@@ -535,11 +535,10 @@ describe("folded at the bottom of the book (#373)", () => {
     });
   }
 
-  it("on the phone, is the last thing in the book, at every hour, picked by no tab (#374)", async () => {
+  it("on the phone, is the last thing in the book, at every hour, picked by no tab (#374, #410)", async () => {
     const s = service();
     await open("phone", s, { at: IN_SESSION });
-    expect(within(screen.getByRole("navigation", { name: "views" })).getAllByRole("button").map((b) => b.textContent))
-      .toEqual(["Book", "Add", "Settings"]);
+    expect(screen.queryByRole("navigation")).toBeNull();
     expect(await entries()).toHaveLength(3);
     expect(book().lastElementChild).toBe(screen.getByRole("region", { name: "closed trades" }));
     expect(asked(s, "/positions")).toBe(1);

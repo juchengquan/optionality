@@ -5,7 +5,7 @@ import { commands, page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
-import { contrast, oklab, overflowsSideways, serveBook, settle, token } from "./nextBook";
+import { contrast, headerBottom, longBook, oklab, overflowsSideways, serveBook, settle, token } from "./nextBook";
 
 const root = () => document.querySelector<HTMLElement>(".nx")!;
 
@@ -109,6 +109,61 @@ describe("the header, with no switch", () => {
       expect(overflowsSideways()).toBe(false);
     });
   }
+});
+
+/** The header held at the top while the page scrolls (#410), and what sticks under it: the table's
+ *  own column heads and the inspector stop at its bottom edge, and a row brought into view lands
+ *  below both rather than under them. */
+describe("the sticky header on the desk", () => {
+  async function long() {
+    await page.viewport(1280, 700);
+    serveBook(longBook(40));
+    render(<Next />);
+    await settle();
+    expect(root().dataset.arrangement).toBe("desk");
+  }
+  const head = () => document.querySelector<HTMLElement>(".nx-head")!;
+
+  it("stays at the top, opaque and over the table, with the column heads stuck under it", async () => {
+    await long();
+    expect(getComputedStyle(head()).position).toBe("sticky");
+    window.scrollTo(0, 800);
+    await settle();
+    expect(window.scrollY, "the page scrolled").toBeGreaterThan(700);
+    expect(head().getBoundingClientRect().top).toBeCloseTo(0, 0);
+    const { left, bottom } = head().getBoundingClientRect();
+    const under = document.elementFromPoint(left + 4, bottom - 2)!;
+    expect(head().contains(under), `drawn over the header: ${under.outerHTML.slice(0, 80)}`).toBe(true);
+    // the table's own header row sticks at the page header's bottom edge, not behind it
+    const cols = document.querySelector<HTMLElement>(".nxd-head")!.getBoundingClientRect();
+    expect(cols.top).toBeCloseTo(headerBottom(), 0);
+  });
+
+  it("keeps the inspector below it", async () => {
+    await long();
+    fireEvent.click(document.querySelector<HTMLElement>('.nxd [data-ref="f0"]')!);
+    await settle();
+    const insp = document.querySelector<HTMLElement>(".nxd-inspector");
+    expect(insp, "an inspector opened").toBeTruthy();
+    window.scrollTo(0, 800);
+    await settle();
+    const r = insp!.getBoundingClientRect();
+    expect(r.top).toBeGreaterThanOrEqual(headerBottom());
+    expect(r.bottom).toBeLessThanOrEqual(window.innerHeight + 0.5);
+  });
+
+  it("brings a row scrolled past into view below the header and the column heads", async () => {
+    await long();
+    const row = document.querySelector<HTMLElement>('[data-ref="f2"]')!;
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    await settle();
+    expect(row.getBoundingClientRect().bottom).toBeLessThan(headerBottom());
+    // as j, k, the palette and the price map bring one (desk/keys.ts, DeskBook)
+    row.scrollIntoView({ block: "nearest" });
+    await settle();
+    const cols = document.querySelector<HTMLElement>(".nxd-head")!.getBoundingClientRect();
+    expect(row.getBoundingClientRect().top).toBeGreaterThanOrEqual(cols.bottom - 0.5);
+  });
 });
 
 /** The rule the three colour families exist for: flipping which way is up moves direction and

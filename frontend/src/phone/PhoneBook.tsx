@@ -20,7 +20,7 @@ import { expiryWords } from "./figures";
  *  was opened, and closes itself if what it shows is gone.
  */
 export function PhoneBook({
-  quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, session, onRevalue, revaluing, privacy,
+  quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, session, privacy,
   entryStyle, writes,
   journal,
 }: BookProps) {
@@ -36,10 +36,10 @@ export function PhoneBook({
 
   const status = (
     <>
-      {/* outside the session (#371): when the service valued what is drawn, and the
-          refresh that values it again */}
-      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings} onRefresh={onRevalue}
-                              refreshing={revaluing} className="nxp-meta" /> : null}
+      {/* outside the session (#371): when the service valued what is drawn; the header's refresh
+          values it again (#410) */}
+      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings}
+                              className="nxp-meta" /> : null}
       {holdingsError !== null ? <p className="nxp-meta">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
       {holdings === null && holdingsError === null ? <p className="nxp-meta">valuing…</p> : null}
       {holdings !== null && holdings.length === 0 ? <p className="nxp-meta">nothing held</p> : null}

@@ -53,19 +53,14 @@ async function tick(ms: number) {
 // queried from the DOM, not the a11y tree: with a sheet open the page behind it is aria-hidden
 const button = () => document.querySelector<HTMLButtonElement>('[aria-label="refresh now"]')!;
 
-/** Settings: the desk's side panel, or the phone's tab. */
-async function openSettings(arrangement: Arrangement): Promise<HTMLElement> {
-  if (arrangement === "desk") {
-    fireEvent.click(screen.getByRole("button", { name: "settings" }));
-    return screen.findByRole("dialog", { name: "Settings" });
-  }
-  fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Settings" }));
-  return (await screen.findByTestId("references")).closest<HTMLElement>(".nx-settings")!;
+/** Settings: the desk's side panel, or the phone's bottom sheet (#410) — opened from the header on both. */
+async function openSettings(_arrangement: Arrangement): Promise<HTMLElement> {
+  fireEvent.click(screen.getByRole("button", { name: "settings" }));
+  return screen.findByRole("dialog", { name: "Settings" });
 }
 
-function closeSettings(arrangement: Arrangement) {
-  if (arrangement === "desk") fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
-  else fireEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Book" }));
+function closeSettings(_arrangement: Arrangement) {
+  fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
 }
 
 describe.each(arrangements)("on the %s, the refresh button", (arrangement) => {

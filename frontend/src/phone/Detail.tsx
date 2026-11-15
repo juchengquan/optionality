@@ -63,7 +63,8 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   const shown = subject ?? last.current;
 
   return (
-    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}
+           onOpenChangeComplete={(o) => { if (!o && last.current) bringBack(refOf(last.current)); }}>
       {/* drawn in a portal OUTSIDE .nx, so it carries the page's colour tokens itself (next.css:
           .nx-tokens) and the two settings they read */}
       <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={readUp()} data-entry={entryStyle}>
@@ -197,4 +198,27 @@ function EditableLine({ entry }: { entry: Entry }) {
       <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
     </RuleLine>
   );
+}
+
+/** The card a subject is drawn as, by the `data-ref` every card carries (NeedsLine's `reveal`). */
+function refOf(subject: Subject): string {
+  return subject.kind === "holding" ? subject.holding.id : subject.entry.id;
+}
+
+/** The card a sheet was about, brought clear of the sticky header once the sheet has gone (#410):
+ *  opened from a card half under the header, Back would otherwise leave it there. Only once the
+ *  sheet's scroll lock has let go, which puts the page back where it was — done sooner, that undoes
+ *  it — and not at all where the card has left the book (a close says so itself, `ClosedResult`).
+ *  "nearest", so a card already in view does not move. */
+function bringBack(ref: string): void {
+  const started = performance.now();
+  const step = () => {
+    if (document.documentElement.hasAttribute("data-base-ui-scroll-locked") && performance.now() - started < 1000) {
+      requestAnimationFrame(step);
+      return;
+    }
+    const card = [...document.querySelectorAll<HTMLElement>(".nx [data-ref]")].find((el) => el.dataset.ref === ref);
+    card?.scrollIntoView?.({ block: "nearest" });
+  };
+  requestAnimationFrame(step);
 }

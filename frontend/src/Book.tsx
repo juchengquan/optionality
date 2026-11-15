@@ -25,14 +25,9 @@ export interface BookProps {
   /** whether New York's session is open (`session.ts`). It decides what is fetched, the
    *  market-closed line, whether a figure carries its time, what the needs-you line states
    *  (holdings' Levels only in session), whether a holding's history starts open (outside it), and
-   *  the saved picture's session line. The columns, the tabs, the rows and the fold do not follow it
+   *  the saved picture's session line. The columns, the rows and the fold do not follow it
    *  (#371–#375). */
   session: boolean;
-  /** values the book once more, from the market-closed line: the header's refresh. Absent where a
-   *  suite draws a book alone, with no page around it. */
-  onRevalue?: () => void;
-  /** a valuation asked by `onRevalue` or the header is still out */
-  revaluing?: boolean;
   privacy: boolean;
   entryStyle: EntryStyle;
   /** editing, closing and deleting a holding (#294); absent, its detail offers none of them */

@@ -22,7 +22,10 @@ holding's burndown carries the days it was watched (last section). **Amended 202
 form's rules, and the Monitor editor's, choose their direction with a ≥ / ≤ pair, and a held debit
 spread's value rule starts at ≤ (last section). **Amended 2026-11-15 (#408):** the add form keeps
 what is typed between Watch and Hold, says on each choice what it does, and "Record as held" opens it
-prefilled from a watch rule, replacing #336's "I hold this" (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+prefilled from a watch rule, replacing #336's "I hold this" (last section). **Amended 2026-11-15
+(#410):** one refresh button, the header's; the header is held at the top of the screen on both
+arrangements, and on the phone carries Add and Settings, whose tab bar is retired; on the phone
+Settings is a bottom sheet over the book like Add's (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -95,7 +98,8 @@ The research found three things nobody does, all of which this service can:
   - "needs you" as banners at the top;
   - one card per held spread, with a strike strip and a large P&L;
   - watchlist cards with progress toward their entry thresholds;
-  - a bottom tab bar: Live, Review, Add, Settings; *(superseded 2026-11-13: Book, Add, Settings)*
+  - a bottom tab bar: Live, Review, Add, Settings; *(superseded 2026-11-13: Book, Add, Settings;
+    and 2026-11-15, #410: no tab bar — Add and Settings are buttons in the sticky header)*
   - REVIEW is one holding per screen, with its burndown as the main chart; *(superseded
     2026-11-13: the pager goes, and a holding's sheet carries its history)*
   - detail and add open as bottom sheets, closed by Back.
@@ -320,7 +324,7 @@ holidays not detected: the same edges `inSession` and the daily sample use, ADR 
     poll. The page values the holdings and reads the References outside the session on opening,
     at each edge of the session (one slept through by a phone included: which session the page
     is in or after is tracked, not only whether), on either refresh button (the header's, and the
-    one on the market-closed line), on opening Settings, and after every write the page makes. A
+    one on the market-closed line — *retired by #410: the header's is the one there is*), on opening Settings, and after every write the page makes. A
     valuation from before the session's last edge is dated ("valued at Sat 05:15"), so a time
     alone never reads as this morning's.
 - **`/quotes` keeps polling in both,** so a rule's alarm and every fault always reach the page, as
@@ -340,7 +344,8 @@ on its chip, with "as valued at HH:MM": #354's rule (option (b) and its clarific
 the session instead of the mode. In session the chip carries no time, as LIVE's did. A rule's own
 alarm and every fault show at every hour.
 
-**The phone** has three tabs: Book, Add, Settings. The Review pager (one holding per screen) goes.
+**The phone** has three tabs: Book, Add, Settings. *(Superseded 2026-11-15, #410: no tabs — Add and
+Settings are header buttons, each opening a bottom sheet over the book.)* The Review pager (one holding per screen) goes.
 A holding's sheet opens its history section by default outside the session and shut in session.
 
 **The desk's inspector** has its history section shut in session and open outside it, and its
@@ -667,3 +672,44 @@ between them is made light. Decided:
   - **The toast reads both back** from `/monitors` after the save: "added 1 holding and 2 Monitors,
     replacing 2 watch rules; also linked to it: 1218_P7150 |Θ| ≥ 0.50".
 
+## Amended 2026-11-15: one refresh, a sticky header, Settings as a sheet (#410)
+
+The owner asked for three layout changes. Decided:
+
+- **One refresh button, the header's.** The market-closed line's "refresh" goes, on the desk and the
+  phone; the line keeps its words. Nothing is lost: the line's button was the header's refresh under
+  another name (`refreshNow` — the line, the holdings' valuation, the References and the closes, then
+  the poll restarted; outside the session that is the one valuation and one read #371 promised).
+  Held by a test that presses the header's button outside the session on both arrangements and
+  counts each of those reads once, and by one that the line has no button left.
+- **The header is held at the top of the screen while the page scrolls**, on the desk and the phone:
+  `position: sticky`, opaque, under the sheets and dialogs. Its top padding is the larger of its own
+  and the safe area's top (`env(safe-area-inset-top)`, which `viewport-fit=cover` makes non-zero
+  under a notch), its sides the gutter or the safe area's, as before. **Nothing lands under it:** its
+  measured height is kept on the document (`--nx-head-h`) and the document's `scroll-padding-top`
+  clears it — so a needs-you banner leading to a row, the palette, j and k and the price map land a
+  row below it — and, on the desk, below the table's own sticky column heads too, which now stick at
+  the header's bottom edge, as the inspector does. A phone card's sheet closed by Back (or any other
+  way) brings its card back clear of the header once the sheet's scroll lock has let go: opened from
+  a card half under the header, the restored scroll alone left it there.
+- **On the phone, Add and Settings are buttons in that header** — the same "add" and "settings" the
+  desk has, 44pt targets like every phone control — and **the bottom tab bar is retired**, since the
+  Book is the page itself. The header's six controls (the title and five buttons) sit on one row at
+  390px; at 320px the title is cut short rather than the row pushed sideways. The page's end clears
+  the home indicator only, where it cleared the bar.
+- **On the phone, Settings is a bottom sheet over the book**, like the Add sheet and drawn by the same
+  component (`PhoneSheet`): it rises from the bottom, never the whole screen, closes on Back, its
+  Close button, Escape and a tap outside, and takes its Back entry from the one list every sheet on
+  the page shares (#408's `useDismissOnBack`), so one Back closes one sheet. The book stays drawn
+  under it, where it was. A close's account (#294) stays drawn under it too, where the Settings
+  screen used to replace it. **The desk keeps its Settings side sheet.** Switching arrangement with
+  Settings open closes the one sheet and opens the other, each giving its Back entry up as before.
+- *Swipe-down:* the issue asked for Settings to close "by Back, swipe-down and Cancel like Add". The
+  Add sheet has no swipe-down (it is a Base UI Dialog, not a Drawer) and no Cancel of the sheet's own
+  — Cancel is the add form's button. Settings, built as the same component, closes exactly as Add
+  does: Back, Close, Escape, a tap outside. A swipe to dismiss, for both sheets, is left to the owner.
+
+What this supersedes, marked where it stands above: the phone's three tabs (#374, the 2026-11-13
+amendment's "The phone has three tabs") and its bar along the bottom; the market-closed line's own
+refresh button (#371). The saved picture is unchanged: its header was always its own, with nothing
+to press.

@@ -32,7 +32,7 @@ async function openPhone(spreads?: Parameters<typeof serveContract>[0]) {
   return writes;
 }
 
-const addTab = () => within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Add" });
+const addTab = () => screen.getByRole("button", { name: "add" });
 const sheet = () => screen.getByRole("dialog", { name: "Add a spread or contract" });
 
 /** The Add tab, then one contract: the expiry, the strike, the threshold. */

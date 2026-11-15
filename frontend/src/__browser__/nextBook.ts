@@ -136,6 +136,32 @@ export function overflowsSideways(): boolean {
   return root.scrollWidth > root.clientWidth;
 }
 
+/** Every value a loaded stylesheet DECLARES for `property` on a rule whose selector contains
+ *  `selector`, @media and @supports included. For what no computed style can show: an
+ *  `env(safe-area-inset-*)` computes to 0px everywhere but a notched screen, so only the rule
+ *  itself says whether the page asked for the inset (#410). */
+export function declared(selector: string, property: string): string[] {
+  const found: string[] = [];
+  const walk = (rules: CSSRuleList) => {
+    for (const rule of rules) {
+      if (rule instanceof CSSStyleRule && rule.selectorText.includes(selector)) {
+        const v = rule.style.getPropertyValue(property);
+        if (v) found.push(v);
+      }
+      if ("cssRules" in rule && rule.cssRules) walk(rule.cssRules as CSSRuleList);
+    }
+  };
+  for (const sheet of document.styleSheets) {
+    try { walk(sheet.cssRules); } catch { /* a sheet from another origin is not this page's */ }
+  }
+  return found;
+}
+
+/** The bottom of the page's sticky header: what a row brought into view must land below (#410). */
+export function headerBottom(): number {
+  return document.querySelector<HTMLElement>(".nx-head")!.getBoundingClientRect().bottom;
+}
+
 /** A colour token as the page resolved it, followed through any `var()` it names. */
 export function token(el: Element, name: string): string {
   let value = getComputedStyle(el).getPropertyValue(name).trim();

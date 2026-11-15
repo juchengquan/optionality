@@ -31,7 +31,8 @@ interface SettingsProps {
 }
 
 /** Settings and the Service panel's content in one place (ADR 0023): what this viewer prefers, and
- *  where the service stands in full. On the desk it is a side panel; on the phone, a tab.
+ *  where the service stands in full. On the desk it is a side sheet; on the phone, a bottom sheet over
+ *  the book, like the Add form's (#410).
  *
  *  Every preference is a cookie, as viewer preferences are (CLAUDE.md: Config), and every one is
  *  applied the moment it is chosen — there is no Save, so nothing chosen can be lost by closing.

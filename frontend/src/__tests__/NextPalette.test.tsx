@@ -446,7 +446,7 @@ describe("after review (#329)", () => {
     await waitFor(() => expect(inspector()).not.toBeNull());
     await run(user, "arrangement: phone");
     await screen.findByText(/Settings switches it back/);
-    await user.click(screen.getByRole("button", { name: "Settings" }));
+    await user.click(screen.getByRole("button", { name: "settings" }));
     await user.selectOptions(await screen.findByLabelText("arrangement"), "desk");
     await waitFor(() => expect(document.querySelector(".nx")!.getAttribute("data-arrangement")).toBe("desk"));
     // back on the desk: nothing selected, no inspector reopened on the old row

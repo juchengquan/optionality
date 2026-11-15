@@ -1,10 +1,7 @@
-import { RefreshCw } from "lucide-react";
-
 import { closedLineText } from "./levels";
 import type { Holding } from "./shared/api";
 
-/** "market closed — valued at 21:04", with a button that values the book once more (#371; ADR
- *  0023 amended 2026-11-13: one page, by the session).
+/** "market closed — valued at 21:04" (#371; ADR 0023 amended 2026-11-13: one page, by the session).
  *
  *  Drawn outside New York's session only, on the desk and the phone alike, because that is when
  *  the holdings and the References are valued once rather than polled. The time is the SERVICE's stamp on the valuation (`valuedAt`), the clock every Level
@@ -13,11 +10,12 @@ import type { Holding } from "./shared/api";
  *  service valued a holding from its latest close (#380), the line names that close on New York's
  *  clock instead — "market closed — as of the close, Fri 13 Nov 16:14" — as `/holdings` does.
  *
- *  The button is the header's refresh — one valuation and one read of the References, then the
- *  poll as it was. It starts no poll: outside the session only the line is polled. The saved
- *  picture says the line's words (`closedLineText`) in its header, with nothing to press.
+ *  Words only since #410: the line had a refresh button of its own, which was the header's refresh
+ *  under another name — one valuation, one read of the References and the closes, then the poll as
+ *  it was. Two buttons for one press, so the header's is the one there is, and it sits in a header
+ *  held at the top of the screen. The saved picture says the same words (`closedLineText`).
  */
-export function ClosedLine({ at, served, holdings = null, onRefresh, refreshing = false, className }: {
+export function ClosedLine({ at, served, holdings = null, className }: {
   /** "21:04:37" or "21:04", or null for no time */
   at: string | null;
   /** the valuation's stamp whole, which says its date where the time alone would mislead —
@@ -26,20 +24,11 @@ export function ClosedLine({ at, served, holdings = null, onRefresh, refreshing 
   /** the holdings drawn: where any was valued from a stored close (#380), the line names that close
    *  instead — "market closed — as of the close, Fri 13 Nov 16:14" (`closeLineWords`) */
   holdings?: readonly Holding[] | null;
-  onRefresh?: () => void;
-  refreshing?: boolean;
   className: string;
 }) {
   return (
     <p className={`nx-mkt-closed ${className}`}>
       <span>{closedLineText(at, served, holdings)}</span>
-      {onRefresh ? (
-        <button type="button" className="nx-mkt-closed-refresh" aria-label="refresh the valuation" disabled={refreshing}
-                onClick={onRefresh}>
-          <RefreshCw aria-hidden="true" className={refreshing ? "animate-spin" : undefined} />
-          refresh
-        </button>
-      ) : null}
     </p>
   );
 }

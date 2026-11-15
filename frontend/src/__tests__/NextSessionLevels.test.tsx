@@ -270,11 +270,10 @@ describe("one clock for a valuation", () => {
     expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("valued at 23:09");
   });
 
-  it("moves the line and the chip on together by the line's own refresh", async () => {
+  it("moves the line and the chip on together by the header's refresh, the one there is (#410)", async () => {
     await open("desk", SUNDAY, true);
     stamp = "2026-11-08 23:11:02+08:00";
-    fireEvent.click(within(document.querySelector<HTMLElement>(".nx-mkt-closed")!)
-      .getByRole("button", { name: "refresh the valuation" }));
+    fireEvent.click(screen.getByRole("button", { name: "refresh now" }));
     await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:11"));
     expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("market closed — valued at 23:11");
   });

@@ -2,7 +2,7 @@
  *  draws the one form the desk does — its types in their hue, its sides by weight and sign, its
  *  modes neutral — and nothing in it is pushed past the screen's edge by a sign; the cards write
  *  each type letter in its colour and a short leg bold. The desk's half is `NextLegColours.test.tsx`. */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { commands, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -28,7 +28,7 @@ for (const scheme of ["light", "dark"] as const) {
       serveAdding({ status: 201, body: {} });
       render(<Next />);
       await settle();
-      await userEvent.click(within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name: "Add" }));
+      await userEvent.click(screen.getByRole("button", { name: "add" }));
       const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
       await animationsDone();
       const edge = document.documentElement.clientWidth;

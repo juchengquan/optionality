@@ -343,19 +343,16 @@ describe("the book outside the session (#374)", () => {
   });
 });
 
-/** "market closed — valued at 01:00" and its refresh (#371), on the Book tab outside the session: not
- *  clipped, nothing pushed sideways, and the button a 44pt target. */
+/** "market closed — valued at 01:00" (#371), in the book outside the session: not clipped, nothing
+ *  pushed sideways. Its words alone since #410 — the header's refresh is the one there is. */
 describe("the market-closed line on the phone", () => {
   const stamped = HOLDINGS.map((h) => ({ ...h, fetched_at: "2026-11-16 01:00:12+08:00" }));
-  it("fits on the Book tab, with its refresh a 44pt target", async () => {
+  it("fits in the book, with nothing to press", async () => {
     outsideTheSession();
     await show(QUOTES, stamped);
     const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
-    expect(line.textContent).toBe("market closed — valued at 01:00refresh");
-    const button = within(line).getByRole("button", { name: "refresh the valuation" });
-    const b = button.getBoundingClientRect();
-    expect(b.width, "the refresh's width").toBeGreaterThanOrEqual(44);
-    expect(b.height, "the refresh's height").toBeGreaterThanOrEqual(44);
+    expect(line.textContent).toBe("market closed — valued at 01:00");
+    expect(within(line).queryByRole("button")).toBeNull();
     const box = line.getBoundingClientRect();
     for (const el of [line, ...line.querySelectorAll<HTMLElement>("*")]) {
       const r = el.getBoundingClientRect();

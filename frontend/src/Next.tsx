@@ -59,7 +59,7 @@ import { copyView } from "./snapshot/copyText";
  *
  *  ONE page at every hour, with no switch (ADR 0023, amended 2026-11-13: one page, by the
  *  session; #371–#375). What it draws is the same in session and out of it — the desk's one column
- *  set, the phone's three tabs, the closed trades folded at the bottom of the book. New York's
+ *  set, the phone's cards, the closed trades folded at the bottom of the book. New York's
  *  session decides only: what it FETCHES; the market-closed line; whether a figure says when it
  *  was read; what the needs-you line states (holdings' Levels only in session); whether a
  *  holding's history starts open (outside it), in the inspector and the phone's sheet; and the
@@ -118,7 +118,7 @@ export function Next() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   // adding a spread or a contract (#293, #331; named for both since #301): a panel above the desk's
-  // table, a bottom sheet from the phone's Add tab
+  // table, a bottom sheet on the phone — opened from the header's "add" on both since #410
   const [adding, setAddingNow] = useState(false);
   // what the form opens with: a fresh draft, or one prefilled by "Record as held" (#408) — numbered,
   // so a second prefill while the form is open draws a new form rather than keeping the last one's
@@ -229,12 +229,10 @@ export function Next() {
     if (settingsOpen && !sessionNow.current) void Promise.all([loadHoldings(), loadReferences()]);
   }, [settingsOpen, loadHoldings, loadReferences]);
 
-  // A banner tapped from the phone's Settings tab leads to a row that is not drawn there: back to
-  // the book first, then to the row once it is.
-  const revealRow = useCallback((ref: string) => {
-    setSettingsOpen(false);
-    setTimeout(() => reveal(ref), 0);
-  }, []);
+  // the page's header is held at the top of the screen (#410): its height, on the document, so
+  // that a row brought into view — by a banner, the palette, j and k, a sheet's closing — lands
+  // below it (next.css: scroll-padding-top), and what sticks under it sticks at its bottom edge
+  const header = useHeaderHeight();
 
   // The desk's selection, kept here so the palette (#299) can read it and land on a row; the table
   // moves it itself, by a click, j and k, or the price map.
@@ -316,7 +314,6 @@ export function Next() {
   const bookProps: BookProps = {
     quotes, monitors: book.monitors, holdings,
     holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, session, privacy, entryStyle, writes,
-    onRevalue: () => void book.refreshNow(), revaluing: book.refreshing,
     journal: (
       <JournalFold open={journalOpen} onToggle={toggleJournal}
                    ready={journal.trades !== null || journal.error !== null}>
@@ -365,7 +362,8 @@ export function Next() {
     <MonitorActionsContext.Provider value={monitorActions}>
     <div className="nx" data-arrangement={arrangement} data-up={up}
          data-entry={entryStyle}>
-      <header className="nx-head">
+      {/* held at the top while the page scrolls, on both arrangements, clear of the notch (#410) */}
+      <header ref={header} className="nx-head">
         <h1>optionality</h1>
         <span className="nx-spacer" />
         <Button variant="ghost" size="sm" aria-label="save as image" disabled={shooting}
@@ -385,24 +383,23 @@ export function Next() {
             <Search /><kbd aria-hidden="true">{shortcut.shown}</kbd>
           </Button>
         )}
-        {phone ? null : (
-          <Button ref={plusButton} variant="ghost" size="sm" aria-label="add" aria-expanded={adding}
-                  aria-controls={adding ? panelId : undefined} onClick={() => setAdding((a) => !a)}>
-            <Plus />
-          </Button>
-        )}
-        {phone ? null : (
-          <Button variant="ghost" size="sm" aria-label="settings" onClick={() => setSettingsOpen(true)}>
-            <Settings2 />
-          </Button>
-        )}
+        {/* Add and Settings on the phone too since #410, where they were tabs of a bar along the
+            bottom: each opens its bottom sheet there, and the desk's panel and side sheet here */}
+        <Button ref={plusButton} variant="ghost" size="sm" aria-label="add" aria-expanded={adding}
+                aria-controls={adding && !phone ? panelId : undefined} aria-haspopup={phone ? "dialog" : undefined}
+                onClick={() => setAdding((a) => !a)}>
+          <Plus />
+        </Button>
+        <Button variant="ghost" size="sm" aria-label="settings" aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>
+          <Settings2 />
+        </Button>
       </header>
 
       <main className="nx-main">
         {book.error ? <div className="nx-banner" role="alert">{book.error}</div> : null}
         <Freshness fetchedAt={book.health?.monitor.fetched_at ?? null} polledAt={book.polledAt}
                    sweepSeconds={book.health?.settings.sweep_seconds ?? null} />
-        <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} onReveal={revealRow} />
+        <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} onReveal={reveal} />
         {/* the market, at every hour (#371): polled in session; outside it read once with the
             holdings, and every reading says when — a figure frozen at a read would otherwise be
             taken for current (ADR 0018) */}
@@ -410,7 +407,7 @@ export function Next() {
         {/* a close's account (#294): the holding has left the book, and its detail with it */}
         {/* one per close, newest first, each until its own Done: a second close never discards the
             first's account, nor a correction half typed into it */}
-        {phone && settingsOpen ? null : outcomes.map((o) => (
+        {outcomes.map((o) => (
           <ClosedResult key={o.closed.id} outcome={o} privacy={privacy} onDone={() => dismissOutcome(o.closed.id)}
                         onCorrected={() => { rereadJournal(); void book.reload(); }}
                         served={journal.trades?.find((t) => t.id === o.closed.id) ?? null} />
@@ -422,20 +419,20 @@ export function Next() {
             {addForm}
           </section>
         ) : null}
-        {phone && settingsOpen ? settings : phone ? <PhoneBook {...bookProps} />
-          : <DeskBook {...bookProps} selection={deskSelection} />}
+        {phone ? <PhoneBook {...bookProps} /> : <DeskBook {...bookProps} selection={deskSelection} />}
       </main>
 
-      {phone ? (
-        <TabBar settings={settingsOpen} adding={adding}
-                onBook={() => setSettingsOpen(false)}
-                onAdd={() => setAdding(true)}
-                onSettings={() => setSettingsOpen(true)} />
-      ) : null}
-      {/* mounted in both, open only on the phone, for the reason DeskSettings below is */}
-      <AddSheet open={adding && phone} onClose={closeAdding} up={up} entryStyle={entryStyle}>
+      {/* the phone's two sheets over the book, one component (#410): mounted in both arrangements
+          and open only on the phone, for the reason DeskSettings below is */}
+      <PhoneSheet open={adding && phone} onClose={closeAdding} up={up} entryStyle={entryStyle}
+                  title="Add a spread or contract"
+                  description="A spread or one contract, and the Monitors it starts with, saved together.">
         {phone ? addForm : null}
-      </AddSheet>
+      </PhoneSheet>
+      <PhoneSheet open={settingsOpen && phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
+                  title="Settings" description={SETTINGS_SAYS}>
+        {phone ? settings : null}
+      </PhoneSheet>
       {/* Mounted in both arrangements and only OPEN on the desk: switching to the phone with it
           open then closes it, and closing is what takes its history entry back off the stack.
           Unmounted instead, the entry stayed and the next Back press did nothing. */}
@@ -470,38 +467,47 @@ function landOnMuted(id: string) {
   listed.focus();
 }
 
-/** The phone's bottom bar (#374; ADR 0023 amended 2026-11-13): the Book, Settings a screen of its
- *  own, and Add, which opens the add form as a bottom sheet over whichever is showing (#293).
- *
- *  The same three tabs at every hour: the Book is one book in session and out of it, and what the
- *  phone fetches follows the session and nothing else. */
-function TabBar({ settings, adding, onBook, onAdd, onSettings }: {
-  settings: boolean; adding: boolean; onBook: () => void; onAdd: () => void; onSettings: () => void;
-}) {
-  const current = adding ? "add" : settings ? "settings" : "book";
-  return (
-    <nav className="nx-tabs" aria-label="views">
-      <button type="button" aria-current={current === "book" ? "page" : undefined}
-              onClick={onBook}>Book</button>
-      <button type="button" aria-current={current === "add" ? "page" : undefined}
-              onClick={onAdd}>Add</button>
-      <button type="button" aria-current={current === "settings" ? "page" : undefined}
-              onClick={onSettings}>Settings</button>
-    </nav>
-  );
+/** What Settings says it is, on the desk's side sheet and the phone's bottom sheet alike. */
+const SETTINGS_SAYS = "This screen's preferences, and where the service stands in full.";
+
+/** The header's height, kept on the document as `--nx-head-h` while the page is drawn (#410): the
+ *  header is sticky, so a row scrolled into view has to land below it (`scroll-padding-top` on the
+ *  document, next.css), and the desk's column heads and inspector stick at its bottom edge. Measured
+ *  rather than assumed: the safe area's top, the arrangement and the text size all move it. */
+function useHeaderHeight() {
+  const observer = useRef<ResizeObserver | null>(null);
+  useEffect(() => () => {
+    observer.current?.disconnect();
+    document.documentElement.style.removeProperty("--nx-head-h");
+  }, []);
+  return useCallback((el: HTMLElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!el) return;
+    const keep = () => document.documentElement.style.setProperty("--nx-head-h", `${el.getBoundingClientRect().height}px`);
+    keep();
+    // jsdom has none, and lays nothing out to measure
+    if (typeof ResizeObserver === "undefined") return;
+    observer.current = new ResizeObserver(keep);
+    observer.current.observe(el);
+  }, []);
 }
 
-/** The phone's Add sheet: a bottom sheet over the page, closed by Back (ADR 0023). */
-function AddSheet({ open, onClose, up, entryStyle, children }: {
-  open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle; children: React.ReactNode;
+/** A bottom sheet over the phone's book, closed by Back (ADR 0023): the Add form's since #293, and
+ *  Settings' since #410, where Settings had been a screen in the book's place. One component, so the
+ *  two open, close and give their Back entry up alike (`useDismissOnBack`, one list for every sheet
+ *  the page opens, #408). */
+function PhoneSheet({ open, onClose, up, entryStyle, title, description, children }: {
+  open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle;
+  title: string; description: string; children: React.ReactNode;
 }) {
   useDismissOnBack(open, onClose);
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={up} data-entry={entryStyle}>
         <SheetHeader>
-          <SheetTitle>Add a spread or contract</SheetTitle>
-          <SheetDescription>A spread or one contract, and the Monitors it starts with, saved together.</SheetDescription>
+          <SheetTitle>{title}</SheetTitle>
+          <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
         <div className="nxp-sheet-body">{children}</div>
       </SheetContent>
@@ -520,7 +526,7 @@ function DeskSettings({ open, onClose, up, entryStyle, children }: {
       <SheetContent className="overflow-y-auto nx-tokens" data-up={up} data-entry={entryStyle}>
         <SheetHeader>
           <SheetTitle>Settings</SheetTitle>
-          <SheetDescription>This screen's preferences, and where the service stands in full.</SheetDescription>
+          <SheetDescription>{SETTINGS_SAYS}</SheetDescription>
         </SheetHeader>
         <div className="px-4 pb-4">{children}</div>
       </SheetContent>
@@ -723,9 +729,10 @@ function useBook(session: boolean, edge: number) {
     return () => clearInterval(id);
   }, [refresh, load, session, pollFrom]);
 
-  /** Everything once, from the header's button and the market-closed line's alike: outside the
-   *  session that is one valuation and one read of the References, and the poll goes on asking
-   *  only for the line. */
+  /** Everything once, from the header's refresh — the one refresh button since #410, which took the
+   *  market-closed line's away: the line, the holdings' valuation, the References and the closes.
+   *  Outside the session that is one valuation and one read of the References, and the poll goes on
+   *  asking only for the line. */
   const refreshNow = useCallback(async () => {
     setRefreshing(true);
     try {

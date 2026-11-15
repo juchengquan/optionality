@@ -11,7 +11,7 @@
  *  synthetic click: under the iPhone profile a synthetic click opened the detail sheet with the
  *  focus left on the body, which holds nothing and so would pass whatever the sheet did.
  */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -23,12 +23,7 @@ async function show() {
   serveBook();
   render(<Next />);
   await settle();
-  // the cards are the Book's, whatever the hour (#374)
-  await userEvent.click(tab("Book"));
-  await settle();
 }
-const tab = (name: string) =>
-  within(screen.getByRole("navigation", { name: "views" })).getByRole("button", { name });
 
 afterEach(cleanup);
 
@@ -45,7 +40,7 @@ describe("what opening a sheet does to the poll, on a phone", () => {
 
   it("does not hold it with the Add sheet merely open", async () => {
     await show();
-    await userEvent.click(tab("Add"));
+    await userEvent.click(screen.getByRole("button", { name: "add" }));
     const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
     await settle();
     expect(sheet.contains(document.activeElement), "the focus never moved into the sheet").toBe(true);

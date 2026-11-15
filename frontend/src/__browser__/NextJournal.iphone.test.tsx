@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Next } from "../Next";
 import { closedBookService } from "../testing/closedBook";
 import type { HoldingService } from "../testing/holdingService";
-import { overflowsSideways, settle } from "./nextBook";
+import { headerBottom, overflowsSideways, settle } from "./nextBook";
 
 afterEach(cleanup);
 
@@ -34,11 +34,10 @@ async function review(): Promise<{ s: HoldingService; journal: HTMLElement }> {
   return { s, journal };
 }
 
-/** The part of `el` the screen shows, above the tab bar: some of it, at least. */
+/** The part of `el` the screen shows, below the sticky header (#410): some of it, at least. */
 function inView(el: Element): boolean {
   const r = el.getBoundingClientRect();
-  const bar = document.querySelector('nav[aria-label="views"]')?.getBoundingClientRect().top ?? window.innerHeight;
-  return r.bottom > 0 && r.top < bar;
+  return r.bottom > headerBottom() && r.top < window.innerHeight;
 }
 
 /** A sheet slides in, and a box measured mid-animation is not where it will be. */
@@ -90,26 +89,29 @@ describe("the closed trades on the phone", () => {
     expect(overflowsSideways()).toBe(false);
   });
 
-  it("does not scroll when it is drawn again already open: Settings and back", async () => {
+  it("does not scroll when Settings opens over it and closes again (#410: a sheet now)", async () => {
     await review();
     window.scrollTo(0, 0);
-    const tabs = screen.getByRole("navigation", { name: "views" });
-    await userEvent.click(within(tabs).getByRole("button", { name: "Settings" }));
+    await userEvent.click(screen.getByRole("button", { name: "settings" }));
+    await screen.findByRole("dialog", { name: "Settings" });
     await settle();
-    await userEvent.click(within(tabs).getByRole("button", { name: "Book" }));
+    window.history.back();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
     const journal = await screen.findByRole("region", { name: "closed trades" });
     expect(within(journal).getByRole("button", { name: "Closed trades" }).getAttribute("aria-expanded")).toBe("true");
     await settle();
     expect(window.scrollY).toBe(0);
   });
 
-  it("opens on a tap into view: its first trade on the screen, above the tab bar", async () => {
+  it("opens on a tap into view: its first trade on the screen, below the sticky header", async () => {
     const { journal } = await review();
     expect(inView(journal.querySelector("[data-closed]")!)).toBe(true);
     // brought up to the top of the screen, under its margin, or as far as the page scrolls
     const root = document.documentElement;
     const top = journal.getBoundingClientRect().top;
-    const margin = parseFloat(getComputedStyle(journal).scrollMarginTop);
+    // its own margin, below the header the page keeps clear (#410: html's scroll-padding-top)
+    const margin = parseFloat(getComputedStyle(journal).scrollMarginTop)
+      + parseFloat(getComputedStyle(root).scrollPaddingTop);
     const atEnd = window.scrollY + window.innerHeight >= root.scrollHeight - 1;
     expect(Math.abs(top - margin) < 2 || atEnd, `top ${top}, scrolled ${window.scrollY} of ${root.scrollHeight}`).toBe(true);
     expect(window.scrollY).toBeGreaterThan(0);
