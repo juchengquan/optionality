@@ -337,7 +337,7 @@ function EditForm({ rule, served, label, draft, busy, error, onDraft, onSave, on
         <div className="nx-mon-field">
           <label htmlFor={`${id}-field`}>what it watches</label>
           <select id={`${id}-field`} value={draft.field} onChange={(e) => set({ field: e.target.value })} {...tie("field")}>
-            {fieldsFor(rule).map((f) => <option key={f} value={f}>{fieldWords(f, rule.combo)}</option>)}
+            {fieldsFor(rule).map((f) => <option key={f} value={f}>{fieldWords(f)}</option>)}
           </select>
           {said("field")}
         </div>

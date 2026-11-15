@@ -87,7 +87,12 @@ describe("the desk's RULE column, short (#388)", () => {
       for (const v of drawn) expect(v.scrollWidth, v.textContent!).toBeLessThanOrEqual(v.clientWidth + 1);
       // the widest line is the quarantined rule's, whose sentence is its short form since #404
       expect(short).toBeLessThanOrEqual(sentences);
-      expect(shortRules).toBeLessThan(sentenceRules * 0.8);
+      // the rules' own lines: the short form drops "— now", ", … away" for an arrow and two spaces,
+      // which since #404 is all that is left between the two (the field's words are the same). On
+      // this book that is 6.8 characters at 1280 and 1440; at least five is the claim
+      const char = widthOf("0", rules[0]!);
+      console.log(`#404: the rules' short lines are ${((sentenceRules - shortRules) / char).toFixed(1)} characters narrower`);
+      expect(sentenceRules - shortRules).toBeGreaterThanOrEqual(5 * char);
     });
   }
 

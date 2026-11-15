@@ -106,7 +106,7 @@ export function needsYou(
     const why = !m.enabled && m.disabled_reason ? QUARANTINED[m.disabled_reason] : undefined;
     // named with what it watches: a contract can carry a delta rule and a price rule, and two
     // identical lines would say one thing twice while hiding which rule it was
-    const what = fieldWords(m.field, Boolean(m.legs));
+    const what = fieldWords(m.field);
     if (why) out.push({ kind: "fault", text: `${monitorName(m)} ${what} quarantined — ${why}` });
   }
   const spokenFor = new Set(
@@ -142,8 +142,9 @@ export function toneOf(items: Need[], entryLooksLikeRisk: boolean): Tone {
  *  held to the domain's golden cases (`alarm.ts`'s `ruleShort`) by `NextRuleShort.test.ts`. Vega is
  *  `ν`, not `V`, which would read as a value. An unknown field is written as it is stored.
  *
- *  `_combo` changes nothing since #404 and is accepted only so a caller still passing it compiles
- *  (#403's `Payoff.tsx`); drop it once nothing does. */
+ *  `_combo` changes nothing since #404. Every caller here passes the field alone; the argument is
+ *  kept only for `Payoff.tsx`, left untouched while #403 rewrites it — drop the argument there and
+ *  here once #403 has landed. */
 export function fieldWords(field: string, _combo?: boolean): string {
   switch (field) {
     case "mid_price": return "value";

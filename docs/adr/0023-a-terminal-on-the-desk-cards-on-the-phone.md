@@ -157,7 +157,10 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
   its own words, `close ≥` short and `cost to close ≥` in full. The sentence's field words
   (`needs.ts`'s `fieldWords`) are held to the domain's golden cases with the short form's, and
   where a quarantined rule's sentence is now its short line, the desk draws it once, with no title
-  repeating it. The palette still finds a rule by the field's spoken name, "delta" or "price".)*
+  repeating it. The inspector's figures are labelled in the same words — `value`, `Δ Γ Θ ν` — where
+  they were `spread value`, `γ`, `θ` and `vega`; a contract's `mid` beside its bid and ask stays,
+  being a quote's and no rule's. The palette still finds a rule by the field's spoken name,
+  "delta" or "price", and a spread's by "spread".)*
 - **Fired alerts:**
   - A fired ENTRY alert is good news and has its own "opportunity" style, never alarm red. A
     viewer setting can make it look the same as risk instead.

@@ -54,7 +54,7 @@ export function ruleOfMonitor(m: Monitor): Rule {
 }
 
 /** How a rule is named on every control about it: two rules on one contract differ by their field. */
-export const ruleLabel = (r: Rule) => `${r.name} ${fieldWords(r.field, r.combo)}`;
+export const ruleLabel = (r: Rule) => `${r.name} ${fieldWords(r.field)}`;
 
 /** The draft holds the threshold as TYPED, so "0." and "-" survive between keystrokes. */
 export interface Draft {
@@ -176,7 +176,7 @@ export const QUARANTINE_WHY: Record<string, (r: Rule) => string> = {
   "unknown-contract": (r) =>
     `the provider does not know its contract ${r.code}: its strike or its expiry is not one it lists`,
   "no-figure": (r) =>
-    `its ${fieldWords(r.field, r.combo)} never arrived, sweep after sweep: what a provider serves depends on the account, so watch a figure it does serve`,
+    `its ${fieldWords(r.field)} never arrived, sweep after sweep: what a provider serves depends on the account, so watch a figure it does serve`,
   unreadable: () =>
     "its stored row cannot be read: a leg or an expiry the service cannot make sense of",
 };

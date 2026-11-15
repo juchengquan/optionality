@@ -182,7 +182,7 @@ export function AddContract({
                   <span>what it watches</span>
                   <select aria-label="what it watches" disabled={!ruleOn} value={draft.field} {...tie("field")}
                           onChange={(e) => set({ field: e.target.value })}>
-                    {CONTRACT_FIELDS.map((f) => <option key={f} value={f}>{fieldWords(f, false)}</option>)}
+                    {CONTRACT_FIELDS.map((f) => <option key={f} value={f}>{fieldWords(f)}</option>)}
                   </select>
                 </label>
                 <label className="nx-add-field">

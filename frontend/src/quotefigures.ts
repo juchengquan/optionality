@@ -17,6 +17,7 @@
  */
 import type { Entry } from "./shared/api";
 import { DASH, shortStamp } from "./shared/format";
+import { fieldWords } from "./needs";
 
 interface RuleFigure {
   /** stable, for React and for a test that wants one figure */
@@ -36,9 +37,10 @@ const served = (v: unknown): v is number => typeof v === "number" && Number.isFi
 const points = (n: number) => n.toFixed(2);
 const PLACES = { option_delta: 3, option_gamma: 4, option_theta: 2, option_vega: 2 } as const;
 
-const GREEKS = [
-  ["option_delta", "Δ"], ["option_gamma", "γ"], ["option_theta", "θ"], ["option_vega", "vega"],
-] as const;
+/** The Greeks, labelled in the rule's own words (`fieldWords`, #404): a figure and a rule on it read
+ *  alike — Δ Γ Θ ν. */
+const GREEKS = (["option_delta", "option_gamma", "option_theta", "option_vega"] as const)
+  .map((key) => [key, fieldWords(key)] as const);
 
 const NOT_SERVED = "not served for this contract";
 const NO_QUOTE = "no quote in this poll";
@@ -119,7 +121,7 @@ function comboFigures(entry: Entry): RuleFigure[] {
   // `combo_value` is the rule's OWN field summed across the legs (`monitorValue`): a price only for
   // a rule on the price. A delta rule's is its summed delta, which the Δ row already says.
   const onPrice = entry.field === "mid_price";
-  const out = onPrice ? [one("combo_value", "spread value", entry.combo_value, 2)] : [];
+  const out = onPrice ? [one("combo_value", fieldWords("mid_price"), entry.combo_value, 2)] : [];
   // the holding's cost to buy back these legs, where the rule covers one (points, not $). Null
   // when a leg has no mid OR a leg is not held exactly once (`costToCloseOf`); on a price rule a
   // served value says every leg has its mid, so it was the holding

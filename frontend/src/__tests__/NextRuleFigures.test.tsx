@@ -13,6 +13,7 @@ import type { Entry } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
 import { PhoneBook } from "../phone/PhoneBook";
+import { fieldWords } from "../needs";
 import { ruleFigures, wholeMissing } from "../quotefigures";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
@@ -46,9 +47,9 @@ describe("a single contract's figures", () => {
       ["last trade", "2026-11-11 23:58:12", null],
       ["IV", "14.24%", null],
       ["Δ", "0.040", null],
-      ["γ", "0.0001", null],
-      ["θ", "-0.06", null],
-      ["vega", "0.43", null],
+      ["Γ", "0.0001", null],
+      ["Θ", "-0.06", null],
+      ["ν", "0.43", null],
     ]);
   });
 
@@ -56,7 +57,7 @@ describe("a single contract's figures", () => {
     // w-dec18-delta's quote carries its name and its delta, and nothing else
     const rows = ruleFigures(quote("w-dec18-delta"));
     expect(figure(rows, "Δ")).toMatchObject({ text: "-0.170", why: null });
-    for (const label of ["bid", "ask", "last", "IV", "γ", "θ", "vega"]) {
+    for (const label of ["bid", "ask", "last", "IV", "Γ", "Θ", "ν"]) {
       expect(figure(rows, label)).toMatchObject({ text: "—", why: "not served for this contract" });
     }
     // the mid is derived, and only from both sides
@@ -107,8 +108,8 @@ describe("a single contract's figures", () => {
     expect(figure(rows, "mid")).toMatchObject({ text: "—", why: "needs both a bid and an ask" });
   });
 
-  it("say a served γ too small for four places as under 0.0001, never 0.0000", () => {
-    const tiny = (g: number) => figure(ruleFigures(withQuote("w-lone", { quote: { ...FULL, option_gamma: g } })), "γ").text;
+  it("say a served Γ too small for four places as under 0.0001, never 0.0000", () => {
+    const tiny = (g: number) => figure(ruleFigures(withQuote("w-lone", { quote: { ...FULL, option_gamma: g } })), "Γ").text;
     expect(tiny(0.00004)).toBe("<0.0001");
     expect(tiny(-0.00004)).toBe(">-0.0001");
     expect(tiny(0)).toBe("0.0000");
@@ -120,7 +121,7 @@ describe("a single contract's figures", () => {
       quote: { ...FULL, bid_price: "0.45", option_gamma: null } as unknown as Entry["quote"],
     }));
     expect(figure(rows, "bid")).toMatchObject({ text: "—", why: "not served for this contract" });
-    expect(figure(rows, "γ")).toMatchObject({ text: "—", why: "not served for this contract" });
+    expect(figure(rows, "Γ")).toMatchObject({ text: "—", why: "not served for this contract" });
     // a zero the Provider DID serve is a figure, and says so
     const zero = ruleFigures(withQuote("w-lone", { quote: { ...FULL, bid_price: 0 } }));
     expect(figure(zero, "bid")).toMatchObject({ text: "0.00", why: null });
@@ -133,11 +134,11 @@ describe("a combo's figures", () => {
       combo_greeks: { option_delta: -0.0512, option_gamma: -0.00031, option_theta: 0.731, option_vega: -1.284 },
     }));
     expect(rows.map((r) => [r.label, r.text, r.why])).toEqual([
-      ["spread value", "-2.40", null],
+      ["value", "-2.40", null],
       ["Δ", "-0.051", null],
-      ["γ", "-0.0003", null],
-      ["θ", "0.73", null],
-      ["vega", "-1.28", null],
+      ["Γ", "-0.0003", null],
+      ["Θ", "0.73", null],
+      ["ν", "-1.28", null],
     ]);
   });
 
@@ -146,20 +147,28 @@ describe("a combo's figures", () => {
       combo_value: null, combo_greeks: { option_delta: -0.05, option_gamma: null },
     }));
     const partial = "a leg has no figure, and no sum is taken from part of them";
-    expect(figure(rows, "spread value")).toMatchObject({ text: "—", why: partial });
+    expect(figure(rows, "value")).toMatchObject({ text: "—", why: partial });
     expect(figure(rows, "Δ")).toMatchObject({ text: "-0.050", why: null });
-    for (const label of ["γ", "θ", "vega"]) expect(figure(rows, label)).toMatchObject({ text: "—", why: partial });
+    for (const label of ["Γ", "Θ", "ν"]) expect(figure(rows, label)).toMatchObject({ text: "—", why: partial });
     // the fixture's own combo carries no greeks at all, as a row from before they were served
-    for (const label of ["Δ", "γ", "θ", "vega"]) {
+    for (const label of ["Δ", "Γ", "Θ", "ν"]) {
       expect(figure(ruleFigures(quote("w-dec18")), label)).toMatchObject({ text: "—", why: partial });
     }
   });
 
-  it("list no spread value for a rule watching a greek: its sum is that greek, not a price", () => {
+  it("are labelled in the rule's own words, so a figure and the rule on it read alike (#404)", () => {
+    const rows = ruleFigures(withQuote("w-dec18", {
+      combo_greeks: { option_delta: -0.0512, option_gamma: -0.00031, option_theta: 0.731, option_vega: -1.284 },
+    }));
+    expect(rows.map((r) => r.label).filter((l) => l !== "cost to close"))
+      .toEqual(["mid_price", "option_delta", "option_gamma", "option_theta", "option_vega"].map((f) => fieldWords(f)));
+  });
+
+  it("list no value for a rule watching a greek: its sum is that greek, not a price", () => {
     const rows = ruleFigures(withQuote("w-dec18", {
       field: "option_delta", combo_value: -0.05, combo_greeks: { option_delta: -0.0512 },
     }));
-    expect(rows.some((r) => r.label === "spread value")).toBe(false);
+    expect(rows.some((r) => r.label === "value")).toBe(false);
     expect(rows.some((r) => r.text === "-0.05")).toBe(false);
     expect(figure(rows, "Δ")).toMatchObject({ text: "-0.051", why: null });
   });
@@ -223,42 +232,42 @@ describe.each([["the desk's inspector", openDesk], ["the phone's sheet", openPho
     expect(drawn(at, "last trade")).toBe("2026-11-11 23:58:12");
     expect(drawn(at, "IV")).toBe("14.24%");
     expect(drawn(at, "Δ")).toBe("0.040");
-    expect(drawn(at, "γ")).toBe("0.0001");
-    expect(drawn(at, "θ")).toBe("-0.06");
-    expect(drawn(at, "vega")).toBe("0.43");
+    expect(drawn(at, "Γ")).toBe("0.0001");
+    expect(drawn(at, "Θ")).toBe("-0.06");
+    expect(drawn(at, "ν")).toBe("0.43");
   });
 
   it("says a figure not served as a dash with its reason, beside it", async () => {
     const at = await open("w-lone", BOOK.map((q) => q.id === "w-lone" ? { ...q, quote: { ...FULL, option_gamma: undefined } } as Entry : q));
-    expect(drawn(at, "γ")).toBe("— not served for this contract");
-    expect(drawn(at, "θ")).toBe("-0.06");
+    expect(drawn(at, "Γ")).toBe("— not served for this contract");
+    expect(drawn(at, "Θ")).toBe("-0.06");
   });
 
   it("shows a combo's value and the greeks the service summed, and no IV", async () => {
     const greeks = { option_delta: -0.0512, option_gamma: -0.00031, option_theta: 0.731, option_vega: -1.284 };
     const at = await open("w-dec18", BOOK.map((q) => q.id === "w-dec18" ? { ...q, combo_greeks: greeks } as Entry : q));
-    expect(drawn(at, "spread value")).toBe("-2.40");
+    expect(drawn(at, "value")).toBe("-2.40");
     expect(drawn(at, "Δ")).toBe("-0.051");
-    expect(drawn(at, "γ")).toBe("-0.0003");
-    expect(drawn(at, "θ")).toBe("0.73");
-    expect(drawn(at, "vega")).toBe("-1.28");
+    expect(drawn(at, "Γ")).toBe("-0.0003");
+    expect(drawn(at, "Θ")).toBe("0.73");
+    expect(drawn(at, "ν")).toBe("-1.28");
     expect(within(within(at).getByRole("group", { name: "figures" })).queryByText("IV")).toBeNull();
   });
 
-  it("calls a delta rule's summed delta no spread value, anywhere", async () => {
+  it("calls a delta rule's summed delta no value, anywhere", async () => {
     const delta = BOOK.map((q) => q.id === "w-dec18"
       ? { ...q, field: "option_delta", threshold: 0.2, combo_value: -0.05, watched: -0.05,
           combo_greeks: { option_delta: -0.0512 } } as Entry : q);
     const at = await open("w-dec18", delta);
-    expect(at.textContent).not.toContain("spread value");
+    expect(within(at).queryAllByText("value", { selector: "dt" })).toHaveLength(0);
     expect(drawn(at, "Δ")).toBe("-0.051");
   });
 
   it("labels the spread value once in the whole of it, for a rule on the spread's price", async () => {
     const at = await open("w-dec18");
     // as a figure's label, anywhere in the sheet or inspector — the facts once had one of their own
-    expect(within(at).getAllByText("spread value", { selector: "dt" })).toHaveLength(1);
-    expect(drawn(at, "spread value")).toBe("-2.40");
+    expect(within(at).getAllByText("value", { selector: "dt" })).toHaveLength(1);
+    expect(drawn(at, "value")).toBe("-2.40");
   });
 
   it("says once why there are no figures, rather than a dash per figure", async () => {
@@ -273,7 +282,7 @@ describe.each([["the desk's inspector", openDesk], ["the phone's sheet", openPho
   it("hides none of them under privacy: they are a contract's figures in points, not $ amounts", async () => {
     const at = await open("w-lone", BOOK, true);
     expect(drawn(at, "bid")).toBe("0.45");
-    expect(drawn(at, "vega")).toBe("0.43");
+    expect(drawn(at, "ν")).toBe("0.43");
   });
 });
 

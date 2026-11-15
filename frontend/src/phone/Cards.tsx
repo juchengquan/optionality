@@ -146,7 +146,7 @@ export function OffList({ quarantined, muted }: { quarantined: Monitor[]; muted:
       {quarantined.map((m) => (
         <li key={m.id} className="nxp-card" data-monitor={m.id} data-state="quarantined">
           <span className="nxp-name">{monitorName(m)}</span>
-          <span className="nxp-sentence">{fieldWords(m.field, Boolean(m.legs))}</span>
+          <span className="nxp-sentence">{fieldWords(m.field)}</span>
           <span className="nx-chip" data-attention="fault"><OctagonAlert aria-hidden="true" />quarantined</span>
           <span className="nxp-meta">{QUARANTINED[m.disabled_reason ?? ""] ?? m.disabled_reason}</span>
           <MonitorControls rule={ruleOfMonitor(m)} served={null} />
@@ -155,7 +155,7 @@ export function OffList({ quarantined, muted }: { quarantined: Monitor[]; muted:
       {muted.map((m) => (
         <li key={m.id} className="nxp-card" data-monitor={m.id} data-state="muted">
           <span className="nxp-name">{monitorName(m)}</span>
-          <span className="nxp-sentence">{fieldWords(m.field, Boolean(m.legs))}</span>
+          <span className="nxp-sentence">{fieldWords(m.field)}</span>
           <span className="nxp-meta">{mutedWords(m.disabled_reason)}</span>
           <MonitorControls rule={ruleOfMonitor(m)} served={null} />
         </li>
