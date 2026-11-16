@@ -25,7 +25,10 @@ keyword name, and a string that IS the name or ends a dotted path to it (`getatt
 "placeOrder")`, folded where literals are added or joined); a star import from an IB client, which
 brings the order classes in unnamed; code handed to `exec`/`eval`/`compile` that names one; and an
 order message sent straight down the wire, `client.send(3, ...)`, which skips every method name
-there is. Docstrings and comments may say anything: describing the rule is not breaking it.
+there is — its id written as a literal, as a name or an enum member bound to one in the same file
+(`PLACE_ORDER = 3`, `class Msg(IntEnum)`), as the protocol's own name (`OUT.PLACE_ORDER`), or as
+text: `send("3", ...)`, or `sendMsg("3\\x00...")`, whose first field is the id. Docstrings and
+comments may say anything: describing the rule is not breaking it.
 
 **How the names were derived** — from `ib_async` 2.1.0 itself, by `derive()` in the library's
 `tests/test_no_trading.py`, which reads its source rather than its documentation:
@@ -179,8 +182,72 @@ def an_int(node: ast.AST) -> int | None:
     return node.value if isinstance(node, ast.Constant) and type(node.value) is int else None
 
 
-def message_sent(call: ast.Call) -> int | None:
-    """The order message a raw `send(...)` puts on the wire, if it is one."""
+def dotted(node: ast.AST) -> str | None:
+    """`a.b.c` as text, where `node` is a plain name or a chain of attributes on one."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        base = dotted(node.value)
+        return None if base is None else f"{base}.{node.attr}"
+    return None
+
+
+def int_constants(tree: ast.AST) -> dict[str, set[int]]:
+    """Every name this source binds to a literal int, by the name a later line would use: `X` for a
+    module's or a function's `X = 3`, and `Msg.X` (and `X`, inside the class) for a class body's — an
+    `IntEnum` member is one. Every value a name is ever given, because a lint cannot know which
+    assignment ran: `PLACE_ORDER = 3; client.send(PLACE_ORDER, ...)` sends message 3 under a name."""
+    found: dict[str, set[int]] = {}
+
+    def bind(name: str, value: int) -> None:
+        found.setdefault(name, set()).add(value)
+
+    def visit(node: ast.AST, owner: str | None) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.Assign, ast.AnnAssign)):
+                value = an_int(child.value) if child.value is not None else None
+                targets = child.targets if isinstance(child, ast.Assign) else [child.target]
+                if value is not None:
+                    for target in targets:
+                        if isinstance(target, ast.Name):
+                            bind(target.id, value)
+                            if owner is not None:
+                                bind(f"{owner}.{target.id}", value)
+            visit(child, child.name if isinstance(child, ast.ClassDef) else owner)
+
+    visit(tree, None)
+    return found
+
+
+#: the protocol's names for the order messages, which a client library may export: `OUT.PLACE_ORDER`
+WRITE_NAMES = {name: message for message, name in WRITE_MESSAGES.items()}
+
+
+def _message_ids(node: ast.AST, constants: dict[str, set[int]], raw: bool) -> set[int]:
+    """Every message id `node` may stand for as the first field sent: a literal int, a name or a
+    member bound to one, a protocol name (`PLACE_ORDER`, `OUT.CANCEL_ORDER`), or text whose first
+    field is a number — the whole string for `send`, which writes each field as text, and up to the
+    first NUL for `sendMsg` (`raw`), which takes the message already joined."""
+    message = an_int(node)
+    if message is not None:
+        return {message}
+    path = dotted(node)
+    if path is not None:
+        ids = set(constants.get(path, set()))
+        last = path.rsplit(".", 1)[-1]
+        if last in WRITE_NAMES:
+            ids.add(WRITE_NAMES[last])
+        return ids
+    text = folded(node)
+    if text is not None:
+        field = text.split("\0", 1)[0] if raw else text
+        if field.strip().isdigit():
+            return {int(field.strip())}
+    return set()
+
+
+def message_sent(call: ast.Call, constants: dict[str, set[int]] | None = None) -> int | None:
+    """The order message a raw `send(...)` or `sendMsg(...)` puts on the wire, if it is one."""
     func = call.func
     name = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else None
     if name not in SENDS or not call.args:
@@ -188,8 +255,8 @@ def message_sent(call: ast.Call) -> int | None:
     first = call.args[0]
     if isinstance(first, ast.Starred) and isinstance(first.value, (ast.List, ast.Tuple)) and first.value.elts:
         first = first.value.elts[0]
-    message = an_int(first)
-    return message if message in WRITE_MESSAGES else None
+    writes = sorted(_message_ids(first, constants or {}, raw=name == "sendMsg") & WRITE_MESSAGES.keys())
+    return writes[0] if writes else None
 
 
 def breaches_in(source: str, *, strings: bool = True) -> list[tuple[int, str]]:
@@ -199,6 +266,7 @@ def breaches_in(source: str, *, strings: bool = True) -> list[tuple[int, str]]:
     tables ARE the names. The library's lint fixes that exemption to this file and nothing else.
     """
     tree = ast.parse(source)
+    constants = int_constants(tree)
     found: set[tuple[int, str]] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and node.attr in FORBIDDEN:
@@ -217,7 +285,7 @@ def breaches_in(source: str, *, strings: bool = True) -> list[tuple[int, str]]:
         elif isinstance(node, (ast.arg, ast.keyword)) and node.arg in FORBIDDEN:
             found.add((node.lineno, f"names {node.arg} as an argument"))
         elif isinstance(node, ast.Call):
-            message = message_sent(node)
+            message = message_sent(node, constants)
             if message is not None:
                 found.add((node.lineno, f"sends {WRITE_MESSAGES[message]} ({message}) down the wire"))
             if isinstance(node.func, ast.Name) and node.func.id in EVALUATORS:
