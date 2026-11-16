@@ -13,7 +13,7 @@ import { ruleText, thresholdError } from "../format.ts";
 
 const LEG_TOKEN = /^([+-])([CP])(\d+(?:\.\d+)?)$/;
 
-/** The trailing `[field] [above|below] [signed]` words, in any order. */
+/** The trailing `[field] [above|below] [abs|signed]` words, in any order. */
 function modifiers(extras: string[], defaultField: string) {
   let field = defaultField;
   let direction = "above";
@@ -21,7 +21,9 @@ function modifiers(extras: string[], defaultField: string) {
   for (const extra of extras) {
     const low = extra.toLowerCase();
     if (low === "above" || low === "below") direction = low;
-    else if (low === "signed") compare = "signed";
+    else if (low === "signed" || low === "abs") compare = low;
+    // anything else is taken as the field, and refused by name if it is not one (`watchFieldError`):
+    // this once made `/watch … abs` watch a field called "abs"
     else field = extra;
   }
   return { field, direction, compare };

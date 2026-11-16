@@ -45,7 +45,7 @@ class _Modifiers:
 
 
 def _modifiers(extras: list[str], default_field: str) -> _Modifiers:
-    """The trailing `[field] [above|below] [signed]` words, in any order."""
+    """The trailing `[field] [above|below] [abs|signed]` words, in any order."""
     field = default_field
     direction = "above"
     compare = "abs"
@@ -53,8 +53,10 @@ def _modifiers(extras: list[str], default_field: str) -> _Modifiers:
         low = extra.lower()
         if low in ("above", "below"):
             direction = low
-        elif low == "signed":
-            compare = "signed"
+        elif low in ("signed", "abs"):
+            compare = low
+        # anything else is taken as the field, and refused by name if it is not one
+        # (`watch_field_error`): this once made `/watch … abs` watch a field called "abs"
         else:
             field = extra
     return _Modifiers(field, direction, compare)

@@ -247,6 +247,23 @@ export const SWEEP: readonly SweepInput[] = [
     }),
   },
   {
+    // a rule made before fields were checked, on a quote's TEXT: it read NaN, which is never
+    // breached and never silent, so it sat on the watchlist doing nothing. Read as no figure, it is
+    // silence like any other, and quarantined at the limit
+    name: "a rule on a quote's text is silence, and quarantined at the limit",
+    outcomes: ["quarantined-for-a-figure-that-never-arrives"],
+    world: world({
+      settings: { QUARANTINE_AFTER_SILENT_SWEEPS: "1" },
+      tables: {
+        monitors: [monitor({ id: "mon-1", field: "option_type" })],
+        watch_samples: [watchDay([C7300], {
+          observed_on: "2026-11-09", dte: 39, legs_mid: { [C7300]: 2.75 }, observed_at: stored(at(-15)),
+        })],
+      },
+      provider: { quotes: { [C7300]: { name: "SPXW 261218 7300C", mid_price: 2.75, option_type: "CALL" } } },
+    }),
+  },
+  {
     name: "a figure that never arrives is quarantined at the limit",
     outcomes: ["quarantined-for-a-figure-that-never-arrives"],
     world: world({

@@ -172,7 +172,7 @@ describe("IB Gateway as the Provider", () => {
 
     const resp = await fetch(`${base}/quotes`);
     expect(resp.status, up.log()).toBe(200);
-    const quotes = await resp.json();
+    const quotes = await resp.json() as { code: string }[];
     expect(quotes.map((q: { code: string }) => q.code)).toContain(code);
     expect(up.log()).not.toMatch(/is not a function/);
   }, 40_000);

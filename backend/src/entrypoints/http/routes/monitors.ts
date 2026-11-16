@@ -19,7 +19,7 @@ import {
 import type { MonitorRow } from "../../../db/rows.ts";
 import { fromSqliteBool, toSqliteBool } from "../../../db/values.ts";
 import { exitPolicy } from "optionality/domain/exit";
-import { comboFieldError, monitorLegCodes } from "optionality/domain/monitor";
+import { comboFieldError, monitorLegCodes, watchFieldError } from "optionality/domain/monitor";
 import { toMonitor, toPosition } from "../../../hydrate.ts";
 import { contractSetKey, lastCloses, ruleHistory, structureKey } from "../../../watch-history.ts";
 import type { Monitor } from "optionality/domain/monitor";
@@ -283,6 +283,9 @@ export function monitorRoutes(deps: Deps) {
       // POST refuses a combo on a figure that is not additive across its legs; a PATCH is the
       // same rule reached by another door, and left open it made a combo watch a summed IV that
       // the engine refuses to compute, so the rule fell silent until quarantined (#292)
+      // ...and a field no quote carries as a figure is refused on either door, as POST refuses it
+      const unwatchable = given.field !== undefined ? watchFieldError(field) : null;
+      if (unwatchable) throw httpError(422, unwatchable);
       const notAdditive = given.field !== undefined && row.legs !== null ? comboFieldError(field) : null;
       if (notAdditive) throw httpError(422, notAdditive);
       if (field !== row.field && findMonitorByCodeField(db, changes.code ?? row.code, field, id)) {

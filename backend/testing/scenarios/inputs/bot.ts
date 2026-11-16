@@ -212,6 +212,18 @@ export const BOT: readonly BotInput[] = [
     update: message("/watch 20261218 PUT 6400 -0.25 signed below"),
   },
   {
+    // "abs" is the compare it names, not a field: it once made the rule watch a field called "abs"
+    name: "/watch takes abs as the compare it names",
+    world: world({ provider: { quotes: BOOK } }),
+    update: message("/watch 2026-12-18 CALL 7300 0.3 abs below"),
+  },
+  {
+    // a word it does not know is still read as the field, and refused by name when it is not one
+    name: "/watch refuses a word that is not a figure a quote carries",
+    world: world({ provider: { quotes: BOOK } }),
+    update: message("/watch 2026-12-18 CALL 7300 0.3 delta"),
+  },
+  {
     name: "/watch with too few words answers with its usage",
     world: world(),
     update: message("/watch 2026-12-18 CALL 7300"),

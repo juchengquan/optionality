@@ -696,7 +696,9 @@ class TestQuotes:
         quotes = resp.json()
         assert len(quotes) == 2
         row = next(q for q in quotes if q["id"] == far)
-        assert [row["watched"], row["distance"], row["fill"], row["triggered"]] == [None, None, 100, True]
+        # and an infinite reading is no figure at all — no market quotes one — so it neither fills nor
+        # rings, as the sweep counts it toward silence rather than alarming on it
+        assert [row["watched"], row["distance"], row["fill"], row["triggered"]] == [None, None, None, False]
 
     async def test_answers_502_rather_than_500_when_the_provider_call_fails(self, start):
         h = start(fetch_quotes=echo_then_fail())

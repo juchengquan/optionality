@@ -45,6 +45,28 @@ export const COMBO_GREEK_FIELDS = [
  *  must still never produce a sum. */
 export const NON_ADDITIVE_FIELDS: ReadonlySet<string> = new Set(["option_implied_volatility"]);
 
+/** Every figure a rule may watch: each NUMBER a Quote carries, under the service's field names —
+ *  moomoo's snapshot (`vendors/opend/snapshot.ts`), IB Gateway's mapping (`vendors/ibkr/fields.ts`),
+ *  which names a subset of the same, and the derived mid. A Quote also carries text — `code`,
+ *  `name`, `option_type`, `update_time` — and flags, and a rule on one of those read NaN on every
+ *  sweep: never silent, so never quarantined, and never alarmed. Nor was a word nobody meant as a
+ *  field: the bot read any trailing word it did not know as one, so `/watch … abs` watched "abs". */
+export const WATCHABLE_FIELDS: readonly string[] = [
+  "mid_price", "last_price", "bid_price", "ask_price", "open_price", "high_price", "low_price",
+  "prev_close_price", "avg_price", "bid_vol", "ask_vol", "volume", "turnover", "turnover_rate",
+  "amplitude", "bid_ask_ratio", "lot_size",
+  "option_delta", "option_gamma", "option_theta", "option_vega", "option_rho",
+  "option_implied_volatility", "option_premium", "option_open_interest", "option_strike_price",
+  "option_contract_size", "option_contract_multiplier", "option_expiry_date_distance",
+];
+
+/** Reason a rule cannot watch this field at all, or null if it can. A combo's own further rule is
+ *  `comboFieldError`. */
+export function watchFieldError(field: string): string | null {
+  if (WATCHABLE_FIELDS.includes(field)) return null;
+  return `cannot watch ${field}: it is not a figure a quote carries`;
+}
+
 export function monitorLegCodes(monitor: Monitor): string[] {
   if (!monitor.legs || monitor.legs.length === 0) return [monitor.code];
   return monitor.legs.map((l) => buildSpxCode(monitor.strike_date, l.option_type, l.strike));
@@ -76,17 +98,27 @@ export function comboFieldSum(monitor: Monitor, byCode: ByCode, field: string): 
   if (legs.length !== codes.length) throw new Error("a code per leg");
   let total = 0;
   for (const [i, leg] of legs.entries()) {
-    const value = byCode[codes[i]!]?.[field];
-    if (value === null || value === undefined) return null;
-    total += leg.sign * (leg.qty ?? 1) * Number(value);
+    const value = reading(byCode[codes[i]!]?.[field]);
+    if (value === null) return null;
+    total += leg.sign * (leg.qty ?? 1) * value;
   }
-  return total;
+  return Number.isFinite(total) ? total : null;
+}
+
+/** A quote field as a figure, or null where it is none. NOT-A-NUMBER is no figure: `Number()` of
+ *  text is NaN, and a NaN compares false with everything — so a rule on it was never breached,
+ *  never silent and never quarantined, and sat on the watchlist doing nothing for ever. Missing,
+ *  it is counted as silence and quarantined after `QUARANTINE_AFTER_SILENT_SWEEPS` like any other
+ *  figure that does not arrive. Infinity likewise: no market quotes one. */
+function reading(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }
 
 export function monitorValue(monitor: Monitor, byCode: ByCode): number | null {
   if (!monitor.legs || monitor.legs.length === 0) {
-    const value = byCode[monitor.code]?.[monitor.field];
-    return value === null || value === undefined ? null : Number(value);
+    return reading(byCode[monitor.code]?.[monitor.field]);
   }
   return comboFieldSum(monitor, byCode, monitor.field);
 }

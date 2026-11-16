@@ -705,7 +705,9 @@ describe("/quotes", () => {
     const quotes = await body(resp);
     expect(quotes).toHaveLength(2);
     const row = quotes.find((q: { id: string }) => q.id === far);
-    expect([row.watched, row.distance, row.fill, row.triggered]).toEqual([null, null, 100, true]);
+    // and an infinite reading is no figure at all — no market quotes one — so it neither fills nor
+    // rings, as the sweep counts it toward silence rather than alarming on it
+    expect([row.watched, row.distance, row.fill, row.triggered]).toEqual([null, null, null, false]);
   });
 
   it("answers 502 rather than 500 when the Provider call fails", async () => {

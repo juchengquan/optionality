@@ -425,10 +425,10 @@ export const HTTP: readonly HttpInput[] = [
   },
   {
     // a field the quote schema does not type passes through as the Provider sent it, so an
-    // infinite reading reaches the row. JSON cannot write one: it is served as no figure and no
-    // distance, the bar and the bell are decided on it as the sweep decides — full, and ringing —
-    // and every other row is answered as usual
-    name: "GET /quotes rings on an infinite reading it cannot serve, and answers every other row",
+    // infinite reading reaches the row. It is no figure — JSON cannot write one, and no market
+    // quotes one — so it is served as no figure, no distance, no fill and no bell, as the sweep
+    // reads it, and every other row is answered as usual
+    name: "GET /quotes serves an infinite reading as no figure, and answers every other row",
     world: world({
       tables: {
         monitors: [
@@ -635,6 +635,18 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/monitors", { ...comboBody, field: "option_implied_volatility" }),
   },
   {
+    // a quote's text is no figure: watched, it read NaN every sweep — never breached, never silent,
+    // never quarantined — so it is refused, asking the Provider nothing
+    name: "POST /monitors refuses a field that is not a figure a quote carries",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/monitors", { ...single, field: "option_type" }),
+  },
+  {
+    name: "POST /monitors refuses a combo on a field that is not a figure a quote carries",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/monitors", { ...comboBody, field: "name" }),
+  },
+  {
     name: "PATCH /monitors/{id} moves a threshold",
     world: world({ tables: held }),
     request: request("PATCH", "/monitors/mon-1", { threshold: 0.35 }),
@@ -682,6 +694,11 @@ export const HTTP: readonly HttpInput[] = [
     name: "PATCH /monitors/{id} refuses a combo moved onto a figure that does not add up",
     world: world({ tables: held }),
     request: request("PATCH", "/monitors/mon-2", { field: "option_implied_volatility" }),
+  },
+  {
+    name: "PATCH /monitors/{id} refuses a field that is not a figure a quote carries",
+    world: world({ tables: held }),
+    request: request("PATCH", "/monitors/mon-1", { field: "abs" }),
   },
   {
     // the owner's fix for a quarantine: switched back on, its reason cleared, the sweep to judge it
@@ -1991,6 +2008,21 @@ export const HTTP: readonly HttpInput[] = [
           direction: "below", compare: "signed",
         }],
       }],
+    }),
+  },
+  {
+    name: "POST /spreads refuses a monitor on a field that is not a figure a quote carries",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{ ...PUT_SPREAD, monitors: [{ option_type: "PUT", strike: 6400, field: "update_time", threshold: 1 }] }],
+    }),
+  },
+  {
+    name: "POST /spreads refuses a spread's own monitor on a field that is not a figure a quote carries",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...PUT_SPREAD, monitors: [{ field: "name", threshold: 1 }] }],
     }),
   },
   {

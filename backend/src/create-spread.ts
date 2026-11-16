@@ -26,7 +26,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import { buildSpxCode } from "optionality/domain/contract";
-import { comboFieldError, thresholdFault } from "optionality/domain/monitor";
+import { comboFieldError, thresholdFault, watchFieldError } from "optionality/domain/monitor";
 import { positionsHolding } from "optionality/domain/position";
 import { type QuoteFetcher, verifyContracts } from "optionality/quotes";
 import { atomic } from "./db/open.ts";
@@ -133,9 +133,11 @@ function plan(
     if (!spread.legs.some((l) => l.option_type === type && l.strike === strike)) {
       return refuse(`${which} watches ${type} ${strike}, which is not one of its legs`);
     }
+    const field = m.field ?? DEFAULT_SINGLE_FIELD;
+    const unwatchable = watchFieldError(field);
+    if (unwatchable) return refuse(unwatchable);
     if (thresholdFault(compare, m.threshold)) return refuse(thresholdError(compare, m.threshold)!);
     const code = buildSpxCode(strikeDate, type, strike);
-    const field = m.field ?? DEFAULT_SINGLE_FIELD;
     return {
       code, field, contracts: [code],
       columns: { code, strike_date: strikeDate, option_type: type, strike, field, ...common },
@@ -146,6 +148,8 @@ function plan(
     return refuse(`'${spread.name}' has one leg, so its value is that contract's: watch the leg instead`);
   }
   const field = m.field ?? DEFAULT_COMBO_FIELD;
+  const unwatchable = watchFieldError(field);
+  if (unwatchable) return refuse(unwatchable);
   const notAdditive = comboFieldError(field);
   if (notAdditive) return refuse(notAdditive);
   if (thresholdFault(compare, m.threshold)) return refuse(thresholdError(compare, m.threshold)!);

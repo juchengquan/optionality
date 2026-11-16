@@ -30,7 +30,7 @@ from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.exit import ExitPolicy
-from optionality.monitor import Monitor, combo_field_error, monitor_leg_codes
+from optionality.monitor import Monitor, combo_field_error, monitor_leg_codes, watch_field_error
 from optionality.position import Position, position_leg_codes
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
@@ -353,6 +353,10 @@ def monitor_routes(deps: Deps) -> APIRouter:
         # POST refuses a combo on a figure that is not additive across its legs; a PATCH is the
         # same rule reached by another door, and left open it made a combo watch a summed IV that
         # the engine refuses to compute, so the rule fell silent until quarantined (#292)
+        # ...and a field no quote carries as a figure is refused on either door, as POST refuses it
+        unwatchable = watch_field_error(field) if given.field is not None else None
+        if unwatchable:
+            raise http_error(422, unwatchable)
         not_additive = combo_field_error(field) if given.field is not None and row["legs"] is not None else None
         if not_additive:
             raise http_error(422, not_additive)
