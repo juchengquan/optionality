@@ -16,7 +16,7 @@ import { hc, type InferRequestType } from "hono/client";
 
 import type { AppType } from "backend";
 import type { Source } from "backend/schemas";
-import { plainReason } from "./errors";
+import { plainReason, RAW } from "./errors";
 
 /** Where the API lives, relative to wherever this bundle was deployed.
  *
@@ -91,13 +91,19 @@ function withSpx<T extends { spx?: number | null; spx_reason?: string | null }>(
   return rows.map((r) => plainReasons({ ...r, spx: r.spx ?? null, spx_reason: r.spx_reason ?? null }));
 }
 
-/** A row's served reasons in plain words (part N, `errors.plainReason`): a socket's error code never
- *  reaches the screen, from whichever field it was served in. */
+/** A row's served reasons in plain words (part N, `errors.plainReason`): a socket's error code is
+ *  never the words on screen, from whichever field it was served in, and the vendor that failed is
+ *  named — a Reference's by its `source`. What was served is kept beside each, under `<field>_raw`,
+ *  for the disclosure that shows it (`ErrorWords.tsx`). */
 function plainReasons<T>(row: T): T {
   const r = row as Record<string, unknown>;
   const out: Record<string, unknown> = { ...r };
+  const vendor = typeof r.source === "string" ? r.source : null;
   for (const k of ["error", "spx_reason", "valued_reason"]) {
-    if (typeof r[k] === "string") out[k] = plainReason(r[k] as string);
+    if (typeof r[k] !== "string") continue;
+    const plain = plainReason(r[k] as string, vendor);
+    out[k] = plain;
+    if (plain !== r[k]) out[`${k}${RAW}`] = r[k];
   }
   return out as T;
 }

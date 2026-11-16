@@ -4,7 +4,7 @@
  *  On the desk, the phone, the picture and its Markdown alike, so the screen and the picture agree.
  *  In the session nothing changes but that a delta rule's figure is no longer called a value.
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BookProps } from "../Book";
@@ -162,6 +162,35 @@ describe("on the phone", () => {
   it("in the session, its live price, as the desk's row does", () => {
     render(<div className="nx"><PhoneBook {...props(true)} /></div>);
     expect(IDS.map(phoneValue)).toEqual(expected(true));
+  });
+});
+
+describe("in the detail, as in the row (review of #420)", () => {
+  /** The value a detail's figures say, by their first figure: the value of a watched row. */
+  const detailValue = (root: Element) => root.querySelector(".nx-figures div:first-child dd")?.textContent ?? null;
+
+  it("out of the session, says each watched row's last price in the inspector and the sheet, as its row and card do", async () => {
+    render(<DeskBook {...props(false)} />);
+    const rows = IDS.filter((id) => document.querySelector(`.nxd-row[data-ref="${id}"] .nxd-name`));
+    const inspector: (string | null)[] = [];
+    for (const id of rows) {
+      const name = document.querySelector<HTMLButtonElement>(`.nxd-row[data-ref="${id}"] .nxd-name`)!;
+      fireEvent.click(name);
+      inspector.push(detailValue(screen.getByRole("complementary", { name: `inspector: ${name.textContent}` })));
+    }
+    expect(inspector).toEqual(rows.map((id) => EXPECT[id]![0]));
+    cleanup();
+    render(<div className="nx"><PhoneBook {...props(false)} /></div>);
+    const sheet: (string | null)[] = [];
+    const cards = rows.filter((id) => document.querySelector(`article[data-ref="${id}"]`));
+    expect(cards.length).toBeGreaterThan(2);
+    for (const id of cards) {
+      fireEvent.click(within(document.querySelector<HTMLElement>(`article[data-ref="${id}"]`)!).getByRole("button", { name: /^details of / }));
+      sheet.push(detailValue(await screen.findByRole("dialog")));
+      act(() => { window.history.back(); });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    }
+    expect(sheet).toEqual(cards.map((id) => EXPECT[id]![0]));
   });
 });
 

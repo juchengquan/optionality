@@ -88,6 +88,51 @@ async function readSettings(read: Read): Promise<void> {
   await settle();
 }
 
+/** The Add sheet, opened from the header: its spread form and its contract form, each read. */
+async function readAdd(read: Read): Promise<void> {
+  fireEvent.click(screen.getByRole("button", { name: "add" }));
+  await settle();
+  const sheet = screen.getAllByRole("dialog").at(-1)!;
+  read("add: a spread", sheet);
+  const contract = within(sheet).queryByRole("button", { name: "one contract" });
+  if (contract) {
+    fireEvent.click(contract);
+    await settle();
+    read("add: one contract", sheet);
+  }
+  act(() => { window.history.back(); });
+  await settle();
+}
+
+/** A rule's editor and its delete question, opened in `root` (an inspector or a sheet) and read,
+ *  then left as they were: the editor cancelled, the question kept. Returns whether there was one. */
+async function readRuleForms(where: string, root: Element, read: Read): Promise<boolean> {
+  const edit = root.querySelector<HTMLButtonElement>(".nx-mon-actions button[aria-label^='edit ']");
+  if (!edit) return false;
+  fireEvent.click(edit);
+  await settle();
+  read(`${where} rule edit`, root);
+  fireEvent.click(within(root.querySelector<HTMLElement>(".nx-mon")!).getByRole("button", { name: "cancel" }));
+  await settle();
+  const del = root.querySelector<HTMLButtonElement>(".nx-mon-actions button[aria-label^='delete ']")!;
+  fireEvent.click(del);
+  await settle();
+  read(`${where} rule delete`, root);
+  fireEvent.click(within(root.querySelector<HTMLElement>(".nx-mon-ask")!).getByRole("button", { name: "keep it" }));
+  await settle();
+  return true;
+}
+
+/** The desk's palette, opened, its finds and its actions read, and shut. */
+async function readPalette(read: Read): Promise<void> {
+  fireEvent.click(screen.getByRole("button", { name: /^find and act/ }));
+  await settle();
+  const palette = screen.getAllByRole("dialog").at(-1)!;
+  read("palette", palette);
+  fireEvent.keyDown(palette, { key: "Escape" });
+  await settle();
+}
+
 /** The desk, walked: what it read, and how much of it was drawn to be read. */
 /** @param now the page's clock: Monday 10:00 New York, in session, unless given */
 export async function walkDesk(read: Read, now: Date = MONDAY): Promise<{ names: number; charts: number; compared: number; split: number }> {
@@ -162,7 +207,18 @@ export async function walkDesk(read: Read, now: Date = MONDAY): Promise<{ names:
   expect(charts, "crosshairs moved").toBeGreaterThan(3);
   expect(compared, "quantity comparisons drawn").toBeGreaterThan(1);
   expect(split, "split tables drawn").toBeGreaterThan(0);
+  // a rule's editor and its delete question, from the first rule row's inspector
+  let ruleForms = 0;
+  for (const name of names) {
+    fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === name)!);
+    await settle();
+    const insp = screen.getByRole("complementary", { name: `inspector: ${name}` });
+    if (!insp.querySelector(".nx-hold-actions") && await readRuleForms(name, insp, read)) { ruleForms++; break; }
+  }
+  expect(ruleForms, "a rule's forms read").toBe(1);
   await readSettings(read);
+  await readAdd(read);
+  await readPalette(read);
   return { names: names.length, charts, compared, split };
 }
 
@@ -203,6 +259,19 @@ export async function walkPhone(read: Read, now: Date = MONDAY): Promise<{ opens
   // out of the session a watched spread with no close recorded has no payoff to draw
   expect(charts).toBeGreaterThan(now === MONDAY ? 3 : 2);
   expect(closes, "close forms read").toBeGreaterThan(1);
+  // a rule's editor and its delete question, in a watched row's sheet
+  let ruleForms = 0;
+  for (const label of opens) {
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    await settle();
+    const sheet = screen.getByRole("dialog");
+    const done = !sheet.querySelector(".nx-hold-actions") && await readRuleForms(label, sheet, read);
+    act(() => { window.history.back(); });
+    await settle();
+    if (done) { ruleForms++; break; }
+  }
+  expect(ruleForms, "a rule's forms read").toBe(1);
   await readSettings(read);
+  await readAdd(read);
   return { opens: opens.length, charts, closes };
 }

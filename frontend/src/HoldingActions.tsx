@@ -26,8 +26,9 @@ import { MonitorControls } from "./MonitorEdit";
 import { ruleOfMonitor } from "./edit";
 import { fieldWords, monitorName } from "./needs";
 import "./holding.css";
-import { plainError } from "./shared/errors";
+import { rawError } from "./shared/errors";
 import { dateWords } from "./shared/times";
+import { ErrorWords } from "./shared/ErrorWords";
 
 /** What a close answered, for the page to say. */
 export interface ClosedOutcome {
@@ -49,7 +50,8 @@ export interface HoldingWrites {
 
 type Open = "edit" | "close" | "delete" | null;
 
-const message = (e: unknown) => plainError(e);
+/** What was thrown, as it was: each place draws it in plain words, the raw one tap away (part N). */
+const message = (e: unknown) => rawError(e);
 
 /** The rules the page knows watch this holding: every `/monitors` row linked to it, and every
  *  enabled rule `placeBook` sat under it. */
@@ -234,7 +236,7 @@ function EditForm({ id, holding, watching, privacy, now, monitors, onCancel, onS
           ? `; its ${watching} rule${watching === 1 ? " is" : "s are"} kept, and a holding added with the same contracts takes ${watching === 1 ? "it" : "them"} back.`
           : "."}
       </p>
-      {error && error.at === null ? <p className="nx-hold-error" role="alert">{error.text}</p> : null}
+      {error && error.at === null ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error.text} /></div> : null}
       <div className="nx-hold-row">
         <button type="submit" className="nx-hold-primary" disabled={saving}>{saving ? "saving…" : "save"}</button>
         <button type="button" onClick={onCancel}>cancel</button>
@@ -268,7 +270,7 @@ function QuantityFields({ holding, draft, error, followers, onChange }: {
           </label>
         ))}
       </div>
-      {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
+      {error ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error} /></div> : null}
       {legs ? (
         <>
           <QuantityChange holding={holding} corrected={legs} />
@@ -320,7 +322,7 @@ function QuantityChange({ holding, corrected }: { holding: Holding; corrected: H
   const [lo, hi] = [Math.min(...strikes), Math.max(...strikes)];
   const body = entry === null ? <p className="nx-meta">no Entry recorded, so there is no payoff to compare</p>
     : shown === null ? <p className="nx-meta">comparing…</p>
-      : "error" in shown ? <p className="nx-meta">{`the payoff could not be compared — ${shown.error}`}</p>
+      : "error" in shown ? <div className="nx-meta">{"the payoff could not be compared — "}<ErrorWords raw={shown.error} /></div>
         : (
           <dl className="nx-payoff-kv" data-updating={shown.key !== key ? "" : undefined}>
             {([
@@ -392,7 +394,7 @@ function CloseForm({ id, holding, now, onCancel, onClosed }: {
                    expired={expired} />
         <DayField value={draft.closedOn} onChange={(closedOn) => change({ closedOn })} />
       </div>
-      {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
+      {error ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error} /></div> : null}
       <div className="nx-hold-row">
         <button type="submit" className="nx-hold-primary" disabled={saving}>{saving ? "closing…" : "close it"}</button>
         <button type="button" onClick={onCancel}>keep it</button>
@@ -479,7 +481,7 @@ export function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onD
           ? "If this was a real trade, close it instead: closing keeps all of it."
           : "If this was a real trade, keep it: its record is what the closed trades show, and a mistyped close is corrected above."}
       </p>
-      {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
+      {error ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error} /></div> : null}
       <div className="nx-hold-row">
         <button type="button" className="nx-hold-danger" disabled={saving} onClick={() => void remove()}>
           {saving ? "deleting…" : "delete it"}

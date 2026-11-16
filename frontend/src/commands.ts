@@ -124,10 +124,13 @@ const single = (type: string, strike: number | null): Leg[] => (strike === null 
 
 /** Everything the palette can find, in the order the desk draws it. */
 export function findables(placed: BookModel): Findable[] {
-  return [
+  const all = [
     ...tableRows(placed).map(ofRow),
     ...placed.muted.map((m) => ofMonitor(m, m.disabled_reason === "expired" ? "expired rule" : "muted rule")),
   ];
+  // once each: a rule on a condor held as two spreads is drawn under both, and is one rule to find
+  // (found by the page walk's palette, review of #420)
+  return all.filter((f, i) => all.findIndex((g) => g.ref === f.ref) === i);
 }
 
 /** What `query` finds among `all`, in their order: every word typed must START one of an item's

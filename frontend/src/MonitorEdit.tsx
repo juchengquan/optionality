@@ -39,7 +39,8 @@ import { RuleWords, ShortWords } from "./RuleWords";
 import { DirectionPair } from "./DirectionPair";
 import { dateWords } from "./shared/times";
 import "./monitor-edit.css";
-import { plainError } from "./shared/errors";
+import { rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 export interface MonitorActions {
   /** a change, then the page as the service now tells it; throws the service's refusal */
@@ -116,7 +117,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
         after();
       }
     } catch (e: unknown) {
-      const text = plainError(e);
+      const text = rawError(e);
       setError({ text, at: spot(text) });
     } finally {
       setBusy(false);
@@ -250,7 +251,8 @@ function settleFocus(root: HTMLElement | null, edit: HTMLButtonElement | null, h
 }
 
 function Refusal({ text, id }: { text: string; id?: string }) {
-  return <p id={id} className="nx-mon-error" role="alert">{text}</p>;
+  // what was thrown kept one tap away, the words plain (part N)
+  return <div id={id} className="nx-mon-error" role="alert"><ErrorWords raw={text} /></div>;
 }
 
 /** A question asked in place, its safe answer focused so an Enter pressed by habit keeps things as

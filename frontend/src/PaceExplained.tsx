@@ -27,7 +27,8 @@ import { fetchVol, type Holding, type Vol } from "./shared/api";
 import { DASH } from "./shared/format";
 import { paceOutcome, paceWords } from "./pace";
 import "./pace.css";
-import { plainError } from "./shared/errors";
+import { rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 export function PaceExplained({ holding }: { holding: Holding }) {
   const s = holding.schedule;
@@ -71,7 +72,7 @@ function useVol(id: string): VolState | null {
     let live = true;
     fetchVol(id).then(
       (vol) => { if (live) setState({ id, vol }); },
-      (err: unknown) => { if (live) setState({ id, error: plainError(err, "open it again to retry") }); },
+      (err: unknown) => { if (live) setState({ id, error: rawError(err) }); },
     );
     return () => { live = false; };
   }, [id]);
@@ -104,7 +105,7 @@ function Split({ id }: { id: string }) {
   if (state === null) return <p className="nx-pace-note">reading what vol did…</p>;
   // a failed read costs the split and nothing else: the rest came with the holding
   if (state.vol === undefined) {
-    return <p className="nx-pace-note">{`what vol did could not be read — ${state.error}`}</p>;
+    return <div className="nx-pace-note">{"what vol did could not be read — "}<ErrorWords raw={state.error ?? ""} again="open it again to retry" /></div>;
   }
   const v = state.vol;
   // the holding's net vega, called what the inspector's figures call it (2026-11-16)

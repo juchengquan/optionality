@@ -8,13 +8,11 @@ import type { Entry, Holding, Monitor } from "../shared/api";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { readUp, type EntryStyle } from "../shared/prefs";
 import { useDismissOnBack } from "../shared/useDismissOnBack";
-import { Chip } from "../Book";
 import type { HoldingWrites } from "../HoldingActions";
 import { DetailBoundary } from "../DetailBoundary";
 import { entryName } from "../needs";
 import { HoldingSections, holdingMeta, RuleSections, ruleMeta } from "../DetailSections";
-import { LevelChip, RuleLine } from "./Cards";
-import { ruleState } from "./state";
+import { RuleLine } from "./Cards";
 import { HoldingStrip } from "../StrikeStrip";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry } from "../edit";
@@ -88,9 +86,8 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session, wri
         {/* the one order the desk's inspector draws too (part J, `sections.ts`) */}
         <HoldingSections surface="phone" holding={holding} rules={rules} quotes={quotes} monitors={monitors}
                          privacy={privacy} session={session} writes={writes}
-                         chip={<LevelChip holding={holding} session={session} />}
                          strip={<HoldingStrip holding={holding} />}
-                         ruleLine={(r) => <EditableLine key={r.id} entry={r} />} />
+                         ruleLine={(r, own) => <EditableLine key={r.id} entry={r} own={own} />} />
       </div>
     </>
   );
@@ -99,7 +96,6 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session, wri
 function RuleDetail({ entry, under, overlap = null, session, privacy }: {
   entry: Entry; under: Entry[]; overlap?: string | null; session: boolean; privacy: boolean;
 }) {
-  const state = ruleState(entry);
   return (
     <>
       <SheetHeader>
@@ -108,17 +104,16 @@ function RuleDetail({ entry, under, overlap = null, session, privacy }: {
       </SheetHeader>
       <div className="nxp-sheet-body">
         <RuleSections surface="phone" entry={entry} under={under} overlap={overlap} privacy={privacy} session={session}
-                      chip={state ? <p><Chip state={state} /></p> : null}
-                      ruleLine={(r) => <EditableLine key={r.id} entry={r} />} />
+                      ruleLine={(r, own) => <EditableLine key={r.id} entry={r} own={own} />} />
       </div>
     </>
   );
 }
 
 /** A rule in the sheet with its controls under it (#292). */
-function EditableLine({ entry }: { entry: Entry }) {
+function EditableLine({ entry, own = false }: { entry: Entry; own?: boolean }) {
   return (
-    <RuleLine entry={entry} marked={false}>
+    <RuleLine entry={entry} marked={false} own={own}>
       <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
     </RuleLine>
   );

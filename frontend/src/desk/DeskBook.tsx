@@ -11,9 +11,9 @@ import { HoldingSections, holdingMeta, RuleSections, ruleMeta } from "../DetailS
 
 import { reasonLabel } from "../shared/groups";
 import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../shared/prefs";
-import { Chip, Money, type BookProps } from "../Book";
+import { Money, type BookProps } from "../Book";
+import { AttentionChip } from "../AttentionChip";
 import { ClosedLine } from "../ClosedLine";
-import { Glyph } from "../NeedsLine";
 import { monitorName, shapeOf, shortRule, storedRuleWords } from "../needs";
 import { ShortWords } from "../RuleWords";
 import { costAndPace, paceOutcome } from "../pace";
@@ -23,7 +23,7 @@ import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, heldSpread, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
+  attentionOf, chipWords, COLUMNS, heldSpread, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
   type DeskColumn, type DeskRow,
 } from "./columns";
 import { StrikeStrip } from "../StrikeStrip";
@@ -33,6 +33,7 @@ import { useDeskFit } from "./useDeskFit";
 import { PriceMapPanel } from "./PriceMapPanel";
 import { priceMapOf, spxOfBook } from "../pricemap";
 import "./desk.css";
+import { ErrorWords } from "../shared/ErrorWords";
 
 /** The desk's book, arrangement A (ADR 0023, #289): ONE dense table, holdings first and then the
  *  watchlist, each grouped by expiry, beside a NON-MODAL inspector.
@@ -245,7 +246,7 @@ function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed,
         <span className="nxd-picker">{picker}</span>
       </div>
       {holdingsError !== null
-        ? <p className="nx-meta nxd-note">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
+        ? <div className="nx-meta nxd-note">{"the holdings could not be valued — "}<ErrorWords raw={holdingsError} again="refresh to try again" /></div> : null}
       {holdings === null && holdingsError === null ? <p className="nx-meta nxd-note">valuing…</p> : null}
       {holdings !== null && holdings.length === 0 ? <p className="nx-meta nxd-note">nothing held</p> : null}
       {/* outside the session (#371): when the service valued what is drawn; the header's refresh
@@ -408,19 +409,6 @@ function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
   );
 }
 
-/** A rule's state is the attention family's chip (Book.tsx's `Chip`); a holding's Level and its
- *  Manage-by are drawn as the needs-you line draws them, with their kinds' glyphs — in the words
- *  `chipWords` gives the row, which outside the session say which valuation they are from (#354). */
-function AttentionChip({ kind, words }: {
-  kind: NonNullable<ReturnType<typeof attentionOf>>; words?: string | null;
-}) {
-  if (kind === "fault" || kind === "entry" || kind === "alarm") return <Chip state={kind} />;
-  return (
-    <span className="nx-chip" data-kind={kind}>
-      <Glyph kind={kind} />{words ?? ATTENTION_WORDS[kind]}
-    </span>
-  );
-}
 
 /** One figure. The visually hidden label says which figure it is to a reader that does not see
  *  the header above it — the rows are a grid of spans, not a `<table>`. */
@@ -548,13 +536,9 @@ function HoldingDetail({ row, session, privacy, partners, onSelect, quotes, moni
   const h: Holding = row.holding;
   // the condor's other spread, when placement bracketed the two
   const partner = partners.get(h.id) ?? null;
-  // its Level, as the row's chip says it: bare in session, and outside it with the valuation it
-  // is from (#354, #371)
-  const a = attentionOf(row);
   return (
     <HoldingSections surface="desk" holding={h} rules={row.rules} quotes={quotes} monitors={monitors}
                      privacy={privacy} session={session} writes={writes}
-                     chip={a ? <AttentionChip kind={a} words={chipWords(row, session)} /> : null}
                      strip={<InspectorStrip holding={h} partner={partner} />}
                      ruleLine={(e) => <RuleItem key={e.id} entry={e} />}
                      extra={partner ? (
@@ -579,12 +563,10 @@ function RuleDetail({ entry, rows, overlap, session, privacy }: {
 }) {
   const under = rows.filter((r): r is Extract<DeskRow, { kind: "rule" }> =>
     r.kind === "rule" && r.nested && !r.entry.legs && r.entry.in_combos.includes(entry.id) && !r.entry.held);
-  const a = attentionOf({ kind: "rule", entry, nested: false });
   return (
     <RuleSections surface="desk" entry={entry} under={under.map((r) => r.entry)} overlap={overlap}
                   privacy={privacy} session={session}
-                  chip={a ? <p><AttentionChip kind={a} /></p> : null}
-                  ruleLine={(e) => <RuleItem key={e.id} entry={e} />} />
+                  ruleLine={(e, own) => <RuleItem key={e.id} entry={e} own={own} />} />
   );
 }
 
@@ -606,12 +588,16 @@ function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined
 
 /** A rule in the inspector's Rules section: its chip, its short form (the sentence to a pointer and
  *  a reader), how far it has come, and its controls. */
-function RuleItem({ entry }: { entry: Entry }) {
+function RuleItem({ entry, own = false }: {
+  entry: Entry;
+  /** the rule the inspector is OF: its chip is the level section's, said once (review of #420) */
+  own?: boolean;
+}) {
   const row: DeskRow = { kind: "rule", entry, nested: false };
   const a = attentionOf(row);
   return (
     <li className="nxd-monitor" data-state={a ?? "calm"}>
-      {a ? <AttentionChip kind={a} /> : null}
+      {a && !own ? <AttentionChip kind={a} /> : null}
       <span><ShortWords short={ALARM_COLUMN.text(row, false)} full={ALARM_COLUMN.words!(row, false)} /></span>
       <Fill entry={entry} />
       <MonitorControls rule={ruleOfEntry(entry)} served={entry} />

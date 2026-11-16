@@ -32,8 +32,11 @@ export function shortDeltas(holding: Holding, quotes: Entry[], monitors: Monitor
     const leg = { option_type: l.option_type, strike: l.strike };
     if (served !== null) return { leg, delta: served };
     const rule = monitors.find((m) => m.legs === null && m.strike_date === holding.strike_date
-      && m.option_type === l.option_type && m.strike === l.strike && byId.get(m.id)?.quote);
-    const figure = rule ? byId.get(rule.id)?.quote?.option_delta : undefined;
+      && m.option_type === l.option_type && m.strike === l.strike && byId.get(m.id));
+    const ruled = rule ? byId.get(rule.id) : undefined;
+    // the quote's own delta, or — where the quote carried none — the figure a delta rule watches, as
+    // the desk's table reads it (`columns.shortLegDelta`, review of #420): one source for the three
+    const figure = ruled?.quote?.option_delta ?? (ruled?.field === "option_delta" ? ruled.watched : undefined);
     return { leg, delta: typeof figure === "number" ? figure : null };
   });
 }

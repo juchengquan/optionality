@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { saidBy } from "../testing/hyphens";
 import { MONDAY, SUNDAY, walkDesk, walkPhone, type Read } from "../testing/pageWalk";
-import { CHECKS } from "../testing/words";
+import { CHECKS, wordsOf } from "../testing/words";
 
 afterEach(() => {
   cleanup();
@@ -28,7 +28,7 @@ afterEach(() => {
 function reading(): { said: string[]; read: Read } {
   const said: string[] = [];
   const read: Read = (where, root) => {
-    const text = saidBy(root);
+    const text = wordsOf(root, saidBy);
     for (const [name, check] of Object.entries(CHECKS)) said.push(...check(text).map((s) => `${where} — ${name}: ${s}`));
   };
   return { said, read };
@@ -38,7 +38,11 @@ describe("the checks see what they look for (each fails on a planted fault)", ()
   it("a clock with no zone, and none with one", () => {
     expect(CHECKS["a clock with no zone"]!("valued at 21:04")).toHaveLength(1);
     expect(CHECKS["a clock with no zone"]!("fetched at 21:04:37 · screen")).toHaveLength(1);
-    for (const ok of ["valued at 21:04 SGT", "16:14 ET", "08:04:37 ET", "17:59 GMT-5", "Mon 16 Nov 2026 10:00 ET",
+    // only the walk's two zones: another zone's name, or capitals that are no zone, is no mark
+    for (const bad of ["21:04 EST", "17:59 GMT-5", "21:04 SG", "16:14 CLOSE"]) {
+      expect(CHECKS["a clock with no zone"]!(bad), bad).toHaveLength(1);
+    }
+    for (const ok of ["valued at 21:04 SGT", "16:14 ET", "08:04:37 ET", "Mon 16 Nov 2026 10:00 ET",
       "observed 20:30 ET, after the 16:15 ET close", "7561.67", "1:2 ratio"]) {
       expect(CHECKS["a clock with no zone"]!(ok), ok).toEqual([]);
     }

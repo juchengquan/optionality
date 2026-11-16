@@ -24,7 +24,8 @@ import { DirectionPair } from "./DirectionPair";
 import { HoldOrWatch } from "./HoldOrWatch";
 import { TakeOver } from "./TakeOver";
 import { ALL_OR_NONE, type HeldLegs } from "./add";
-import { plainError } from "./shared/errors";
+import { rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 export function AddContract({
   privacy, monitors, holdings, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving, prefilled,
@@ -72,7 +73,7 @@ export function AddContract({
     try {
       onSaved(await addSpreads(out.body));
     } catch (err: unknown) {
-      const text = plainError(err);
+      const text = rawError(err);
       setError({ text, at: refusalSpot(text) });
     } finally {
       setSaving(false);
@@ -86,7 +87,7 @@ export function AddContract({
   const tie = (spot: ContractSpot) => error?.at === spot
     ? { "aria-invalid": true, "aria-describedby": errorId(spot) } : {};
   const said = (spot: ContractSpot) => error?.at === spot
-    ? <p id={errorId(spot)} className="nx-add-error" role="alert">{error.text}</p> : null;
+    ? <div id={errorId(spot)} className="nx-add-error" role="alert"><ErrorWords raw={error.text} /></div> : null;
   const thresholdTie = error?.at === "threshold" ? tie("threshold")
     : fault && (draft.rule || !draft.held) ? { "aria-invalid": true, "aria-describedby": `${id}-fault` } : {};
 

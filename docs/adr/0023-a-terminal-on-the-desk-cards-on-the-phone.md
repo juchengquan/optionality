@@ -952,7 +952,11 @@ zone mark.
   are the list above, and the P&L and the captured share lead it, as on the phone. A rule's own
   progress is its line's in `Rules`. Each section is marked `data-section`, and `NextDetailOrder`
   holds both surfaces to the list and to each other, for every holding and watched row of the
-  owner's book.
+  owner's book. A rule's chip and its fault are its level section's, said once: its own line in
+  `Rules` draws neither (review of #420). A holding's chip is the same on both — its Level or its
+  Manage-by, in the row's words (`AttentionChip`). Out of the session a watched row's value figure is
+  its last in-session price and when, as its row and card say it; a short leg's Δ is read from the
+  one source the table reads, a delta rule's watched figure included.
 - **K. The phone's cards say what the desk's rows say.** A watch card gives its value and Δ as its
   desk row writes them (`columns.ruleCells`) — the live price in session and the last in-session one
   out of it, a held spread's cost to close — where it had a value only out of session. Every rule
@@ -966,14 +970,22 @@ zone mark.
   `the figures could not be refreshed — the service did not answer; tried again at the next poll`,
   `the holdings could not be valued — the service failed (502); refresh to try again`. A browser's
   "Failed to fetch" (and Safari's and Firefox's spellings), a socket's `ECONNREFUSED` and the page's
-  own `/quotes → 502` are never on screen; the raw text is the banner's title. A reason the service
-  SERVES for a dash (`error`, `spx_reason`, `valued_reason`, a Reference's error) is plain where it is
-  a socket's noise, `the provider could not be reached`, and as served otherwise. A refusal is the
+  own `/quotes → 502` are never the WORDS on screen. What was thrown or served stays one tap away: a
+  "details" disclosure beside the words (`ErrorWords.tsx`) — on the banner, the holdings' note, every
+  form's refusal, the payoff's, the history's, the pace split's and the closed trades' failures, a
+  rule's fault in its detail and a Reference's in Settings — which a finger and a screen reader
+  reach, where a `title` reached a pointer alone (review of #420); a toast carries it as its detail.
+  A failure names its VENDOR: `moomoo could not be reached`, a Reference's by its source — never
+  "the provider" where the vendor is known, since the References exist to tell vendors apart. A
+  reason the service SERVES for a dash (`error`, `spx_reason`, `valued_reason`, a Reference's error)
+  is made plain at the API boundary (`api.ts`), its served text kept beside it (`<field>_raw`). A refusal is the
   service's words, said as they are, with no retry promised. **Settings' privacy note** says what it
   keeps: `%, Δ, DTE and points`, and that figures in points per contract — cost to close, entry, the
   pace gap, the payoff — stay.
 - **Held by** `WordsPage.test.tsx`, over the page walk the hyphen guard uses (`testing/pageWalk.tsx`,
-  now with Settings), on the desk and the phone, in session and out: no clock without its zone, no
+  now with Settings, the Add sheet, a rule's editor and delete question, and the desk's palette), on
+  the desk and the phone, in session and out: no clock without its zone (ET or the viewer's, SGT —
+  no other mark passes), no
   offset for a zone, no ISO date, no "Monitor", no raw error — each check held to a planted fault.
   `NoCapitals.test.ts` holds every stylesheet and component to no capitals set by CSS, and the
   browser's `NextGreekLabels` to what it computes on every heading, label and button. `NextReasons`

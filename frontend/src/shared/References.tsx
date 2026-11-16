@@ -9,6 +9,8 @@ import { NativeSelect } from "@/components/ui/native-select";
 
 import type { Reference } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
+import { RawDetails } from "./ErrorWords";
+import { rawReason } from "./errors";
 import { referenceTitle } from "./readings";
 
 /** Which Securities are kept on the page, and the door for adding one (ADR 0018, 0019).
@@ -49,7 +51,7 @@ export function References({
               {/* the whole sentence, where the strip shows a dash: a class refusal reads
                   "US stock indices are not supported", which is the one thing that explains why
                   an index cannot be kept directly (ADR 0018) */}
-              {r.error ? ` — ${r.error}` : ""}
+              {r.error ? <>{` — ${r.error}`}<RawDetails plain={r.error} raw={rawReason(r, "error")} /></> : ""}
               {/* its own wording: the default reassures about a threshold and about muting, and a
                   Reference has neither — what it actually costs is nothing, which is worth saying
                   rather than leaving the monitor's sentence to imply otherwise */}

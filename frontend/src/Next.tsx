@@ -51,6 +51,7 @@ import { Still, type StillProps } from "./snapshot/Still";
 import { useSaveImage } from "./snapshot/useSaveImage";
 import { copyView } from "./snapshot/copyText";
 import { plainError, rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 /** The dashboard, at `/opt` (ADR 0023): built at `/opt/next` beside the page before it from #287,
  *  and the only page since the swap (#301).
@@ -412,7 +413,12 @@ export function Next() {
       </header>
 
       <main className="nx-main">
-        {book.error ? <div className="nx-banner" role="alert" title={book.errorRaw ?? undefined}>{book.error}</div> : null}
+        {book.error ? (
+          <div className="nx-banner" role="alert">
+            {"the figures could not be refreshed — "}
+            <ErrorWords raw={book.errorRaw ?? ""} again="tried again at the next poll" />
+          </div>
+        ) : null}
         <Freshness fetchedAt={book.health?.monitor.fetched_at ?? null} polledAt={book.polledAt}
                    sweepSeconds={book.health?.settings.sweep_seconds ?? null} />
         <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} onReveal={reveal} />
@@ -707,7 +713,8 @@ function useBook(session: boolean, edge: number, regular: boolean) {
       setHoldings(null);
       setHoldingsAt(null);
       setHoldingsServed(null);
-      setHoldingsError(plainError(e, "refresh to try again"));
+      // what was thrown, said plainly where it is drawn, the raw one tap away (part N)
+      setHoldingsError(rawError(e));
     }
   }, []);
 
@@ -779,7 +786,12 @@ function useBook(session: boolean, edge: number, regular: boolean) {
     try {
       await fn();
     } catch (e: unknown) {
-      toast.add({ title: plainError(e), type: "error" });
+      {
+        const raw = rawError(e);
+        const title = plainError(e);
+        // the raw text as the toast's detail, where it says more than the words (part N)
+        toast.add({ title, description: raw.trim() !== title ? raw : undefined, type: "error" });
+      }
       return false;
     }
     // asked here rather than by `load`, to know when it lands: a read that STARTS after the write,

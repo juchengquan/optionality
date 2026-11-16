@@ -748,7 +748,7 @@ describe("when part of the service fails", () => {
     expect(line.textContent).toContain("quarantined");
     // in plain words, the raw status kept for a pointer (part N)
     expect(screen.getByRole("alert").textContent).toContain("the service failed (502); tried again at the next poll");
-    expect(screen.getByRole("alert").getAttribute("title")).toBe("/quotes → 502");
+    expect(screen.getByRole("alert").querySelector("[data-raw] code")!.textContent).toBe("/quotes → 502");
   });
 
   it("keeps a watched row's last close, read apart from /quotes, through a Provider outage (#402)", async () => {
@@ -769,7 +769,7 @@ describe("when part of the service fails", () => {
     await waitFor(() => expect(row().textContent).toContain("−3.85 (Fri 16:14 ET)"));
     // in plain words, the raw status kept for a pointer (part N)
     expect(screen.getByRole("alert").textContent).toContain("the service failed (502); tried again at the next poll");
-    expect(screen.getByRole("alert").getAttribute("title")).toBe("/quotes → 502");
+    expect(screen.getByRole("alert").querySelector("[data-raw] code")!.textContent).toBe("/quotes → 502");
   });
 
   it("does not read the closes on a poll in the session while /quotes answers", async () => {

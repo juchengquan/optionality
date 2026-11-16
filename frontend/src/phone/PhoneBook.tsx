@@ -8,6 +8,7 @@ import { placeBook, type BookModel, type PlacedHolding } from "../placement";
 import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
 import { expiryWords } from "./figures";
+import { ErrorWords } from "../shared/ErrorWords";
 
 /** The phone's book, arrangement B (ADR 0023, #290): cards and the detail sheet — ONE book, the
  *  same cards in session and out of it (#374; ADR 0023 amended 2026-11-13), with no pager: a
@@ -40,7 +41,8 @@ export function PhoneBook({
       {(phase ?? (session ? "regular" : "closed")) !== "regular"
         ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings}
                       phase={phase ?? "closed"} className="nxp-meta" /> : null}
-      {holdingsError !== null ? <p className="nxp-meta">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
+      {holdingsError !== null
+        ? <div className="nxp-meta">{"the holdings could not be valued — "}<ErrorWords raw={holdingsError} again="refresh to try again" /></div> : null}
       {holdings === null && holdingsError === null ? <p className="nxp-meta">valuing…</p> : null}
       {holdings !== null && holdings.length === 0 ? <p className="nxp-meta">nothing held</p> : null}
     </>

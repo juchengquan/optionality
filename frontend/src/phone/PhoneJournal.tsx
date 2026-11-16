@@ -13,6 +13,7 @@ import { useDismissOnBack } from "../shared/useDismissOnBack";
 import { ClosedTradeDetail, TradeLegs } from "../ClosedTrade";
 import { madeWords, storedWords, type ClosedTrade, type Journal } from "../journal";
 import { dateWords } from "../shared/times";
+import { ErrorWords } from "../shared/ErrorWords";
 
 export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDeleted }: {
   journal: Journal; privacy: boolean; entryStyle: EntryStyle; onCorrected: () => void;
@@ -30,7 +31,9 @@ export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDele
   return (
     <div className="nxj-phone">
       {/* said BESIDE the rows a re-read failed to replace, which stay, as the open trade does */}
-      {error !== null ? <p className="nx-hold-error" role="alert">{`the closed trades could not be read — ${error}`}</p> : null}
+      {error !== null ? <div className="nx-hold-error" role="alert">
+        {"the closed trades could not be read — "}<ErrorWords raw={error} again="open it again to retry" />
+      </div> : null}
       {trades === null ? (error === null ? <p className="nxp-meta">reading the closed trades…</p> : null)
           : trades.length === 0 ? <p className="nxp-meta">nothing closed yet: a holding closed is kept here, with its samples</p>
             : (

@@ -13,10 +13,16 @@ export function RuleFigures({ entry, className, held = entry.held }: {
 }) {
   // no quote at all: one reason, rather than ten dashes each repeating it
   const missing = wholeMissing(entry);
-  if (missing !== null) return <p className="nx-meta nx-figures-missing" data-figures-missing="">{`no figures — ${missing}`}</p>;
+  const figures = ruleFigures(entry, held);
+  const none = missing === null ? null
+    : <p className="nx-meta nx-figures-missing" data-figures-missing="">{`no figures — ${missing}`}</p>;
+  if (figures.length === 0) return none;
   return (
+    <>
+    {/* out of the session a quote-less watchlist row still says its last in-session price */}
+    {none}
     <dl className={`${className} nx-figures`} role="group" aria-label="figures">
-      {ruleFigures(entry, held).map((f) => (
+      {figures.map((f) => (
         <div key={f.key} data-figure={f.key} data-detail={f.detail ? "" : undefined}>
           <dt>{f.label}</dt>
           {/* the reason sits under its dash, in words a finger can read: a title is for a pointer */}
@@ -24,5 +30,6 @@ export function RuleFigures({ entry, className, held = entry.held }: {
         </div>
       ))}
     </dl>
+    </>
   );
 }

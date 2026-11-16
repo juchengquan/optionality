@@ -25,6 +25,11 @@ import { stripOfEntry } from "./strip";
 import { figureOf, percent, points } from "./shared/numbers";
 import { POSITION_GREEKS, SHORT_DELTA } from "./shared/words";
 import { dateWords } from "./shared/times";
+import { AttentionChip } from "./AttentionChip";
+import { attentionOf, chipWords, type DeskRow } from "./desk/columns";
+import { ruleState } from "./phone/state";
+import { RawDetails } from "./shared/ErrorWords";
+import { rawReason } from "./shared/errors";
 import { HOLDING_SECTIONS, RULE_SECTIONS, SECTION_HEADINGS, type HoldingSection, type RuleSection } from "./sections";
 
 export type Surface = "desk" | "phone";
@@ -78,7 +83,7 @@ function inOrder<K extends string>(order: readonly K[], drawn: Record<K, ReactNo
 }
 
 export function HoldingSections({
-  surface, holding, rules, quotes, monitors, privacy, session, chip, strip, ruleLine, writes, extra,
+  surface, holding, rules, quotes, monitors, privacy, session, strip, ruleLine, writes, extra,
 }: {
   surface: Surface;
   holding: Holding;
@@ -88,13 +93,12 @@ export function HoldingSections({
   monitors: Monitor[];
   privacy: boolean;
   session: boolean;
-  /** its Level's chip, as the surface draws one */
-  chip: ReactNode;
   /** its strike strip, as the surface draws it (the desk's joins a bracketed partner's) */
   strip: ReactNode;
-  /** a rule line with its controls, as the surface draws one — with how far it has come toward its
-   *  threshold, which is why a rule's own level section draws no bar of its own */
-  ruleLine: (e: Entry) => ReactNode;
+  /** a rule line with its controls, as the surface draws one, with how far it has come toward its
+   *  threshold. `own` is the rule the detail is OF, whose chip and fault its level section says
+   *  once (review of #420) */
+  ruleLine: (e: Entry, own: boolean) => ReactNode;
   writes?: HoldingWrites;
   /** drawn at the end of the legs section: the desk's link to a condor's other spread */
   extra?: ReactNode;
@@ -103,6 +107,10 @@ export function HoldingSections({
   const s = holding.schedule;
   const g = holding.greeks;
   const manage = manageBy(holding);
+  // its Level or its Manage-by: one chip, one reading of it, on both surfaces (review of #420)
+  const row: DeskRow = { kind: "holding", holding, rules };
+  const attention = attentionOf(row);
+  const chip = attention ? <AttentionChip kind={attention} words={chipWords(row, session)} /> : null;
   const drawn: Record<HoldingSection, ReactNode> = {
     level: (
       <div className={c.hero}>
@@ -143,7 +151,7 @@ export function HoldingSections({
       <>
         <Heading surface={surface} of="rules" />
         {rules.length > 0
-          ? <ul className={c.rules}>{rules.map((r) => ruleLine(r))}</ul>
+          ? <ul className={c.rules}>{rules.map((r) => ruleLine(r, false))}</ul>
           : <p className={c.meta}>no rule on it</p>}
       </>
     ),
@@ -158,7 +166,7 @@ export function HoldingSections({
 }
 
 export function RuleSections({
-  surface, entry, under, overlap, privacy, session, chip, ruleLine,
+  surface, entry, under, overlap, privacy, session, ruleLine,
 }: {
   surface: Surface;
   entry: Entry;
@@ -168,21 +176,21 @@ export function RuleSections({
   overlap: string | null;
   privacy: boolean;
   session: boolean;
-  /** its state's chip, as the surface draws one */
-  chip: ReactNode;
-  ruleLine: (e: Entry) => ReactNode;
+  ruleLine: (e: Entry, own: boolean) => ReactNode;
 }) {
   const c = CLASSES[surface];
+  const state = ruleState(entry);
   // a combo drawn in the watchlist because it names a contract its holding does not hold is a
   // watched spread here too (#346): its note says what it shares, in place of "on something held"
   const watched = !entry.held || Boolean(overlap);
   const drawn: Record<RuleSection, ReactNode> = {
     level: (
       <>
-        {chip}
+        {state ? <p><AttentionChip kind={state} /></p> : null}
         {overlap ? null : <p className={c.meta}>{entry.held ? "on something held" : "watch only"}</p>}
         {overlap ? <p className={`${c.meta} nx-overlap`} data-overlap="">{overlap}</p> : null}
-        {entry.error ? <p className="nx-why">{entry.error}</p> : null}
+        {/* the fault in plain words, what was served one tap away (part N) */}
+        {entry.error ? <div className="nx-why">{entry.error}<RawDetails plain={entry.error} raw={rawReason(entry, "error")} /></div> : null}
       </>
     ),
     legs: entry.legs ? <LegList legs={entry.legs.map(signedLeg)} /> : null,
@@ -202,7 +210,7 @@ export function RuleSections({
     rules: (
       <>
         <Heading surface={surface} of="rules" />
-        <ul className={c.rules}>{[entry, ...under].map((r) => ruleLine(r))}</ul>
+        <ul className={c.rules}>{[entry, ...under].map((r) => ruleLine(r, r.id === entry.id))}</ul>
       </>
     ),
     // a watched row's daily closes (#402), opened as a holding's history is (#372)

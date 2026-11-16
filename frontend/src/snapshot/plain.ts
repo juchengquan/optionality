@@ -30,6 +30,7 @@ import { placeBook, type PlacedHolding } from "../placement";
 import { servedWhen, type MarketPhase } from "../session";
 import { ET, zoneName } from "../shared/times";
 import { compactWords, nearest, strikeName } from "../strip";
+import { plainWords } from "../shared/errors";
 
 /** What the view is made from: the page's figures as they stood at the press. */
 export interface PlainInput {
@@ -160,7 +161,7 @@ export function plainView(input: PlainInput): PlainView {
 
   // ---- Holdings
   const holdingNotes: string[] = [];
-  if (input.holdingsError !== null) holdingNotes.push(`the holdings could not be valued — ${input.holdingsError}`);
+  if (input.holdingsError !== null) holdingNotes.push(`the holdings could not be valued — ${plainWords(input.holdingsError, "refresh to try again")}`);
   else if (input.holdings === null) holdingNotes.push("valuing…");
   else if (input.holdings.length === 0) holdingNotes.push("nothing held");
   const holdingGroups: PlainGroup[] = placed.holdings.map(({ expiry, rows }) => ({

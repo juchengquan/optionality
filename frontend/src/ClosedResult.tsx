@@ -16,7 +16,8 @@ import { correctionBody, exitPrefill, type CloseDraft } from "./holding";
 import { madeWords, storedWords } from "./journal";
 import { DayField, ExitField, type ClosedOutcome } from "./HoldingActions";
 import { dateWords } from "./shared/times";
-import { plainError } from "./shared/errors";
+import { rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 /** Brings the account into view and puts the focus on it — once the sheet it was closed from has
  *  gone. On the phone the close happens in a modal sheet, which locks the page's scroll and, as it
@@ -86,7 +87,10 @@ export function ClosedResult({ outcome, privacy, onDone, onCorrected, served }: 
       <p className="nx-meta">Points, Entry less Exit across the contracts held: a closed holding has no quote to give it a dollar size.</p>
       <h3>Its rules</h3>
       {fates === null ? (
-        <p className="nx-hold-error">{`The rules could not be read back after the close — ${fatesError ?? "no answer"}. The Muted list says where each is.`}</p>
+        <div className="nx-hold-error">
+          {"The rules could not be read back after the close — "}<ErrorWords raw={fatesError ?? ""} />
+          {". The Muted list says where each is."}
+        </div>
       ) : fates.length === 0 ? (
         <p className="nx-meta">No rule watched it.</p>
       ) : (
@@ -141,7 +145,7 @@ export function Correction({ id, name, closedOn, exit, onSaved }: {
       onSaved({ closed_on: answer.closed_on, exit: answer.exit, realized_points: answer.realized_points });
       setSaved(true);
     } catch (err) {
-      setError(plainError(err));
+      setError(rawError(err));
     } finally {
       busy.current = false;
       setSaving(false);
@@ -167,7 +171,7 @@ export function Correction({ id, name, closedOn, exit, onSaved }: {
         <ExitField value={draft.exit} onChange={(v) => change({ exit: v })} />
         <DayField value={draft.closedOn} onChange={(v) => change({ closedOn: v })} />
       </div>
-      {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
+      {error ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error} /></div> : null}
       {/* mounted empty and filled, so a screen reader announces it */}
       <p className="nx-meta" role="status">{saved ? "corrected" : ""}</p>
       <div className="nx-hold-row">

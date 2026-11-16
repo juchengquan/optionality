@@ -227,3 +227,8 @@ html[data-nx-arrangement="phone"] :is(select, input, textarea) { font-size: 16px
 .nx-leglist { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
 /* what qualifies a figure — manage-by's threshold — said beside it, quieter (part F) */
 .nx-detail { color: var(--muted-foreground); font-weight: 400; }
+/* the raw text behind an error said plainly (part N): one tap away, never the words themselves */
+.nx-raw { display: inline-block; margin-left: 0.375rem; font-size: 0.75rem; color: var(--muted-foreground); vertical-align: baseline; }
+.nx-raw > summary { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.nx-raw[open] { display: block; margin-left: 0; }
+.nx-raw code { display: block; overflow-wrap: anywhere; white-space: pre-wrap; }

@@ -47,8 +47,11 @@ export function LevelChip({ holding, session }: { holding: Holding; session: boo
 }
 
 /** One rule as a line: what it watches in its own sentence, and its state's chip when it has one. */
-export function RuleLine({ entry, marked = true, children }: {
+export function RuleLine({ entry, marked = true, own = false, children }: {
   entry: Entry;
+  /** the rule a sheet is OF: its chip and its fault are the sheet's level section's, said once
+   *  (review of #420) */
+  own?: boolean;
   /** drawn under the rule: the sheet's controls for it (#292) */
   children?: React.ReactNode;
   /** whether a banner may lead here: on the page yes, in the sheet no, or a banner tapped while
@@ -60,10 +63,10 @@ export function RuleLine({ entry, marked = true, children }: {
     <li className="nxp-rule" data-ref={marked ? entry.id : undefined} data-state={state ?? "calm"}>
       <span className="nxp-rule-name">{entryName(entry)}</span>
       <span className="nxp-sentence"><RuleWords entry={entry} /></span>
-      {state ? <Chip state={state} /> : null}
+      {state && !own ? <Chip state={state} /> : null}
       {/* how far it has come, as a watch card draws it (part K) */}
       <Progress entry={entry} />
-      {entry.error ? <span className="nxp-error">{entry.error}</span> : null}
+      {entry.error && !own ? <span className="nxp-error">{entry.error}</span> : null}
       {children}
     </li>
   );

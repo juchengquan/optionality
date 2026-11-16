@@ -55,7 +55,8 @@ import {
 import { newYorkWeekdayWhen } from "./session";
 import { closeWords, payoffAt } from "./watchhistory";
 import "./payoff.css";
-import { plainError } from "./shared/errors";
+import { rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 /** One spread nobody holds: one contract, in points, and no money to hide. */
 /** One spread nobody holds, in points per contract as a holding's are said (part L): it is one
@@ -90,7 +91,7 @@ function usePayoff(subject: string, key: string | null, load: () => Promise<Payo
     loader.current().then(
       (payoff) => { if (live) setState({ subject, key, payoff, shown: key }); },
       (err: unknown) => {
-        if (live) setState({ subject, key, error: plainError(err, "open it again to retry") });
+        if (live) setState({ subject, key, error: rawError(err) });
       },
     );
     return () => { live = false; };
@@ -222,7 +223,8 @@ function PayoffFigure({ state, unit, legs, spx, spxReason, blank, note }: {
   note?: string;
 }) {
   const body = blank !== null ? <p className="nx-meta">{blank}</p>
-    : state?.error !== undefined ? <p className="nx-meta">{`the payoff could not be drawn — ${state.error}`}</p>
+    : state?.error !== undefined
+      ? <div className="nx-meta">{"the payoff could not be drawn — "}<ErrorWords raw={state.error} again="open it again to retry" /></div>
       : !state?.payoff ? <p className="nx-meta">drawing…</p>
         : (
           <>

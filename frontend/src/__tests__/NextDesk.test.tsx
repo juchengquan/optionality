@@ -642,7 +642,10 @@ describe("the column choice is shared with /opt, and only the desk's part of it 
 describe("what the holdings section says when there are no figures", () => {
   it("says the valuation failed instead of figures, and keeps the rules on held contracts", () => {
     render(<DeskBook {...props({ holdings: null, holdingsError: "/positions/values → 502" })} />);
-    expect(screen.getByText("the holdings could not be valued — /positions/values → 502")).toBeTruthy();
+    // in plain words, what was thrown one tap away (part N)
+    const note = screen.getByText(/^the holdings could not be valued — /);
+    expect(note.textContent).toBe("the holdings could not be valued — the service failed (502); refresh to try againdetails/positions/values → 502");
+    expect(note.querySelector("details[data-raw] summary")!.textContent).toBe("details");
     const unplaced = screen.getByTestId("unplaced");
     expect(unplaced.querySelector('[data-ref="r-calls"]')).toBeTruthy();
     expect(unplaced.querySelector('[data-ref="r-ic"]')).toBeTruthy();

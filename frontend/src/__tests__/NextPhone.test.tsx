@@ -193,6 +193,25 @@ describe("the cards say what the desk's rows say (part K)", () => {
     }
   });
 
+  it("says a short leg's Δ from the one source the desk's table reads, a delta rule's figure included (review of #420)", async () => {
+    // no served leg delta, and a quote that carries none: the rule's watched figure is the Δ
+    const bare = HOLDINGS.map((h) => ({ ...h, legs_delta: null }));
+    const leg = { ...SHORT_LEG, field: "option_delta", quote: { name: "SPXW 261218 7300.00C" } } as Entry;
+    const book = { holdings: bare, quotes: [...QUOTES, leg], monitors: [...MONITORS, SHORT_LEG_RULE] };
+    render(<DeskBook {...book} holdingsError={null} holdingsAt={null} session privacy={false} entryStyle="opportunity" />);
+    const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="h-calls"]')!;
+    const table = row.querySelector('[data-col="delta"] .nxd-v')!.textContent;
+    fireEvent.click(within(row).getByRole("button", { name: "1218_C7300" }));
+    const insp = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
+    const inspector = within(insp).getByText("short Δ").nextElementSibling!.textContent;
+    cleanup();
+    draw(book);
+    const onCard = within(card("h-calls")).getByText("short Δ").nextSibling!.textContent;
+    expect(table).toBe("0.231");
+    expect(inspector).toBe(table);
+    expect(onCard).toBe(table);
+  });
+
   it("says a holding's DTE once, on its expiry's heading and not on its card", () => {
     draw();
     for (const c of region("Holdings").querySelectorAll<HTMLElement>("article[data-ref]")) {

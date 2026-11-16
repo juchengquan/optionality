@@ -98,6 +98,61 @@ describe("one section order, on the desk and the phone (part J)", () => {
   });
 });
 
+describe("each thing said once in a detail (review of #420)", () => {
+  const faulted = QUOTES.map((q) => q.id === "w-dec18" ? { ...q, error: "contract not found", triggered: true } : q);
+  const drawn = (quotes = faulted): BookProps => ({ ...props(), quotes });
+
+  it("draws a rule's chip and its fault once, in its level section, on the desk and the phone", async () => {
+    render(<DeskBook {...drawn()} />);
+    const row = [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === "w-dec18")!;
+    fireEvent.click(within(row).getByRole("button", { name: "1218_P7150" }));
+    const insp = screen.getByRole("complementary", { name: "inspector: 1218_P7150" });
+    const counts = (root: Element) => ({
+      chips: root.querySelectorAll(".nx-chip").length,
+      faults: [...root.querySelectorAll(".nx-why, .nxp-error")].filter((el) => el.textContent!.includes("contract not found")).length,
+      chipInLevel: root.querySelector("[data-section='level'] .nx-chip") !== null,
+    });
+    const desk = counts(insp);
+    cleanup();
+    render(<div className="nx"><PhoneBook {...drawn()} /></div>);
+    fireEvent.click(screen.getByRole("button", { name: "details of 1218_P7150" }));
+    const phone = counts(await screen.findByRole("dialog"));
+    expect(desk).toEqual({ chips: 1, faults: 1, chipInLevel: true });
+    expect(phone).toEqual(desk);
+  });
+
+  it("draws a holding's chip the same on both: its Level or its Manage-by, with its words", async () => {
+    const due = HOLDINGS.map((h) => h.id === "h-puts"
+      ? { ...h, schedule: { ...h.schedule!, reached: null, manage_by_due: true } } : h);
+    const chipOf = (root: Element) => root.querySelector("[data-section='level'] .nx-chip")?.textContent ?? null;
+    render(<DeskBook {...{ ...props(), holdings: due }} />);
+    const row = [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === "h-puts")!;
+    fireEvent.click(within(row).getByRole("button", { name: "1218_P6400" }));
+    const desk = chipOf(screen.getByRole("complementary", { name: "inspector: 1218_P6400" }));
+    cleanup();
+    render(<div className="nx"><PhoneBook {...{ ...props(), holdings: due }} /></div>);
+    fireEvent.click(screen.getByRole("button", { name: "details of 1218_P6400" }));
+    const phone = chipOf(await screen.findByRole("dialog"));
+    expect(desk).toBe("manage-by");
+    expect(phone).toBe(desk);
+  });
+
+  it("leads a holding's level section with its P&L and its captured share, on both", async () => {
+    const h = HOLDINGS.find((x) => x.id === "h-calls")!;
+    render(<DeskBook {...props()} />);
+    const row = [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === "h-calls")!;
+    fireEvent.click(within(row).getByRole("button", { name: h.name }));
+    const level = (root: Element) => root.querySelector("[data-section='level']")!.textContent;
+    const desk = level(screen.getByRole("complementary", { name: `inspector: ${h.name}` }));
+    cleanup();
+    render(<div className="nx"><PhoneBook {...props()} /></div>);
+    fireEvent.click(screen.getByRole("button", { name: `details of ${h.name}` }));
+    const phone = level(await screen.findByRole("dialog"));
+    expect(desk).toMatch(/^−\$240captured \d+%/);
+    expect(phone).toBe(desk);
+  });
+});
+
 /** The name a row is drawn under, read from the desk's own table. */
 function nameOf(ref: string): string {
   render(<DeskBook {...props()} />);

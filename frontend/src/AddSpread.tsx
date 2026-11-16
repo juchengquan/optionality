@@ -40,7 +40,8 @@ import { DraftPreview } from "./Payoff";
 import { DirectionPair, type Direction } from "./DirectionPair";
 import { fieldWords } from "./needs";
 import "./add.css";
-import { plainError } from "./shared/errors";
+import { rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 type Props = {
   privacy: boolean;
@@ -127,7 +128,7 @@ function SpreadForm({
     try {
       onSaved(await addSpreads(out.body));
     } catch (err: unknown) {
-      setError(plainError(err));
+      setError(rawError(err));
     } finally {
       setSaving(false);
     }
@@ -170,7 +171,7 @@ function SpreadForm({
         ))}
       </div>
 
-      {error ? <p className="nx-add-error" role="alert">{error}</p> : null}
+      {error ? <div className="nx-add-error" role="alert"><ErrorWords raw={error} /></div> : null}
       <div className="nx-add-row nx-add-actions">
         <Button type="submit" disabled={saving}>{saving ? "saving…" : saveWords(draft)}</Button>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>

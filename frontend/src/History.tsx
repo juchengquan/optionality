@@ -48,7 +48,8 @@ import {
   BEFORE_ENTRY_WORDS, beforeEntryDays, entryCloseDay, thresholdOf, watchedCharted, watchedSamples, withBeforeEntry,
 } from "./watchhistory";
 import "./history.css";
-import { plainError } from "./shared/errors";
+import { rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 interface Answer<T> {
   id: string;
@@ -72,7 +73,7 @@ function useAnswer<T>(id: string, fetch: (id: string) => Promise<T>): Answer<T> 
         setState(isSamples(samples) ? { id, samples: samples as T }
           : { id, error: "the service answered without them" });
       },
-      (err: unknown) => { if (live) setState({ id, error: plainError(err, "open it again to retry") }); },
+      (err: unknown) => { if (live) setState({ id, error: rawError(err) }); },
     );
     return () => { live = false; };
     // the fetch is a module function, the same on every render: the id is what is asked about
@@ -124,7 +125,8 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
   };
   // the days its contracts were watched before it was entered, drawn first and faint (#402)
   const served = state?.samples ? withBeforeEntry(state.samples) : undefined;
-  const blank = state?.error !== undefined ? `the samples could not be read — ${state.error}`
+  const blank: React.ReactNode = state?.error !== undefined
+    ? <>{"the samples could not be read — "}<ErrorWords raw={state.error} again="open it again to retry" /></>
     : !served ? "reading the samples…"
       : served.samples.length === 0 ? (holding.closed_on === null
         ? "no daily samples recorded yet: the sweep writes one a day while it is held"
@@ -148,7 +150,8 @@ export function WatchedHistory({ entry, privacy }: { entry: Entry; privacy: bool
   const unit: Unit = { size: 1, contracts: 1, money: false, hidden: privacy, what: "value" };
   const served = state?.samples ? watchedSamples(state.samples) : undefined;
   const threshold = state?.samples ? thresholdOf(state.samples) : null;
-  const blank = state?.error !== undefined ? `the closes could not be read — ${state.error}`
+  const blank: React.ReactNode = state?.error !== undefined
+    ? <>{"the closes could not be read — "}<ErrorWords raw={state.error} again="open it again to retry" /></>
     : !served ? "reading the closes…"
       : served.samples.length === 0
         ? "no daily closes recorded yet: the sweep writes one a day while it is watched"
@@ -164,7 +167,7 @@ export function WatchedHistory({ entry, privacy }: { entry: Entry; privacy: bool
 /** The three panels of a history — the value by day, each leg's IV, SPX against the strikes — on
  *  one DTE axis with one crosshair, for a holding or a watched row. */
 function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCost, threshold = null }: {
-  id: string; holding: Charted; served: Samples | undefined; blank: string | null; unit: Unit; privacy: boolean;
+  id: string; holding: Charted; served: Samples | undefined; blank: React.ReactNode; unit: Unit; privacy: boolean;
   title: string; noCost: string; threshold?: number | null;
 }) {
   const cross = useCross(id, served, holding);
@@ -187,7 +190,7 @@ function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCos
           {title}
           <span className="nx-hist-unit">{`${unit.money && !privacy ? "$" : "points"} ${unit.what ?? "to close"}, ${scopeWords(unit)}`}</span>
         </h4>
-        {blank !== null || !served ? <p className="nx-meta">{blank}</p>
+        {blank !== null || !served ? <div className="nx-meta">{blank}</div>
           : (
             <>
               <Burndown served={served} unit={unit} axis={axis!} span={dteWindow(served)} gutters={gutters!}
