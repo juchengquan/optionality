@@ -1032,7 +1032,17 @@ describe("SPX's price on every row (#288)", () => {
     // (6500 + 1000) / 0.94, (8100 + 2) / 1.07, (8150 + 1) / 1.08: the middle one is 7547.22
     const levels = [7500 / 0.94, 8102 / 1.07, 8151 / 1.08].sort((a, b) => a - b);
     expect(quotes).toHaveLength(2);
+    // the suite's clock is 01:26 New York, GTH: the index is not computed, and the figure says so
+    // beside its price, never as current (#416)
     for (const q of quotes) {
+      expect(q.spx).toBe(Number(levels[1]!.toFixed(2)));
+      expect(q.spx_reason).toBe("index not computed overnight — the last close's level");
+    }
+    // in the session the same batch's figure is current
+    const inSession = await watchlistQuotes(
+      db, TZ, fakeFetcher(fetch), { includeCombos: true, now: new Date("2026-10-01T15:00:00Z"), policy: POLICY },
+    );
+    for (const q of inSession) {
       expect(q.spx).toBe(Number(levels[1]!.toFixed(2)));
       expect(q.spx_reason).toBeNull();
     }

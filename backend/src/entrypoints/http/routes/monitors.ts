@@ -469,7 +469,9 @@ const EntryOut = z.object({
   /** SPX's price as this response's one batch implies it, from its options' premiums (ADR 0024):
    *  the same on every row. Null where the batch cannot give it, never a Reference's figure. */
   spx: z.number().nullable(),
-  /** why `spx` is null, in words; null when there is a figure */
+  /** why `spx` is null, in words — or, beside a figure, why it is not current: outside the regular
+   *  session the index is not computed, and the figure is its last close's level (`sessionSpx`,
+   *  #416). Null for a current figure. */
   spx_reason: z.string().nullable(),
   /** a combo's short legs placed against `spx` (#297); empty for a single contract */
   short_strikes: z.array(StrikeDistanceOut),

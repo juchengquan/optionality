@@ -1,5 +1,5 @@
 {
-  "name": "GET /positions/values outside the session says a weekend reading it values from is no close",
+  "name": "GET /positions/values outside the session never values from a weekend reading, which is no close",
   "world": {
     "clock": "2026-11-14T17:00:00.000Z",
     "settings": {
@@ -167,54 +167,49 @@
           "closed_on": null,
           "exit": null,
           "realized_points": null,
-          "cost_to_close": 3.4,
-          "pnl": 300,
-          "captured": 0.46875000000000006,
-          "contract_size": 100,
-          "spx": 6900.5,
-          "spx_reason": null,
+          "cost_to_close": null,
+          "pnl": null,
+          "captured": null,
+          "contract_size": null,
+          "spx": null,
+          "spx_reason": "no SPX option in the batch to derive it from",
           "greeks": {
-            "option_delta": 1.3877787807814457e-17,
+            "option_delta": null,
             "option_gamma": null,
             "option_theta": null,
-            "option_vega": -1
+            "option_vega": null
           },
-          "legs_delta": {
-            "US.SPXW261218C7300000": 0.2,
-            "US.SPXW261218C7350000": 0.14,
-            "US.SPXW261218P6400000": -0.17,
-            "US.SPXW261218P6350000": -0.11
-          },
+          "legs_delta": null,
           "short_strikes": [
             {
               "code": "US.SPXW261218C7300000",
               "option_type": "CALL",
               "strike": 7300,
-              "delta": 0.2,
-              "points": 399.5,
-              "sigma": 1.31,
-              "one_sigma": 305.38
+              "delta": null,
+              "points": null,
+              "sigma": null,
+              "one_sigma": null
             },
             {
               "code": "US.SPXW261218P6400000",
               "option_type": "PUT",
               "strike": 6400,
-              "delta": -0.17,
-              "points": 500.5,
-              "sigma": 1.23,
-              "one_sigma": 405.42
+              "delta": null,
+              "points": null,
+              "sigma": null,
+              "one_sigma": null
             }
           ],
-          "fetched_at": "2026-11-15 00:00:00+08:00",
-          "valued_from": "close",
-          "valued_on": "2026-11-14",
-          "valued_timing": "weekend",
-          "valued_reason": null,
+          "fetched_at": null,
+          "valued_from": "live",
+          "valued_on": null,
+          "valued_timing": null,
+          "valued_reason": "moomoo call failed: connect ECONNREFUSED 127.0.0.1:33333",
           "dte": 34,
           "schedule": {
             "dte_at_open": 35,
             "on_pace": 6.3079088678986395,
-            "pace_gap": -2.9079088678986396,
+            "pace_gap": null,
             "target": 3.2,
             "stop": 12.8,
             "target_dte": 9,
@@ -226,6 +221,15 @@
       ]
     },
     "rows": {},
-    "calls": {}
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7300000",
+          "US.SPXW261218C7350000",
+          "US.SPXW261218P6350000",
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
   }
 }

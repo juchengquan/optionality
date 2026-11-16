@@ -27,6 +27,9 @@ figures are decided here; each surface only chooses how to say them.
 
 **Outside New York's session a holding is valued from its latest close** (#380): `values_from_close`
 decides, per holding, and only the holdings valued live are asked for. `holdings.ts` says why.
+**In the Curb and overnight (GTH) a holding is valued live where every leg is quoted** (#416): every
+holding is asked for in the one batch, valued live where it has a Cost to close and from its close where
+not, and SPX is said stale beside its price (`session_spx`).
 **Out of the session a failed Provider call costs only the holdings that needed it** (#387): they are
 dashes with the failure's message (`unpriced`), and the rest are served from their closes; in the session
 the failure is still the caller's.
@@ -39,9 +42,9 @@ from datetime import datetime
 from typing import Any, Literal, TypedDict, cast
 
 from optionality.exit import ExitPolicy, captured, dte_at_open, exit_levels
-from optionality.expiry import days_to_expiry, in_session, values_from_close
+from optionality.expiry import days_to_expiry, in_session, market_phase, values_from_close
 from optionality.position import Position, contract_size, cost_to_close, pnl_at, position_leg_codes
-from optionality.quote import ByCode, DerivedSpx, derived_spx, display_records
+from optionality.quote import ByCode, DerivedSpx, derived_spx, display_records, session_spx
 
 from .correct_legs import before_correction
 from .db.queries import list_position_samples, open_positions
@@ -110,17 +113,24 @@ class Valued:
 
 #: why a close valuation has no SPX
 NO_CLOSE_SPX = "no SPX price was recorded with the close it is valued from"
+#: why a close valuation's SPX is not current: the level stored with that close (#416)
+CLOSE_SPX = "the level at the close it is valued from"
 
 
-def close_of(db: sqlite3.Connection, row: PositionRow, now: datetime) -> PositionSampleRow | None:
-    """The stored row a holding is valued from at `now`, or None to value it live (`values_from_close`).
-    A row observed before a leg's quantity was last corrected is no candidate (#359)."""
-    samples = [
+def close_candidates(db: sqlite3.Connection, row: PositionRow) -> list[PositionSampleRow]:
+    """The stored rows a holding may be valued from (`values_from_close` chooses among them). A row
+    observed before a leg's quantity was last corrected is no candidate (#359)."""
+    return [
         s
         for s in list_position_samples(db, row["id"])
         if not before_correction(s["observed_at"], row["qty_corrected_at"])
     ]
-    return values_from_close(now, samples)
+
+
+def _asks(now: datetime, candidates: list[PositionSampleRow]) -> bool:
+    """Whether a holding is asked of the Provider at `now`: in the regular session, the Curb and GTH
+    every holding, valued live where quoted (#416); while nothing trades only one with no close."""
+    return market_phase(now) != "closed" or values_from_close(now, False, candidates) is None
 
 
 def _stored_map(text: str | None) -> dict[str, Any] | None:
@@ -225,7 +235,12 @@ def _live(
 
 
 def _from_close(
-    row: PositionRow, position: Position, close: PositionSampleRow, dte: int, settings: Settings
+    row: PositionRow,
+    position: Position,
+    close: PositionSampleRow,
+    dte: int,
+    settings: Settings,
+    unpriced: str | None,
 ) -> HoldingValue:
     cost = close["cost_to_close"]
     return HoldingValue(
@@ -237,10 +252,10 @@ def _from_close(
         schedule=_schedule_of(row, cost, close["dte"], dte, settings),
         dte=dte,
         valued_from="close",
-        unpriced=None,
+        unpriced=unpriced,
         close=close,
         records=_close_records(position, close),
-        spx=DerivedSpx(price=close["spx"], reason=NO_CLOSE_SPX if close["spx"] is None else None),
+        spx=DerivedSpx(price=close["spx"], reason=NO_CLOSE_SPX if close["spx"] is None else CLOSE_SPX),
         contract_size=close["contract_size"],
         figures_dte=close["dte"],
     )
@@ -263,8 +278,9 @@ async def holding_values(
         return Valued(values=[])
 
     positions = [to_position(r) for r in rows]
-    closes = [close_of(db, row, now) for row in rows]
-    live = [p for p, c in zip(positions, closes, strict=True) if c is None]
+    candidates = [close_candidates(db, row) for row in rows]
+    asked = [_asks(now, c) for c in candidates]
+    live = [p for p, a in zip(positions, asked, strict=True) if a]
     by_code: ByCode = {}
     unpriced: str | None = None
     if live:
@@ -276,20 +292,30 @@ async def holding_values(
         except Exception as err:
             # in the session the batch is the price, and its failure is the whole answer's; out of it the
             # holdings it would have priced are dashes with the reason, and the closes still stand (#387)
+            # — overnight too, where an unanswered batch quotes no leg (#416)
             if in_session(now):
                 raise
             unpriced = str(err)
         if records is not None:
             by_code = display_records(records, tz, now)
-    batch_spx = derived_spx(list(by_code.values()))
+    # each holding's close, or None to value it live: overnight and in the Curb, live exactly where
+    # this batch gives it a Cost to close (#416)
+    closes = [
+        values_from_close(now, cost_to_close(p, by_code) is not None, c)
+        for p, c in zip(positions, candidates, strict=True)
+    ]
+    # SPX as the batch implies it, said stale outside the regular session (#416)
+    batch_spx = session_spx(now, derived_spx(list(by_code.values())))
     batch_size = contract_size(by_code)
 
     values: list[HoldingValue] = []
-    for row, position, close in zip(rows, positions, closes, strict=True):
+    for row, position, close, was_asked in zip(rows, positions, closes, asked, strict=True):
         dte = days_to_expiry(row["strike_date"], now)
+        # a holding the failed call would have priced, valued from its close for want of it, carries the
+        # failure too (#416)
         values.append(
             _live(row, position, by_code, batch_spx, batch_size, dte, settings, unpriced)
             if close is None
-            else _from_close(row, position, close, dte, settings)
+            else _from_close(row, position, close, dte, settings, unpriced if was_asked else None)
         )
     return Valued(values=values)

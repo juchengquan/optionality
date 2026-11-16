@@ -1,0 +1,427 @@
+{
+  "name": "GET /positions/{id}/samples serves no watched price read overnight, before entry or as the entry day's close",
+  "world": {
+    "clock": "2026-11-16T05:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": "connect ECONNREFUSED 127.0.0.1:33333",
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-11-16",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-16",
+          "dte": 32,
+          "cost_to_close": null,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-16 05:00:06.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        }
+      ],
+      "watch_samples": [
+        {
+          "contracts": "US.SPXW261218C7300000,US.SPXW261218C7350000,US.SPXW261218P6350000,US.SPXW261218P6400000",
+          "observed_on": "2026-11-13",
+          "dte": 35,
+          "legs_mid": {
+            "US.SPXW261218C7300000": 2.75,
+            "US.SPXW261218C7350000": 1.75,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 2.25
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-13 21:14:59.000000",
+          "spx": null,
+          "contract_size": null
+        },
+        {
+          "contracts": "US.SPXW261218C7300000,US.SPXW261218C7350000,US.SPXW261218P6350000,US.SPXW261218P6400000",
+          "observed_on": "2026-11-15",
+          "dte": 33,
+          "legs_mid": {
+            "US.SPXW261218C7300000": 3,
+            "US.SPXW261218C7350000": 2,
+            "US.SPXW261218P6400000": 5,
+            "US.SPXW261218P6350000": 2.5
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-16 01:15:07.000000",
+          "spx": null,
+          "contract_size": null
+        },
+        {
+          "contracts": "US.SPXW261218C7300000,US.SPXW261218C7350000,US.SPXW261218P6350000,US.SPXW261218P6400000",
+          "observed_on": "2026-11-16",
+          "dte": 32,
+          "legs_mid": {
+            "US.SPXW261218C7300000": 3.25,
+            "US.SPXW261218C7350000": 2,
+            "US.SPXW261218P6400000": 5,
+            "US.SPXW261218P6350000": 2.5
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-16 05:00:06.000000",
+          "spx": null,
+          "contract_size": null
+        }
+      ],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/positions/pos-1/samples",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "levels": {
+          "dte_at_open": 32,
+          "target": 3.2,
+          "stop": 12.8,
+          "target_dte": 8,
+          "manage_by_dte": 21
+        },
+        "plan": [
+          {
+            "dte": 32,
+            "on_pace": 6.4
+          },
+          {
+            "dte": 31,
+            "on_pace": 6.299206299209449
+          },
+          {
+            "dte": 30,
+            "on_pace": 6.196773353931867
+          },
+          {
+            "dte": 29,
+            "on_pace": 6.092618484691127
+          },
+          {
+            "dte": 28,
+            "on_pace": 5.986651818838307
+          },
+          {
+            "dte": 27,
+            "on_pace": 5.878775382679628
+          },
+          {
+            "dte": 26,
+            "on_pace": 5.768882040742383
+          },
+          {
+            "dte": 25,
+            "on_pace": 5.656854249492381
+          },
+          {
+            "dte": 24,
+            "on_pace": 5.542562584220407
+          },
+          {
+            "dte": 23,
+            "on_pace": 5.4258639865002145
+          },
+          {
+            "dte": 22,
+            "on_pace": 5.30659966456864
+          },
+          {
+            "dte": 21,
+            "on_pace": 5.184592558726289
+          },
+          {
+            "dte": 20,
+            "on_pace": 5.059644256269408
+          },
+          {
+            "dte": 19,
+            "on_pace": 4.931531202375181
+          },
+          {
+            "dte": 18,
+            "on_pace": 4.800000000000001
+          },
+          {
+            "dte": 17,
+            "on_pace": 4.664761515876241
+          },
+          {
+            "dte": 16,
+            "on_pace": 4.525483399593905
+          },
+          {
+            "dte": 15,
+            "on_pace": 4.3817804600413295
+          },
+          {
+            "dte": 14,
+            "on_pace": 4.233202097703345
+          },
+          {
+            "dte": 13,
+            "on_pace": 4.079215610874228
+          },
+          {
+            "dte": 12,
+            "on_pace": 3.919183588453085
+          },
+          {
+            "dte": 11,
+            "on_pace": 3.752332607858744
+          },
+          {
+            "dte": 10,
+            "on_pace": 3.577708763999664
+          },
+          {
+            "dte": 9,
+            "on_pace": 3.394112549695428
+          },
+          {
+            "dte": 8,
+            "on_pace": 3.2
+          },
+          {
+            "dte": 7,
+            "on_pace": 2.9933259094191533
+          },
+          {
+            "dte": 6,
+            "on_pace": 2.7712812921102037
+          },
+          {
+            "dte": 5,
+            "on_pace": 2.529822128134704
+          },
+          {
+            "dte": 4,
+            "on_pace": 2.2627416997969525
+          },
+          {
+            "dte": 3,
+            "on_pace": 1.9595917942265424
+          },
+          {
+            "dte": 2,
+            "on_pace": 1.6
+          },
+          {
+            "dte": 1,
+            "on_pace": 1.1313708498984762
+          },
+          {
+            "dte": 0,
+            "on_pace": 0
+          }
+        ],
+        "samples": [
+          {
+            "observed_on": "2026-11-16",
+            "observed_at": "2026-11-16 13:00:06+08:00",
+            "timing": "before-open",
+            "dte": 32,
+            "cost_to_close": null,
+            "on_pace": 6.4,
+            "legs_iv": {
+              "US.SPXW261218C7300000": 14.5,
+              "US.SPXW261218C7350000": 14,
+              "US.SPXW261218P6400000": 19.25,
+              "US.SPXW261218P6350000": 20
+            },
+            "legs_vega": {
+              "US.SPXW261218C7300000": 4.25,
+              "US.SPXW261218C7350000": 4,
+              "US.SPXW261218P6400000": 4.5,
+              "US.SPXW261218P6350000": 3.75
+            },
+            "legs_delta": {
+              "US.SPXW261218C7300000": 0.2,
+              "US.SPXW261218C7350000": 0.14,
+              "US.SPXW261218P6400000": -0.17,
+              "US.SPXW261218P6350000": -0.11
+            },
+            "spx": 6900.5,
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": 0.2,
+                "points": 399.5,
+                "sigma": 1.35,
+                "one_sigma": 296.26
+              },
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": -0.17,
+                "points": 500.5,
+                "sigma": 1.27,
+                "one_sigma": 393.31
+              }
+            ],
+            "before_correction": false
+          }
+        ],
+        "before_entry": [
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-14 05:14:59+08:00",
+            "timing": "close",
+            "dte": 35,
+            "cost_to_close": 3.25,
+            "on_pace": null,
+            "legs_iv": null,
+            "legs_vega": null,
+            "legs_delta": null,
+            "spx": null,
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": null,
+                "points": null,
+                "sigma": null,
+                "one_sigma": null
+              },
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": null,
+                "points": null,
+                "sigma": null,
+                "one_sigma": null
+              }
+            ],
+            "before_correction": false
+          },
+          {
+            "observed_on": "2026-11-15",
+            "observed_at": "2026-11-16 09:15:07+08:00",
+            "timing": "after-close",
+            "dte": 33,
+            "cost_to_close": null,
+            "on_pace": null,
+            "legs_iv": null,
+            "legs_vega": null,
+            "legs_delta": null,
+            "spx": null,
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": null,
+                "points": null,
+                "sigma": null,
+                "one_sigma": null
+              },
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": null,
+                "points": null,
+                "sigma": null,
+                "one_sigma": null
+              }
+            ],
+            "before_correction": false
+          }
+        ],
+        "entry_close": null,
+        "qty_corrected_at": null
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

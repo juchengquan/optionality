@@ -2,6 +2,7 @@ import { BellRing, OctagonAlert, Sparkles } from "lucide-react";
 
 import type { Entry, Holding, Monitor } from "./shared/api";
 import type { EntryStyle } from "./shared/prefs";
+import type { MarketPhase } from "./session";
 import { DASH } from "./shared/format";
 import type { HoldingWrites } from "./HoldingActions";
 
@@ -28,6 +29,11 @@ export interface BookProps {
    *  the saved picture's session line. The columns, the rows and the fold do not follow it
    *  (#371–#375). */
   session: boolean;
+  /** which of SPX options' sessions it is (`marketPhase`, #416): the page polls in the regular one,
+   *  the Curb and GTH alike (`session` is true in all three), and the session line says which —
+   *  "overnight session — live quotes, thin" — wherever it is not the regular one. Absent, it is
+   *  read from `session`: regular, or closed. */
+  phase?: MarketPhase;
   privacy: boolean;
   entryStyle: EntryStyle;
   /** editing, closing and deleting a holding (#294); absent, its detail offers none of them */

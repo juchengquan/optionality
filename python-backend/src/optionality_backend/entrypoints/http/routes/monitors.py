@@ -592,7 +592,8 @@ class EntryOut(BaseModel):
     #: SPX's price as this response's one batch implies it, from its options' premiums (ADR 0024): the
     #: same on every row. None where the batch cannot give it, never a Reference's figure.
     spx: float | None
-    #: why `spx` is None, in words; None when there is a figure
+    #: why `spx` is None, in words — or, beside a figure, why it is not current: outside the regular session
+    #: the index is not computed, and the figure is its last close's level (`session_spx`, #416)
     spx_reason: str | None
     #: a combo's short legs placed against `spx` (#297); empty for a single contract
     short_strikes: list[StrikeDistanceOut]

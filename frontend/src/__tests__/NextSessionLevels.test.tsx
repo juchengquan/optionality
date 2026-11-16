@@ -213,13 +213,13 @@ describe("in session they read the same poll and agree, so the chip carries no t
   });
 
   it("still holds across the close: the chip takes its time as the line lets the Level go", async () => {
-    stamp = "2026-11-10 05:15:30+08:00"; // Monday 16:15:30 New York, valued just after the close
+    stamp = "2026-11-10 06:00:30+08:00"; // Monday 17:00:30 New York, valued just after the Curb
     await open("desk", "2026-11-09T21:14:00Z"); // Monday 16:14 New York
     await until(() => expect(line()).toContain("1231_7000P at stop"));
     expect(chipIn(document, "p1")).toBe("at stop");
-    vi.setSystemTime(new Date("2026-11-09T21:16:00Z")); // 16:16, the window focused
+    vi.setSystemTime(new Date("2026-11-09T22:01:00Z")); // 17:01, the window focused: nothing trades
     await act(async () => { window.dispatchEvent(new Event("focus")); });
-    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 05:15"));
+    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 06:00"));
     expect(line()).not.toContain("1231_7000P");
   });
 });

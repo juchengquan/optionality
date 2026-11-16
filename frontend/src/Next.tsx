@@ -37,7 +37,7 @@ import { holdOnDesk, NOTHING_SELECTED, type DeskSelection } from "./desk/keys";
 import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
-import { inSession, servedWhen, sessionEdge, useSessionClock } from "./session";
+import { marketPhase, servedWhen, sessionEdge, useSessionClock } from "./session";
 import { withCloses, withLastKnown } from "./lastknown";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
@@ -84,12 +84,16 @@ export function Next() {
   // New York's session, read off the clock every 15 s and on coming back into view: what the page
   // fetches and what the needs-you line says follow it, and nothing else does (#371).
   const now = useSessionClock();
-  const session = inSession(now);
+  // ...and which of SPX options' sessions (#416): the page polls in the regular one, the Curb and
+  // GTH alike, since SPX options trade in all three and the holdings are valued live where quoted;
+  // only while nothing trades is the book valued once. `session` is that: whether the page polls
+  const phase = marketPhase(now);
+  const session = phase !== "closed";
   // and WHICH session it is in or after: a tab asleep from Monday 20:00 to Tuesday 20:00 New York
   // reads `false` at both ends, and must still value the book again when it wakes
   const edge = sessionEdge(now).getTime();
 
-  const book = useBook(session, edge);
+  const book = useBook(session, edge, phase === "regular");
   // the picture (#300): the press, and the page's figures as they were at it — the off-screen tree
   // is drawn from that copy, so a poll landing mid-capture cannot make one picture two moments
   const { frame: pictured, stageRef, save } = useSaveImage<StillProps>();
@@ -219,7 +223,8 @@ export function Next() {
   // the preview's SPX marker: the book's last batch's derived price, never a Reference's (ADR 0024)
   const priced = book.quotes.find((q) => q.spx !== null) ?? book.holdings?.find((h) => h.spx !== null);
   const spx = priced?.spx ?? null;
-  const spxReason = priced ? null : book.quotes[0]?.spx_reason ?? book.holdings?.[0]?.spx_reason ?? null;
+  // ...with its reason beside it where it is not current, outside the regular session (#416)
+  const spxReason = priced ? priced.spx_reason ?? null : book.quotes[0]?.spx_reason ?? book.holdings?.[0]?.spx_reason ?? null;
   const addForm = (
     <AddSpread key={prefill?.n ?? 0} initial={prefill?.initial} privacy={privacy} monitors={book.monitors}
                holdings={holdings} spx={spx}
@@ -254,8 +259,9 @@ export function Next() {
   // and each row's last close (#402), which is its value wherever there is no live one: out of the
   // session, and while /quotes is failing, whose rows are then the last ones read
   const quotes = useMemo(
-    () => withLastKnown(withCloses(book.quotes, book.closes), book.monitors, session && !book.quotesFailed),
-    [book.quotes, book.closes, book.monitors, session, book.quotesFailed],
+    () => withLastKnown(withCloses(book.quotes, book.closes), book.monitors,
+      book.quotesFailed || !session ? "close" : phase === "regular" ? "live" : "live-or-close"),
+    [book.quotes, book.closes, book.monitors, session, phase, book.quotesFailed],
   );
   const placed = useMemo(() => placeBook(quotes, holdings, book.monitors), [quotes, holdings, book.monitors]);
   const found = useMemo(() => findables(placed), [placed]);
@@ -322,7 +328,7 @@ export function Next() {
   // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
   const bookProps: BookProps = {
     quotes, monitors: book.monitors, holdings,
-    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, session, privacy, entryStyle, writes,
+    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, session, phase, privacy, entryStyle, writes,
     journal: (
       <JournalFold open={journalOpen} onToggle={toggleJournal}
                    ready={journal.trades !== null || journal.error !== null}>
@@ -356,7 +362,7 @@ export function Next() {
   const viewNow = (): StillProps => ({
     quotes: bookProps.quotes, monitors: bookProps.monitors, holdings: bookProps.holdings,
     holdingsError: bookProps.holdingsError, holdingsAt: bookProps.holdingsAt, holdingsServed: bookProps.holdingsServed,
-    session: bookProps.session, privacy: bookProps.privacy, needs: items, health: book.health, polledAt: book.polledAt,
+    session: bookProps.session, phase: bookProps.phase, privacy: bookProps.privacy, needs: items, health: book.health, polledAt: book.polledAt,
     error: book.error, references: book.references, hidden: readHidden(), takenAt: new Date(),
   });
   const saveView = () => void save(viewNow());
@@ -606,7 +612,7 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>,
  *  on, so ANY open or close passed — while the tab was awake, or slept through with its timers
  *  suspended and noticed when it comes back into view (`useSessionClock`) — values the book again.
  */
-function useBook(session: boolean, edge: number) {
+function useBook(session: boolean, edge: number, regular: boolean) {
   const [quotes, setQuotes] = useState<Entry[]>([]);
   const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [health, setHealth] = useState<Health | null>(null);
@@ -625,8 +631,10 @@ function useBook(session: boolean, edge: number) {
   // so it answers while /quotes cannot
   const [closes, setCloses] = useState<Closes>([]);
   const [quotesFailed, setQuotesFailed] = useState(false);
-  const inSessionNow = useRef(session);
-  inSessionNow.current = session;
+  // the regular session's, where every value is live: outside it — the Curb and GTH included, where
+  // a row with no quote says its last close (#416) — the closes are read with every poll of the line
+  const regularNow = useRef(regular);
+  regularNow.current = regular;
   // ONE read at a time, and a failed one keeps the closes there were: they are stored history
   const [loadCloses] = useState(() => oneAtATime(
     // an answer that is not the list is no closes, never a crash of the page that reads it
@@ -645,7 +653,7 @@ function useBook(session: boolean, edge: number) {
     if (q.status === "fulfilled") setQuotes(q.value);
     setQuotesFailed(q.status === "rejected");
     // the closes at every hour the value cell says them: out of the session, and while /quotes fails
-    if (!inSessionNow.current || q.status === "rejected") void loadCloses();
+    if (!regularNow.current || q.status === "rejected") void loadCloses();
     if (m.status === "fulfilled") setMonitors(m.value);
     if (h.status === "fulfilled") setHealth(h.value);
     const failed = [q, m, h].find((r) => r.status === "rejected");

@@ -1,5 +1,6 @@
 import { closedLineText } from "./levels";
 import type { Holding } from "./shared/api";
+import type { MarketPhase } from "./session";
 
 /** "market closed — valued at 21:04" (#371; ADR 0023 amended 2026-11-13: one page, by the session).
  *
@@ -15,7 +16,7 @@ import type { Holding } from "./shared/api";
  *  it was. Two buttons for one press, so the header's is the one there is, and it sits in a header
  *  held at the top of the screen. The saved picture says the same words (`closedLineText`).
  */
-export function ClosedLine({ at, served, holdings = null, className }: {
+export function ClosedLine({ at, served, holdings = null, className, phase = "closed" }: {
   /** "21:04:37" or "21:04", or null for no time */
   at: string | null;
   /** the valuation's stamp whole, which says its date where the time alone would mislead —
@@ -25,10 +26,13 @@ export function ClosedLine({ at, served, holdings = null, className }: {
    *  instead — "market closed — as of the close, Fri 13 Nov 16:14" (`closeLineWords`) */
   holdings?: readonly Holding[] | null;
   className: string;
+  /** which session it is outside the regular one (#416): in the Curb and GTH the line says the
+   *  quotes are live and thin rather than that the market is closed */
+  phase?: MarketPhase;
 }) {
   return (
-    <p className={`nx-mkt-closed ${className}`}>
-      <span>{closedLineText(at, served, holdings)}</span>
+    <p className={`nx-mkt-closed ${className}`} data-phase={phase}>
+      <span>{closedLineText(at, served, holdings, new Date(), phase)}</span>
     </p>
   );
 }

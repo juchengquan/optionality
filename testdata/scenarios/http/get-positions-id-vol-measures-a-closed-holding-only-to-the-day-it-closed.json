@@ -152,12 +152,12 @@
         "reason": null,
         "at": "2026-11-07",
         "timing": "unrecorded",
-        "gap": -3.073350528379864,
-        "gap_reason": null,
-        "rest": -4.135850528379864,
+        "gap": null,
+        "gap_reason": "7 Nov has no Cost to close from a regular session",
+        "rest": null,
         "vega": 0,
         "cover": null,
-        "cover_reason": "its legs' vegas cancel out, so no move in vol would cover the gap"
+        "cover_reason": "7 Nov has no Cost to close from a regular session"
       }
     },
     "rows": {},

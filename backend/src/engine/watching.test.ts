@@ -185,6 +185,25 @@ describe("under exactly the holdings' sampling rules (ADR 0011)", () => {
     }]);
   });
 
+  it("stores no GTH price: the day keeps its vol with the mids empty, and a close is never replaced (#416)", async () => {
+    // moomoo quotes SPX options live overnight; on 2026-11-15 the first GTH sweep, Sunday 20:15,
+    // priced a watched day — none of which is a day's close
+    spreadRule();
+    now = new Date("2026-10-02T19:00:00Z"); // Friday 15:00 in New York, the session
+    await sweep();
+    book[SHORT] = quote(7);
+    now = new Date("2026-10-05T00:15:07Z"); // Sunday 20:15:07, GTH for Monday
+    await sweep();
+    now = new Date("2026-10-05T04:00:06Z"); // Monday 00:00, GTH
+    await sweep();
+    expect(stored()).toMatchObject([
+      { observed_on: "2026-10-02", legs_mid: toSqliteJson({ [SHORT]: 5, [LONG]: 2 }) },
+      { observed_on: "2026-10-04", legs_mid: null, legs_iv: toSqliteJson({ [SHORT]: 12.5, [LONG]: 11.5 }),
+        observed_at: "2026-10-05 00:15:07.000000" },
+      { observed_on: "2026-10-05", legs_mid: null, observed_at: "2026-10-05 04:00:06.000000" },
+    ]);
+  });
+
   it("never replaces a stored price with an empty one", async () => {
     spreadRule();
     await sweep();

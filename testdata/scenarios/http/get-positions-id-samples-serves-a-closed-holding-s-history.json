@@ -323,7 +323,7 @@
             "observed_at": "2026-11-08 05:00:00+08:00",
             "timing": "close",
             "dte": 41,
-            "cost_to_close": 6,
+            "cost_to_close": null,
             "on_pace": 6.323350528379864,
             "legs_iv": null,
             "legs_vega": null,

@@ -382,6 +382,21 @@ class TestClosedLine:
             == "market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading"
         )
 
+    def test_in_the_curb_and_gth_says_live_and_thin_and_the_failure_whichever_way_each_was_valued(self):
+        # #416
+        assert closed_line([self.valued(None)], "overnight") == "overnight session — live quotes, thin"
+        assert closed_line([self.valued(None)], "curb") == "Curb — live quotes, thin"
+        assert (
+            closed_line([self.valued(None), self.valued(self.FRI)], "overnight")
+            == "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14"
+        )
+        down_from_close = SimpleNamespace(close=self.FRI, unpriced="OpenD down")
+        assert (
+            closed_line([down_from_close], "overnight")
+            == "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14;"
+            " the Provider could not be asked"
+        )
+
     def test_says_a_holding_with_no_close_was_not_valued_where_the_provider_could_not_be_asked(self):
         # #387
         failed = SimpleNamespace(close=None, unpriced="OpenD down")

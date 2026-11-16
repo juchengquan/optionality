@@ -224,7 +224,9 @@ function PayoffFigure({ state, unit, legs, spx, spxReason, blank, note }: {
           <>
             {note ? <p className="nx-meta nx-payoff-note">{note}</p> : null}
             <Chart payoff={state.payoff} unit={unit} legs={legs} spx={spx} />
-            {spx === null ? <p className="nx-meta nx-payoff-spx">{`SPX — ${spxReason ?? "no price"}`}</p> : null}
+            {spx === null ? <p className="nx-meta nx-payoff-spx">{`SPX — ${spxReason ?? "no price"}`}</p>
+              // a price that is not current says so (#416): the marker is the last close's level
+              : spxReason ? <p className="nx-meta nx-payoff-spx" data-stale="">{`SPX ${spx.toFixed(2)} (${spxReason})`}</p> : null}
             <dl className="nx-payoff-kv">
               <div><dt>max profit</dt><dd>{state.payoff.max_profit === null ? "no ceiling" : pnlWords(state.payoff.max_profit, unit)}</dd></div>
               <div><dt>max loss</dt><dd>{state.payoff.max_loss === null ? "no floor" : pnlWords(state.payoff.max_loss, unit)}</dd></div>

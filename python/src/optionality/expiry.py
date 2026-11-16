@@ -53,6 +53,48 @@ def in_session(now: datetime | None = None) -> bool:
     return in_sample_hours(now)
 
 
+#: which of SPX options' sessions New York's clock is in (#416)
+type MarketPhase = Literal["regular", "curb", "overnight", "closed"]
+
+# 09:25, 17:00 and 20:15 in New York, as milliseconds since its midnight
+_GTH_UNTIL = (9 * 60 + 25) * 60_000
+_CURB_UNTIL = 17 * 60 * 60_000
+_GTH_FROM = (20 * 60 + 15) * 60_000
+
+
+def market_phase(now: datetime | None = None) -> MarketPhase:
+    """Which of SPX options' sessions New York's clock is in at `now` (#416), from Cboe's hours.
+
+    - regular: 09:30:00 to 16:15:00, both ends included, Monday to Friday — `in_session`, exactly.
+    - curb: after 16:15:00 and before 17:00:00, Monday to Friday.
+    - overnight: Global Trading Hours, GTH — 20:15:00 to before 09:25:00 the next morning, for a trade
+      date of Monday to Friday, so Sunday 20:15 starts Monday's and Friday 20:15 starts nothing.
+    - closed: every other instant.
+
+    Holidays are not detected, as `in_session` does not detect them. Mirrors `expiry.ts`.
+    """
+    weekday = _aware(now).astimezone(ZoneInfo(MARKET_TZ)).weekday()  # Monday 0 .. Sunday 6
+    t = _since_new_york_midnight(now)
+    if weekday < 5:
+        if _SAMPLE_FROM <= t <= _SAMPLE_UNTIL:
+            return "regular"
+        if _SAMPLE_UNTIL < t < _CURB_UNTIL:
+            return "curb"
+        # the morning's end of the GTH that began the evening before (Monday's began on Sunday)
+        if t < _GTH_UNTIL:
+            return "overnight"
+    # an evening's GTH is the NEXT weekday's: Sunday's to Thursday's evenings have one
+    if t >= _GTH_FROM and weekday not in (4, 5):
+        return "overnight"
+    return "closed"
+
+
+def sampled_price(now: datetime, price: float | None) -> float | None:
+    """The price a day's sample may store, observed at `now` (#416): a regular session's, and nothing
+    else — a GTH, Curb or weekend reading keeps its vol with the price left empty. Mirrors `expiry.ts`."""
+    return price if market_phase(now) == "regular" else None
+
+
 def _since_new_york_midnight(now: datetime | None) -> int:
     """Milliseconds since midnight in New York at `now`."""
     ny = _aware(now).astimezone(ZoneInfo(MARKET_TZ))
@@ -91,8 +133,10 @@ def takes_sample(now: datetime, stored: StoredSample | None, observed: SampleRea
     hour. Before the open: only that fill. In the hours: written when the figures moved, and a
     provisional row regardless (a weekend's, restamped). After the close: a provisional row replaced (a
     missed session's evening) — a complete one only by complete readings — a settled row missing its IV or vega completed by a sweep with BOTH, a
-    complete settled row never changed. An empty Cost to close never replaces a stored one at any hour,
-    and a row without one is completed only by a reading with all three (#380). Mirrors `expiry.ts`.
+    complete settled row never changed. An empty Cost to close never replaces a stored one at any hour
+    (#380). Outside the regular session no reading has a cost (`sampled_price`, #416), so after the close
+    a row is complete, and a reading whole, by its IV and vega alone: a costless row is completed by the
+    vol, and a priced row is never changed. Mirrors `expiry.ts`.
     """
     if stored is None:
         return "yes"
@@ -109,11 +153,9 @@ def takes_sample(now: datetime, stored: StoredSample | None, observed: SampleRea
         return "no"
     if t <= _SAMPLE_UNTIL:
         return "yes" if provisional else "if-changed"
-    # a row without a cost is incomplete, and only a reading with all three is complete
-    incomplete = stored["legs_iv"] is None or stored["legs_vega"] is None or stored["cost_to_close"] is None
-    complete = (
-        observed["legs_iv"] is not None and observed["legs_vega"] is not None and observed["cost_to_close"] is not None
-    )
+    # after the close no reading has a price (#416): complete by the IV and vega alone
+    incomplete = stored["legs_iv"] is None or stored["legs_vega"] is None
+    complete = observed["legs_iv"] is not None and observed["legs_vega"] is not None
     if provisional:
         # a complete provisional row only by complete readings, or the day could lose its Vol for good
         return "yes" if incomplete or complete else "no"
@@ -170,10 +212,11 @@ class CloseCandidate(TypedDict):
     cost_to_close: float | None
 
 
-def _taken_in_session(observed_at: str | None) -> bool:
-    """Whether a stored row was observed IN New York's session — a weekday's 09:30-16:15 — and so is
-    that day's close: `sample_timing` says "close" by the hour alone, which a weekend row in those hours
-    also is. Mirrors `expiry.ts`."""
+def taken_in_session(observed_at: str | None) -> bool:
+    """Whether a stored row was observed IN New York's regular session — a weekday's 09:30-16:15 — and so
+    its price is a session's: what every reader of a stored price asks (#416). `sample_timing` says
+    "close" by the hour alone, which a weekend row in those hours also is; a row with no stamp, or one
+    that will not read, is not. Mirrors `expiry.ts`."""
     if observed_at is None or sample_timing(observed_at) != "close":
         return False
     when = _stored_instant(observed_at)
@@ -209,29 +252,33 @@ def session_closed_since(day: str, now: datetime) -> bool:
 
 
 def close_sample[R: CloseCandidate](samples: list[R]) -> R | None:
-    """Which of a holding's stored rows it is valued from outside the session (#380, F6), or None.
+    """Which of a holding's stored rows it is valued from where it is not valued live (#380, F6), or None.
 
-    The LATEST row with a Cost to close taken in the hours (`sample_timing` "close"); where none was,
-    the latest row with a cost of any timing, which the caller states. A row without a cost values
-    nothing. Latest by its market day, whatever order the rows come in. Mirrors `expiry.ts`.
+    The LATEST row with a Cost to close observed in a REGULAR session (`taken_in_session`) and nothing
+    else (#416): an overnight, Curb, after-close, before-open, weekend or unstamped row is no close. A
+    row without a cost values nothing. Latest by its market day, whatever order the rows come in.
+    Mirrors `expiry.ts`.
     """
     close: R | None = None
-    any_: R | None = None
     for s in samples:
-        if s["cost_to_close"] is None:
+        if s["cost_to_close"] is None or not taken_in_session(s["observed_at"]):
             continue
-        if any_ is None or s["observed_on"] > any_["observed_on"]:
-            any_ = s
-        if _taken_in_session(s["observed_at"]) and (close is None or s["observed_on"] > close["observed_on"]):
+        if close is None or s["observed_on"] > close["observed_on"]:
             close = s
-    return close if close is not None else any_
+    return close
 
 
-def values_from_close[R: CloseCandidate](now: datetime, samples: list[R]) -> R | None:
-    """The row a holding is valued from at `now`, or None to value it LIVE (#380): always live in the
-    session, the latest close (`close_sample`) outside it, and live where no row has a cost. Mirrors
-    `expiry.ts`."""
-    return None if in_session(now) else close_sample(samples)
+def values_from_close[R: CloseCandidate](now: datetime, quoted: bool, samples: list[R]) -> R | None:
+    """The row a holding is valued from at `now`, or None to value it LIVE (#380, #416): always live in
+    the regular session; in the Curb and overnight (GTH) live where `quoted` — every leg two-sided in
+    this batch — and the latest close (`close_sample`) where not; closed, the latest close, quoted or
+    not; and live where no row has a cost. Mirrors `expiry.ts`."""
+    phase = market_phase(now)
+    if phase == "regular":
+        return None
+    if quoted and phase in ("overnight", "curb"):
+        return None
+    return close_sample(samples)
 
 
 def days_to_expiry(strike_date: str, now: datetime | None = None) -> int:

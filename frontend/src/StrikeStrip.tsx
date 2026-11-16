@@ -12,9 +12,8 @@
  *  and the scale's padding (`scaleOf`) keeps a label centred on the outermost mark inside the box —
  *  measured under the iPhone profile at a 24px text size.
  */
-import { DASH } from "./shared/format";
 import type { Holding } from "./shared/api";
-import { deltaWords, distanceWords, scaleOf, stripOfHolding, type Strip } from "./strip";
+import { deltaWords, distanceWords, scaleOf, spxStripWords, stripOfHolding, type Strip } from "./strip";
 import { Leg } from "./shared/Legs";
 import "./StrikeStrip.css";
 
@@ -47,7 +46,8 @@ export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?
           {compact ? null : <span className="nxs-l"><b>{k.strike}</b><i>{deltaWords(k.delta)}</i></span>}
         </span>
       ))}
-      {strip.spx !== null ? <span className="nxs-spx" style={{ left: pct(at(strip.spx)) }} /> : null}
+      {strip.spx !== null
+        ? <span className="nxs-spx" data-stale={strip.reason ? "" : undefined} style={{ left: pct(at(strip.spx)) }} /> : null}
     </div>
   );
   if (compact) return <span className="nxs" data-compact="">{scale}</span>;
@@ -55,8 +55,8 @@ export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?
     <figure className="nxs" aria-label="strike strip">
       {scale}
       <figcaption className="nxs-words">
-        <span className="nxs-spx-words">
-          {strip.spx !== null ? `SPX ${strip.spx.toFixed(2)}` : `SPX ${DASH} ${strip.reason ?? "no price"}`}
+        <span className="nxs-spx-words" data-stale={strip.spx !== null && strip.reason ? "" : undefined}>
+          {spxStripWords(strip)}
         </span>
         {strip.shorts.map((k) => (
           <span key={k.code}>

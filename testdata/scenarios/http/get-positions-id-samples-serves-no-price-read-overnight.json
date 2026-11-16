@@ -1,0 +1,748 @@
+{
+  "name": "GET /positions/{id}/samples serves no price read overnight",
+  "world": {
+    "clock": "2026-11-16T05:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-12",
+          "dte": 36,
+          "cost_to_close": 3.75,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-12 21:14:58.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-13",
+          "dte": 35,
+          "cost_to_close": 3.25,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-13 21:14:59.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-14",
+          "dte": 34,
+          "cost_to_close": null,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-14 05:00:12.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-15",
+          "dte": 33,
+          "cost_to_close": 3.4,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-16 01:15:07.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-16",
+          "dte": 32,
+          "cost_to_close": 3.05,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-16 05:00:06.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        }
+      ],
+      "watch_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/positions/pos-1/samples",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "levels": {
+          "dte_at_open": 67,
+          "target": 3.2,
+          "stop": 12.8,
+          "target_dte": 17,
+          "manage_by_dte": 21
+        },
+        "plan": [
+          {
+            "dte": 67,
+            "on_pace": 6.4
+          },
+          {
+            "dte": 66,
+            "on_pace": 6.352059250071422
+          },
+          {
+            "dte": 65,
+            "on_pace": 6.303753915948483
+          },
+          {
+            "dte": 64,
+            "on_pace": 6.255075551042828
+          },
+          {
+            "dte": 63,
+            "on_pace": 6.206015377492361
+          },
+          {
+            "dte": 62,
+            "on_pace": 6.156564267681249
+          },
+          {
+            "dte": 61,
+            "on_pace": 6.1067127244129855
+          },
+          {
+            "dte": 60,
+            "on_pace": 6.056450859614514
+          },
+          {
+            "dte": 59,
+            "on_pace": 6.005768371436188
+          },
+          {
+            "dte": 58,
+            "on_pace": 5.954654519597354
+          },
+          {
+            "dte": 57,
+            "on_pace": 5.903098098810413
+          },
+          {
+            "dte": 56,
+            "on_pace": 5.8510874100971195
+          },
+          {
+            "dte": 55,
+            "on_pace": 5.798610229789111
+          },
+          {
+            "dte": 54,
+            "on_pace": 5.7456537759799655
+          },
+          {
+            "dte": 53,
+            "on_pace": 5.69220467216796
+          },
+          {
+            "dte": 52,
+            "on_pace": 5.6382489077965205
+          },
+          {
+            "dte": 51,
+            "on_pace": 5.583771795362573
+          },
+          {
+            "dte": 50,
+            "on_pace": 5.528757923720705
+          },
+          {
+            "dte": 49,
+            "on_pace": 5.473191107162474
+          },
+          {
+            "dte": 48,
+            "on_pace": 5.417054329794035
+          },
+          {
+            "dte": 47,
+            "on_pace": 5.360329684670358
+          },
+          {
+            "dte": 46,
+            "on_pace": 5.302998307068947
+          },
+          {
+            "dte": 45,
+            "on_pace": 5.245040301198269
+          },
+          {
+            "dte": 44,
+            "on_pace": 5.186434659533652
+          },
+          {
+            "dte": 43,
+            "on_pace": 5.127159173853475
+          },
+          {
+            "dte": 42,
+            "on_pace": 5.067190336907403
+          },
+          {
+            "dte": 41,
+            "on_pace": 5.006503233481995
+          },
+          {
+            "dte": 40,
+            "on_pace": 4.945071419432037
+          },
+          {
+            "dte": 39,
+            "on_pace": 4.882866787011652
+          },
+          {
+            "dte": 38,
+            "on_pace": 4.819859414559662
+          },
+          {
+            "dte": 37,
+            "on_pace": 4.756017398258475
+          },
+          {
+            "dte": 36,
+            "on_pace": 4.691306663282121
+          },
+          {
+            "dte": 35,
+            "on_pace": 4.625690751160645
+          },
+          {
+            "dte": 34,
+            "on_pace": 4.559130579594211
+          },
+          {
+            "dte": 33,
+            "on_pace": 4.491584170224238
+          },
+          {
+            "dte": 32,
+            "on_pace": 4.423006338976564
+          },
+          {
+            "dte": 31,
+            "on_pace": 4.353348342488203
+          },
+          {
+            "dte": 30,
+            "on_pace": 4.282557472756517
+          },
+          {
+            "dte": 29,
+            "on_pace": 4.210576590430413
+          },
+          {
+            "dte": 28,
+            "on_pace": 4.137343584994907
+          },
+          {
+            "dte": 27,
+            "on_pace": 4.0627907473455265
+          },
+          {
+            "dte": 26,
+            "on_pace": 3.9868440367205653
+          },
+          {
+            "dte": 25,
+            "on_pace": 3.9094222194017676
+          },
+          {
+            "dte": 24,
+            "on_pace": 3.830435850653311
+          },
+          {
+            "dte": 23,
+            "on_pace": 3.7497860635492337
+          },
+          {
+            "dte": 22,
+            "on_pace": 3.6673631179371875
+          },
+          {
+            "dte": 21,
+            "on_pace": 3.583044648790171
+          },
+          {
+            "dte": 20,
+            "on_pace": 3.4966935341321794
+          },
+          {
+            "dte": 19,
+            "on_pace": 3.4081552764009597
+          },
+          {
+            "dte": 18,
+            "on_pace": 3.3172547542324233
+          },
+          {
+            "dte": 17,
+            "on_pace": 3.2237921491460213
+          },
+          {
+            "dte": 16,
+            "on_pace": 3.127537775521414
+          },
+          {
+            "dte": 15,
+            "on_pace": 3.028225429807257
+          },
+          {
+            "dte": 14,
+            "on_pace": 2.9255437050485598
+          },
+          {
+            "dte": 13,
+            "on_pace": 2.8191244538982603
+          },
+          {
+            "dte": 12,
+            "on_pace": 2.7085271648970175
+          },
+          {
+            "dte": 11,
+            "on_pace": 2.593217329766826
+          },
+          {
+            "dte": 10,
+            "on_pace": 2.4725357097160185
+          },
+          {
+            "dte": 9,
+            "on_pace": 2.3456533316410604
+          },
+          {
+            "dte": 8,
+            "on_pace": 2.211503169488282
+          },
+          {
+            "dte": 7,
+            "on_pace": 2.0686717924974536
+          },
+          {
+            "dte": 6,
+            "on_pace": 1.9152179253266555
+          },
+          {
+            "dte": 5,
+            "on_pace": 1.7483467670660897
+          },
+          {
+            "dte": 4,
+            "on_pace": 1.563768887760707
+          },
+          {
+            "dte": 3,
+            "on_pace": 1.3542635824485088
+          },
+          {
+            "dte": 2,
+            "on_pace": 1.105751584744141
+          },
+          {
+            "dte": 1,
+            "on_pace": 0.7818844438803535
+          },
+          {
+            "dte": 0,
+            "on_pace": 0
+          }
+        ],
+        "samples": [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-13 05:14:58+08:00",
+            "timing": "close",
+            "dte": 36,
+            "cost_to_close": 3.75,
+            "on_pace": 4.691306663282121,
+            "legs_iv": {
+              "US.SPXW261218C7300000": 14.5,
+              "US.SPXW261218C7350000": 14,
+              "US.SPXW261218P6400000": 19.25,
+              "US.SPXW261218P6350000": 20
+            },
+            "legs_vega": {
+              "US.SPXW261218C7300000": 4.25,
+              "US.SPXW261218C7350000": 4,
+              "US.SPXW261218P6400000": 4.5,
+              "US.SPXW261218P6350000": 3.75
+            },
+            "legs_delta": {
+              "US.SPXW261218C7300000": 0.2,
+              "US.SPXW261218C7350000": 0.14,
+              "US.SPXW261218P6400000": -0.17,
+              "US.SPXW261218P6350000": -0.11
+            },
+            "spx": 6900.5,
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": 0.2,
+                "points": 399.5,
+                "sigma": 1.27,
+                "one_sigma": 314.23
+              },
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": -0.17,
+                "points": 500.5,
+                "sigma": 1.2,
+                "one_sigma": 417.17
+              }
+            ],
+            "before_correction": false
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-14 05:14:59+08:00",
+            "timing": "close",
+            "dte": 35,
+            "cost_to_close": 3.25,
+            "on_pace": 4.625690751160645,
+            "legs_iv": {
+              "US.SPXW261218C7300000": 14.5,
+              "US.SPXW261218C7350000": 14,
+              "US.SPXW261218P6400000": 19.25,
+              "US.SPXW261218P6350000": 20
+            },
+            "legs_vega": {
+              "US.SPXW261218C7300000": 4.25,
+              "US.SPXW261218C7350000": 4,
+              "US.SPXW261218P6400000": 4.5,
+              "US.SPXW261218P6350000": 3.75
+            },
+            "legs_delta": {
+              "US.SPXW261218C7300000": 0.2,
+              "US.SPXW261218C7350000": 0.14,
+              "US.SPXW261218P6400000": -0.17,
+              "US.SPXW261218P6350000": -0.11
+            },
+            "spx": 6900.5,
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": 0.2,
+                "points": 399.5,
+                "sigma": 1.29,
+                "one_sigma": 309.84
+              },
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": -0.17,
+                "points": 500.5,
+                "sigma": 1.22,
+                "one_sigma": 411.34
+              }
+            ],
+            "before_correction": false
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 13:00:12+08:00",
+            "timing": "before-open",
+            "dte": 34,
+            "cost_to_close": null,
+            "on_pace": 4.559130579594211,
+            "legs_iv": {
+              "US.SPXW261218C7300000": 14.5,
+              "US.SPXW261218C7350000": 14,
+              "US.SPXW261218P6400000": 19.25,
+              "US.SPXW261218P6350000": 20
+            },
+            "legs_vega": {
+              "US.SPXW261218C7300000": 4.25,
+              "US.SPXW261218C7350000": 4,
+              "US.SPXW261218P6400000": 4.5,
+              "US.SPXW261218P6350000": 3.75
+            },
+            "legs_delta": {
+              "US.SPXW261218C7300000": 0.2,
+              "US.SPXW261218C7350000": 0.14,
+              "US.SPXW261218P6400000": -0.17,
+              "US.SPXW261218P6350000": -0.11
+            },
+            "spx": 6900.5,
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": 0.2,
+                "points": 399.5,
+                "sigma": 1.31,
+                "one_sigma": 305.38
+              },
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": -0.17,
+                "points": 500.5,
+                "sigma": 1.23,
+                "one_sigma": 405.42
+              }
+            ],
+            "before_correction": false
+          },
+          {
+            "observed_on": "2026-11-15",
+            "observed_at": "2026-11-16 09:15:07+08:00",
+            "timing": "after-close",
+            "dte": 33,
+            "cost_to_close": null,
+            "on_pace": 4.491584170224238,
+            "legs_iv": {
+              "US.SPXW261218C7300000": 14.5,
+              "US.SPXW261218C7350000": 14,
+              "US.SPXW261218P6400000": 19.25,
+              "US.SPXW261218P6350000": 20
+            },
+            "legs_vega": {
+              "US.SPXW261218C7300000": 4.25,
+              "US.SPXW261218C7350000": 4,
+              "US.SPXW261218P6400000": 4.5,
+              "US.SPXW261218P6350000": 3.75
+            },
+            "legs_delta": {
+              "US.SPXW261218C7300000": 0.2,
+              "US.SPXW261218C7350000": 0.14,
+              "US.SPXW261218P6400000": -0.17,
+              "US.SPXW261218P6350000": -0.11
+            },
+            "spx": 6900.5,
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": 0.2,
+                "points": 399.5,
+                "sigma": 1.33,
+                "one_sigma": 300.86
+              },
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": -0.17,
+                "points": 500.5,
+                "sigma": 1.25,
+                "one_sigma": 399.41
+              }
+            ],
+            "before_correction": false
+          },
+          {
+            "observed_on": "2026-11-16",
+            "observed_at": "2026-11-16 13:00:06+08:00",
+            "timing": "before-open",
+            "dte": 32,
+            "cost_to_close": null,
+            "on_pace": 4.423006338976564,
+            "legs_iv": {
+              "US.SPXW261218C7300000": 14.5,
+              "US.SPXW261218C7350000": 14,
+              "US.SPXW261218P6400000": 19.25,
+              "US.SPXW261218P6350000": 20
+            },
+            "legs_vega": {
+              "US.SPXW261218C7300000": 4.25,
+              "US.SPXW261218C7350000": 4,
+              "US.SPXW261218P6400000": 4.5,
+              "US.SPXW261218P6350000": 3.75
+            },
+            "legs_delta": {
+              "US.SPXW261218C7300000": 0.2,
+              "US.SPXW261218C7350000": 0.14,
+              "US.SPXW261218P6400000": -0.17,
+              "US.SPXW261218P6350000": -0.11
+            },
+            "spx": 6900.5,
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": 0.2,
+                "points": 399.5,
+                "sigma": 1.35,
+                "one_sigma": 296.26
+              },
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": -0.17,
+                "points": 500.5,
+                "sigma": 1.27,
+                "one_sigma": 393.31
+              }
+            ],
+            "before_correction": false
+          }
+        ],
+        "before_entry": [],
+        "entry_close": null,
+        "qty_corrected_at": null
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

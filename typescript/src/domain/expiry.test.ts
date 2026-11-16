@@ -14,8 +14,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  closeSample, daysToExpiry, inSampleHours, inSession, marketDate, sampleTiming, takesSample,
-  valuedTiming, valuesFromClose, type SampleReadings,
+  closeSample, daysToExpiry, inSampleHours, inSession, marketDate, marketPhase, sampledPrice,
+  sampleTiming, takesSample, valuedTiming, valuesFromClose, type SampleReadings,
 } from "./expiry.ts";
 
 describe("the market date", () => {
@@ -212,13 +212,21 @@ describe("takesSample — whether this sweep writes the day's row, and how", () 
     expect(takesSample(session, emptyFill, noCost)).toBe("yes");
   });
 
-  it("gives a row with an empty cost its cost when one is read, and not otherwise (#380)", () => {
+  it("gives a row with an empty cost its cost in the session, and never after the close (#380, #416)", () => {
     const emptyInHours = row("2026-11-09 16:00:00.000000", noCost);
     expect(takesSample(session, emptyInHours, readings)).toBe("if-changed");
-    // after the close a settled row without a cost is incomplete, completed by a whole reading...
-    expect(takesSample(evening, emptyInHours, readings)).toBe("yes");
-    // ...and by nothing less: another costless reading would rewrite it on every sweep till midnight
+    // after the close no price is a day's (#416): a settled row with its vol is complete without one,
+    // and neither a priced reading nor a costless one rewrites it on every sweep till midnight
+    expect(takesSample(evening, emptyInHours, readings)).toBe("no");
     expect(takesSample(evening, emptyInHours, noCost)).toBe("no");
+  });
+
+  it("completes a costless row's vol after the close, and never a priced row's (#416)", () => {
+    const withoutVega = { legs_iv: "{}", legs_vega: null, cost_to_close: null };
+    expect(takesSample(evening, row("2026-11-09 16:00:00.000000", withoutVega), noCost)).toBe("yes");
+    // a priced row missing its vega keeps it missing rather than lose its price to a GTH reading
+    const pricedWithoutVega = { legs_iv: "{}", legs_vega: null, cost_to_close: 3.05 };
+    expect(takesSample(evening, row("2026-11-09 16:00:00.000000", pricedWithoutVega), noCost)).toBe("no");
   });
 
   it("calls a row provisional by New York's clock, across a change of the clocks", () => {
@@ -339,24 +347,38 @@ describe("closeSample — the row a holding is valued from outside the session (
     expect(closeSample([fri, evening])).toBe(fri);
   });
 
-  it("falls back to the latest row with a cost of any timing, where no close has one", () => {
-    // a trade recorded in New York's evening: its first row is after the close
+  it("reads a regular session's price only: no fallback to a row of any other timing (#416)", () => {
+    // a trade recorded in New York's evening: its first row is after the close, and is no close
     const opened = row("2026-11-13", "2026-11-14 01:30:00.000000", 3.2);
     const before = row("2026-11-12", "2026-11-12 10:00:00.000000", 3.6); // 05:00, before the open
-    expect(closeSample([before, opened, sat])).toBe(opened);
+    expect(closeSample([before, opened, sat])).toBeNull();
   });
 
-  it("takes a row with no stamp only as the fallback", () => {
+  it("never takes an overnight (GTH) price, though it is the latest (#416)", () => {
+    // Sunday 20:15:07 New York, the first sweep of Monday's overnight session
+    const gth = row("2026-11-15", "2026-11-16 01:15:07.004000", 3.4);
+    // Monday 00:00 New York, a GTH mark
+    const midnight = row("2026-11-16", "2026-11-16 05:00:06.363000", 3.05);
+    expect(closeSample([fri, gth, midnight])).toBe(fri);
+    expect(closeSample([gth, midnight])).toBeNull();
+  });
+
+  it("never takes a Curb price either (#416)", () => {
+    const curb = row("2026-11-13", "2026-11-13 21:40:00.000000", 3.0); // Friday 16:40
+    expect(closeSample([thu, curb])).toBe(thu);
+  });
+
+  it("takes a row with no stamp never: nothing says it was a session's (#416)", () => {
     const legacy = row("2026-11-14", null, 2.9);
     expect(closeSample([fri, legacy])).toBe(fri);
-    expect(closeSample([legacy])).toBe(legacy);
+    expect(closeSample([legacy])).toBeNull();
   });
 
   it("calls no weekend row a close, though it was taken in the hours (#380 review)", () => {
     // a Provider that prices at the weekend: Saturday noon's reading carries Friday forward at best
     const saturdayNoon = row("2026-11-14", "2026-11-14 17:00:00.000000", 3.1);
     expect(closeSample([fri, saturdayNoon])).toBe(fri);
-    expect(closeSample([saturdayNoon])).toBe(saturdayNoon); // the fallback, its timing stated
+    expect(closeSample([saturdayNoon])).toBeNull();
   });
 
   it("is null where no row has a cost", () => {
@@ -365,22 +387,87 @@ describe("closeSample — the row a holding is valued from outside the session (
   });
 });
 
-describe("valuesFromClose — live in the session, the latest close outside it (#380)", () => {
+describe("valuesFromClose — live in the session and where GTH quotes it, the close otherwise (#380, #416)", () => {
   const fri = { observed_on: "2026-11-13", observed_at: "2026-11-13 21:14:59.561000", cost_to_close: 3.05 };
 
-  it("values live in the session, whatever is stored", () => {
-    expect(valuesFromClose(at("2026-11-09T15:00:00Z"), [fri])).toBeNull();
-    expect(valuesFromClose(at("2026-11-13T21:15:00.000Z"), [fri])).toBeNull(); // 16:15:00
+  it("values live in the session, whatever is stored and whether or not it is quoted", () => {
+    expect(valuesFromClose(at("2026-11-09T15:00:00Z"), true, [fri])).toBeNull();
+    expect(valuesFromClose(at("2026-11-09T15:00:00Z"), false, [fri])).toBeNull();
+    expect(valuesFromClose(at("2026-11-13T21:15:00.000Z"), false, [fri])).toBeNull(); // 16:15:00
   });
 
-  it("values from the close outside it", () => {
-    expect(valuesFromClose(at("2026-11-13T21:15:00.001Z"), [fri])).toBe(fri);
-    expect(valuesFromClose(at("2026-11-14T14:00:00Z"), [fri])).toBe(fri); // Saturday 09:00
-    expect(valuesFromClose(at("2026-11-14T17:00:00Z"), [fri])).toBe(fri); // Saturday noon
+  it("values live overnight (GTH) where every leg has a two-sided quote (#416)", () => {
+    expect(valuesFromClose(at("2026-11-16T01:15:07Z"), true, [fri])).toBeNull(); // Sunday 20:15
+    expect(valuesFromClose(at("2026-11-16T05:00:00Z"), true, [fri])).toBeNull(); // Monday 00:00
   });
 
-  it("values live outside it where no row has a cost", () => {
-    expect(valuesFromClose(at("2026-11-14T17:00:00Z"), [{ ...fri, cost_to_close: null }])).toBeNull();
+  it("values live in the Curb where quoted (#416)", () => {
+    expect(valuesFromClose(at("2026-11-13T21:40:00Z"), true, [fri])).toBeNull(); // Friday 16:40
+  });
+
+  it("falls back to the close overnight and in the Curb where a leg is not quoted (#416)", () => {
+    expect(valuesFromClose(at("2026-11-16T05:00:00Z"), false, [fri])).toBe(fri);
+    expect(valuesFromClose(at("2026-11-13T21:40:00Z"), false, [fri])).toBe(fri);
+  });
+
+  it("values from the close when nothing trades, quoted or not", () => {
+    expect(valuesFromClose(at("2026-11-13T21:15:00.001Z"), false, [fri])).toBe(fri); // 16:15:00.001, the Curb
+    expect(valuesFromClose(at("2026-11-13T22:30:00Z"), true, [fri])).toBe(fri); // Friday 17:30
+    expect(valuesFromClose(at("2026-11-14T17:00:00Z"), true, [fri])).toBe(fri); // Saturday noon
+  });
+
+  it("values live where no row has a cost", () => {
+    expect(valuesFromClose(at("2026-11-14T17:00:00Z"), false, [{ ...fri, cost_to_close: null }])).toBeNull();
+  });
+});
+
+describe("marketPhase — which of SPX options' sessions New York's clock is in (#416)", () => {
+  const cases: [string, string, string][] = [
+    ["2026-11-09T14:29:59.999Z", "closed", "Monday 09:29:59.999, between GTH and the open"],
+    ["2026-11-09T14:25:00.000Z", "closed", "Monday 09:25, GTH's end"],
+    ["2026-11-09T14:24:59.999Z", "overnight", "Monday 09:24:59.999, GTH's last moment"],
+    ["2026-11-09T14:30:00.000Z", "regular", "Monday 09:30, the open"],
+    ["2026-11-09T21:15:00.000Z", "regular", "Monday 16:15, the options' close"],
+    ["2026-11-09T21:15:00.001Z", "curb", "a millisecond after the close: the Curb"],
+    ["2026-11-09T21:59:59.999Z", "curb", "the Curb's last moment"],
+    ["2026-11-09T22:00:00.000Z", "closed", "Monday 17:00, the Curb's end"],
+    ["2026-11-10T01:14:59.999Z", "closed", "Monday 20:14:59.999"],
+    ["2026-11-10T01:15:00.000Z", "overnight", "Monday 20:15, Tuesday's GTH"],
+    ["2026-11-10T05:00:00.000Z", "overnight", "Tuesday 00:00, in GTH"],
+    ["2026-11-14T01:15:00.000Z", "closed", "Friday 20:15: no GTH into a Saturday"],
+    ["2026-11-14T17:00:00.000Z", "closed", "Saturday noon"],
+    ["2026-11-15T21:40:00.000Z", "closed", "Sunday 16:40: no Curb on a Sunday"],
+    ["2026-11-16T01:14:59.999Z", "closed", "Sunday 20:14:59.999"],
+    ["2026-11-16T01:15:00.000Z", "overnight", "Sunday 20:15 starts Monday's trade date"],
+    ["2026-11-16T05:00:00.000Z", "overnight", "Monday 00:00"],
+    ["2026-11-13T21:40:00.000Z", "curb", "Friday 16:40: the Curb"],
+    ["2026-03-09T00:15:00.000Z", "overnight", "Sunday 20:15 EDT, the night the clocks went forward"],
+  ];
+  for (const [instant, phase, name] of cases) {
+    it(`${name}: ${phase}`, () => expect(marketPhase(at(instant))).toBe(phase));
+  }
+
+  it("is regular exactly where inSession is", () => {
+    for (const [instant] of cases) {
+      expect(marketPhase(at(instant)) === "regular").toBe(inSession(at(instant)));
+    }
+  });
+});
+
+describe("sampledPrice — what a day's sample may store as its price (#416)", () => {
+  it("keeps a regular session's price", () => {
+    expect(sampledPrice(at("2026-11-13T21:14:59Z"), 3.05)).toBe(3.05);
+  });
+
+  it("stores no overnight, Curb or weekend price", () => {
+    expect(sampledPrice(at("2026-11-16T01:15:07Z"), 3.4)).toBeNull(); // Sunday 20:15, GTH
+    expect(sampledPrice(at("2026-11-16T05:00:06Z"), 3.05)).toBeNull(); // Monday 00:00, GTH
+    expect(sampledPrice(at("2026-11-13T21:40:00Z"), 3.0)).toBeNull(); // Friday 16:40, the Curb
+    expect(sampledPrice(at("2026-11-14T17:00:00Z"), 3.1)).toBeNull(); // Saturday noon
+  });
+
+  it("is null for no price at any hour", () => {
+    expect(sampledPrice(at("2026-11-13T20:00:00Z"), null)).toBeNull();
   });
 });
 

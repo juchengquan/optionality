@@ -926,11 +926,15 @@ describe("a watched rule's daily closes (#402)", () => {
       });
     });
 
-    it("is the latest reading with a price where no close has one, said for what it is", async () => {
+    it("is never a price read outside a regular session: an overnight (GTH) one is no close (#416)", async () => {
       start();
       const id = (await body(await post(combo({ field: "mid_price" })))).id;
+      // Thursday 21:00 New York, GTH: before #416 the sweep stored such a price
       watched(spreadCodes(), "2026-10-01", 31, [5, 2], "2026-10-02 01:00:00.000000");
-      expect((await closesOf())[id]).toMatchObject({ price: 3, timing: "after-close" });
+      expect((await closesOf())[id]).toBeNull();
+      // and beside a session's close, the close, though the GTH row is later
+      watched(spreadCodes(), "2026-09-30", 32, [6, 2], "2026-09-30 20:14:00.000000");
+      expect((await closesOf())[id]).toMatchObject({ observed_on: "2026-09-30", price: 4, timing: "close" });
     });
 
     it("is null for a rule with no day priced", async () => {

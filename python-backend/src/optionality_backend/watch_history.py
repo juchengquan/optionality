@@ -28,6 +28,7 @@ from optionality.expiry import (
     in_session,
     market_date,
     sample_timing,
+    taken_in_session,
     valued_timing,
 )
 from optionality.js import js_string
@@ -114,7 +115,8 @@ def _days(
                 "observed_at": None if timing == "unrecorded" else display_stored(s["observed_at"], tz),
                 "timing": timing,
                 "dte": s["dte"],
-                "value": value(records),
+                # a regular session's price only (#416): a chart of closes plots no overnight mark
+                "value": value(records) if taken_in_session(s["observed_at"]) else None,
                 "legs_iv": stored_leg_map(s["legs_iv"]),
                 "legs_vega": stored_leg_map(s["legs_vega"]),
                 "legs_delta": stored_leg_map(s["legs_delta"]),

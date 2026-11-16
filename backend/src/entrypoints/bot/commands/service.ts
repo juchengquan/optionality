@@ -9,7 +9,7 @@ import { buildSpxCode } from "optionality/domain/contract";
 import { displayTimeShort } from "optionality/domain/timefmt";
 import { holdingValues } from "../../../holdings.ts";
 import type { QuoteRecord } from "optionality/quotes";
-import { inSession } from "optionality/domain/expiry";
+import { marketPhase } from "optionality/domain/expiry";
 import { HELP_TEXT, closedLine, fmtValue, standingNote, table } from "../format.ts";
 
 /** Where each Position stands: what it costs to buy back, what that is worth, and the one thing
@@ -38,8 +38,10 @@ export const holdings: Command = async (ctx) => {
     standingNote(v),
   ]));
   // outside the session the figures are a close's, and the table keeps its four columns: the one
-  // line under it says which close (#380)
-  return inSession(now) ? reply : `${reply}\n${closedLine(valued.values)}`;
+  // line under it says which close (#380) — or, in the Curb and overnight, that they are live and
+  // thin, and which were valued from a close (#416)
+  const phase = marketPhase(now);
+  return phase === "regular" ? reply : `${reply}\n${closedLine(valued.values, phase)}`;
 };
 
 /** One contract's live figures, for a strike nothing watches. The reason `/spx/quote` could be

@@ -14,7 +14,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import {
-  daysToExpiry, marketDate, sessionClosedSince, takesSample, valuedTiming,
+  daysToExpiry, marketDate, marketPhase, sampledPrice, sessionClosedSince, takesSample, valuedTiming, valuesFromClose,
 } from "optionality/domain/expiry";
 import { normalizeStrikeDate } from "optionality/domain/contract";
 import { dteAtOpen, onPace } from "optionality/domain/exit";
@@ -30,7 +30,7 @@ import type { Settings } from "../env.ts";
 import type { Notifier } from "../notify.ts";
 import type { QuoteRecord } from "optionality/quotes";
 import { toPosition } from "../hydrate.ts";
-import { closeOf } from "../holdings.ts";
+import { closeCandidates } from "../holdings.ts";
 
 /** What the sweep hands these: the database, the policy, and a way to send that reports whether it
  *  got through. `notify.ts`'s notifier swallows a failed send — it must, since the sweep's job is
@@ -55,10 +55,11 @@ export interface PositionSweepDeps {
  *  **Held until there is a Cost to close to say** (#380). The notice goes once, so one sent without
  *  its "now" line is without it for good — and the manage-by DTE is first crossed just after New
  *  York's midnight, when moomoo quotes every option bid 0 / ask 0 and the batch prices nothing. So
- *  it is valued as `/holdings` and the page value the holding (#387): in the session from the
- *  sweep's own batch, and outside it from the holding's latest close (`closeOf`) even where the
- *  batch prices it overnight, with that close's day said beside the figure and its pace at that
- *  close's own DTE — so the three never quote two costs for one holding. Out of the session with
+ *  it is valued as `/holdings` and the page value the holding (#387, #416): in the session from the
+ *  sweep's own batch; in the Curb and overnight (GTH) from the batch where it quotes every leg, and
+ *  from the latest close where it does not; and while nothing trades from the latest close
+ *  (`valuesFromClose`) even where the batch prices it, with that close's day said beside the figure
+ *  and its pace at that close's own DTE — so the three never quote two costs for one holding. Out of the session with
  *  no row that has a cost, the batch's, as the page's live valuation would be. Where neither gives a
  *  cost the notice is not sent and not stamped, and the next sweep asks again — in the session at
  *  the latest, where the batch prices it. The wait is BOUNDED: once a whole session has closed since
@@ -76,11 +77,13 @@ export async function noticeManageBy(
       const dte = daysToExpiry(row.strike_date, at);
       if (dte < 0 || dte > settings.exitManageByDte) continue;
 
-      // valued as `/holdings` and the page value it (#387): out of the session from the latest close
-      // whatever the batch says — an overnight quote must not make the notice say "now X" while
-      // they say "as of the close, Y" — and live in the session, or where no row has a cost
-      const close = closeOf(deps.db, row, at);
-      const cost = close === null ? costToClose(toPosition(row), byCode) : close.cost_to_close;
+      // valued as `/holdings` and the page value it (#387, #416): live in the session, and in the
+      // Curb and GTH where the batch quotes every leg; from the latest close otherwise — a quote
+      // must not make the notice say "now X" while they say "as of the close, Y" — or live where no
+      // row has a cost
+      const live = costToClose(toPosition(row), byCode);
+      const close = valuesFromClose(at, live !== null, closeCandidates(deps.db, row));
+      const cost = close === null ? live : close.cost_to_close;
       // no cost yet: HELD, unsent and unstamped, until a sweep has one to say — but not for ever: once
       // a whole session has closed since the holding entered the window with still no price, a wait
       // will not bring one, and it goes without its "now" line, as it did before #380
@@ -90,7 +93,7 @@ export async function noticeManageBy(
       let line = `⏰ ${row.name} is at ${dte} DTE — manage by ${settings.exitManageByDte}`;
       if (row.entry !== null) line += `\nentry ${row.entry}`;
       if (cost !== null) {
-        line += close === null ? ` · now ${cost.toFixed(2)}` : ` · ${cost.toFixed(2)} ${closeWords(close)}`;
+        line += close === null ? ` · now ${cost.toFixed(2)}${thinWords(at)}` : ` · ${cost.toFixed(2)} ${closeWords(close)}`;
       }
       if (pace !== null) {
         line += `\non-pace ${pace.toFixed(2)}`;
@@ -117,6 +120,17 @@ function windowEntered(strikeDate: string, openedAt: string, manageByDte: number
   const reached = new Date(Date.parse(`${normalizeStrikeDate(strikeDate)}T00:00:00Z`) - manageByDte * 86_400_000)
     .toISOString().slice(0, 10);
   return openedAt > reached ? openedAt : reached;
+}
+
+/** What a live figure is, after it, where the quotes are thin (#416): " (overnight, thin)" in GTH, "
+ *  (Curb, thin)" in the Curb, as the page's and the bot's line say it — the notice goes once, and is
+ *  usually first due just after New York's midnight, in GTH — and nothing in the session. */
+function thinWords(at: Date): string {
+  switch (marketPhase(at)) {
+    case "overnight": return " (overnight, thin)";
+    case "curb": return " (Curb, thin)";
+    default: return "";
+  }
 }
 
 /** Which stored row a figure is from, after the figure: "at the 2026-11-13 close", or the reading's
@@ -168,7 +182,10 @@ export function recordSamples(
       // unknown, not zero: one leg without a mid and there is no cost to record. The vol may still
       // be there to read — moomoo quotes every option 0/0 out of hours and serves the greeks — and
       // the chain needs the day, so the row is written with the cost left empty (#380, below).
-      const cost = costToClose(position, byCode);
+      // ...and a REGULAR session's only (#416): in the Curb and overnight (GTH) moomoo quotes the
+      // legs live and thin, and at the weekend nothing trades, so none of that is the day's close.
+      // The reading keeps its vol with the cost left empty, and never replaces a stored one.
+      const cost = sampledPrice(at, costToClose(position, byCode));
 
       // Per LEG, because a structure has no IV — "IV is never summed" (CLAUDE.md), and these
       // legs run 10.5% to 22.1%, so one number for them would be a fiction. The vegas go with

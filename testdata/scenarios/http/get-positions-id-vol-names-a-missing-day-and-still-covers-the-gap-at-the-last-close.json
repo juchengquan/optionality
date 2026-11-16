@@ -1,7 +1,7 @@
 {
   "name": "GET /positions/{id}/vol names a missing day, and still covers the gap at the last close",
   "world": {
-    "clock": "2026-11-09T15:00:00.000Z",
+    "clock": "2026-11-10T15:00:00.000Z",
     "settings": {
       "API_TOKEN": "tok",
       "DISPLAY_TZ": "Asia/Singapore",
@@ -86,8 +86,8 @@
         },
         {
           "position_id": "pos-1",
-          "observed_on": "2026-11-08",
-          "dte": 40,
+          "observed_on": "2026-11-09",
+          "dte": 39,
           "cost_to_close": 6.25,
           "legs_iv": {
             "US.SPXW261218C7300000": 15,
@@ -102,7 +102,7 @@
             "US.SPXW261218P6350000": 3.5
           },
           "legs_delta": null,
-          "observed_at": "2026-11-08 21:05:00.000000",
+          "observed_at": "2026-11-09 21:05:00.000000",
           "spx": null,
           "contract_size": null
         }
@@ -127,14 +127,14 @@
         "from": null,
         "to": null,
         "days": null,
-        "reason": "the record skips from 6 Nov to 8 Nov: a day is missing",
-        "at": "2026-11-08",
+        "reason": "the record skips from 6 Nov to 9 Nov: a day is missing",
+        "at": "2026-11-09",
         "timing": "close",
-        "gap": 0.004239533129386963,
+        "gap": 0.08280568537963795,
         "gap_reason": null,
         "rest": null,
         "vega": -1.5,
-        "cover": 0.0028263554195913088,
+        "cover": 0.05520379025309197,
         "cover_reason": null
       }
     },

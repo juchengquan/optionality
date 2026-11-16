@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { marketDate, sampleTiming, valuedTiming } from "optionality/domain/expiry";
+import { marketDate, sampleTiming, takenInSession, valuedTiming } from "optionality/domain/expiry";
 import { dteAtOpen, exitLevels, exitPolicy, onPace } from "optionality/domain/exit";
 import {
   POSITION_GREEK_FIELDS, legReadings, positionGreek, positionLegCodes, realizedPoints,
@@ -117,7 +117,9 @@ const PositionValues = PositionOut.extend({
    *  the same on every holding, as `contract_size` is. Null where the batch cannot give it,
    *  never a Reference's figure. */
   spx: z.number().nullable(),
-  /** why `spx` is null, in words; null when there is a figure */
+  /** why `spx` is null, in words — or, beside a figure, why it is not current: outside the regular
+   *  session the index is not computed, and the figure is its last close's level (`sessionSpx`,
+   *  #416). Null for a current figure. */
   spx_reason: z.string().nullable(),
   greeks: z.record(z.string(), z.number().nullable()),
   /** each leg's OWN delta, contract code -> delta, from the same batch: what a short leg's Δ is
@@ -143,9 +145,11 @@ const PositionValues = PositionOut.extend({
    *  one "unrecorded"; null when live. Said beside the figures so an evening's reading, or a
    *  Saturday's, is never passed off as a close. */
   valued_timing: z.enum(["close", "before-open", "after-close", "weekend", "unrecorded"]).nullable(),
-  /** why a holding valued live has no figures, in words: out of the session, the Provider call that
-   *  would have priced it failed, and the rest of the book is still served from its closes (#387).
-   *  Null wherever it was valued — and in the session, where that failure is the route's 502. */
+  /** why a holding's figures are not live, in words: out of the session, the Provider call that would
+   *  have priced it failed — a holding valued live then has no figures, and the rest of the book is
+   *  served from its closes (#387); in the Curb and GTH, where every holding is asked, one valued from
+   *  its close says it too (#416). Null wherever the call was answered or not needed — and in the
+   *  session, where that failure is the route's 502. */
   valued_reason: z.string().nullable(),
   /** days left where the option trades, the same reckoning the dashboard's column uses: TODAY's,
    *  whatever the figures are from. Levels and the pace are at the close's own DTE (#380, F5). */
@@ -213,7 +217,9 @@ const SampleOut = z.object({
   timing: z.enum(["close", "before-open", "after-close", "unrecorded"]),
   dte: z.number(),
   /** null on a day kept for its vol readings with no price to give: a leg without a two-sided
-   *  quote, moomoo's 0/0 out of hours (#380). The burndown draws no point for it. */
+   *  quote, moomoo's 0/0 out of hours (#380) — and on any day whose price was not read in a
+   *  regular session (`takenInSession`, #416): an overnight, Curb or weekend price is no close. The
+   *  burndown draws no point for it. */
   cost_to_close: z.number().nullable(),
   /** what Cost to close would be at this DTE if only time had passed (`onPace`); null without a
    *  schedule */
@@ -510,7 +516,8 @@ export function positionRoutes(deps: Deps) {
             observed_at: timing === "unrecorded" ? null : displayStored(s.observed_at, tz),
             timing,
             dte: s.dte,
-            cost_to_close: s.cost_to_close,
+            // a regular session's price only (#416): the burndown plots closes
+            cost_to_close: takenInSession(s.observed_at) ? s.cost_to_close : null,
             on_pace: onPace(row.entry, openedDte, s.dte),
             legs_iv: iv,
             legs_vega: legMap(s.legs_vega),

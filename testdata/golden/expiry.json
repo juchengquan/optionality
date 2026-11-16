@@ -732,7 +732,7 @@
           "cost_to_close": 3.05
         }
       ],
-      "expect": "yes"
+      "expect": "no"
     },
     {
       "fn": "takesSample",
@@ -1124,7 +1124,7 @@
     },
     {
       "fn": "closeSample",
-      "name": "the latest with a cost of any timing, where no close has one",
+      "name": "no row of any other timing, where no close has a cost (#416)",
       "args": [
         [
           {
@@ -1144,15 +1144,11 @@
           }
         ]
       ],
-      "expect": {
-        "observed_on": "2026-11-13",
-        "observed_at": "2026-11-14 01:30:00.000000",
-        "cost_to_close": 3.2
-      }
+      "expect": null
     },
     {
       "fn": "closeSample",
-      "name": "a row with no stamp only where nothing in the hours has a cost",
+      "name": "a row with no stamp is no close (#416)",
       "args": [
         [
           {
@@ -1171,6 +1167,90 @@
         "observed_on": "2026-11-13",
         "observed_at": "2026-11-13 21:14:59.561000",
         "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "closeSample",
+      "name": "a row with no stamp alone values nothing (#416)",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": null,
+            "cost_to_close": 2.9
+          }
+        ]
+      ],
+      "expect": null
+    },
+    {
+      "fn": "closeSample",
+      "name": "an overnight (GTH) price is never the close, though it is the latest (#416)",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-15",
+            "observed_at": "2026-11-16 01:15:07.004000",
+            "cost_to_close": 3.4
+          },
+          {
+            "observed_on": "2026-11-16",
+            "observed_at": "2026-11-16 05:00:06.363000",
+            "cost_to_close": 3.05
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "closeSample",
+      "name": "overnight prices alone value nothing (#416)",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-15",
+            "observed_at": "2026-11-16 01:15:07.004000",
+            "cost_to_close": 3.4
+          },
+          {
+            "observed_on": "2026-11-16",
+            "observed_at": "2026-11-16 05:00:06.363000",
+            "cost_to_close": 3.05
+          }
+        ]
+      ],
+      "expect": null
+    },
+    {
+      "fn": "closeSample",
+      "name": "a Curb price is never the close (#416)",
+      "args": [
+        [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 21:14:58.100000",
+            "cost_to_close": 4.4
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:40:00.000000",
+            "cost_to_close": 3
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-12",
+        "observed_at": "2026-11-12 21:14:58.100000",
+        "cost_to_close": 4.4
       }
     },
     {
@@ -1198,7 +1278,7 @@
     },
     {
       "fn": "closeSample",
-      "name": "a costed Saturday noon row alone is the fallback, not a close",
+      "name": "a costed Saturday noon row is never a close, even alone",
       "args": [
         [
           {
@@ -1213,11 +1293,7 @@
           }
         ]
       ],
-      "expect": {
-        "observed_on": "2026-11-14",
-        "observed_at": "2026-11-14 17:00:00.000000",
-        "cost_to_close": 3.1
-      }
+      "expect": null
     },
     {
       "fn": "closeSample",
@@ -1402,6 +1478,7 @@
         {
           "$date": "2026-11-13T21:15:00.000Z"
         },
+        false,
         [
           {
             "observed_on": "2026-11-12",
@@ -1419,11 +1496,62 @@
     },
     {
       "fn": "valuesFromClose",
-      "name": "a millisecond after the close, the close",
+      "name": "a millisecond after the close, in the Curb, unquoted: the close",
       "args": [
         {
           "$date": "2026-11-13T21:15:00.001Z"
         },
+        false,
+        [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 21:14:58.100000",
+            "cost_to_close": 4.4
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "valuesFromClose",
+      "name": "in the Curb, quoted: live (#416)",
+      "args": [
+        {
+          "$date": "2026-11-13T21:40:00.000Z"
+        },
+        true,
+        [
+          {
+            "observed_on": "2026-11-12",
+            "observed_at": "2026-11-12 21:14:58.100000",
+            "cost_to_close": 4.4
+          },
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          }
+        ]
+      ],
+      "expect": null
+    },
+    {
+      "fn": "valuesFromClose",
+      "name": "Friday 17:30, quoted: the close, nothing trades",
+      "args": [
+        {
+          "$date": "2026-11-13T22:30:00.000Z"
+        },
+        true,
         [
           {
             "observed_on": "2026-11-12",
@@ -1450,6 +1578,7 @@
         {
           "$date": "2026-11-14T17:00:00.000Z"
         },
+        true,
         [
           {
             "observed_on": "2026-11-12",
@@ -1476,11 +1605,67 @@
     },
     {
       "fn": "valuesFromClose",
-      "name": "Monday before the open, Friday's close",
+      "name": "Sunday 20:15, overnight, quoted: live (#416)",
       "args": [
         {
-          "$date": "2026-11-16T14:00:00.000Z"
+          "$date": "2026-11-16T01:15:00.000Z"
         },
+        true,
+        [
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 05:00:12.407000",
+            "cost_to_close": null
+          }
+        ]
+      ],
+      "expect": null
+    },
+    {
+      "fn": "valuesFromClose",
+      "name": "Monday 00:00, overnight, a leg unquoted: Friday's close, never a GTH row (#416)",
+      "args": [
+        {
+          "$date": "2026-11-16T05:00:00.000Z"
+        },
+        false,
+        [
+          {
+            "observed_on": "2026-11-13",
+            "observed_at": "2026-11-13 21:14:59.561000",
+            "cost_to_close": 3.05
+          },
+          {
+            "observed_on": "2026-11-14",
+            "observed_at": "2026-11-14 05:00:12.407000",
+            "cost_to_close": null
+          },
+          {
+            "observed_on": "2026-11-15",
+            "observed_at": "2026-11-16 01:15:07.004000",
+            "cost_to_close": 3.4
+          }
+        ]
+      ],
+      "expect": {
+        "observed_on": "2026-11-13",
+        "observed_at": "2026-11-13 21:14:59.561000",
+        "cost_to_close": 3.05
+      }
+    },
+    {
+      "fn": "valuesFromClose",
+      "name": "Monday 09:27, between GTH and the open, quoted: Friday's close",
+      "args": [
+        {
+          "$date": "2026-11-16T14:27:00.000Z"
+        },
+        true,
         [
           {
             "observed_on": "2026-11-13",
@@ -1507,6 +1692,7 @@
         {
           "$date": "2026-11-14T17:00:00.000Z"
         },
+        false,
         [
           {
             "observed_on": "2026-11-14",
@@ -1516,6 +1702,300 @@
         ]
       ],
       "expect": null
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Monday 09:24:59.999, GTH's last moment",
+      "args": [
+        {
+          "$date": "2026-11-09T14:24:59.999Z"
+        }
+      ],
+      "expect": "overnight"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Monday 09:25, GTH's end",
+      "args": [
+        {
+          "$date": "2026-11-09T14:25:00.000Z"
+        }
+      ],
+      "expect": "closed"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Monday 09:29:59.999",
+      "args": [
+        {
+          "$date": "2026-11-09T14:29:59.999Z"
+        }
+      ],
+      "expect": "closed"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Monday 09:30, the open",
+      "args": [
+        {
+          "$date": "2026-11-09T14:30:00.000Z"
+        }
+      ],
+      "expect": "regular"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Monday 16:15, the options' close",
+      "args": [
+        {
+          "$date": "2026-11-09T21:15:00.000Z"
+        }
+      ],
+      "expect": "regular"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "a millisecond after 16:15, the Curb",
+      "args": [
+        {
+          "$date": "2026-11-09T21:15:00.001Z"
+        }
+      ],
+      "expect": "curb"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "the Curb's last moment",
+      "args": [
+        {
+          "$date": "2026-11-09T21:59:59.999Z"
+        }
+      ],
+      "expect": "curb"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Monday 17:00, the Curb's end",
+      "args": [
+        {
+          "$date": "2026-11-09T22:00:00.000Z"
+        }
+      ],
+      "expect": "closed"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Monday 20:14:59.999",
+      "args": [
+        {
+          "$date": "2026-11-10T01:14:59.999Z"
+        }
+      ],
+      "expect": "closed"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Monday 20:15, Tuesday's GTH",
+      "args": [
+        {
+          "$date": "2026-11-10T01:15:00.000Z"
+        }
+      ],
+      "expect": "overnight"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Friday 20:15, no GTH into a Saturday",
+      "args": [
+        {
+          "$date": "2026-11-14T01:15:00.000Z"
+        }
+      ],
+      "expect": "closed"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Saturday noon",
+      "args": [
+        {
+          "$date": "2026-11-14T17:00:00.000Z"
+        }
+      ],
+      "expect": "closed"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Sunday 16:40, no Curb on a Sunday",
+      "args": [
+        {
+          "$date": "2026-11-15T21:40:00.000Z"
+        }
+      ],
+      "expect": "closed"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Sunday 20:14:59.999",
+      "args": [
+        {
+          "$date": "2026-11-16T01:14:59.999Z"
+        }
+      ],
+      "expect": "closed"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Sunday 20:15 starts Monday's trade date",
+      "args": [
+        {
+          "$date": "2026-11-16T01:15:00.000Z"
+        }
+      ],
+      "expect": "overnight"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Monday 00:00, in GTH",
+      "args": [
+        {
+          "$date": "2026-11-16T05:00:00.000Z"
+        }
+      ],
+      "expect": "overnight"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Sunday 20:15 EDT, the night the clocks went forward",
+      "args": [
+        {
+          "$date": "2026-03-09T00:15:00.000Z"
+        }
+      ],
+      "expect": "overnight"
+    },
+    {
+      "fn": "marketPhase",
+      "name": "Sunday 20:15 EST, the night the clocks went back",
+      "args": [
+        {
+          "$date": "2026-11-02T01:15:00.000Z"
+        }
+      ],
+      "expect": "overnight"
+    },
+    {
+      "fn": "sampledPrice",
+      "name": "a regular session's price",
+      "args": [
+        {
+          "$date": "2026-11-13T21:14:59.000Z"
+        },
+        3.05
+      ],
+      "expect": 3.05
+    },
+    {
+      "fn": "sampledPrice",
+      "name": "Sunday 20:15, GTH",
+      "args": [
+        {
+          "$date": "2026-11-16T01:15:07.000Z"
+        },
+        3.4
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sampledPrice",
+      "name": "Monday 00:00, GTH",
+      "args": [
+        {
+          "$date": "2026-11-16T05:00:06.000Z"
+        },
+        3.05
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sampledPrice",
+      "name": "Friday 16:40, the Curb",
+      "args": [
+        {
+          "$date": "2026-11-13T21:40:00.000Z"
+        },
+        3
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sampledPrice",
+      "name": "Saturday noon",
+      "args": [
+        {
+          "$date": "2026-11-14T17:00:00.000Z"
+        },
+        3.1
+      ],
+      "expect": null
+    },
+    {
+      "fn": "sampledPrice",
+      "name": "no price in the session",
+      "args": [
+        {
+          "$date": "2026-11-13T20:00:00.000Z"
+        },
+        null
+      ],
+      "expect": null
+    },
+    {
+      "fn": "takenInSession",
+      "name": "Friday's close",
+      "args": [
+        "2026-11-13 21:14:59.561000"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "takenInSession",
+      "name": "Sunday 20:15, GTH",
+      "args": [
+        "2026-11-16 01:15:07.004000"
+      ],
+      "expect": false
+    },
+    {
+      "fn": "takenInSession",
+      "name": "Friday 16:40, the Curb",
+      "args": [
+        "2026-11-13 21:40:00.000000"
+      ],
+      "expect": false
+    },
+    {
+      "fn": "takenInSession",
+      "name": "Saturday noon",
+      "args": [
+        "2026-11-14 17:00:00.000000"
+      ],
+      "expect": false
+    },
+    {
+      "fn": "takenInSession",
+      "name": "no stamp",
+      "args": [
+        null
+      ],
+      "expect": false
+    },
+    {
+      "fn": "takenInSession",
+      "name": "a stamp it cannot read",
+      "args": [
+        "2026-11-13T21:14:59Z"
+      ],
+      "expect": false
     }
   ]
 }

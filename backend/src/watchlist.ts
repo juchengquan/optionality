@@ -17,7 +17,7 @@ import {
 import type { Monitor, MonitorLeg } from "optionality/domain/monitor";
 import type { Position } from "optionality/domain/position";
 import { buildSpxCode } from "optionality/domain/contract";
-import { derivedSpx, strikeDistances, type StrikeDistance } from "optionality/domain/quote";
+import { derivedSpx, sessionSpx, strikeDistances, type StrikeDistance } from "optionality/domain/quote";
 import type { QuoteRecord } from "optionality/quotes";
 
 export interface WatchlistEntry {
@@ -85,7 +85,9 @@ export interface WatchlistEntry {
    *  can be placed against the index of the same instant as its own figures (ADR 0010). Null where
    *  the batch cannot give it; never a Reference's figure (ADR 0018). */
   spx: number | null;
-  /** why `spx` is null, in words; null when there is a figure */
+  /** why `spx` is null, in words — or, beside a figure, why it is not current: outside the regular
+   *  session the index is not computed, and the figure is its last close's level (`sessionSpx`,
+   *  #416). Null for a current figure. */
   spx_reason: string | null;
   /** a combo's SHORT legs (minus is short) placed against `spx`, in points and σ, with each leg's
    *  own delta from this batch (`strikeDistances`, #297): what the strike strip draws. Empty for a
@@ -133,8 +135,9 @@ export function buildEntries(inputs: EntryInputs): WatchlistEntry[] {
   const combos = monitors
     .filter((m) => m.legs && m.legs.length > 0)
     .map((m) => ({ id: m.id, codes: new Set(monitorLegCodes(m)) }));
-  // once for the batch: every row was priced by it, so every row carries the same index level
-  const spx = derivedSpx(Object.values(byCode));
+  // once for the batch: every row was priced by it, so every row carries the same index level —
+  // said stale outside the regular session, when the index is not computed (#416)
+  const spx = sessionSpx(now ?? new Date(), derivedSpx(Object.values(byCode)));
   return monitors.map((m) => {
     const isCombo = Boolean(m.legs && m.legs.length > 0);
     const positions = owned[m.id] ?? [];

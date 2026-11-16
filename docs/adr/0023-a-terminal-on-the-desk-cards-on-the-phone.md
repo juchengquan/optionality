@@ -771,3 +771,29 @@ The owner decided, from the live page:
   control's height, each consequence drawn under its button rather than inside it (#408's
   description, unchanged). The held contract's Monitor switch says "Monitor on" / "Monitor off".
 - **A gap of nothing to two places is "on pace"**, drawn 0.00 in no colour — never "ahead by 0.00".
+
+## Amended 2026-11-16: the Curb and the overnight session are live, and say so (#416)
+
+The 2026-11-13 and 2026-11-14 amendments keyed the page to New York's session and valued the book
+from the latest close outside it, on the belief that "out of hours moomoo quotes every option 0/0".
+That is true only while nothing trades: SPX options trade in the Curb (16:15–17:00) and in GTH
+(20:15–09:25 New York; Sunday 20:15 starts Monday's trade date), and moomoo quotes them live. The
+owner's decisions (2026-11-16), as built:
+
+- **The page polls in the Curb and GTH as in session** (`marketPhase`, `frontend/src/session.ts`;
+  ADR 0012, amended): `/quotes`, `/positions/values`, `/references`. Alarms ring in GTH, every rule,
+  as they always did — a rule with no two-sided quote is still held (#384).
+- **A holding is valued LIVE where every leg has a two-sided quote**, and from its latest close where
+  one has none (`valuesFromClose`), in both backends; while nothing trades, from the close as before.
+- **The session line says which session**: "overnight session — live quotes, thin" (or "Curb — live
+  quotes, thin"), then how many holdings were valued from a close for want of a quote, and which
+  close — never "market closed". `/holdings` says the same line under its table.
+- **A watchlist row's value cell is the live price** where the poll quotes one, and its last close
+  where not. **A Level chip valued live in the Curb or GTH carries the time**: "at stop · live at
+  21:04"; one valued from a close says "as of the close".
+- **SPX outside the regular session is the last close's level**: moomoo's index quote stands still
+  overnight and every premium is worked out against it, so `derivedSpx` inverts to Friday's 7561.68
+  all weekend and night. The service says so beside the price (`spx_reason`, `sessionSpx`; ADR 0024,
+  amended), and the page draws it: a hollow dot on the strike strip with the reason in its words,
+  the reason on the price map's line and beside the payoff's marker. The strike distances and σ are
+  still measured against it, and say so through that reason. Never presented as current.

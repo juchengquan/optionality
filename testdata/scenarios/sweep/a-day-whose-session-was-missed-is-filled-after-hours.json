@@ -160,7 +160,7 @@
             "position_id": "pos-1",
             "observed_on": "2026-11-09",
             "dte": 39,
-            "cost_to_close": 3.25,
+            "cost_to_close": null,
             "legs_iv": {
               "US.SPXW261218C7300000": 14.5,
               "US.SPXW261218C7350000": 14.5,

@@ -88,7 +88,7 @@
           "name": "moomoo",
           "ok": false
         },
-        "golden_cases": "ef724eb2f6e3",
+        "golden_cases": "465ca632b768",
         "monitor": {
           "last_sweep_at": "2026-11-09 22:59:50+08:00",
           "last_sweep_ok": false,

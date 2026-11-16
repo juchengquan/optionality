@@ -13,6 +13,13 @@
  *  out of hours is a dash, never a 0. Only the holdings valued live are asked for, so a book wholly
  *  valued from its closes asks the Provider nothing.
  *
+ *  **In the Curb and overnight (GTH) a holding is valued live where every leg is quoted** (#416):
+ *  SPX options trade then, thinly, and the owner trades them in Singapore's daytime. So EVERY
+ *  holding is asked for, in the one bounded batch, and each is valued live where the batch gives it
+ *  a Cost to close — every leg two-sided — and from its latest close where it does not
+ *  (`valuesFromClose`). SPX is said stale beside its price outside the regular session
+ *  (`sessionSpx`): the index is not computed then.
+ *
  *  **Out of the session a failed Provider call costs only the holdings that needed it** (#387): they
  *  are dashes with the reason (`unpriced`), and the rest are served from their closes. Out of hours
  *  a holding valued live would be a dash anyway, so a 502 for the whole book would withhold every
@@ -27,8 +34,8 @@ import {
 import {
   captured, dteAtOpen, exitLevels, exitPolicy, type ExitLevels,
 } from "optionality/domain/exit";
-import { daysToExpiry, inSession, valuesFromClose } from "optionality/domain/expiry";
-import { derivedSpx, type DerivedSpx } from "optionality/domain/quote";
+import { daysToExpiry, inSession, marketPhase, valuesFromClose } from "optionality/domain/expiry";
+import { derivedSpx, sessionSpx, type DerivedSpx } from "optionality/domain/quote";
 import { listPositionSamples, openPositions } from "./db/queries/index.ts";
 import type { PositionRow, PositionSampleRow } from "./db/rows.ts";
 import type { Settings } from "./env.ts";
@@ -55,8 +62,9 @@ export interface HoldingValue {
   dte: number;
   /** "live" from the Provider's batch, or "close" from the stored row `close` (#380) */
   valuedFrom: "live" | "close";
-  /** why a holding valued live has no figures: out of the session, the failed Provider call's own
-   *  message (#387); null wherever the call was made and answered, or not needed */
+  /** why a holding's figures are not live: out of the session, the failed Provider call's own message
+   *  — on a holding valued live, which then has none (#387), and in the Curb and GTH on one valued from
+   *  its close for want of it (#416); null wherever the call was made and answered, or not needed */
   unpriced: string | null;
   /** the stored row a close valuation is from; null for a live one */
   close: PositionSampleRow | null;
@@ -77,16 +85,26 @@ export interface HoldingValue {
  *  from, or before migration 0010. */
 export const NO_CLOSE_SPX = "no SPX price was recorded with the close it is valued from";
 
-/** The stored row a holding is valued from at `now`, or null to value it live (`valuesFromClose`).
+/** Why a close valuation's SPX is not current: it is the level stored with that close, never where
+ *  SPX is now — said beside it, as `sessionSpx` says a live batch's outside the session (#416). */
+export const CLOSE_SPX = "the level at the close it is valued from";
+
+/** The stored rows a holding may be valued from (`valuesFromClose` chooses among them).
  *
  *  A row observed before a leg's quantity was last corrected is no candidate: its Cost to close was
  *  summed under the old quantities (#359), a figure for another structure — the reason `/vol`
  *  withholds a gap read off one. Such a holding falls back to an earlier-corrected row, or to live.
  */
-export function closeOf(db: DatabaseSync, row: PositionRow, now: Date): PositionSampleRow | null {
-  const samples = listPositionSamples(db, row.id)
+export function closeCandidates(db: DatabaseSync, row: PositionRow): PositionSampleRow[] {
+  return listPositionSamples(db, row.id)
     .filter((s) => !beforeCorrection(s.observed_at, row.qty_corrected_at));
-  return valuesFromClose(now, samples);
+}
+
+/** Whether a holding is asked of the Provider at `now`: in the regular session, the Curb and GTH
+ *  every holding, which is valued live where quoted (#416); while nothing trades only one with no
+ *  close to be valued from. */
+function asks(now: Date, candidates: readonly PositionSampleRow[]): boolean {
+  return marketPhase(now) !== "closed" || valuesFromClose(now, false, candidates) === null;
 }
 
 /** A stored per-leg map, or null where it is absent or will not parse: a corrupt map costs its own
@@ -157,8 +175,9 @@ export async function holdingValues(
   if (rows.length === 0) return { values: [] };
 
   const positions = rows.map(toPosition);
-  const closes = rows.map((row) => closeOf(db, row, now));
-  const live = positions.filter((_, i) => closes[i] === null);
+  const candidates = rows.map((row) => closeCandidates(db, row));
+  const asked = candidates.map((c) => asks(now, c));
+  const live = positions.filter((_, i) => asked[i]);
   let byCode: ByCode = {};
   let unpriced: string | null = null;
   if (live.length > 0) {
@@ -171,12 +190,17 @@ export async function holdingValues(
     } catch (err) {
       // in the session the batch is the price, and its failure is the whole answer's; out of it the
       // holdings it would have priced are dashes with the reason, and the closes still stand (#387)
+      // — overnight too, where an unanswered batch quotes no leg (#416)
       if (inSession(now)) throw err;
       unpriced = err instanceof Error ? err.message : String(err);
     }
     if (records !== null) byCode = displayRecords(records, tz, now);
   }
-  const batchSpx = derivedSpx(Object.values(byCode));
+  // each holding's close, or null to value it live: overnight and in the Curb, live exactly where
+  // this batch gives it a Cost to close (#416)
+  const closes = positions.map((p, i) => valuesFromClose(now, costToClose(p, byCode) !== null, candidates[i]!));
+  // SPX as the batch implies it, said stale outside the regular session (#416)
+  const batchSpx = sessionSpx(now, derivedSpx(Object.values(byCode)));
   const batchSize = contractSize(byCode);
 
   return {
@@ -199,8 +223,11 @@ export async function holdingValues(
         row, position, cost, pnl: pnlAt(position, cost, close.contract_size),
         captured: captured(position.entry, cost),
         schedule: scheduleOf(row, cost, close.dte, dte, settings), dte,
-        valuedFrom: "close", unpriced: null, close, records: closeRecords(position, close),
-        spx: { price: close.spx, reason: close.spx === null ? NO_CLOSE_SPX : null },
+        // a holding the failed call would have priced, valued from its close for want of it — in the
+        // Curb and GTH every holding is asked — carries the failure too, so nothing says the quotes
+        // are live while the Provider refuses (#416)
+        valuedFrom: "close", unpriced: asked[i] ? unpriced : null, close, records: closeRecords(position, close),
+        spx: { price: close.spx, reason: close.spx === null ? NO_CLOSE_SPX : CLOSE_SPX },
         contractSize: close.contract_size, figuresDte: close.dte,
       };
     }),

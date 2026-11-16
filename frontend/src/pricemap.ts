@@ -56,10 +56,13 @@ interface Lane {
 /** SPX's price for the map's one line, and the batch it is from. */
 interface SpxLine {
   spx: number | null;
-  /** why `spx` is null, as the service said it */
+  /** why `spx` is null, as the service said it — or, beside a price, why it is not current: outside
+   *  the regular session the index is not computed, and the price is its last close's level (#416) */
   reason: string | null;
-  /** which response's batch: `/quotes` (the watchlist) or `/positions/values` (the holdings) */
-  source: "watchlist" | "holdings" | null;
+  /** which response's batch: `/quotes` (the watchlist) or `/positions/values` (the holdings) — or,
+   *  where no holding was valued live, the close a holding was valued from, whose stored level is no
+   *  batch's (#416) */
+  source: "watchlist" | "holdings" | "close" | null;
   /** when that batch was fetched, as the service served it (`fetched_at`), or null where unsaid */
   at: string | null;
 }
@@ -81,16 +84,21 @@ const instant = (at: string | null) => {
  *  the watchlist's, which is the poll's own. The watchlist's time is its single contracts'
  *  `quote.fetched_at` (a combo row carries no quote); the holdings' is their `fetched_at`. */
 export function spxOfBook(quotes: Entry[], holdings: Holding[] | null): SpxLine {
+  // a holding valued live first: one valued from its close carries that close's stored level (#416)
+  const held = [...(holdings ?? [])].sort((a, b) => Number(a.valued_from === "close") - Number(b.valued_from === "close"));
   const batches = [
     { source: "watchlist" as const, rows: quotes as (Entry | Holding)[],
       at: quotes.map((q) => q.quote?.fetched_at).find((t): t is string => typeof t === "string") ?? null },
-    { source: "holdings" as const, rows: (holdings ?? []) as (Entry | Holding)[],
-      at: (holdings ?? []).map((h) => h.fetched_at).find((t): t is string => instant(t) !== null) ?? null },
+    { source: "holdings" as const, rows: held as (Entry | Holding)[],
+      at: held.map((h) => h.fetched_at).find((t): t is string => instant(t) !== null) ?? null },
   ];
   const priced = batches.filter((b) => typeof b.rows[0]?.spx === "number");
   if (priced.length > 0) {
     const best = priced.reduce((a, b) => ((instant(b.at) ?? -Infinity) > (instant(a.at) ?? -Infinity) ? b : a));
-    return { spx: best.rows[0]!.spx!, reason: null, source: best.source, at: best.at };
+    // its stale reason with it, outside the regular session (#416): never presented as current
+    const row = best.rows[0]!;
+    const fromClose = best.source === "holdings" && (row as Holding).valued_from === "close";
+    return { spx: row.spx!, reason: row.spx_reason ?? null, source: fromClose ? "close" : best.source, at: best.at };
   }
   const said = batches.flatMap((b) => b.rows).find((r) => r.spx_reason);
   return { spx: null, reason: said?.spx_reason ?? "nothing on the book to derive it from", source: null, at: null };
@@ -109,7 +117,10 @@ export function spxWords(line: SpxLine, session: boolean): string {
   const time = clockOf(line.at);
   const whose = line.source === "holdings" && !session ? "as last valued"
     : `from the ${line.source === "holdings" ? "holdings'" : "watchlist's"} batch`;
-  return `SPX ${line.spx.toFixed(2)} · ${whose}${time ? `, ${time}` : ""}`;
+  const stale = line.reason ? ` (${line.reason})` : "";
+  // a close's stored level is no batch's, and its reason says whose it is (#416)
+  if (line.source === "close") return `SPX ${line.spx.toFixed(2)}${stale}`;
+  return `SPX ${line.spx.toFixed(2)}${stale} · ${whose}${time ? `, ${time}` : ""}`;
 }
 
 const spreadOf = (id: string, name: string, kind: MapSpread["kind"],

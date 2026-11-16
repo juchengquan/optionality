@@ -12,8 +12,12 @@ the vol split is of the gap at the last sample, served whole by the route. Amend
 outside the session a holding is valued from its latest close, which each row now carries the
 contract size for (last two sections).
 
-**Amended 2026-11-15 (#402): what is WATCHED is sampled too** (last section): the close of every
+**Amended 2026-11-15 (#402): what is WATCHED is sampled too**: the close of every
 set of contracts an enabled rule watches, under exactly these rules, kept by the contracts.
+
+**Amended 2026-11-16 (#416): no price read outside a regular session is a day's** (last section): a
+GTH, Curb or weekend reading keeps its vol with the price empty, the readers read a session's price
+only, and migration 0015 clears the overnight prices already stored.
 
 ## Context
 
@@ -372,3 +376,40 @@ and the days it was watched before it was entered were lost to its burndown.
   14 priced days), so it answers through an outage. Never today's row while the session runs, which
   is no close yet; and none for contracts an open holding holds exactly, whose rows stop at its
   entry. The page reads it out of the session, at each edge of it, and whenever `/quotes` fails.
+
+## Amended 2026-11-16: no price read outside a regular session is a day's (#416)
+
+SPX and SPXW options trade in Cboe's Global Trading Hours, GTH — 20:15 to 09:25 New York, Sunday to
+Friday, a Sunday 20:15 start belonging to Monday's trade date — and in the Curb, 16:15 to 17:00, and
+moomoo quotes them LIVE then: on 2026-11-15 at Sunday 20:47 New York a December call was 3.00/3.40.
+The amendments of 2026-11-14 said "out of hours moomoo quotes every option 0/0", which is true only
+outside GTH and the Curb, and nothing in the sweep looked at the hour: Sunday 15 November's holding
+row took a Cost to close of 3.40 from the first GTH sweep (20:15:07), through the "settled but
+incomplete, completed by a whole reading" rule; Monday's was filled at 00:00 from a GTH mark; every
+watched day the same; and the pace split then measured from the Monday 00:00 mark while the holding
+said "as of the close, Fri".
+
+The owner's decisions (2026-11-16), as built:
+
+- **A domain `marketPhase(now)`**: `regular` (09:30:00–16:15:00, Monday to Friday — `inSession`
+  exactly), `curb` (after 16:15, before 17:00, Monday to Friday), `overnight` (GTH: from 20:15 to
+  before 09:25, for a trade date of Monday to Friday — Sunday 20:15 starts Monday's, Friday 20:15
+  nothing) and `closed`. Golden-cased, Python-ported, and the page asks the same of its clock
+  (`frontend/src/session.ts`). Holidays are not detected, as today.
+- **A sample stores a regular session's price only** (`sampledPrice`). A reading in GTH, the Curb, a
+  weekend or any other hour outside a weekday's 09:30–16:15 keeps its IV, vega and delta — the vol
+  chain still needs every calendar day — with the Cost to close (or a watched day's mids) left EMPTY,
+  and an empty price never replaces a stored one (`takesSample`). Consequence: after the close a row
+  is complete by its IV and vega alone, so a costless row missing one is still completed by the
+  evening's reading, but a PRICED row missing its vega is no longer completed after the close — the
+  row is written whole and the evening has no price — only by the session's own later sweeps.
+- **Every reader reads a regular session's price only** (`takenInSession`): `closeSample` (and so the
+  close a holding is valued from, and a watched rule's last close) has NO fallback any more to a
+  priced row of another timing, a row with no stamp included; `paceExplained` skips an out-of-session
+  price as it skips a costless day ("… has no Cost to close from a regular session" where that is all
+  there is); and `/positions/{id}/samples` and the watch history serve such a day's price as none, so
+  the burndown plots closes.
+- **Migration 0015** clears the prices already stored from outside a regular session — on the live
+  file, the two holding rows of Sunday 15 and Monday 16 November, and the ten watched days of those
+  two dates — keeping every row and its vol. Applied at boot after `make deploy`'s backup, never by
+  hand; verified on an online backup in both backends.

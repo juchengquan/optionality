@@ -28,7 +28,7 @@ import { closedLineText, levelWords } from "../levels";
 import { monitorName, storedRuleWords, type Need } from "../needs";
 import { mutedWords } from "../phone/figures";
 import { placeBook, type PlacedHolding } from "../placement";
-import { servedWhen } from "../session";
+import { servedWhen, type MarketPhase } from "../session";
 import { compactWords, nearest, strikeName } from "../strip";
 
 /** What the view is made from: the page's figures as they stood at the press. */
@@ -40,6 +40,9 @@ export interface PlainInput {
   holdingsAt: string | null;
   holdingsServed?: string | null;
   session: boolean;
+  /** which of SPX options' sessions (#416), for the session line; absent, regular or closed by
+   *  `session` */
+  phase?: MarketPhase;
   privacy: boolean;
   /** the needs-you line as the page draws it now */
   needs: Need[];
@@ -268,8 +271,10 @@ function headerLines(input: PlainInput): PlainLine[] {
     {
       label: "session",
       // the market-closed line's own words outside the session (#371, #380)
-      text: session ? "in session"
-        : closedLineText(input.holdings !== null ? input.holdingsAt : null, input.holdingsServed, input.holdings, takenAt),
+      // ...and in the Curb and GTH, that the quotes are live and thin (#416)
+      text: (input.phase ?? (session ? "regular" : "closed")) === "regular" ? "in session"
+        : closedLineText(input.holdings !== null ? input.holdingsAt : null, input.holdingsServed, input.holdings, takenAt,
+          input.phase ?? "closed"),
     },
     {
       label: "figures",

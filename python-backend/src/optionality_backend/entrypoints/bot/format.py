@@ -33,10 +33,11 @@ import math
 import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from optionality.alarm import RuleShape, rule_short
-from optionality.expiry import MARKET_TZ, valued_timing
+from optionality.expiry import MARKET_TZ, MarketPhase, valued_timing
 from optionality.js import js_string, to_fixed
 from optionality.monitor import threshold_fault
 
@@ -278,11 +279,32 @@ def close_words(close: PositionSampleRow) -> str:
     return f"as of {_day_words(date.fromisoformat(close['observed_on']))}, at a time not recorded"
 
 
-def closed_line(values: list[HoldingValue]) -> str:
+def _thin_line(values: list[HoldingValue], phase: Literal["overnight", "curb"]) -> str:
+    """The one line `/holdings` adds under its table in the Curb and overnight (GTH, #416): the figures
+    are live where every leg is quoted, and thin — then how many holdings had a leg unquoted and were
+    valued from their latest close, and which close; and where the Provider could not be asked, that.
+    Mirrors `format.ts`' `thinLine`."""
+    line = "overnight session — live quotes, thin" if phase == "overnight" else "Curb — live quotes, thin"
+    closes = [v.close for v in values if v.close is not None]
+    if closes:
+        latest = closes[0]
+        for c in closes[1:]:
+            if c["observed_on"] > latest["observed_on"]:
+                latest = c
+        line += f"; {len(closes)} not quoted, {close_words(latest)}"
+    # every holding is asked in the Curb and GTH, so a failure is said whichever way each was valued
+    if any(v.unpriced is not None for v in values):
+        line += "; the Provider could not be asked"
+    return line
+
+
+def closed_line(values: list[HoldingValue], phase: MarketPhase = "closed") -> str:
     """The one line `/holdings` adds under its table outside the session (#380): which close the figures
     are from, how many holdings were valued from another row, and how many had none and were valued
-    live — or, where the Provider could not be asked for them, were not valued at all (#387). Mirrors
-    `format.ts`' `closedLine`."""
+    live — or, where the Provider could not be asked for them, were not valued at all (#387). In the Curb
+    and overnight, `_thin_line` instead (#416). Mirrors `format.ts`' `closedLine`."""
+    if phase in ("overnight", "curb"):
+        return _thin_line(values, phase)  # type: ignore[arg-type]
     closes = [v.close for v in values if v.close is not None]
     live = len(values) - len(closes)
     # one call prices every holding valued live, so either all of them were asked or none was

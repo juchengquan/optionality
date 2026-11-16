@@ -21,7 +21,7 @@
  *  `shows` is how a scenario claiming the outcome must look, and is checked against every claim —
  *  a scenario cannot cover an outcome by saying so.
  */
-import { inSampleHours, marketDate } from "optionality/domain/expiry";
+import { inSampleHours, marketDate, marketPhase } from "optionality/domain/expiry";
 import { monitorLegCodes, type Monitor } from "optionality/domain/monitor";
 import { settingsFromEnv } from "../../src/env.ts";
 import type { Change, Row, SweepScenario } from "./format.ts";
@@ -79,6 +79,8 @@ const beforeOpen = (s: SweepScenario): boolean => {
     .map((p) => [p.type, p.value]));
   return Number(part.hour) * 60 + Number(part.minute) < 9 * 60 + 30;
 };
+/** Whether the clock is outside New York's regular session: the Curb, GTH, or nothing trading (#416). */
+const outOfSession = (s: SweepScenario): boolean => marketPhase(new Date(s.world.clock)) !== "regular";
 /** The stored row for the clock's market day, if the world holds one. */
 const dayRow = (s: SweepScenario): Row | undefined => s.world.tables.position_samples
   .find((r: Row) => r.observed_on === marketDate(new Date(s.world.clock)));
@@ -294,6 +296,32 @@ export const OUTCOMES: readonly Outcome[] = [
     },
   },
   {
+    // #416: every leg priced, outside the regular session — GTH, the Curb, a weekend — and the day's
+    // row is written with its vol and NO price: such a price is never a day's close
+    name: "sample-price-not-stored-out-of-session",
+    decision: "sampledPrice",
+    shows: (s) => outOfSession(s) && priced(s) && (s.expect.rows.position_samples?.added ?? [])
+      .some((r) => r.cost_to_close === null && r.legs_iv !== null),
+  },
+  {
+    // ...and the watched contracts' day the same: the mids left empty, the vol kept
+    name: "watch-sample-price-not-stored-out-of-session",
+    decision: "sampledPrice",
+    shows: (s) => outOfSession(s) && priced(s) && (s.expect.rows.watch_samples?.added ?? [])
+      .some((r) => r.legs_mid === null && r.legs_iv !== null),
+  },
+  {
+    // #416: a priced row is never written by a reading out of the session, which has no price —
+    // not even to complete its vol, since the row is written whole
+    name: "priced-row-kept-from-an-out-of-session-reading",
+    decision: "takesSample",
+    shows: (s) => {
+      const day = dayRow(s);
+      return outOfSession(s) && priced(s) && day !== undefined && typeof day.cost_to_close === "number"
+        && s.expect.rows.position_samples === undefined;
+    },
+  },
+  {
     // no leg with a book, so no Cost to close: the day is kept for its vol readings with the cost
     // EMPTY, never stored as 0.00 (#380)
     name: "sample-kept-with-an-empty-cost",
@@ -390,6 +418,15 @@ export const OUTCOMES: readonly Outcome[] = [
       && changes(s, "positions").some((c) => c.to.manage_notified_at !== undefined),
   },
   {
+    // #416: in GTH or the Curb, every leg quoted, the holding is valued LIVE though a close is
+    // stored — the notice says the batch's "now", as the page and /holdings say it
+    name: "manage-by-notice-live-overnight",
+    decision: "valuesFromClose",
+    shows: (s) => ["overnight", "curb"].includes(marketPhase(new Date(s.world.clock))) && said(s, /^⏰ [^]* · now /)
+      && s.world.tables.position_samples.some((r: Row) => typeof r.cost_to_close === "number")
+      && changes(s, "positions").some((c) => c.to.manage_notified_at !== undefined),
+  },
+  {
     // nothing configured counts as delivered: the rows move, nobody's phone does
     name: "telegram-not-configured",
     decision: null,
@@ -419,4 +456,5 @@ export const NOT_A_DECISION: Readonly<Record<string, string>> = {
   contractSize: "the size recordSamples stores beside a row's cost (#380)",
   valuedTiming: "the words noticeManageBy names a close's timing in (#380), a weekend's included (#387)",
   normalizeStrikeDate: "reading the expiry noticeManageBy counts the manage-by window back from",
+  marketPhase: "the words noticeManageBy labels a live figure from thin quotes with (#416)",
 };

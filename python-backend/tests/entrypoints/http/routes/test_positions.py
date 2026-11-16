@@ -102,10 +102,20 @@ class TestWhatVolDidToAHoldingOverItsOwnSamples:
 
     @staticmethod
     def sample(h, id_, on, dte, iv, vega):
+        # observed at that day's 16:00 New York: a regular session's price, the only kind a gap is
+        # measured from (#416)
         h.db.execute(
-            """insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega)
-               values (?, ?, ?, 3.0, ?, ?)""",
-            (id_, on, dte, None if iv is None else json.dumps(iv), None if vega is None else json.dumps(vega)),
+            """insert into position_samples
+                 (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega, observed_at)
+               values (?, ?, ?, 3.0, ?, ?, ?)""",
+            (
+                id_,
+                on,
+                dte,
+                None if iv is None else json.dumps(iv),
+                None if vega is None else json.dumps(vega),
+                f"{on} 20:00:00.000000",
+            ),
         )
 
     async def test_measures_the_vol_move_from_the_day_it_was_opened(self, start):
@@ -127,9 +137,8 @@ class TestWhatVolDidToAHoldingOverItsOwnSamples:
             "to": "2026-10-07",
             "days": 1,
             "reason": None,
-            # a row with no observed time is said as one, never claimed as the close
             "at": "2026-10-07",
-            "timing": "unrecorded",
+            "timing": "close",
             "gap": gap,
             "gap_reason": None,
             "rest": gap - 4,
@@ -259,14 +268,15 @@ class TestAHoldingsDailySamples:
             },
             {
                 "observed_on": "2026-10-07", "observed_at": "2026-10-08 08:30:00+08:00", "timing": "after-close",
-                "dte": 72, "cost_to_close": 2.75, "on_pace": 3 * math.sqrt(72 / 73), "spx": None, "before_correction": False,
+                # a price read outside a regular session is served as none (#416): the burndown plots closes
+                "dte": 72, "cost_to_close": None, "on_pace": 3 * math.sqrt(72 / 73), "spx": None, "before_correction": False,
                 "legs_iv": None, "legs_vega": None, "legs_delta": None,
 
                 "short_strikes": ANY,
             },
             {
                 "observed_on": "2026-10-08", "observed_at": None, "timing": "unrecorded",
-                "dte": 71, "cost_to_close": 2.5, "on_pace": 3 * math.sqrt(71 / 73), "spx": None, "before_correction": False,
+                "dte": 71, "cost_to_close": None, "on_pace": 3 * math.sqrt(71 / 73), "spx": None, "before_correction": False,
                 "legs_iv": None, "legs_vega": None, "legs_delta": None,
 
                 "short_strikes": ANY,
@@ -934,6 +944,11 @@ class TestPositionsValues:
 
         h = start_with(start, fetch)
         await post(h, condor())
+        # the suite's clock is GTH: valued live, and SPX said stale beside its price (#416)
+        overnight = (await h.call("/positions/values")).json()[0]
+        assert overnight["spx"] == 7000
+        assert overnight["spx_reason"] == "index not computed overnight — the last close's level"
+        h.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # Thursday 11:00 New York, the session
         v = (await h.call("/positions/values")).json()[0]
         assert v["spx"] == 7000
         assert v["spx_reason"] is None
@@ -1117,6 +1132,79 @@ class TestPositionsValues:
             "valued_from": "live",
             "valued_reason": "moomoo call failed: quota exceeded",
         }
+
+
+class TestPositionsValuesInTheCurbAndOvernight:
+    """/positions/values in the Curb and overnight (GTH, #416)."""
+
+    @staticmethod
+    def close(h, id_):
+        # Thursday's close, at 16:14 New York
+        h.db.execute(
+            """insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at, contract_size)
+               values (?, '2026-10-01', 15, 2.5, '2026-10-01 20:14:00.000000', 100)""",
+            (id_,),
+        )
+
+    async def test_values_a_holding_live_where_every_leg_is_quoted_and_from_its_close_where_one_is_not(self, start):
+        # the suite's clock is 01:26 New York on a Friday: GTH, when SPX options trade live and thin
+        thin = False
+
+        async def fetch(codes):
+            records = (await priced_fetcher(codes)).records
+            if not thin:
+                return records
+            return [{**r, "mid_price": None} if str(r["code"]).endswith("P7075000") else r for r in records]
+
+        h = start_with(start, fetch)
+        id_ = (await post(h, condor())).json()["id"]
+        self.close(h, id_)
+        h.db.execute("update position_samples set spx = 6900.5 where position_id = ?", (id_,))
+
+        [live] = (await h.call("/positions/values")).json()
+        # 5.00 - 2.00 + 3.00 - 1.50: the quotes, never Thursday's 2.50
+        assert (live["cost_to_close"], live["valued_from"], live["valued_reason"]) == (4.5, "live", None)
+        assert live["fetched_at"] is not None
+
+        thin = True  # a leg with no two-sided quote: the close, as when nothing trades
+        [close] = (await h.call("/positions/values")).json()
+        assert (close["cost_to_close"], close["valued_from"], close["valued_timing"]) == (2.5, "close", "close")
+        assert close["valued_reason"] is None
+        # its SPX is the close's stored level, and says so (#416 review)
+        assert close["spx_reason"] == "the level at the close it is valued from"
+
+    async def test_overnight_with_the_provider_down_says_so_on_a_holding_valued_from_its_close(self, start):
+        # #416 review
+        first = True
+
+        async def fetch(codes):
+            nonlocal first
+            if first:
+                first = False
+                return (await priced_fetcher(codes)).records
+            raise RuntimeError("connect ECONNREFUSED")
+
+        h = start_with(start, fetch)
+        id_ = (await post(h, condor())).json()["id"]
+        self.close(h, id_)
+        [v] = (await h.call("/positions/values")).json()
+        assert (v["cost_to_close"], v["valued_from"], v["valued_reason"]) == (
+            2.5,
+            "close",
+            "moomoo call failed: connect ECONNREFUSED",
+        )
+        # ...and while nothing trades a close is not asked for, so it carries nothing
+        h.now = datetime(2026, 10, 1, 22, 30, tzinfo=UTC)
+        [closed] = (await h.call("/positions/values")).json()
+        assert (closed["cost_to_close"], closed["valued_from"], closed["valued_reason"]) == (2.5, "close", None)
+
+    async def test_values_from_the_close_while_nothing_trades_though_a_provider_quotes_every_leg(self, start):
+        h = start_with(start)
+        id_ = (await post(h, condor())).json()["id"]
+        self.close(h, id_)
+        h.now = datetime(2026, 10, 1, 22, 30, tzinfo=UTC)  # Thursday 18:30 New York: between the Curb and GTH
+        [v] = (await h.call("/positions/values")).json()
+        assert (v["cost_to_close"], v["valued_from"]) == (2.5, "close")
 
 
 class TestRecordingACreditAfterTheFact:

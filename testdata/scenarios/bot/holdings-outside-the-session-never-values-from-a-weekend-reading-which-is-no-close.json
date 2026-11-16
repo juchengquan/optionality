@@ -1,5 +1,5 @@
 {
-  "name": "/holdings outside the session says a weekend reading it values from is no close",
+  "name": "/holdings outside the session never values from a weekend reading, which is no close",
   "world": {
     "clock": "2026-11-14T17:00:00.000Z",
     "settings": {
@@ -194,10 +194,19 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "<pre>holding     cost  P&amp;L  note\ndec-condor  3.10  330      TARGET</pre>\nmarket closed — as of Sat 14 Nov 11:00",
+      "text": "<pre>holding     cost  P&amp;L  note\ndec-condor  —     —        —</pre>\nmarket closed — no close recorded yet, and the Provider could not be asked",
       "parse_mode": "HTML"
     },
     "rows": {},
-    "calls": {}
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7300000",
+          "US.SPXW261218C7350000",
+          "US.SPXW261218P6350000",
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
   }
 }

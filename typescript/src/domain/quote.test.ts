@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { derivedSpx, midPrice, oneSigma, sigmaDistance, strikeDistances } from "./quote.ts";
+import { derivedSpx, midPrice, oneSigma, sessionSpx, sigmaDistance, strikeDistances } from "./quote.ts";
 
 /** 2026-11-10 09:30:01 New York; ^GSPC read 7513.09 at the same instant */
 const call = { code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547 };
@@ -201,5 +201,31 @@ describe("midPrice", () => {
     expect(midPrice(true, 4.1)).toBeNull();
     expect(midPrice(3.5, Number.POSITIVE_INFINITY)).toBeNull();
     expect(midPrice(Number.NaN, 4.1)).toBeNull();
+  });
+});
+
+describe("sessionSpx — the derived SPX said stale outside the regular session (#416)", () => {
+  const friday = { price: 7561.68, reason: null };
+
+  it("is as derived in the regular session", () => {
+    expect(sessionSpx(new Date("2026-11-13T20:00:00Z"), friday)).toEqual(friday);
+  });
+
+  it("says overnight that the index is not computed, beside the price it still gives", () => {
+    expect(sessionSpx(new Date("2026-11-16T01:15:00Z"), friday)).toEqual({
+      price: 7561.68, reason: "index not computed overnight — the last close's level",
+    });
+  });
+
+  it("says it in the Curb, and while nothing trades", () => {
+    expect(sessionSpx(new Date("2026-11-13T21:40:00Z"), friday).reason)
+      .toBe("index not computed after the close — the close's level");
+    expect(sessionSpx(new Date("2026-11-14T17:00:00Z"), friday).reason)
+      .toBe("index not computed while the market is closed — the last close's level");
+  });
+
+  it("keeps its own reason where there is no price at all", () => {
+    const none = { price: null, reason: "no SPX option in the batch to derive it from" };
+    expect(sessionSpx(new Date("2026-11-16T01:15:00Z"), none)).toEqual(none);
   });
 });

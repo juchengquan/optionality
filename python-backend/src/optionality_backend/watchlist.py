@@ -26,7 +26,7 @@ old Python's routes/ui.py and reachable over no endpoint at all.
 
 import math
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal, NamedTuple, NotRequired, TypedDict, cast
 
 from optionality.contract import build_spx_code
@@ -52,7 +52,7 @@ from optionality.position import (
     holds_any_of,
     position_leg_codes,
 )
-from optionality.quote import ByCode, Quote, StrikeDistance, derived_spx, strike_distances
+from optionality.quote import ByCode, Quote, StrikeDistance, derived_spx, session_spx, strike_distances
 
 
 class PositionRef(TypedDict):
@@ -139,7 +139,8 @@ class WatchlistEntry(TypedDict):
     #: placed against the index of the same instant as its own figures (ADR 0010). None where the batch
     #: cannot give it; never a Reference's figure (ADR 0018).
     spx: float | None
-    #: why `spx` is None, in words; None when there is a figure
+    #: why `spx` is None, in words — or, beside a figure, why it is not current: outside the regular session
+    #: the index is not computed, and the figure is its last close's level (`session_spx`, #416)
     spx_reason: str | None
     #: a combo's SHORT legs (minus is short) placed against `spx`, in points and sigma, with each leg's
     #: own delta from this batch (`strike_distances`, #297): what the strike strip draws. Empty for a
@@ -183,8 +184,9 @@ def build_entries(
     # every combo in this watchlist, by the Contracts its legs name: the spreads a single Contract sits
     # in are found from these, as the holdings a rule watches are found from what is held
     combos = [_Combo(id=m.id, codes=frozenset(monitor_leg_codes(m))) for m in monitors if m.legs]
-    # once for the batch: every row was priced by it, so every row carries the same index level
-    spx = derived_spx(list(by_code.values()))
+    # once for the batch: every row was priced by it, so every row carries the same index level — said
+    # stale outside the regular session, when the index is not computed (#416)
+    spx = session_spx(now if now is not None else datetime.now(UTC), derived_spx(list(by_code.values())))
     return [_entry(m, by_code, bad, owned, holdings, policy, now, combos, spx.price, spx.reason) for m in monitors]
 
 

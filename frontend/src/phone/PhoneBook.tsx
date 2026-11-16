@@ -4,7 +4,7 @@ import "./phone.css";
 import type { BookProps } from "../Book";
 import { Money } from "../Book";
 import { ClosedLine } from "../ClosedLine";
-import { lastPriceWords } from "../lastknown";
+import { outOfHoursValue } from "../lastknown";
 import { placeBook, type BookModel, type PlacedHolding } from "../placement";
 import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
@@ -20,7 +20,7 @@ import { expiryWords } from "./figures";
  *  was opened, and closes itself if what it shows is gone.
  */
 export function PhoneBook({
-  quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, session, privacy,
+  quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, privacy,
   entryStyle, writes,
   journal,
 }: BookProps) {
@@ -37,9 +37,10 @@ export function PhoneBook({
   const status = (
     <>
       {/* outside the session (#371): when the service valued what is drawn; the header's refresh
-          values it again (#410) */}
-      {!session ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings}
-                              className="nxp-meta" /> : null}
+          values it again (#410). In the Curb and GTH, that the quotes are live and thin (#416) */}
+      {(phase ?? (session ? "regular" : "closed")) !== "regular"
+        ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings}
+                      phase={phase ?? "closed"} className="nxp-meta" /> : null}
       {holdingsError !== null ? <p className="nxp-meta">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
       {holdings === null && holdingsError === null ? <p className="nxp-meta">valuing…</p> : null}
       {holdings !== null && holdings.length === 0 ? <p className="nxp-meta">nothing held</p> : null}
@@ -101,7 +102,7 @@ export function PhoneBook({
               {items.map(({ entry, under, overlap }) => (
                 <li key={entry.id}>
                   <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)}
-                            value={session ? undefined : lastPriceWords(entry.last_price ?? null)} />
+                            value={outOfHoursValue(entry)} />
                 </li>
               ))}
             </ul>

@@ -15,7 +15,7 @@ import math
 import sqlite3
 from datetime import datetime
 
-from optionality.expiry import days_to_expiry, market_date, takes_sample
+from optionality.expiry import days_to_expiry, market_date, sampled_price, takes_sample
 from optionality.js import number
 from optionality.monitor import monitor_leg_codes
 from optionality.position import contract_size, position_leg_codes
@@ -94,10 +94,14 @@ def record_watch_samples(
             if dte < 0:
                 continue
             maps = [_readings(codes, by_code, field) for field in _FIELDS]
-            # nothing observed at all — contracts the Provider did not return — is no row
-            if all(m is None for m in maps):
+            read, ivs, vegas, deltas = (None if m is None else to_sqlite_json(m) for m in maps)
+            # the mids are a REGULAR session's or none (#416): a GTH, Curb or weekend quote is no day's
+            # price, and the day keeps its vol with the mids left empty
+            mids = None if sampled_price(at, _priced(read)) is None else read
+            # nothing observed at all — contracts the Provider did not return, or only an out-of-session
+            # price — is no row
+            if mids is None and ivs is None and vegas is None and deltas is None:
                 continue
-            mids, ivs, vegas, deltas = (None if m is None else to_sqlite_json(m) for m in maps)
 
             day = find_watch_sample(db, key, observed_on)
             write = takes_sample(

@@ -212,10 +212,11 @@ describe("recording what a Position was worth", () => {
     now = new Date("2026-10-02T00:45:00Z"); // 20:45, a moved mark, and the row now exists
     await sweeper(pricing(short, 4.0)).sweep();
 
+    // ...with its vol and no price: 20:30 is GTH, and an overnight price is no day's close (#416)
     expect(samples()).toEqual([
-      { position_id: id, observed_on: "2026-10-01", dte: 31, cost_to_close: 4 },
+      { position_id: id, observed_on: "2026-10-01", dte: 31, cost_to_close: null },
     ]);
-    expect(rows()[0]).toMatchObject({ observed_at: "2026-10-02 00:30:00.000000" });
+    expect(rows()[0]).toMatchObject({ observed_at: "2026-10-02 00:30:00.000000", iv: 1, vega: 1 });
   });
 
   it("fills a day whose session was missed whole, after the hours, and marks it", async () => {
@@ -232,21 +233,44 @@ describe("recording what a Position was worth", () => {
 
     expect(rows()).toEqual([
       { observed_on: "2026-10-01", cost_to_close: 4, observed_at: "2026-10-01 15:00:00.000000", iv: 1, vega: 1 },
-      { observed_on: "2026-10-02", cost_to_close: 3, observed_at: "2026-10-03 00:30:00.000000", iv: 1, vega: 1 },
+      // Friday 20:30: nothing trades, and no price is stored but a regular session's (#416)
+      { observed_on: "2026-10-02", cost_to_close: null, observed_at: "2026-10-03 00:30:00.000000", iv: 1, vega: 1 },
     ]);
   });
 
-  it("completes a row the feed left without its vega, after the hours, from a sweep with both", async () => {
-    // the vol chain needs an IV and a vega for every leg on every day; the row is written whole
-    // from the completing sweep, and stamped with its instant
+  it("never 'completes' a priced row after the close: the GTH reading would blank its price (#416)", async () => {
+    // the row is written whole, and after the close no reading has a price; trading the session's
+    // Cost to close for the evening's vega would cost the day its close, so the row stays as it is
     held("held");
     const short = buildSpxCode(future(), "CALL", 8050);
     await sweeper(pricing(short, 5.0, "vega")).sweep(); // 11:00: the vegas withheld all session
-    now = new Date("2026-10-02T00:30:00Z"); // 20:30 the same market day
+    now = new Date("2026-10-02T00:30:00Z"); // 20:30 the same market day, GTH
     await sweeper(pricing(short, 4.5)).sweep();
 
     expect(rows()).toEqual([
-      { observed_on: "2026-10-01", cost_to_close: 3.5, observed_at: "2026-10-02 00:30:00.000000", iv: 1, vega: 1 },
+      { observed_on: "2026-10-01", cost_to_close: 4, observed_at: "2026-10-01 15:00:00.000000", iv: 1, vega: 0 },
+    ]);
+  });
+
+  it("stores no price from a GTH sweep, keeps its vol, and never replaces a stored close (#416)", async () => {
+    // Sunday 20:15 New York starts Monday's GTH, and moomoo quotes SPX options live: the first sweep
+    // fills Sunday's costless row with its vol, never its 3.40; Monday 00:00 fills Monday's the same
+    // way; and Friday's close, priced in the session, is never touched by either
+    held("held");
+    const short = buildSpxCode(future(), "CALL", 8050);
+    now = new Date("2026-10-02T19:00:00Z"); // Friday 15:00 EDT, the session
+    await sweeper(pricing(short, 5.0)).sweep();
+    now = new Date("2026-10-03T00:30:00Z"); // Friday 20:30: priced by a fake, never by the session
+    await sweeper(pricing(short, 3.0)).sweep();
+    now = new Date("2026-10-05T00:15:07Z"); // Sunday 20:15:07 EDT, GTH
+    await sweeper(pricing(short, 4.4)).sweep();
+    now = new Date("2026-10-05T04:00:06Z"); // Monday 00:00 EDT, GTH
+    await sweeper(pricing(short, 4.05)).sweep();
+
+    expect(rows()).toEqual([
+      { observed_on: "2026-10-02", cost_to_close: 4, observed_at: "2026-10-02 19:00:00.000000", iv: 1, vega: 1 },
+      { observed_on: "2026-10-04", cost_to_close: null, observed_at: "2026-10-05 00:15:07.000000", iv: 1, vega: 1 },
+      { observed_on: "2026-10-05", cost_to_close: null, observed_at: "2026-10-05 04:00:06.000000", iv: 1, vega: 1 },
     ]);
   });
 
@@ -342,8 +366,9 @@ describe("recording what a Position was worth", () => {
     now = new Date("2026-10-01T09:00:00Z"); // 05:00 EDT, a moved overnight mark
     await sweeper(pricing(short, 4.0)).sweep();
 
+    // the fill keeps its vol and no price: 00:05 is GTH (#416)
     expect(rows()).toEqual([
-      { observed_on: "2026-10-01", cost_to_close: 4, observed_at: "2026-10-01 04:05:00.000000", iv: 1, vega: 1 },
+      { observed_on: "2026-10-01", cost_to_close: null, observed_at: "2026-10-01 04:05:00.000000", iv: 1, vega: 1 },
     ]);
   });
 
@@ -360,8 +385,9 @@ describe("recording what a Position was worth", () => {
     now = new Date("2026-10-02T00:45:00Z"); // and now settled, so a later mark does not move it
     await sweeper(pricing(short, 3.0)).sweep();
 
+    // neither with a price: both readings are GTH's (#416)
     expect(rows()).toEqual([
-      { observed_on: "2026-10-01", cost_to_close: 3, observed_at: "2026-10-02 00:30:00.000000", iv: 1, vega: 1 },
+      { observed_on: "2026-10-01", cost_to_close: null, observed_at: "2026-10-02 00:30:00.000000", iv: 1, vega: 1 },
     ]);
   });
 
@@ -378,8 +404,9 @@ describe("recording what a Position was worth", () => {
     now = new Date("2026-10-03T16:00:00Z"); // 12:00, still the same: settled now, so no write
     await sweeper(pricing(short, 5.0)).sweep();
 
+    // a weekend's row has no price, whoever quotes one (#416)
     expect(restamped).toEqual([
-      { observed_on: "2026-10-03", cost_to_close: 4, observed_at: "2026-10-03 15:00:00.000000", iv: 1, vega: 1 },
+      { observed_on: "2026-10-03", cost_to_close: null, observed_at: "2026-10-03 15:00:00.000000", iv: 1, vega: 1 },
     ]);
     expect(rows()).toEqual(restamped);
   });
@@ -393,7 +420,7 @@ describe("recording what a Position was worth", () => {
     await sweeper(pricing(short, 3.0)).sweep();
 
     expect(rows()).toEqual([
-      { observed_on: "2026-10-01", cost_to_close: 4, observed_at: "2026-10-02 00:30:00.000000", iv: 1, vega: 1 },
+      { observed_on: "2026-10-01", cost_to_close: null, observed_at: "2026-10-02 00:30:00.000000", iv: 1, vega: 1 },
     ]);
   });
 
@@ -544,7 +571,8 @@ describe("recording what a Position was worth", () => {
     const saved = now;
     now = new Date("2026-10-17T14:00:00Z");
     try {
-      await sweeper(spread(5.0, 1.0)).sweep();
+      // with its vol: a Saturday's row has no price (#416), and is kept for the vol readings
+      await sweeper(pricing(buildSpxCode(future(), "CALL", 8050), 5.0)).sweep();
     } finally {
       now = saved;
     }
@@ -1004,9 +1032,28 @@ describe("the manage-by notice", () => {
     expect(notifiedAt(id)).toBeTruthy();
   });
 
-  it("out of hours says the latest close though the batch prices it overnight, as /holdings does (#387)", async () => {
-    // 01:00 New York: a Provider that quotes overnight prices the leg at 3.90, but the page and the
-    // bot value the holding from yesterday's close out of the session, so the notice says that one
+  it("overnight (GTH) says the batch's cost where it quotes every leg, as /holdings does (#416)", async () => {
+    // 01:00 New York is GTH: the leg is quoted at 3.90, and the page and the bot value the holding
+    // live from that quote, so the notice says it, never yesterday's close
+    const id = held("condor", daysFromNow(-24), 21);
+    closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toContain("entry 6.86 · now 3.90 (overnight, thin)");
+  });
+
+  it("in the Curb says the batch's cost is the Curb's, thin (#416)", async () => {
+    now = new Date("2026-10-01T20:40:00Z"); // Thursday 16:40 New York
+    const id = held("condor", daysFromNow(-24), 21);
+    closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
+    expect(notices()[0]).toContain("entry 6.86 · now 3.90 (Curb, thin)");
+  });
+
+  it("while nothing trades says the latest close though the batch prices it, as /holdings does (#387)", async () => {
+    // 18:30 New York, between the Curb and GTH: a Provider that quotes then prices the leg at 3.90,
+    // but the page and the bot value the holding from yesterday's close, so the notice says that one
+    now = new Date("2026-10-01T22:30:00Z");
     const id = held("condor", daysFromNow(-24), 21);
     closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
     await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
@@ -1015,12 +1062,14 @@ describe("the manage-by notice", () => {
     expect(notices()[0]).not.toContain("now");
   });
 
-  it("out of hours with no close, says the reading this sweep just stored, as /holdings would (#387)", async () => {
-    // 01:00 New York and no row yet: the sweep fills the day from its own batch before the notice,
-    // and that costed row before the open is what the page and the bot value the holding from now
+  it("overnight with no close, says the batch's cost live — never a stored GTH price (#416)", async () => {
+    // 01:00 New York and no row yet: the sweep fills the day with no price (GTH), and the holding
+    // is valued live from the batch, as the page and the bot value it
     const id = held("condor", daysFromNow(-24), 21);
     await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 4.4 })).sweep();
-    expect(notices()).toEqual(["⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · 4.40 on 2026-10-01, before the open"
+    // ...and says it is a thin overnight figure, as the page's and the bot's line do: the notice goes
+    // once, and is usually first due just after New York's midnight (#416 review)
+    expect(notices()).toEqual(["⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · now 4.40 (overnight, thin)"
       + "\non-pace 4.69 — ahead by 0.29"]);
     expect(notifiedAt(id)).toBeTruthy();
   });
@@ -1032,17 +1081,18 @@ describe("the manage-by notice", () => {
     await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
     expect(notices()).toHaveLength(1);
     expect(notices()[0]).toContain("entry 6.86 · now 3.90");
+    expect(notices()[0]).not.toContain("thin");
   });
 
-  it("names a weekend reading it is valued from by its day, never as a close (#387)", async () => {
+  it("never values from a weekend reading: a Provider's weekend price is no close (#387, #416)", async () => {
     // Saturday 3 October, 13:00 New York: no weekday close has a cost, and Saturday's noon row was
-    // priced by a Provider that quotes at weekends — the fallback, which is no close
+    // priced by a Provider that quotes at weekends — no close, so there is no cost to say yet
     now = new Date("2026-10-03T17:00:00Z");
     const id = held("condor", daysFromNow(-24), 21);
     closeRow(id, "2026-10-03", "2026-10-03 16:00:00.000000", 4.1, 21);
     await sweeper(priceless(21)).sweep();
-    expect(notices()).toHaveLength(1);
-    expect(notices()[0]).toContain("entry 6.86 · 4.10 on 2026-10-03\n");
+    expect(notices()).toEqual([]);
+    expect(notifiedAt(id)).toBeNull();
   });
 
   it("holds it no longer than a whole session: still no cost after one, it goes without its now line (#380)", async () => {

@@ -11,6 +11,7 @@ import json
 import sqlite3
 
 import pytest
+from optionality.expiry import taken_in_session
 
 from optionality_backend.db.migrate import APPLIED_TABLE, DIRECTORY, migrate, pending_migrations, stamp_all
 from optionality_backend.db.open import create_database, open_database
@@ -392,3 +393,100 @@ class TestWhatOnlyThePythonCanGetWrong:
         assert caught.value.__cause__ is not None
         assert db.in_transaction is False
         db.close()
+
+
+class Test0015NoPriceReadOutsideARegularSessionIsADaysPrice:
+    """#416: held to `optionality.expiry.taken_in_session` exactly, as `migrate.test.ts` holds it."""
+
+    NAME = "0015-no-overnight-price-is-a-close.sql"
+
+    #: every edge the domain draws, in both of New York's offsets and across both changes of the clocks
+    STAMPS = (
+        # the live database's two GTH rows (Sunday 20:15:07 and Monday 00:00 New York, EST)
+        "2026-11-16 01:15:07.004000",
+        "2026-11-16 05:00:06.363000",
+        # Friday's and Thursday's closes, 16:14 EST
+        "2026-11-13 21:14:59.561000",
+        "2026-11-12 21:14:58.100000",
+        # the session's edges in EST: 09:29:59.999, 09:30, 16:15, 16:15:00.001
+        "2026-11-09 14:29:59.999000",
+        "2026-11-09 14:30:00.000000",
+        "2026-11-09 21:15:00.000000",
+        "2026-11-09 21:15:00.001000",
+        # ...and in EDT
+        "2026-10-01 13:29:59.999000",
+        "2026-10-01 13:30:00.000000",
+        "2026-10-01 20:15:00.000000",
+        "2026-10-01 20:15:00.001000",
+        # the Curb, a weekend's noon, Saturday's midnight fill, a weekday's evening
+        "2026-11-13 21:40:00.000000",
+        "2026-11-14 17:00:00.000000",
+        "2026-11-14 05:00:12.407000",
+        "2026-11-11 01:00:00.000000",
+        # the Mondays after each change of the clocks, at 09:30 New York, and the Sundays themselves
+        "2026-03-09 13:30:00.000000",
+        "2026-03-09 13:29:59.000000",
+        "2026-11-02 14:30:00.000000",
+        "2026-11-02 14:29:59.000000",
+        "2026-03-08 06:59:59.000000",
+        "2026-03-08 07:00:00.000000",
+        "2026-11-01 05:59:59.000000",
+        "2026-11-01 06:00:00.000000",
+        # a stamp with no fraction, and one with a short fraction
+        "2026-11-10 15:00:00",
+        "2026-11-10 21:15:00.5",
+    )
+
+    def behind(self, tmp_path):
+        """A database one migration behind: built current, then 0015 un-recorded."""
+        db = create_database(tmp_path / "behind.db")
+        db.execute(f"delete from {APPLIED_TABLE} where name = ?", (self.NAME,))
+        db.execute(
+            "insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)"
+            " values ('pos-1', 'condor', null, '2026-12-18', 1, 6.4, '[]', '2026-11-02 14:30:00.000000')"
+        )
+        return db
+
+    def test_clears_exactly_the_holdings_prices_the_domain_would_not_read_as_a_sessions(self, tmp_path):
+        db = self.behind(tmp_path)
+
+        def insert(on, stamp):
+            db.execute(
+                "insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, observed_at, spx)"
+                """ values ('pos-1', ?, 30, 3.05, '{"a":14.5}', ?, 6900.5)""",
+                (on, stamp),
+            )
+
+        for i, stamp in enumerate(self.STAMPS):
+            insert(f"d{i:03d}", stamp)
+        # a row with no stamp, and one that will not read, are left as they are
+        insert("legacy", None)
+        insert("garbled", "2026-11-14T17:00:00Z")
+        assert migrate(db) == [self.NAME]
+
+        rows = db.execute(
+            "select observed_on, observed_at, cost_to_close, legs_iv, spx from position_samples"
+        ).fetchall()
+        for on, at, cost, iv, spx in rows:
+            kept = on in ("legacy", "garbled") or taken_in_session(at)
+            assert cost == (3.05 if kept else None), at
+            # the row stays, and everything but its price
+            assert (iv, spx) == ('{"a":14.5}', 6900.5)
+        # and the classification is not trivial: some of each
+        assert sum(1 for r in rows if r[2] is None) > 10
+        assert sum(1 for r in rows if r[2] is not None) > 5
+
+    def test_clears_exactly_the_watched_days_mids_the_domain_would_not_read_as_a_sessions(self, tmp_path):
+        db = self.behind(tmp_path)
+        for i, stamp in enumerate(self.STAMPS):
+            db.execute(
+                "insert into watch_samples (contracts, observed_on, dte, legs_mid, legs_iv, observed_at)"
+                """ values ('US.X', ?, 30, '{"US.X":3.65}', '{"US.X":14.5}', ?)""",
+                (f"d{i:03d}", stamp),
+            )
+        migrate(db)
+        rows = db.execute("select observed_at, legs_mid, legs_iv from watch_samples").fetchall()
+        assert len(rows) == len(self.STAMPS)
+        for at, mid, iv in rows:
+            assert mid == ('{"US.X":3.65}' if taken_in_session(at) else None), at
+            assert iv == '{"US.X":14.5}'

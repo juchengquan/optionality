@@ -8,7 +8,7 @@
 import { buildSpxCode } from "optionality/domain/contract";
 import type { Row, World } from "../format.ts";
 import {
-  BOOK, C7300, C7350, C7500, EXPIRED, P6350, P6400, PREMIUM_BOOK, at, combo, except, link, monitor, position, quote,
+  BOOK, C7300, C7350, C7500, EXPIRED, EXPIRY, P6350, P6400, PREMIUM_BOOK, at, combo, except, link, monitor, position, quote,
   sample, stored, watchDay, world,
 } from "./fixtures.ts";
 
@@ -584,15 +584,19 @@ export const SWEEP: readonly SweepInput[] = [
   },
   {
     // the first sweep after midnight filled the day from overnight marks; the session was then
-    // missed; the service is back at 20:30 and the evening's reading replaces that fill
+    // missed; the service is back at 20:30 and the evening's reading replaces that fill. Neither has
+    // a price: both are GTH's, and a sample stores a regular session's only (#416)
     name: "a midnight fill is replaced by the evening's reading after a missed session",
     outcomes: ["provisional-row-replaced-after-hours", "sample-rewritten-when-it-moves"],
     world: world({
       clock: "2026-11-10T01:30:00.000Z", // 20:30 on Monday 9 November in New York
       tables: {
         positions: [position({ id: "pos-1" })],
-        // filled at 00:05 that day, from marks that have moved since
-        position_samples: [{ ...todays, cost_to_close: 3.5, observed_at: "2026-11-09 05:05:00.000000" }],
+        // filled at 00:05 that day, from vol readings that have moved since
+        position_samples: [{
+          ...todays, cost_to_close: null, legs_iv: { [C7300]: 15, [C7350]: 15, [P6400]: 20, [P6350]: 21 },
+          observed_at: "2026-11-09 05:05:00.000000",
+        }],
       },
       provider: { quotes: BOOK },
     }),
@@ -606,8 +610,9 @@ export const SWEEP: readonly SweepInput[] = [
       clock: "2026-11-07T16:00:00.000Z", // 11:00 on Saturday 7 November in New York
       tables: {
         positions: [position({ id: "pos-1" })],
+        // a weekend's row has no price (#416), whoever quotes one
         position_samples: [
-          { ...todays, observed_on: "2026-11-07", dte: 41, observed_at: "2026-11-07 05:05:00.000000" },
+          { ...todays, observed_on: "2026-11-07", dte: 41, cost_to_close: null, observed_at: "2026-11-07 05:05:00.000000" },
         ],
       },
       provider: { quotes: BOOK },
@@ -641,16 +646,75 @@ export const SWEEP: readonly SweepInput[] = [
     }),
   },
   {
-    // the feed withheld the vegas all session: the evening's sweep has them, and completes the row
-    name: "a day's row without its vegas is completed after hours",
+    // a day kept without a price — an evening's fill, GTH (#416) — and without its vegas: the next
+    // sweep after the close has them, and completes its vol, still with no price
+    name: "a costless day's row without its vegas is completed after hours",
     outcomes: ["incomplete-row-completed-after-hours", "sample-rewritten-when-it-moves"],
     world: world({
       clock: "2026-11-10T01:30:00.000Z", // 20:30 on Monday 9 November in New York
       tables: {
         positions: [position({ id: "pos-1" })],
-        position_samples: [{ ...todays, legs_vega: null }],
+        position_samples: [{ ...todays, cost_to_close: null, legs_vega: null, observed_at: "2026-11-10 01:20:00.000000" }],
       },
       provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // the feed withheld the vegas all session, so the day's close has none: an evening's (GTH) sweep
+    // has them, but no price, and the row is written whole — so it is left alone rather than lose
+    // the close (#416)
+    name: "a priced day's row without its vegas is never completed by an overnight reading",
+    outcomes: ["priced-row-kept-from-an-out-of-session-reading"],
+    world: world({
+      clock: "2026-11-10T01:30:00.000Z", // 20:30 on Monday 9 November in New York, GTH
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        position_samples: [{ ...todays, legs_vega: null, observed_at: "2026-11-09 21:14:00.000000" }],
+      },
+      provider: { quotes: BOOK },
+    }),
+  },
+  {
+    // #416: Sunday 20:15 New York starts Monday's GTH, and moomoo quotes SPX options live. The sweep
+    // rings the alarm as at any hour, fills Sunday's row with the vol and NO price, and Friday's
+    // close stays as it is; the watched combo's day the same
+    name: "an overnight (GTH) sweep rings the alarm and stores the day's vol with no price",
+    outcomes: ["alarm-fires", "sample-price-not-stored-out-of-session", "watch-sample-price-not-stored-out-of-session",
+      "sample-recorded"],
+    world: world({
+      clock: "2026-11-16T01:15:07.000Z", // 20:15:07 on Sunday 15 November in New York
+      tables: {
+        positions: [position({ id: "pos-1" })],
+        monitors: [
+          monitor({ id: "mon-1", scope: null, threshold: 0.2 }),
+          combo({ id: "mon-2", strike_date: EXPIRY, legs: [
+            { sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "CALL", strike: 7500 },
+          ] }),
+        ],
+        position_samples: [{
+          ...todays, observed_on: "2026-11-13", dte: 35, observed_at: "2026-11-13 21:14:59.000000",
+        }],
+      },
+      provider: { quotes: { ...BOOK, [C7500]: quote("SPXW 261218 7500C", 0.5, 0.06) } },
+    }),
+  },
+  {
+    // #416: overnight the holding is valued LIVE where every leg is quoted, as the page and /holdings
+    // value it — so the manage-by notice says the batch's "now", not Friday's close
+    name: "overnight a manage-by notice is valued live where every leg is quoted",
+    outcomes: ["manage-by-notice-live-overnight", "manage-by-notice"],
+    world: world({
+      clock: "2026-11-16T05:00:00.000Z", // 00:00 on Monday 16 November in New York, GTH
+      tables: {
+        positions: [november],
+        position_samples: [
+          sample({
+            position_id: "pos-nov", observed_on: "2026-11-13", dte: 14, cost_to_close: 2.25,
+            observed_at: "2026-11-13 21:14:59.000000", contract_size: 100,
+          }),
+        ],
+      },
+      provider: { quotes: NOVEMBER_QUOTES },
     }),
   },
   {

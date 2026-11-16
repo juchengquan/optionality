@@ -22,8 +22,16 @@ export interface Strip {
   shorts: ShortStrike[];
   longs: LongStrike[];
   spx: number | null;
-  /** why `spx` is null, as the service said it */
+  /** why `spx` is null, as the service said it — or, beside a price, why it is not current (#416) */
   reason: string | null;
+}
+
+/** "SPX 6900.50", or with its reason beside it where the price is not current — outside the
+ *  regular session it is the last close's level, and the distances below it are measured against
+ *  that (#416) — or a dash and why where there is none. */
+export function spxStripWords(strip: Strip): string {
+  if (strip.spx === null) return `SPX ${DASH} ${strip.reason ?? "no price"}`;
+  return `SPX ${strip.spx.toFixed(2)}${strip.reason ? ` (${strip.reason})` : ""}`;
 }
 
 /** A holding's strip; null for one with no short leg — a lone long held as a hedge — which has no

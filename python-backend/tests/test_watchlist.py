@@ -996,7 +996,7 @@ class TestTheSpreadsASingleContractIsALegOf:
 class TestSpxSPriceOnEveryRow:
     """#288: SPX's price, derived once from the batch's premiums (ADR 0024)."""
 
-    async def test_is_derived_once_from_the_batch_the_same_on_every_row_legs_included(self, monitor, combo, run):
+    async def test_is_derived_once_from_the_batch_the_same_on_every_row_legs_included(self, monitor, combo, run, db):
         monitor()
         combo()
         # CODE is a call at 6500 and the legs calls at 8100 and 8150: each inverts to its own level,
@@ -1011,7 +1011,21 @@ class TestSpxSPriceOnEveryRow:
         quotes = await run(fetch, True)
         levels = sorted([7500 / 0.94, 8102 / 1.07, 8151 / 1.08])
         assert len(quotes) == 2
+        # the suite's clock is Sunday 23:35 New York, GTH: the index is not computed, and the figure
+        # says so beside its price, never as current (#416)
         for q in quotes:
+            assert q["spx"] == round(levels[1], 2)
+            assert q["spx_reason"] == "index not computed overnight — the last close's level"
+        # in the session the same batch's figure is current
+        in_session = await watchlist_quotes(
+            db,
+            TZ,
+            fake_fetcher(fetch),
+            include_combos=True,
+            now=datetime(2026, 10, 1, 15, 0, tzinfo=UTC),
+            policy=POLICY,
+        )
+        for q in in_session:
             assert q["spx"] == round(levels[1], 2)
             assert q["spx_reason"] is None
 
