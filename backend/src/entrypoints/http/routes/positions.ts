@@ -145,9 +145,11 @@ const PositionValues = PositionOut.extend({
    *  one "unrecorded"; null when live. Said beside the figures so an evening's reading, or a
    *  Saturday's, is never passed off as a close. */
   valued_timing: z.enum(["close", "before-open", "after-close", "weekend", "unrecorded"]).nullable(),
-  /** why a holding valued live has no figures, in words: out of the session, the Provider call that
-   *  would have priced it failed, and the rest of the book is still served from its closes (#387).
-   *  Null wherever it was valued — and in the session, where that failure is the route's 502. */
+  /** why a holding's figures are not live, in words: out of the session, the Provider call that would
+   *  have priced it failed — a holding valued live then has no figures, and the rest of the book is
+   *  served from its closes (#387); in the Curb and GTH, where every holding is asked, one valued from
+   *  its close says it too (#416). Null wherever the call was answered or not needed — and in the
+   *  session, where that failure is the route's 502. */
   valued_reason: z.string().nullable(),
   /** days left where the option trades, the same reckoning the dashboard's column uses: TODAY's,
    *  whatever the figures are from. Levels and the pace are at the close's own DTE (#380, F5). */

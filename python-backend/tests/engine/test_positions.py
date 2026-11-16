@@ -1096,7 +1096,15 @@ class TestTheManageByNotice:
         self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
         await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 3.9})).sweep()
         assert len(self.notices(b)) == 1
-        assert "entry 6.86 · now 3.90" in self.notices(b)[0]
+        assert "entry 6.86 · now 3.90 (overnight, thin)" in self.notices(b)[0]
+
+    async def test_in_the_curb_says_the_batch_s_cost_is_the_curb_s_thin(self, b: Book) -> None:
+        # #416
+        b.now = datetime(2026, 10, 1, 20, 40, tzinfo=UTC)  # Thursday 16:40 New York
+        id_ = self.held(b, "condor", b.days_from_now(-24), 21)
+        self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
+        await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 3.9})).sweep()
+        assert "entry 6.86 · now 3.90 (Curb, thin)" in self.notices(b)[0]
 
     async def test_while_nothing_trades_says_the_latest_close_though_the_batch_prices_it(self, b: Book) -> None:
         # #387: 18:30 New York, between the Curb and GTH: a Provider that quotes then prices the leg at
@@ -1113,7 +1121,8 @@ class TestTheManageByNotice:
         # #416: the sweep fills the day with no price (GTH), and the holding is valued live from the batch
         id_ = self.held(b, "condor", b.days_from_now(-24), 21)
         await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 4.4})).sweep()
-        notice = "⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · now 4.40"
+        # ...and says it is a thin overnight figure, as the page's and the bot's line do (#416 review)
+        notice = "⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · now 4.40 (overnight, thin)"
         assert self.notices(b) == [f"{notice}\non-pace 4.69 — ahead by 0.29"]
         assert self.notified_at(b, id_)
 
@@ -1124,6 +1133,7 @@ class TestTheManageByNotice:
         await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 3.9})).sweep()
         assert len(self.notices(b)) == 1
         assert "entry 6.86 · now 3.90" in self.notices(b)[0]
+        assert "thin" not in self.notices(b)[0]
 
     async def test_never_values_from_a_weekend_reading_a_provider_s_weekend_price_is_no_close(self, b: Book) -> None:
         # #387, #416: Saturday 3 October, 13:00 New York; no weekday close has a cost, and Saturday's noon

@@ -1015,6 +1015,7 @@ describe("/positions/values in the Curb and overnight (GTH, #416)", () => {
       `insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at, contract_size)
        values (?, '2026-10-01', 15, 2.5, '2026-10-01 20:14:00.000000', 100)`,
     ).run(id);
+    h.db.prepare("update position_samples set spx = 6900.5 where position_id = ?").run(id);
 
     const [live] = await body(await h.call("/positions/values"));
     // 5.00 − 2.00 + 3.00 − 1.50: the quotes, never Thursday's 2.50
@@ -1023,7 +1024,28 @@ describe("/positions/values in the Curb and overnight (GTH, #416)", () => {
 
     thin = true; // a leg with no two-sided quote: the close, as when nothing trades
     const [close] = await body(await h.call("/positions/values"));
-    expect(close).toMatchObject({ cost_to_close: 2.5, valued_from: "close", valued_timing: "close" });
+    expect(close).toMatchObject({ cost_to_close: 2.5, valued_from: "close", valued_timing: "close", valued_reason: null });
+    // its SPX is the close's stored level, and says so (#416 review)
+    expect(close.spx_reason).toBe("the level at the close it is valued from");
+  });
+
+  it("overnight with the Provider down says so on a holding valued from its close for want of it (#416 review)", async () => {
+    let first = true;
+    start(async (codes) => {
+      if (first) { first = false; return pricedFetcher(codes); }
+      throw new Error("connect ECONNREFUSED");
+    });
+    const id = (await body(await post(condor()))).id as string;
+    h.db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at, contract_size)
+       values (?, '2026-10-01', 15, 2.5, '2026-10-01 20:14:00.000000', 100)`,
+    ).run(id);
+    const [v] = await body(await h.call("/positions/values"));
+    expect(v).toMatchObject({ cost_to_close: 2.5, valued_from: "close", valued_reason: "moomoo call failed: connect ECONNREFUSED" });
+    // ...and while nothing trades a close is not asked for, so it carries nothing
+    h.now = new Date("2026-10-01T22:30:00Z");
+    const [closed] = await body(await h.call("/positions/values"));
+    expect(closed).toMatchObject({ cost_to_close: 2.5, valued_from: "close", valued_reason: null });
   });
 
   it("values from the close while nothing trades, though a Provider quotes every leg", async () => {

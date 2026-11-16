@@ -48,6 +48,13 @@ describe("the session line in the Curb and GTH", () => {
       .toBe("overnight session — live quotes, thin; the Provider could not be asked");
   });
 
+  it("says it where the Provider was down for a holding valued from its close for want of a quote", () => {
+    // every holding is asked overnight: the close-valued one carries the failure too (#416 review)
+    const down = { ...fromClose("b"), valued_reason: "moomoo call failed: connect ECONNREFUSED" };
+    expect(thinLineWords([down], "overnight")).toBe(
+      "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14; the Provider could not be asked");
+  });
+
   it("is the line's words by the phase, and the market-closed words while nothing trades", () => {
     expect(closedLineText("09:30", null, [overnight("a")], new Date(), "overnight"))
       .toBe("overnight session — live quotes, thin");
@@ -81,6 +88,15 @@ describe("SPX outside the regular session is said stale beside its price (#416)"
     const { container } = render(<StrikeStrip strip={strip} />);
     expect(container.querySelector(".nxs-spx[data-stale]")).toBeTruthy();
     expect(container.querySelector(".nxs-spx-words")?.textContent).toContain("the last close's level");
+  });
+
+  it("on the price map's line from a holding's close, never as a batch's (#416 review)", () => {
+    const close = { ...fromClose("b"), spx: 7561.69, spx_reason: "the level at the close it is valued from" };
+    const line = spxOfBook([], [close]);
+    expect(line.source).toBe("close");
+    expect(spxWords(line, true)).toBe("SPX 7561.69 (the level at the close it is valued from)");
+    // a holding valued live is preferred to one valued from its close
+    expect(spxOfBook([], [close, overnight("a")]).source).toBe("holdings");
   });
 
   it("on the price map's line, from the batch that gave it", () => {

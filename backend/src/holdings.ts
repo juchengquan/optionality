@@ -62,8 +62,9 @@ export interface HoldingValue {
   dte: number;
   /** "live" from the Provider's batch, or "close" from the stored row `close` (#380) */
   valuedFrom: "live" | "close";
-  /** why a holding valued live has no figures: out of the session, the failed Provider call's own
-   *  message (#387); null wherever the call was made and answered, or not needed */
+  /** why a holding's figures are not live: out of the session, the failed Provider call's own message
+   *  — on a holding valued live, which then has none (#387), and in the Curb and GTH on one valued from
+   *  its close for want of it (#416); null wherever the call was made and answered, or not needed */
   unpriced: string | null;
   /** the stored row a close valuation is from; null for a live one */
   close: PositionSampleRow | null;
@@ -83,6 +84,10 @@ export interface HoldingValue {
 /** Why a close valuation has no SPX: the row was written by a batch with no premium to derive it
  *  from, or before migration 0010. */
 export const NO_CLOSE_SPX = "no SPX price was recorded with the close it is valued from";
+
+/** Why a close valuation's SPX is not current: it is the level stored with that close, never where
+ *  SPX is now — said beside it, as `sessionSpx` says a live batch's outside the session (#416). */
+export const CLOSE_SPX = "the level at the close it is valued from";
 
 /** The stored rows a holding may be valued from (`valuesFromClose` chooses among them).
  *
@@ -171,7 +176,8 @@ export async function holdingValues(
 
   const positions = rows.map(toPosition);
   const candidates = rows.map((row) => closeCandidates(db, row));
-  const live = positions.filter((_, i) => asks(now, candidates[i]!));
+  const asked = candidates.map((c) => asks(now, c));
+  const live = positions.filter((_, i) => asked[i]);
   let byCode: ByCode = {};
   let unpriced: string | null = null;
   if (live.length > 0) {
@@ -217,8 +223,11 @@ export async function holdingValues(
         row, position, cost, pnl: pnlAt(position, cost, close.contract_size),
         captured: captured(position.entry, cost),
         schedule: scheduleOf(row, cost, close.dte, dte, settings), dte,
-        valuedFrom: "close", unpriced: null, close, records: closeRecords(position, close),
-        spx: { price: close.spx, reason: close.spx === null ? NO_CLOSE_SPX : null },
+        // a holding the failed call would have priced, valued from its close for want of it — in the
+        // Curb and GTH every holding is asked — carries the failure too, so nothing says the quotes
+        // are live while the Provider refuses (#416)
+        valuedFrom: "close", unpriced: asked[i] ? unpriced : null, close, records: closeRecords(position, close),
+        spx: { price: close.spx, reason: close.spx === null ? NO_CLOSE_SPX : CLOSE_SPX },
         contractSize: close.contract_size, figuresDte: close.dte,
       };
     }),

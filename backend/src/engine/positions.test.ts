@@ -1039,7 +1039,15 @@ describe("the manage-by notice", () => {
     closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
     await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
     expect(notices()).toHaveLength(1);
-    expect(notices()[0]).toContain("entry 6.86 · now 3.90");
+    expect(notices()[0]).toContain("entry 6.86 · now 3.90 (overnight, thin)");
+  });
+
+  it("in the Curb says the batch's cost is the Curb's, thin (#416)", async () => {
+    now = new Date("2026-10-01T20:40:00Z"); // Thursday 16:40 New York
+    const id = held("condor", daysFromNow(-24), 21);
+    closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
+    await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
+    expect(notices()[0]).toContain("entry 6.86 · now 3.90 (Curb, thin)");
   });
 
   it("while nothing trades says the latest close though the batch prices it, as /holdings does (#387)", async () => {
@@ -1059,7 +1067,9 @@ describe("the manage-by notice", () => {
     // is valued live from the batch, as the page and the bot value it
     const id = held("condor", daysFromNow(-24), 21);
     await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 4.4 })).sweep();
-    expect(notices()).toEqual(["⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · now 4.40"
+    // ...and says it is a thin overnight figure, as the page's and the bot's line do: the notice goes
+    // once, and is usually first due just after New York's midnight (#416 review)
+    expect(notices()).toEqual(["⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · now 4.40 (overnight, thin)"
       + "\non-pace 4.69 — ahead by 0.29"]);
     expect(notifiedAt(id)).toBeTruthy();
   });
@@ -1071,6 +1081,7 @@ describe("the manage-by notice", () => {
     await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
     expect(notices()).toHaveLength(1);
     expect(notices()[0]).toContain("entry 6.86 · now 3.90");
+    expect(notices()[0]).not.toContain("thin");
   });
 
   it("never values from a weekend reading: a Provider's weekend price is no close (#387, #416)", async () => {

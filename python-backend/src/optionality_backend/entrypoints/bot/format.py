@@ -292,7 +292,8 @@ def _thin_line(values: list[HoldingValue], phase: Literal["overnight", "curb"]) 
             if c["observed_on"] > latest["observed_on"]:
                 latest = c
         line += f"; {len(closes)} not quoted, {close_words(latest)}"
-    if any(v.close is None and v.unpriced is not None for v in values):
+    # every holding is asked in the Curb and GTH, so a failure is said whichever way each was valued
+    if any(v.unpriced is not None for v in values):
         line += "; the Provider could not be asked"
     return line
 

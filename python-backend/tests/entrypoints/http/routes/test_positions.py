@@ -1159,6 +1159,7 @@ class TestPositionsValuesInTheCurbAndOvernight:
         h = start_with(start, fetch)
         id_ = (await post(h, condor())).json()["id"]
         self.close(h, id_)
+        h.db.execute("update position_samples set spx = 6900.5 where position_id = ?", (id_,))
 
         [live] = (await h.call("/positions/values")).json()
         # 5.00 - 2.00 + 3.00 - 1.50: the quotes, never Thursday's 2.50
@@ -1168,6 +1169,34 @@ class TestPositionsValuesInTheCurbAndOvernight:
         thin = True  # a leg with no two-sided quote: the close, as when nothing trades
         [close] = (await h.call("/positions/values")).json()
         assert (close["cost_to_close"], close["valued_from"], close["valued_timing"]) == (2.5, "close", "close")
+        assert close["valued_reason"] is None
+        # its SPX is the close's stored level, and says so (#416 review)
+        assert close["spx_reason"] == "the level at the close it is valued from"
+
+    async def test_overnight_with_the_provider_down_says_so_on_a_holding_valued_from_its_close(self, start):
+        # #416 review
+        first = True
+
+        async def fetch(codes):
+            nonlocal first
+            if first:
+                first = False
+                return (await priced_fetcher(codes)).records
+            raise RuntimeError("connect ECONNREFUSED")
+
+        h = start_with(start, fetch)
+        id_ = (await post(h, condor())).json()["id"]
+        self.close(h, id_)
+        [v] = (await h.call("/positions/values")).json()
+        assert (v["cost_to_close"], v["valued_from"], v["valued_reason"]) == (
+            2.5,
+            "close",
+            "moomoo call failed: connect ECONNREFUSED",
+        )
+        # ...and while nothing trades a close is not asked for, so it carries nothing
+        h.now = datetime(2026, 10, 1, 22, 30, tzinfo=UTC)
+        [closed] = (await h.call("/positions/values")).json()
+        assert (closed["cost_to_close"], closed["valued_from"], closed["valued_reason"]) == (2.5, "close", None)
 
     async def test_values_from_the_close_while_nothing_trades_though_a_provider_quotes_every_leg(self, start):
         h = start_with(start)

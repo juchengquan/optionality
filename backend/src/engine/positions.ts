@@ -14,7 +14,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import {
-  daysToExpiry, marketDate, sampledPrice, sessionClosedSince, takesSample, valuedTiming, valuesFromClose,
+  daysToExpiry, marketDate, marketPhase, sampledPrice, sessionClosedSince, takesSample, valuedTiming, valuesFromClose,
 } from "optionality/domain/expiry";
 import { normalizeStrikeDate } from "optionality/domain/contract";
 import { dteAtOpen, onPace } from "optionality/domain/exit";
@@ -93,7 +93,7 @@ export async function noticeManageBy(
       let line = `⏰ ${row.name} is at ${dte} DTE — manage by ${settings.exitManageByDte}`;
       if (row.entry !== null) line += `\nentry ${row.entry}`;
       if (cost !== null) {
-        line += close === null ? ` · now ${cost.toFixed(2)}` : ` · ${cost.toFixed(2)} ${closeWords(close)}`;
+        line += close === null ? ` · now ${cost.toFixed(2)}${thinWords(at)}` : ` · ${cost.toFixed(2)} ${closeWords(close)}`;
       }
       if (pace !== null) {
         line += `\non-pace ${pace.toFixed(2)}`;
@@ -120,6 +120,17 @@ function windowEntered(strikeDate: string, openedAt: string, manageByDte: number
   const reached = new Date(Date.parse(`${normalizeStrikeDate(strikeDate)}T00:00:00Z`) - manageByDte * 86_400_000)
     .toISOString().slice(0, 10);
   return openedAt > reached ? openedAt : reached;
+}
+
+/** What a live figure is, after it, where the quotes are thin (#416): " (overnight, thin)" in GTH, "
+ *  (Curb, thin)" in the Curb, as the page's and the bot's line say it — the notice goes once, and is
+ *  usually first due just after New York's midnight, in GTH — and nothing in the session. */
+function thinWords(at: Date): string {
+  switch (marketPhase(at)) {
+    case "overnight": return " (overnight, thin)";
+    case "curb": return " (Curb, thin)";
+    default: return "";
+  }
 }
 
 /** Which stored row a figure is from, after the figure: "at the 2026-11-13 close", or the reading's

@@ -33,6 +33,7 @@ from optionality.exit import dte_at_open, on_pace
 from optionality.expiry import (
     days_to_expiry,
     market_date,
+    market_phase,
     sampled_price,
     session_closed_since,
     takes_sample,
@@ -125,7 +126,11 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
             if row["entry"] is not None:
                 line += f"\nentry {js_string(row['entry'])}"
             if cost is not None:
-                line += f" · now {_fixed(cost)}" if close is None else f" · {_fixed(cost)} {_close_words(close)}"
+                line += (
+                    f" · now {_fixed(cost)}{_thin_words(at)}"
+                    if close is None
+                    else f" · {_fixed(cost)} {_close_words(close)}"
+                )
             if pace is not None:
                 line += f"\non-pace {_fixed(pace)}"
                 if cost is not None:
@@ -145,6 +150,17 @@ def _window_entered(strike_date: str, opened_at: str, manage_by_dte: int) -> str
     manage-by DTE, or the day it was Opened where that was later."""
     reached = (date.fromisoformat(normalize_strike_date(strike_date)) - timedelta(days=manage_by_dte)).isoformat()
     return max(reached, opened_at)
+
+
+def _thin_words(at: datetime) -> str:
+    """What a live figure is, after it, where the quotes are thin (#416): " (overnight, thin)" in GTH,
+    " (Curb, thin)" in the Curb, and nothing in the session. Mirrors `positions.ts`' `thinWords`."""
+    phase = market_phase(at)
+    if phase == "overnight":
+        return " (overnight, thin)"
+    if phase == "curb":
+        return " (Curb, thin)"
+    return ""
 
 
 def _close_words(close: PositionSampleRow) -> str:

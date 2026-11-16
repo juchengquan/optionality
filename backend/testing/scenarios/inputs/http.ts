@@ -1105,6 +1105,46 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/pos-1/vol"),
   },
   {
+    // ...and a watched rule's history serves a day priced overnight (before migration 0015) with no
+    // value: its chart plots closes (#416 review)
+    name: "GET /monitors/{id}/samples serves no value for a day priced overnight",
+    world: world({
+      clock: GTH_MONDAY,
+      tables: {
+        monitors: [monitor({ id: "mon-1", field: "mid_price", threshold: 3 })],
+        watch_samples: [
+          watchDay([C7300], { observed_on: "2026-11-13", dte: 35, legs_mid: { [C7300]: 2.75 }, observed_at: "2026-11-13 21:14:59.000000" }),
+          watchDay([C7300], { observed_on: "2026-11-15", dte: 33, legs_mid: { [C7300]: 3.4 }, observed_at: "2026-11-16 01:15:07.000000" }),
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/monitors/mon-1/samples"),
+  },
+  {
+    // ...and a holding's days WATCHED before its entry, and its entry day's watched close, the same:
+    // Sunday's GTH-priced watch day is served with no Cost to close, and Monday's — the day it was
+    // entered, its own row costless — is no entry-day close (#416 review)
+    name: "GET /positions/{id}/samples serves no watched price read overnight, before entry or as the entry day's close",
+    world: world({
+      clock: GTH_MONDAY,
+      tables: {
+        positions: [position({ id: "pos-1", opened_at: "2026-11-16" })],
+        position_samples: [closeRow("2026-11-16", 32, null, "2026-11-16 05:00:06.000000")],
+        watch_samples: [
+          watchDay(condorCodes, { observed_on: "2026-11-13", dte: 35, legs_mid: legMap([2.75, 1.75, 4.5, 2.25]),
+            observed_at: "2026-11-13 21:14:59.000000" }),
+          watchDay(condorCodes, { observed_on: "2026-11-15", dte: 33, legs_mid: legMap([3, 2, 5, 2.5]),
+            observed_at: "2026-11-16 01:15:07.000000" }),
+          watchDay(condorCodes, { observed_on: "2026-11-16", dte: 32, legs_mid: legMap([3.25, 2, 5, 2.5]),
+            observed_at: "2026-11-16 05:00:06.000000" }),
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
     // ...and a watched rule's last close is Friday's, never the GTH mids stored after it
     name: "GET /monitors/closes never serves a price read overnight as a close",
     world: world({

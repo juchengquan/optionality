@@ -113,6 +113,8 @@ class Valued:
 
 #: why a close valuation has no SPX
 NO_CLOSE_SPX = "no SPX price was recorded with the close it is valued from"
+#: why a close valuation's SPX is not current: the level stored with that close (#416)
+CLOSE_SPX = "the level at the close it is valued from"
 
 
 def close_candidates(db: sqlite3.Connection, row: PositionRow) -> list[PositionSampleRow]:
@@ -233,7 +235,12 @@ def _live(
 
 
 def _from_close(
-    row: PositionRow, position: Position, close: PositionSampleRow, dte: int, settings: Settings
+    row: PositionRow,
+    position: Position,
+    close: PositionSampleRow,
+    dte: int,
+    settings: Settings,
+    unpriced: str | None,
 ) -> HoldingValue:
     cost = close["cost_to_close"]
     return HoldingValue(
@@ -245,10 +252,10 @@ def _from_close(
         schedule=_schedule_of(row, cost, close["dte"], dte, settings),
         dte=dte,
         valued_from="close",
-        unpriced=None,
+        unpriced=unpriced,
         close=close,
         records=_close_records(position, close),
-        spx=DerivedSpx(price=close["spx"], reason=NO_CLOSE_SPX if close["spx"] is None else None),
+        spx=DerivedSpx(price=close["spx"], reason=NO_CLOSE_SPX if close["spx"] is None else CLOSE_SPX),
         contract_size=close["contract_size"],
         figures_dte=close["dte"],
     )
@@ -272,7 +279,8 @@ async def holding_values(
 
     positions = [to_position(r) for r in rows]
     candidates = [close_candidates(db, row) for row in rows]
-    live = [p for p, c in zip(positions, candidates, strict=True) if _asks(now, c)]
+    asked = [_asks(now, c) for c in candidates]
+    live = [p for p, a in zip(positions, asked, strict=True) if a]
     by_code: ByCode = {}
     unpriced: str | None = None
     if live:
@@ -301,11 +309,13 @@ async def holding_values(
     batch_size = contract_size(by_code)
 
     values: list[HoldingValue] = []
-    for row, position, close in zip(rows, positions, closes, strict=True):
+    for row, position, close, was_asked in zip(rows, positions, closes, asked, strict=True):
         dte = days_to_expiry(row["strike_date"], now)
+        # a holding the failed call would have priced, valued from its close for want of it, carries the
+        # failure too (#416)
         values.append(
             _live(row, position, by_code, batch_spx, batch_size, dte, settings, unpriced)
             if close is None
-            else _from_close(row, position, close, dte, settings)
+            else _from_close(row, position, close, dte, settings, unpriced if was_asked else None)
         )
     return Valued(values=values)

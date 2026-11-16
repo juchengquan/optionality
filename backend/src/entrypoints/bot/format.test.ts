@@ -277,6 +277,17 @@ describe("closedLine — which close /holdings is valued from, out of session (#
       .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading");
   });
 
+  it("in the Curb and GTH says the quotes are live and thin, and the failure whichever way each was valued (#416)", () => {
+    expect(closedLine([valued(null)], "overnight")).toBe("overnight session — live quotes, thin");
+    expect(closedLine([valued(null)], "curb")).toBe("Curb — live quotes, thin");
+    expect(closedLine([valued(null), valued(FRI)], "overnight"))
+      .toBe("overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14");
+    // the Provider down overnight: the holding valued from its close for want of it carries the failure
+    const downFromClose = { close: FRI, unpriced: "OpenD down" } as unknown as HoldingValue;
+    expect(closedLine([downFromClose], "overnight")).toBe(
+      "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14; the Provider could not be asked");
+  });
+
   it("says a holding with no close was not valued where the Provider could not be asked (#387)", () => {
     const failed = { close: null, unpriced: "OpenD down" } as unknown as HoldingValue;
     expect(closedLine([valued(FRI), failed]))

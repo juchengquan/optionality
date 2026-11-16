@@ -228,9 +228,9 @@ class PositionValues(PositionOut):
     valued_on: str | None
     #: what that row is (`valued_timing`): a "weekend" reading is never a "close" (#387); None when live
     valued_timing: Literal["close", "before-open", "after-close", "weekend", "unrecorded"] | None
-    #: why a holding valued live has no figures, in words: out of the session, the Provider call that would
-    #: have priced it failed, and the rest of the book is still served from its closes (#387). None wherever
-    #: it was valued — and in the session, where that failure is the route's 502.
+    #: why a holding's figures are not live, in words: out of the session, the Provider call that would have
+    #: priced it failed (#387) — and in the Curb and GTH a holding valued from its close for want of it says it
+    #: too (#416). None wherever the call was answered or not needed, and in the session (the route's 502).
     valued_reason: str | None
     #: days left where the option trades, the same reckoning the dashboard's column uses: TODAY's,
     #: whatever the figures are from. Levels and the pace are at the close's own DTE (#380, F5).

@@ -120,7 +120,9 @@ export function thinLineWords(holdings: readonly Holding[] | null, phase: "overn
     const latest = closes.reduce((a, b) => ((b.valued_on ?? "") > (a.valued_on ?? "") ? b : a));
     line += `; ${closes.length} not quoted, ${closeWords(latest)}`;
   }
-  if ((holdings ?? []).some((h) => h.valued_from === "live" && h.valued_reason !== null)) {
+  // every holding is asked in the Curb and GTH, so a failure is said whichever way each was valued:
+  // one valued from its close for want of a quote carries it too (#416)
+  if ((holdings ?? []).some((h) => h.valued_reason !== null)) {
     line += "; the Provider could not be asked";
   }
   return line;

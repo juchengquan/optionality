@@ -258,7 +258,7 @@
           "captured": 0.16666666666666666,
           "contract_size": 100,
           "spx": 6900.5,
-          "spx_reason": null,
+          "spx_reason": "the level at the close it is valued from",
           "greeks": {
             "option_delta": null,
             "option_gamma": null,

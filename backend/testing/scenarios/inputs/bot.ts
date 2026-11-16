@@ -125,6 +125,17 @@ export const BOT: readonly BotInput[] = [
     update: message("/holdings"),
   },
   {
+    // #416 review: overnight with the Provider down, the condor is valued from its close for want of a
+    // quote, and the line says the Provider could not be asked rather than that the quotes are live
+    name: "/holdings overnight with the Provider down says so beside the close it values from",
+    world: world({
+      clock: "2026-11-16T05:00:00.000Z", // 00:00 on Monday 16 November in New York, GTH
+      tables: { ...held, position_samples: [FRIDAY_CLOSE] },
+      provider: { down: DOWN },
+    }),
+    update: message("/holdings"),
+  },
+  {
     // #387, #416: a reading priced in the hours on a Saturday is no close, nor one after Friday's
     // close: neither values the holding, which is valued live — the Provider down, a dash
     name: "/holdings outside the session never values from a weekend reading, which is no close",

@@ -138,7 +138,7 @@
   },
   "expect": {
     "messages": [
-      "⏰ nov-condor is at 11 DTE — manage by 21\nentry 6.4 · now 1.25\non-pace 3.44 — ahead by 2.19"
+      "⏰ nov-condor is at 11 DTE — manage by 21\nentry 6.4 · now 1.25 (overnight, thin)\non-pace 3.44 — ahead by 2.19"
     ],
     "rows": {
       "positions": {

@@ -214,7 +214,8 @@ function thinLine(values: readonly HoldingValue[], phase: "overnight" | "curb"):
     const latest = closes.reduce((a, b) => (b.observed_on > a.observed_on ? b : a));
     line += `; ${closes.length} not quoted, ${closeWords(latest)}`;
   }
-  if (values.some((v) => v.close === null && v.unpriced !== null)) line += "; the Provider could not be asked";
+  // every holding is asked in the Curb and GTH, so a failure is said whichever way each was valued
+  if (values.some((v) => v.unpriced !== null)) line += "; the Provider could not be asked";
   return line;
 }
 
