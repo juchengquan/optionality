@@ -52,6 +52,57 @@ describe("what a package may not do", () => {
   });
 });
 
+describe("the other spellings of the same reach", () => {
+  it("refuses a dynamic import written as a template literal", () => {
+    write("backend/src/a.ts", "const m = await import(`../../python/src/y.ts`);\n");
+    expect(found()).toEqual([expect.stringContaining("leaves backend/")]);
+  });
+
+  it("refuses a Python path climbed by .parent rather than parents[n]", () => {
+    write("python/tests/t.py", 'P = Path(__file__).resolve().parent.parent.parent / "backend" / "src"\n');
+    expect(found()).toEqual([expect.stringContaining("another package's source")]);
+  });
+
+  it("refuses a path joined onto import.meta.dirname or __dirname", () => {
+    write("backend/src/a.ts", 'const p = join(import.meta.dirname, "../../python/src/x.py");\n');
+    write("backend/src/b.ts", 'const p = resolve(__dirname, "..", "..", "python", "src");\n');
+    expect(found()).toEqual([
+      expect.stringContaining("backend/src/a.ts"), expect.stringContaining("backend/src/b.ts"),
+    ]);
+  });
+
+  it("refuses a path built in a template literal from import.meta.dirname", () => {
+    write("backend/src/a.ts", "const t = readFileSync(`${import.meta.dirname}/../../python/src/x.py`);\n");
+    write("backend/src/b.ts", 'const t = import.meta.dirname + "/../../python/src/x.py";\n');
+    expect(found()).toEqual([
+      expect.stringContaining("backend/src/a.ts"), expect.stringContaining("backend/src/b.ts"),
+    ]);
+  });
+
+  it("refuses a file URL written with single quotes or backticks", () => {
+    write("backend/src/a.ts", "const p = new URL('../../python/src/x.py', import.meta.url);\n");
+    write("backend/src/b.ts", "const p = new URL(`../../python/src/x.py`, import.meta.url);\n");
+    expect(found()).toEqual([
+      expect.stringContaining("backend/src/a.ts"), expect.stringContaining("backend/src/b.ts"),
+    ]);
+  });
+
+  it("allows every one of those spellings where it stays home or reaches shared ground", () => {
+    write("backend/src/a.ts", [
+      "const m = await import(`./b.ts`);",
+      'const p = join(import.meta.dirname, "../../testdata/x.json");',
+      "const t = `${import.meta.dirname}/../../testdata/golden`;",
+      "const u = new URL('../../testdata/x.json', import.meta.url);",
+      "",
+    ].join("\n"));
+    write("backend/src/b.ts", "export const b = 1;\n");
+    write("python/tests/t.py", 'P = Path(__file__).resolve().parent.parent.parent / "testdata" / "golden"\n');
+    // and in Python a backtick is a docstring's markup, never a string
+    write("python/src/m.py", '"""Ported from `../../backend/src/m.ts`."""\n');
+    expect(found()).toEqual([]);
+  });
+});
+
 describe("what it must allow, or the repository cannot work", () => {
   it("allows the shared test data, which both suites read by path", () => {
     write("python/tests/t.py", 'CASES = Path(__file__).resolve().parents[2] / "testdata" / "golden"\n');

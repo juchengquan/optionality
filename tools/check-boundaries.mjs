@@ -88,7 +88,13 @@ export const SKIP_DIRS = new Set([
   ".claude",
 ]);
 const SOURCE = /\.(ts|tsx|mts|js|mjs|jsx|py)$/;
-const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']([^"']+)["']/g;
+/** A specifier in double quotes, single quotes or BACKTICKS: a template literal with no `${}` is one
+ *  fixed path, and `import(\`../../x.ts\`)` passed every guard until a review wrote one. A template
+ *  that interpolates is built at runtime, which no lint can read, so `$` ends the match. */
+const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'`])([^"'`$]+)\1/g;
+/** ...but not in Python, where a backtick is a docstring's markup — "ported from `backend/src/`" —
+ *  and never a string. */
+const PY_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'])([^"'$]+)\1/g;
 /** Python's relative import, which the pattern above cannot see: its specifier carries no quotes.
  *  Admitting `.py` to the file list alone therefore bought the path check and nothing else — a
  *  mutation sweep caught that, by adding `from ...backend.src import thing` and watching it pass.
@@ -101,8 +107,18 @@ const PY_IMPORT = /^[ \t]*from\s+(\.+)([\w.]*)\s+import\s/gm;
  *  does not say — `parents[2]` is the repository root from `python/tests/`, legal only because of
  *  the `/ "testdata" / "golden"` that follows it. So the segments come too. */
 const PARENTS = /\bparents\s*\[\s*(\d+)\s*\]((?:\s*\/\s*"[^"]*")*)/g;
-const FILE_URL = /new\s+URL\(\s*"([^"]+)"\s*,\s*import\.meta\.url\s*\)/g;
+const FILE_URL = /new\s+URL\(\s*(["'`])([^"'`$]+)\1\s*,\s*import\.meta\.url\s*\)/g;
 const SEGMENT = /"([^"]*)"/g;
+/** The same climb spelled `.parent` at a time: `Path(__file__).resolve().parent` is the file's own
+ *  directory, so N of them is N-1 levels up — the spelling a review found every check blind to. */
+const PARENT_CHAIN = /\b__file__\s*\)(?:\s*\.\s*resolve\(\s*\))?((?:\s*\.\s*parent\b(?!s))+)((?:\s*\/\s*"[^"]*")*)/g;
+/** A path joined onto the module's own directory: `join(import.meta.dirname, "../../x")`,
+ *  `resolve(__dirname, "..", "x")`. The quoted arguments are the segments. */
+const DIR_JOIN = /\b(?:join|resolve)\(\s*(?:import\.meta\.dirname|__dirname)\s*((?:,\s*(["'`])[^"'`$]*\2\s*)*)\)/g;
+/** ...and the same directory with a path appended as text: `${import.meta.dirname}/../x` inside a
+ *  template, or `import.meta.dirname + "/../x"`. */
+const DIR_TEXT = /(?:\$\{\s*(?:import\.meta\.dirname|__dirname)\s*\}([^`$]*)`|\b(?:import\.meta\.dirname|__dirname)\s*\+\s*(["'`])([^"'`$]*)\2)/g;
+const QUOTED = /(["'`])([^"'`$]*)\1/g;
 
 function walk(dir) {
   return readdirSync(dir).flatMap((entry) => {
@@ -141,7 +157,7 @@ export function crossings(repo = ROOT, packages = PACKAGES, shared = SHARED, dep
     const readable = (target) =>
         inside(target, root) || !packages.some((p) => inside(target, join(repo, p)));
 
-    for (const [, spec] of text.matchAll(SPECIFIER)) {
+    for (const [, , spec] of text.matchAll(file.endsWith(".py") ? PY_SPECIFIER : SPECIFIER)) {
       if (!spec.startsWith(".")) {
         // a name: legal as a ROUTE, being what the other package publishes, so the only question
         // is whether this package may depend on that one at all
@@ -170,7 +186,18 @@ export function crossings(repo = ROOT, packages = PACKAGES, shared = SHARED, dep
         resolve(dirname(file), "../".repeat(Number(levels)),
                 [...joined.matchAll(SEGMENT)].map(([, seg]) => seg).join("/")),
       ]),
-      ...[...text.matchAll(FILE_URL)].map(([match, spec]) => [match, resolve(dirname(file), spec)]),
+      ...[...text.matchAll(PARENT_CHAIN)].map(([match, chain, joined]) => [
+        match,
+        resolve(dirname(file), "../".repeat(chain.split("parent").length - 2),
+                [...joined.matchAll(SEGMENT)].map(([, seg]) => seg).join("/")),
+      ]),
+      ...[...text.matchAll(FILE_URL)].map(([match, , spec]) => [match, resolve(dirname(file), spec)]),
+      ...[...text.matchAll(DIR_JOIN)].map(([match, args]) => [
+        match, resolve(dirname(file), ...[...args.matchAll(QUOTED)].map(([, , seg]) => seg)),
+      ]),
+      ...[...text.matchAll(DIR_TEXT)].map(([match, inTemplate, , appended]) => [
+        match, resolve(dirname(file), `./${inTemplate ?? appended}`),
+      ]),
     ];
     for (const [match, target] of reaches) {
       if (readable(target)) continue;
