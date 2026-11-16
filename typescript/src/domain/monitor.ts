@@ -109,9 +109,11 @@ export function comboFieldSum(monitor: Monitor, byCode: ByCode, field: string): 
  *  text is NaN, and a NaN compares false with everything — so a rule on it was never breached,
  *  never silent and never quarantined, and sat on the watchlist doing nothing for ever. Missing,
  *  it is counted as silence and quarantined after `QUARANTINE_AFTER_SILENT_SWEEPS` like any other
- *  figure that does not arrive. Infinity likewise: no market quotes one. */
+ *  figure that does not arrive. Infinity likewise: no market quotes one; and a flag, which `Number`
+ *  reads as 1 or 0. */
 function reading(value: unknown): number | null {
-  if (value === null || value === undefined) return null;
+  // a flag is not a figure either, though `Number(true)` is 1: `suspension` would read as one
+  if (value === null || value === undefined || typeof value === "boolean") return null;
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }

@@ -487,7 +487,9 @@ class MonitorSweeper:
                             continue
                         # the decision is `optionality.lifecycle.silence_verdict` (ADR 0017); this
                         # applies it
-                        verdict = silence_verdict(monitor, set(by_code), self.silent_sweeps.get(row["id"], 0), limit)
+                        verdict = silence_verdict(
+                            monitor, set(by_code), self.silent_sweeps.get(row["id"], 0), limit, by_code
+                        )
                         if verdict.count is None:
                             self.silent_sweeps.pop(row["id"], None)
                         else:

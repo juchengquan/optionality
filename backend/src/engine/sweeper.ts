@@ -439,7 +439,7 @@ export class MonitorSweeper {
             }
             // the decision is `domain/lifecycle.silenceVerdict` (ADR 0017); this applies it
             const verdict = silenceVerdict(
-              monitor, new Set(Object.keys(byCode)), this.silentSweeps.get(row.id) ?? 0, limit,
+              monitor, new Set(Object.keys(byCode)), this.silentSweeps.get(row.id) ?? 0, limit, byCode,
             );
             if (verdict.count === null) this.silentSweeps.delete(row.id);
             else this.silentSweeps.set(row.id, verdict.count);

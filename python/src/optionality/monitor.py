@@ -137,7 +137,7 @@ def _reading(value: object) -> float | None:
     """A quote field as a figure, or None where it is none: text reads NaN, which compares false with
     everything, so a rule on it was never breached, never silent and never quarantined. Infinity
     likewise. Mirrors `monitor.ts`."""
-    if value is None:
+    if value is None or isinstance(value, bool):  # a flag is not a figure, though JavaScript reads it as 1
         return None
     n = number(value)
     return n if math.isfinite(n) else None

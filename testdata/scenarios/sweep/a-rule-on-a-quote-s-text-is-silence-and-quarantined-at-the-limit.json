@@ -77,7 +77,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ monitor US.SPXW261218C7300000 |option_type| ≥ 0.30 disabled: no option_type in the quote for 1 consecutive sweeps"
+      "⚠️ monitor US.SPXW261218C7300000 |option_type| ≥ 0.30 disabled: option_type is not a number in the quote for 1 consecutive sweeps"
     ],
     "rows": {
       "monitors": {

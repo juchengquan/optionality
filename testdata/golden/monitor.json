@@ -718,6 +718,29 @@
     },
     {
       "fn": "monitorValue",
+      "name": "a flag is no figure, though JavaScript reads true as 1",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "suspension",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "US.SPXW261120C7100000": {
+            "code": "US.SPXW261120C7100000",
+            "suspension": true
+          }
+        }
+      ],
+      "expect": null
+    },
+    {
+      "fn": "monitorValue",
       "name": "a numeric string is a figure",
       "args": [
         {

@@ -1107,6 +1107,15 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "silenceReason", name: "every leg priced, so the field itself is missing",
       args: [combo, new Set([LP, SP, SC, LC])] },
     { fn: "silenceReason", name: "a single contract with no quote", args: [single, new Set()] },
+    // sent, and still no figure: text where a number belongs is said to be one, never missing
+    { fn: "silenceReason", name: "a field sent as text is not a number, not missing",
+      args: [{ ...single, field: "option_type" }, new Set([single.code]),
+        { [single.code]: { code: single.code, option_type: "CALL" } }] },
+    { fn: "silenceReason", name: "a field the quote does not carry is still missing",
+      args: [single, new Set([single.code]), { [single.code]: { code: single.code } }] },
+    { fn: "silenceVerdict", name: "a field sent as a flag is quarantined as not a number",
+      args: [{ ...single, field: "suspension" }, new Set([single.code]), 0, 1,
+        { [single.code]: { code: single.code, suspension: false } }] },
 
     // the run of silence, and where it ends
     { fn: "silenceVerdict", name: "a first silent sweep only counts",
@@ -1206,6 +1215,8 @@ export const INPUTS: Record<string, CaseInput[]> = {
     // text read as a figure is NaN, which compared false with everything: no figure at all instead
     { fn: "monitorValue", name: "a text field is no figure",
       args: [{ ...single, field: "option_type" }, { [single.code]: { code: single.code, option_type: "CALL" } }] },
+    { fn: "monitorValue", name: "a flag is no figure, though JavaScript reads true as 1",
+      args: [{ ...single, field: "suspension" }, { [single.code]: { code: single.code, suspension: true } }] },
     { fn: "monitorValue", name: "a numeric string is a figure",
       args: [single, { [single.code]: { code: single.code, option_delta: "0.25" } }] },
     { fn: "comboFieldSum", name: "a leg reading text is no sum",
