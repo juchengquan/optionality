@@ -87,6 +87,54 @@ describe("the other spellings of the same reach", () => {
     ]);
   });
 
+  // #422's review: what the first round still let through
+  it("refuses a directory held in a variable, then joined into another package", () => {
+    write("backend/src/a.ts", [
+      'import { fileURLToPath } from "node:url";',
+      "const here = dirname(fileURLToPath(import.meta.url));",
+      'readFileSync(join(here, "../../python/src/x.py"));', "",
+    ].join("\n"));
+    write("backend/src/b.ts", [
+      'const ROOT = join(import.meta.dirname, "../..");',
+      'readFileSync(join(ROOT, "python/src/x.py"));', "",
+    ].join("\n"));
+    write("backend/src/c.ts", 'const p = "python/src/x.py";\nreadFileSync(join(import.meta.dirname, "../..", p));\n');
+    expect(found()).toEqual([
+      expect.stringContaining("backend/src/a.ts"), expect.stringContaining("backend/src/b.ts"),
+      expect.stringContaining("backend/src/c.ts"),
+    ]);
+  });
+
+  it("refuses require() and import.meta.resolve() into another package", () => {
+    write("backend/src/a.ts", 'const x = require("../../python/src/x.py");\n');
+    write("backend/src/b.ts", 'const u = import.meta.resolve("../../python/src/x.py");\n');
+    expect(found()).toEqual([
+      expect.stringContaining("backend/src/a.ts"), expect.stringContaining("backend/src/b.ts"),
+    ]);
+  });
+
+  it("refuses the Python's joinpath, single quotes and os.path spellings", () => {
+    write("python/tests/a.py", 'R = Path(__file__).resolve().parent.parent.parent.joinpath("backend", "src")\n');
+    write("python/tests/b.py", 'P = os.path.join(os.path.dirname(__file__), "..", "..", "backend", "src")\n');
+    write("python/tests/c.py", 'P = Path(__file__).parents[2].joinpath("backend/src")\n');
+    write("python/tests/d.py", "P = Path(__file__).parent.parent.parent / 'backend' / 'src'\n");
+    write("python/tests/e.py", 'P = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../backend")\n');
+    expect(found()).toEqual(["a", "b", "c", "d", "e"].map((f) => expect.stringContaining(`python/tests/${f}.py`)));
+  });
+
+  it("stays quiet where a joined name cannot be read, and where a held directory stays home", () => {
+    // gateway.test.ts's own shape: the root held in a variable, joined with an IMPORTED name
+    write("backend/src/a.ts", [
+      'import { CASES } from "./cases.ts";',
+      'const ROOT = join(import.meta.dirname, "../..");',
+      'const EXPECTED = join(ROOT, CASES, "expected");',
+      'const DATA = join(ROOT, "testdata", "golden");', "",
+    ].join("\n"));
+    write("backend/src/cases.ts", 'export const CASES = "x";\n');
+    write("python/tests/t.py", 'P = os.path.join(os.path.dirname(__file__), "..", "..", "testdata")\n');
+    expect(found()).toEqual([]);
+  });
+
   it("allows every one of those spellings where it stays home or reaches shared ground", () => {
     write("backend/src/a.ts", [
       "const m = await import(`./b.ts`);",

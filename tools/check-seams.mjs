@@ -56,7 +56,8 @@ const SOURCE = /\.(ts|tsx|mts|js|mjs|jsx)$/;
 /** A specifier in double quotes, single quotes or BACKTICKS: a template literal with no `${}` is one
  *  fixed path, and `import(\`../../x.ts\`)` passed every guard until a review wrote one. A template
  *  that interpolates is built at runtime, which no lint can read, so `$` ends the match. */
-const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)(["'`])([^"'`$]+)\1/g;
+const SPECIFIER =
+  /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*|\bimport\.meta\.resolve\s*\(\s*)(["'`])([^"'`$]+)\1/g;
 
 /** Each directory whose interior is private, and the files that are not.
  *
