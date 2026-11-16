@@ -77,7 +77,22 @@ RESEARCH = "optionality.research"
 #: what a pure module may never import, at module level or inside a function. `yfinance` and
 #: `ib_async` join `moomoo` for the same reason: each is an extra, and a pure module reaching one
 #: would break `import optionality.alarm` for everyone who installed without it
-FORBIDDEN_ROOTS = {"moomoo", "yfinance", "ib_async", "urllib", "http", "requests", "httpx", "socket", "ssl"}
+FORBIDDEN_ROOTS = {
+    "moomoo",
+    "yfinance",
+    "ib_async",
+    "urllib",
+    "http",
+    "requests",
+    "httpx",
+    "socket",
+    "ssl",
+    "optionality_backend",
+}
+#: the service built on this library (ADR 0021): the library may import nothing of it — the backend
+#: imports the library's public modules, never the reverse. `check-boundaries` holds that direction
+#: for the TypeScript; nothing held it here, for ANY module of the package, ports and research included
+BACKEND = "optionality_backend"
 
 
 def pure_modules() -> list[str]:
@@ -134,6 +149,56 @@ def test_a_pure_module_reaches_nothing_outside_itself(module: str) -> None:
         "a pure module reached the SDK, the network or an impure module — this breaks "
         "`import optionality` for anyone who installed without the `opend` extra: " + "; ".join(offences)
     )
+
+
+def reaches_the_backend(path: Path) -> list[str]:
+    """Where the file at `path` imports the backend, with lines: an import statement at any depth,
+    or a module named to `importlib.import_module` or `__import__` as a literal."""
+    tree = ast.parse(path.read_text())
+    found = [f"{path.name}:{line} imports {name}" for line, name in imported_by(path) if name.split(".")[0] == BACKEND]
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not node.args:
+            continue
+        func = node.func
+        called = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else None
+        first = node.args[0]
+        if called in ("import_module", "__import__") and isinstance(first, ast.Constant) and isinstance(first.value, str):
+            if first.value.split(".")[0] == BACKEND:
+                found.append(f"{path.name}:{node.lineno} imports {first.value}")
+    return found
+
+
+def every_module() -> list[Path]:
+    """Every file of the package: the pure modules, the ports, the service reader, research, the
+    generated stamp. Its emptiness is a failure, not a pass."""
+    paths = sorted(PACKAGE.rglob("*.py"))
+    assert PACKAGE / "ibkr.py" in paths and RESEARCH_DIR / "__init__.py" in paths, f"too little found: {paths}"
+    return paths
+
+
+@pytest.mark.parametrize("path", every_module(), ids=lambda p: p.relative_to(PACKAGE).as_posix())
+def test_no_module_of_the_library_reaches_the_backend(path: Path) -> None:
+    offences = reaches_the_backend(path)
+    assert offences == [], (
+        "the library imported the backend built on it (ADR 0021: the backend depends on the library, "
+        "never the reverse): " + "; ".join(offences)
+    )
+
+
+def test_the_backend_rule_bites(tmp_path: Path) -> None:
+    for source in (
+        "from optionality_backend.env import Settings\n",
+        "import optionality_backend\n",
+        "def later():\n    import optionality_backend.db.open as db\n",
+        "import importlib\nb = importlib.import_module('optionality_backend.db')\n",
+        "b = __import__('optionality_backend')\n",
+    ):
+        offender = tmp_path / "offender.py"
+        offender.write_text(source)
+        assert reaches_the_backend(offender) != [], f"the rule did not see: {source!r}"
+    # and a name that merely begins the same way is not the backend
+    (tmp_path / "fine.py").write_text("import optionality_backends_are_elsewhere\nfrom optionality import js\n")
+    assert reaches_the_backend(tmp_path / "fine.py") == []
 
 
 def reaches_research(path: Path) -> list[str]:
