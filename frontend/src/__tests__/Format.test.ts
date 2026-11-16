@@ -8,17 +8,17 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { clockTime, heldLeg, legText, marketDay, shortContract, shortStamp, signedLeg } from "../shared/format";
+import { clockTime, heldLeg, legText, marketDay, shortContract, shortFirst, shortStamp, signedLeg } from "../shared/format";
 
-describe("legs, short as minus (#351)", () => {
+describe("legs, short as the true minus (#351, 2026-11-16)", () => {
   it("writes a quantity between the sign and the contract, and a quantity of one not at all", () => {
     expect([
       { sign: 1, option_type: "CALL", strike: 7300 }, { sign: -1, option_type: "CALL", strike: 7350, qty: 2 },
       { sign: 1, option_type: "CALL", strike: 7400, qty: 1 },
-    ].map((l) => legText(signedLeg(l), "signs")).join(" ")).toBe("+C7300 -2C7350 +C7400");
+    ].map((l) => legText(signedLeg(l), "signs")).join(" ")).toBe("+C7300 \u22122C7350 +C7400");
     expect([
       { side: "long", option_type: "PUT", strike: 6400 }, { side: "short", option_type: "PUT", strike: 6350, qty: 2 },
-    ].map((l) => legText(heldLeg(l), "signs")).join(" ")).toBe("+P6400 -2P6350");
+    ].map((l) => legText(heldLeg(l), "signs")).join(" ")).toBe("+P6400 \u22122P6350");
   });
 });
 
@@ -102,5 +102,16 @@ describe("the screen's own clock", () => {
   it("pads every field, so the line does not jitter as the seconds tick", () => {
     // 09:08:07 in +08 is 01:08:07 here, which pads the hour as well as the minute and the second
     expect(clockTime(new Date("2026-10-21T09:08:07+08:00"))).toBe("01:08:07");
+  });
+});
+
+describe("a structure's legs, short first (2026-11-16)", () => {
+  it("puts the short legs before the long, each side in its given order", () => {
+    const legs = [
+      { short: false, option_type: "PUT", strike: 6250 }, { short: true, option_type: "PUT", strike: 6300 },
+      { short: true, option_type: "CALL", strike: 7400 }, { short: false, option_type: "CALL", strike: 7450 },
+    ];
+    expect(shortFirst(legs).map((l) => legText(l, "signs")).join(" ")).toBe("−P6300 −C7400 +P6250 +C7450");
+    expect(shortFirst<{ short?: boolean; option_type: string; strike: number }>([{ option_type: "CALL", strike: 8000 }]).map((l) => legText(l, "signs"))).toEqual(["C8000"]);
   });
 });

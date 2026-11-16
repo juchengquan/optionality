@@ -8,6 +8,7 @@
  *  why, and nothing here fills the gap — not the References strip's SPX, which nothing derives
  *  from (ADR 0018). The one piece of arithmetic is where a strike sits on the drawn scale.
  */
+import { delta, spx } from "./shared/numbers";
 import type { Entry, Holding } from "./shared/api";
 import { DASH } from "./shared/format";
 
@@ -31,7 +32,7 @@ export interface Strip {
  *  that (#416) — or a dash and why where there is none. */
 export function spxStripWords(strip: Strip): string {
   if (strip.spx === null) return `SPX ${DASH} ${strip.reason ?? "no price"}`;
-  return `SPX ${strip.spx.toFixed(2)}${strip.reason ? ` (${strip.reason})` : ""}`;
+  return `SPX ${spx(strip.spx)}${strip.reason ? ` (${strip.reason})` : ""}`;
 }
 
 /** A holding's strip; null for one with no short leg — a lone long held as a hedge — which has no
@@ -105,7 +106,7 @@ export function compactWords(k: ShortStrike): string {
 export const strikeName = (k: { option_type: string; strike: number }) => `${k.option_type[0]}${k.strike}`;
 
 /** Δ to three places with a true minus, as the strip writes it on its strike. */
-export const deltaWords = (d: number | null) => d === null ? `Δ ${DASH}` : `Δ ${d.toFixed(3).replace("-", "−")}`;
+export const deltaWords = (d: number | null) => `Δ ${delta(d)}`;
 
 /** Where a price sits across the drawn scale, as a percentage of its width: every strike and SPX
  *  inside it, padded so the outermost labels have room. */

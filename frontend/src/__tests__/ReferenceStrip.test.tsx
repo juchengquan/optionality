@@ -87,9 +87,9 @@ describe("how fresh the vendor says it is", () => {
 });
 
 describe("the figure", () => {
-  it("is separated and two-placed, because it is read by its digits", () => {
+  it("is two-placed with no separator, as the strikes and breakevens beside it are written", () => {
     render(<ReferenceStrip references={[spx()]} />);
-    expect(screen.getByText("7,587.30")).toBeTruthy();
+    expect(screen.getByText("7587.30")).toBeTruthy();
   });
 
   it("carries the day's move, signed", () => {
@@ -99,7 +99,7 @@ describe("the figure", () => {
 
   it("signs a day down the other way", () => {
     render(<ReferenceStrip references={[spx({ change: -0.0123 })]} />);
-    expect(screen.getByText("-1.23%")).toBeTruthy();
+    expect(screen.getByText("\u22121.23%")).toBeTruthy();
   });
 
   it("says nothing about the move where no close arrived", () => {
@@ -170,7 +170,7 @@ describe("outside the session, every reading says when it was read", () => {
   it("puts the service's time on each reading, to the minute", () => {
     render(<ReferenceStrip references={[spx(), vix]} timeOf={timeOf} />);
     expect(readings()).toEqual([
-      "SPX (moomoo) 7,587.30+0.40%read at 21:04",
+      "SPX (moomoo) 7587.30+0.40%read at 21:04",
       "VIX (yahoo) 16.82read at 21:04",
     ]);
   });
@@ -182,7 +182,7 @@ describe("outside the session, every reading says when it was read", () => {
 
   it("dates a reading from another day", () => {
     render(<ReferenceStrip references={[spx({ fetched_at: "2026-11-12 21:04:11+08:00" })]} timeOf={timeOf} />);
-    expect(readings()).toEqual(["SPX (moomoo) 7,587.30+0.40%read at Thu 21:04"]);
+    expect(readings()).toEqual(["SPX (moomoo) 7587.30+0.40%read at Thu 21:04"]);
   });
 
   it("never draws a reading without its time", () => {

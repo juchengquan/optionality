@@ -8,15 +8,16 @@ export const DASH = "—";
  *  which is no position and has no side), its type, its strike and its quantity, absent for one. */
 export interface WrittenLeg { short?: boolean; option_type: string; strike: number; qty?: number }
 
-/** How a place writes a leg: `signs` as the book writes it, `-2C8150`; `minus` with a true minus,
- *  as the charts write it, `−2C8150`; `words` as the inspector writes it, `short 2× CALL 8150`; and
- *  `name`, its contract alone, `C8150`, as the strike strip and the SPX chart name a strike. */
-export type LegForm = "signs" | "minus" | "words" | "name";
+/** How a place writes a leg: `signs` as the book and the charts write it, `−2C8150`, with the true
+ *  minus (one format, 2026-11-16: the book's hyphen-minus and the charts' minus were two); `words`
+ *  as the inspector writes it, `short 2× CALL 8150`; and `name`, its contract alone, `C8150`, as
+ *  the strike strip and the SPX chart name a strike. */
+export type LegForm = "signs" | "words" | "name";
 
-/** +C8100 -C8150: the signs are what the signed-sum engine keys off, so a leg entered backwards is
- *  visible at a glance. A quantity sits between the sign and the contract, `-2C8150`, and a
+/** −C8150 +C8100: the signs are what the signed-sum engine keys off, so a leg entered backwards is
+ *  visible at a glance. A quantity sits between the sign and the contract, `−2C8150`, and a
  *  quantity of one is not written (#351). Every place that writes a leg draws it through
- *  `shared/Legs.tsx`, from these parts.
+ *  `shared/Legs.tsx`, from these parts, and writes a structure's legs short first (`shortFirst`).
  *
  *  A leg's text in three parts — before its type, its type, after it — so the drawing can mark the
  *  type for its colour (#391) and still write exactly these characters. */
@@ -26,11 +27,19 @@ export function legParts(l: WrittenLeg, form: LegForm): [string, string, string]
     return [`${l.short === undefined ? "" : l.short ? "short " : "long "}${many ? `${l.qty}× ` : ""}`, l.option_type, ` ${l.strike}`];
   }
   if (form === "name") return ["", l.option_type[0]!, String(l.strike)];
-  const sign = l.short === undefined ? "" : l.short ? (form === "minus" ? "−" : "-") : "+";
+  const sign = l.short === undefined ? "" : l.short ? "\u2212" : "+";
   return [`${sign}${many ? l.qty : ""}`, l.option_type[0]!, String(l.strike)];
 }
 
 export const legText = (l: WrittenLeg, form: LegForm): string => legParts(l, form).join("");
+
+/** A structure's legs in the order every place writes them (2026-11-16): the short legs first, then
+ *  the long, each side in the order it was given — `−C8050 +C8100`, `−P6800 +P6750`, and a condor's
+ *  two shorts before its two wings. A leg with no side (a rule's one contract) keeps its place. */
+export function shortFirst<T extends { short?: boolean }>(legs: readonly T[]): T[] {
+  const rank = (l: T) => (l.short === true ? 0 : l.short === false ? 1 : 0);
+  return legs.map((l, i) => [l, i] as const).sort(([a, i], [b, j]) => rank(a) - rank(b) || i - j).map(([l]) => l);
+}
 
 /** A signed leg (`sign`, a combo's) and a held one (`side`, a holding's) as a written leg. */
 export const signedLeg = (l: Leg): WrittenLeg =>

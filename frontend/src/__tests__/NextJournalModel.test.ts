@@ -44,12 +44,12 @@ describe("a figure, said", () => {
     // as STORED: 1.225 is not 1.23, and a sum's float noise is trimmed
     expect(storedWords(1.225)).toBe("1.225");
     expect(storedWords(2.35 - 1.15)).toBe("1.2");
-    expect(storedWords(-7)).toBe("-7");
+    expect(storedWords(-7)).toBe("−7");
   });
 
   it("says what a trade made in points as served, unknown where the service could not say, and hides it under privacy", () => {
     expect(madeWords(7, false)).toBe("7 pts");
-    expect(madeWords(-1.5, false)).toBe("-1.5 pts");
+    expect(madeWords(-1.5, false)).toBe("−1.5 pts");
     expect(madeWords(0, false)).toBe("0 pts");
     // as stored, with only a sum's float noise trimmed: 0.004 is not "0.00", which reads as even
     expect(madeWords(0.004, false)).toBe("0.004 pts");

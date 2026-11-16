@@ -69,9 +69,17 @@ export function readMarkdown(md: string): ReadView {
       out.lines.push({ label: line.slice(2, at), text: unescape(line.slice(at + 2)) });
     } else if (line.startsWith("|")) {
       const cells = cellsOf(line);
-      if (cells.every((c) => /^-{3,}$/.test(c))) continue;
+      if (cells.every((c) => /^:?-{3,}:?$/.test(c))) continue;
       section!.rows.push(cells);
     } else section!.notes.push(unescape(line));
   }
   return out;
+}
+
+/** A read view with every true minus as the hyphen-minus: Copy as text writes a figure's cell with the
+ *  hyphen so a spreadsheet reads it as a number, where the picture draws the true minus (the owner,
+ *  2026-11-16, `MARKDOWN_FIGURE_MINUS`). The two are held to each other with the sign set aside here,
+ *  and the sign itself by its own test. */
+export function signless(view: ReadView): ReadView {
+  return JSON.parse(JSON.stringify(view).replaceAll("−", "-")) as ReadView;
 }

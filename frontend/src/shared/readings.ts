@@ -1,6 +1,7 @@
 /** A Reference reading in words (ADR 0018, ADR 0019): what the strip draws (`ReferenceStrip.tsx`),
  *  the References panel names, and the saved picture and its text say (#394). Pure, so the picture's
  *  builder (`snapshot/plain.ts`) reaches it without a component. */
+import { fixed, spx } from "./numbers";
 import type { Reference } from "./api";
 import { DASH } from "./format";
 
@@ -52,22 +53,21 @@ function freshness(reference: Reference): string[] {
   return said;
 }
 
-/** Thousands separated and two places: these are index-sized numbers, and 7587.3 beside a strike
- *  of 6950 is read by its digits.
- *
- *  `en-US` named explicitly, never the device's locale: the owner's browser is Chinese and a bare
- *  `toLocaleString()` renders the page in whatever language the device is set to (`format.clockTime`
- *  has the same note, and the bug that earned it). */
-export const FIGURE = new Intl.NumberFormat("en-US", {
-  minimumFractionDigits: 2, maximumFractionDigits: 2,
-});
+/** A reading's figure: two places and no thousands separator, as SPX is written everywhere on the
+ *  page (`shared/numbers.ts`: `spx`, 2026-11-16) — the strip's 7561.67 is read against the strikes
+ *  and breakevens beside it, which carry none. */
+export const FIGURE = { format: (n: number): string => spx(n) };
 
 /** The day's move, signed, as a percentage of the previous close. Scale-free, like the fraction the
  *  service sends. */
 export function changeText(change: number | null): string | null {
   if (change === null) return null;
   const pc = change * 100;
-  return `${pc >= 0 ? "+" : ""}${pc.toFixed(2)}%`;
+  const text = fixed(pc, 2);
+  // a move too small for two places is the formatter's bound with its sign inside it: "<+0.01%",
+  // as a fall is ">−0.01%"
+  if (text.startsWith("<")) return `<+${text.slice(1)}%`;
+  return `${pc > 0 || text === "0.00" ? "+" : ""}${text}%`;
 }
 
 /** One reading in words, as the strip draws it, for the saved picture and its text (#394): "S&P 500

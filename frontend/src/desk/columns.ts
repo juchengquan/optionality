@@ -14,7 +14,8 @@
  *  left before the Manage-by) and a share as a percentage.
  */
 import type { Entry, Holding, Monitor } from "../shared/api";
-import { DASH, heldLeg, legText, signedLeg, type WrittenLeg } from "../shared/format";
+import { DASH, heldLeg, legText, shortFirst, signedLeg, type WrittenLeg } from "../shared/format";
+import { delta, money, percent, points } from "../shared/numbers";
 import type { BookModel } from "../placement";
 import {
   entryName, isEntrySignal, monitorName, QUARANTINED, sentence, shapeOf, shortRule, shortSentence, storedRuleWords,
@@ -47,27 +48,19 @@ export interface DeskColumn {
   words?: (row: DeskRow, privacy: boolean) => string;
 }
 
-// ---- figures, with fixed decimals per field (ADR 0023)
-
-const points = (n: number | null | undefined) => (n === null || n === undefined ? DASH : n.toFixed(2));
-const delta = (n: number | null | undefined) => (n === null || n === undefined ? DASH : n.toFixed(3));
-const share = (n: number | null) => (n === null ? DASH : `${Math.round(n * 100)}%`);
-
-const MONEY = new Intl.NumberFormat("en-US", {
-  style: "currency", currency: "USD", maximumFractionDigits: 0, signDisplay: "exceptZero",
-});
+// ---- figures, with fixed decimals per field (ADR 0023), all of them `shared/numbers.ts`'s
 
 /** As `Money` in Book.tsx draws it: the same characters, so the measuring counts what is drawn. */
-function moneyText(value: number | null, privacy: boolean): string {
+export function moneyText(value: number | null, privacy: boolean): string {
   if (value === null) return DASH;
-  return privacy ? "$•••" : MONEY.format(value);
+  return privacy ? "$•••" : money(value);
 }
 
 /** The legs a row writes in its legs column: a holding's, or a rule's on a spread; none for a
  *  rule on one contract. `Cell` draws them, each type in its colour (#391). */
 export function rowLegs(row: DeskRow): WrittenLeg[] {
-  if (row.kind === "holding") return row.holding.legs.map(heldLeg);
-  return row.kind === "rule" && row.entry.legs ? row.entry.legs.map(signedLeg) : [];
+  if (row.kind === "holding") return shortFirst(row.holding.legs.map(heldLeg));
+  return row.kind === "rule" && row.entry.legs ? shortFirst(row.entry.legs.map(signedLeg)) : [];
 }
 
 /** moomoo's `US.SPXW261218P7150000` as the type and strike it names, or null for anything else. */
@@ -209,9 +202,16 @@ const VALUE: DeskColumn = {
   text: (r) => r.kind === "holding" ? points(r.holding.cost_to_close)
     : r.kind === "rule"
       ? (onWatchlist(r) ? outOfHoursValue(r.entry) : undefined)
-        ?? points(r.entry.legs && !r.overlap ? (r.entry.cost_to_close ?? priceOf(r.entry)) : priceOf(r.entry))
+        ?? points(heldSpread(r) ? r.entry.cost_to_close : priceOf(r.entry))
       : "",
 };
+
+/** A spread rule drawn as something held — under its holding, or on held contracts no holding
+ *  owns — whose value cell says its COST TO CLOSE, positive, as the holding's own does (the owner,
+ *  2026-11-16), and a dash where the service could not price it: never its signed value in its
+ *  place. A spread on the watchlist keeps its signed value, a partial overlap (#346) included. */
+export const heldSpread = (r: Extract<DeskRow, { kind: "rule" }>): boolean =>
+  Boolean(r.entry.legs) && r.entry.held && !r.overlap;
 
 /** The desk's value column (the owner, 2026-11-16): a holding's Cost to close with its pace gap
  *  beside it, "3.05 −1.57", in one field, where the two had a column each. The gap keeps its sign
@@ -235,7 +235,7 @@ const PNL: DeskColumn = {
 };
 
 const CAPTURED: DeskColumn = {
-  key: "captured", label: "captured", text: holdingOnly((h) => share(h.captured)),
+  key: "captured", label: "captured", text: holdingOnly((h) => percent(h.captured)),
 };
 
 const DELTA: DeskColumn = {

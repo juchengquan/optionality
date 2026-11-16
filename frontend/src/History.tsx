@@ -30,6 +30,7 @@
  *  margins they share (`Gutters`) and the one mapping they all use (`dayScale`), DTE from `span` at
  *  the left margin to 0 at the right.
  */
+import { tick } from "./shared/numbers";
 import { useEffect, useRef, useState } from "react";
 import { scaleLinear } from "@visx/scale";
 import { LinePath } from "@visx/shape";
@@ -240,7 +241,7 @@ function ivAxis(served: Samples, holding: Charted) {
   const legs = holding.legs.map((l) => ({
     code: legCode(holding.strike_date, l),
     leg: heldLeg(l),
-    name: legText(heldLeg(l), "minus"),
+    name: legText(heldLeg(l), "signs"),
     short: l.side === "short",
   }));
   const readings = served.samples.flatMap((s) => Object.values(s.legs_iv ?? {}));
@@ -250,7 +251,9 @@ function ivAxis(served: Samples, holding: Charted) {
   const scale = scaleLinear<number>({ domain: [lo - pad, hi + pad], nice: 3 });
   const [bottom, top] = scale.domain() as [number, number];
   const ticks = scale.ticks(3);
-  const label = (v: number) => `${Number(v.toFixed(2))}%`;
+  // an axis tick, to the places it needs, as the burndown's are (`shared/numbers.ts`: `tick`); the
+  // readouts say each IV to two places
+  const label = (v: number) => `${tick(v)}%`;
   const L = Math.ceil(Math.max(...ticks.map((v) => textWidth(label(v))))) + 10;
   // the leg names sit at the right end of each line, so the plot stops short of them
   const RL = Math.ceil(Math.max(...legs.map((l) => textWidth(l.name)))) + 8;
@@ -303,7 +306,7 @@ function IvChart({ served, holding, gutters, cross, before }: {
     const v = pointed.sample!.legs_iv?.[leg.code];
     return typeof v === "number" ? [{ code: leg.code, y: y(v) }] : [];
   });
-  const name = (leg: IvLeg["leg"]) => legText(leg, "minus");
+  const name = (leg: IvLeg["leg"]) => legText(leg, "signs");
 
   return (
     <>
@@ -328,7 +331,7 @@ function IvChart({ served, holding, gutters, cross, before }: {
                 <circle key={p.dte} data-dte={p.dte} data-mark={MARK[p.timing]}
                         data-before-entry={p.watched ? "" : undefined} cx={x(p.dte)} cy={y(p.v)} r={2.25} />
               ))}
-              <SvgLeg leg={leg.leg} form="minus" x={x(last.dte) + 6} y={labelY + 4} />
+              <SvgLeg leg={leg.leg} form="signs" x={x(last.dte) + 6} y={labelY + 4} />
             </g>
           ))}
           {pointed === null ? null : (
@@ -348,7 +351,7 @@ function IvChart({ served, holding, gutters, cross, before }: {
                     W={W} H={IV_H}>
             <div className="nx-bd-tip-h">{read.day}</div>
             {read.none !== null ? <div>{read.none}</div> : read.legs.map((l, i) => (
-              <div key={i} data-iv-leg=""><Leg leg={l.leg} form="minus" />{` ${l.words}`}</div>
+              <div key={i} data-iv-leg=""><Leg leg={l.leg} form="signs" />{` ${l.words}`}</div>
             ))}
             {read.why === null ? null : <div className="nx-bd-tip-why">{read.why}</div>}
             {pointed.on !== null && before.has(pointed.on)

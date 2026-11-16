@@ -16,9 +16,8 @@ const CONDOR = [
 ];
 
 describe("a leg's text", () => {
-  it("is the book's, in each of the four ways the page writes one", () => {
-    expect(CONDOR.map((l) => legText(l, "signs"))).toEqual(["+P6250", "-2P6300", "-C7400", "+C7450"]);
-    expect(CONDOR.map((l) => legText(l, "minus"))).toEqual(["+P6250", "−2P6300", "−C7400", "+C7450"]);
+  it("is the book's, in each of the three ways the page writes one, a short with the true minus", () => {
+    expect(CONDOR.map((l) => legText(l, "signs"))).toEqual(["+P6250", "−2P6300", "−C7400", "+C7450"]);
     expect(CONDOR.map((l) => legText(l, "words"))).toEqual(["long PUT 6250", "short 2× PUT 6300", "short CALL 7400", "long CALL 7450"]);
     expect(CONDOR.map((l) => legText(l, "name"))).toEqual(["P6250", "P6300", "C7400", "C7450"]);
   });
@@ -29,10 +28,10 @@ describe("a leg's text", () => {
 });
 
 describe("a leg drawn", () => {
-  it("writes the same characters, its type letter marked and its side said", () => {
+  it("writes the same characters, short legs first, its type letter marked and its side said", () => {
     const { container } = render(<p><Legs legs={CONDOR} /></p>);
-    expect(container.textContent).toBe("+P6250 -2P6300 -C7400 +C7450");
-    expect(legMarks(container)).toEqual(["+P6250 long PUT", "-2P6300 short PUT", "-C7400 short CALL", "+C7450 long CALL"]);
+    expect(container.textContent).toBe("−2P6300 −C7400 +P6250 +C7450");
+    expect(legMarks(container)).toEqual(["−2P6300 short PUT", "−C7400 short CALL", "+P6250 long PUT", "+C7450 long CALL"]);
   });
 
   it("marks the whole type word in the inspector's words", () => {
@@ -48,7 +47,7 @@ describe("a leg drawn", () => {
   });
 
   it("draws the same inside a chart, as SVG text", () => {
-    const { container } = render(<svg><SvgLeg leg={CONDOR[1]!} form="minus" x={1} y={2} /></svg>);
+    const { container } = render(<svg><SvgLeg leg={CONDOR[1]!} form="signs" x={1} y={2} /></svg>);
     const text = container.querySelector("text")!;
     expect(text.textContent).toBe("−2P6300");
     expect(legMarks(container)).toEqual(["−2P6300 short PUT"]);

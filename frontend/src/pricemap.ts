@@ -16,6 +16,7 @@
  *  disagree about what is held and what watched. Each spread carries the id of the table row it
  *  is, which is how a selection in one is a selection in the other.
  */
+import { fixed, spx as spxText } from "./shared/numbers";
 import type { Entry, Holding } from "./shared/api";
 import { entryName } from "./needs";
 import type { BookModel } from "./placement";
@@ -119,8 +120,8 @@ export function spxWords(line: SpxLine, session: boolean): string {
     : `from the ${line.source === "holdings" ? "holdings'" : "watchlist's"} batch`;
   const stale = line.reason ? ` (${line.reason})` : "";
   // a close's stored level is no batch's, and its reason says whose it is (#416)
-  if (line.source === "close") return `SPX ${line.spx.toFixed(2)}${stale}`;
-  return `SPX ${line.spx.toFixed(2)}${stale} · ${whose}${time ? `, ${time}` : ""}`;
+  if (line.source === "close") return `SPX ${spxText(line.spx)}${stale}`;
+  return `SPX ${spxText(line.spx)}${stale} · ${whose}${time ? `, ${time}` : ""}`;
 }
 
 const spreadOf = (id: string, name: string, kind: MapSpread["kind"],
@@ -192,7 +193,7 @@ export function priceMapOf(placed: BookModel, line: SpxLine): PriceMap {
  *  draws the strike named beside its figure as a leg (#391); with no band, why, and no strike. */
 export function bandParts(lane: Lane): { before: string; strike: ShortStrike | null; after: string } {
   if (!lane.band) return { before: lane.bandWhy ?? "", strike: null, after: "" };
-  return { before: `±1σ ${lane.band.strike.one_sigma!.toFixed(0)} pts · `, strike: lane.band.strike, after: "'s IV" };
+  return { before: `±1σ ${fixed(lane.band.strike.one_sigma!, 0)} pts · `, strike: lane.band.strike, after: "'s IV" };
 }
 
 /** "±1σ 401 pts · P7150's IV": the band's width and whose IV it was worked from. */

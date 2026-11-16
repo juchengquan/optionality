@@ -22,6 +22,7 @@
  *    the two differ, and a holding whose Opened is not its first sample's day loses its vol figure
  *    without a word (ADR 0011).
  */
+import { readNumber } from "./shared/numbers";
 import type { DraftPayoff, Monitor, Payoff } from "./shared/api";
 import { storedRuleWords } from "./needs";
 
@@ -262,11 +263,7 @@ export function derivedName(
 }
 
 /** A number as typed, or null for blank or not a number. */
-function typed(text: string): number | null {
-  if (text.trim() === "") return null;
-  const n = Number(text);
-  return Number.isFinite(n) ? n : null;
-}
+const typed = readNumber;
 
 const cents = (n: number) => Math.round(n * 100) / 100;
 

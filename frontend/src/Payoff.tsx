@@ -37,6 +37,7 @@
  *  `BurndownChart.tsx` gives. Its width is MEASURED rather than scaled from a viewBox, so text
  *  stays its own size in a 272px inspector and on a 390px phone alike.
  */
+import { spx as spxText } from "./shared/numbers";
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { scaleLinear } from "@visx/scale";
 import { LinePath } from "@visx/shape";
@@ -226,7 +227,7 @@ function PayoffFigure({ state, unit, legs, spx, spxReason, blank, note }: {
             <Chart payoff={state.payoff} unit={unit} legs={legs} spx={spx} />
             {spx === null ? <p className="nx-meta nx-payoff-spx">{`SPX — ${spxReason ?? "no price"}`}</p>
               // a price that is not current says so (#416): the marker is the last close's level
-              : spxReason ? <p className="nx-meta nx-payoff-spx" data-stale="">{`SPX ${spx.toFixed(2)} (${spxReason})`}</p> : null}
+              : spxReason ? <p className="nx-meta nx-payoff-spx" data-stale="">{`SPX ${spxText(spx)} (${spxReason})`}</p> : null}
             <dl className="nx-payoff-kv">
               <div><dt>max profit</dt><dd>{state.payoff.max_profit === null ? "no ceiling" : pnlWords(state.payoff.max_profit, unit)}</dd></div>
               <div><dt>max loss</dt><dd>{state.payoff.max_loss === null ? "no floor" : pnlWords(state.payoff.max_loss, unit)}</dd></div>
@@ -292,7 +293,7 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
   const legLabels = labelRows([...legs].sort((a, b) => a.strike - b.strike)
     .filter((l) => l.strike >= d0 && l.strike <= d1)
     // a little wider than plain figures: a short leg is drawn bold
-    .map((l) => ({ x: x(l.strike), w: textWidth(legText(l, "minus")) * 1.1, leg: l })), 6, 2, W - 2);
+    .map((l) => ({ x: x(l.strike), w: textWidth(legText(l, "signs")) * 1.1, leg: l })), 6, 2, W - 2);
   const beLabels = labelRows(payoff.breakevens.map((b) => ({ x: x(b), w: textWidth(`BE ${level(b)}`), b })), 6, 2, W - 2);
   /** A label pressed against an edge is anchored TO that edge, so it never depends on how good the
    *  estimate of its width was. */
@@ -415,9 +416,11 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
             </g>
           ))}
           {legLabels.map((c) => (
-            <text key={`${c.row}:${c.items.map((i) => legText(i.leg, "minus")).join()}`} data-strikes="" {...anchored(c)} y={rowY(c.row)}>
-              {c.items.map((i, n) => (
-                <Fragment key={n}>{n > 0 ? " " : null}<SvgLegSpan leg={i.leg} /></Fragment>
+            <text key={`${c.row}:${c.items.map((i) => legText(i.leg, "signs")).join()}`} data-strikes="" {...anchored(c)} y={rowY(c.row)}>
+              {/* the legs one label joins in STRIKE order, left to right as the axis runs: short first is
+                  for a list of legs, and this is a label on an axis (review of #418) */}
+              {c.items.map((i) => i.leg).map((leg, n) => (
+                <Fragment key={n}>{n > 0 ? " " : null}<SvgLegSpan leg={leg} /></Fragment>
               ))}
             </text>
           ))}
@@ -431,7 +434,7 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
             <g data-marker="spx" className="nx-payoff-marker">
               <line x1={spxX} x2={spxX} y1={T - 4} y2={H - B} />
               <text x={spxX > W * 0.6 ? spxX - 4 : spxX + 4} y={T - 6}
-                    textAnchor={spxX > W * 0.6 ? "end" : "start"}>{`SPX ${spx!.toFixed(2)}`}</text>
+                    textAnchor={spxX > W * 0.6 ? "end" : "start"}>{`SPX ${spxText(spx!)}`}</text>
             </g>
           )}
           {at === null ? null : (

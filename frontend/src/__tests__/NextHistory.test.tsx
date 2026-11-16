@@ -249,7 +249,8 @@ describe("the burndown, in the desk's inspector outside the session", () => {
       fireEvent.keyDown(keys, { key });
       const said = carried();
       expect(said).not.toMatch(/\$/);
-      for (const n of across) expect(said.split(/[^\d.,]/)).not.toContain(n);
+      // a percentage (an IV, or its axis) is no figure across the contracts
+      for (const n of across) expect(said.replace(/[\d.,]+%/g, "").split(/[^\d.,]/)).not.toContain(n);
     }
     // and it does say the per-contract figures: the valuation now, the Target and the Stop
     expect(carried()).toContain(`to close, per contract: ${perContract.at(-1)!.toFixed(2)} pts`);
@@ -302,7 +303,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     // two "$0" drawn over each other
     expect(new Set(labels).size).toBe(labels.length);
     expect(labels.at(-1)).toBe("$0");
-    expect(labels[0]).toMatch(/^-\$\d/);
+    expect(labels[0]).toMatch(/^\u2212\$\d/);
   });
 
   it("breaks the line across a missed session rather than joining the days either side", async () => {

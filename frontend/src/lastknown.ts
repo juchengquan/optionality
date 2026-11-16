@@ -19,6 +19,7 @@
  *  have come from — is not presented at all. A real figure read out of hours is still on the row:
  *  a rule on a greek has one, since moomoo serves greeks out of hours, and needs nothing from here.
  */
+import { points } from "./shared/numbers";
 import type { Entry, LastClose, Monitor } from "./shared/api";
 import { DASH } from "./shared/format";
 import { inSession, newYorkWeekdayWhen, servedInstant } from "./session";
@@ -119,7 +120,7 @@ function lastPriceIn(e: Entry, rows: readonly Entry[]): LastKnown | null {
 export function lastPriceWords(last: LastKnown | null): string {
   if (last === null) return DASH;
   const when = newYorkWeekdayWhen(last.at);
-  return `${last.value.toFixed(2)}${when ? ` (${when})` : ""}`;
+  return `${points(last.value)}${when ? ` (${when})` : ""}`;
 }
 
 /** The price a row's value cell says (#400), whatever the rule watches: the page's own `price`, or,

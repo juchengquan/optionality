@@ -764,7 +764,7 @@ describe("when part of the service fails", () => {
     await act(async () => { vi.advanceTimersByTime(15_000); });
     await quiet();
     expect(calls, said()).toContain("/monitors/closes");
-    await waitFor(() => expect(row().textContent).toContain("-3.85 (Fri 16:14)"));
+    await waitFor(() => expect(row().textContent).toContain("−3.85 (Fri 16:14)"));
     expect(screen.getByRole("alert").textContent).toContain("/quotes → 502");
   });
 

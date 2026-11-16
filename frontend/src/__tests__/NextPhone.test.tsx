@@ -76,7 +76,7 @@ describe("the cards, on the owner's book", () => {
       ? { ...h, schedule: { ...SCHEDULE, reached: "stop" } } as Holding : h);
     draw({ holdings: stopped, quotes: [...QUOTES, SHORT_LEG], monitors: [...MONITORS, SHORT_LEG_RULE] });
     const c = card("h-calls");
-    expect(c.querySelector(".nxp-hero [data-money]")!.textContent).toBe("-$240");
+    expect(c.querySelector(".nxp-hero [data-money]")!.textContent).toBe("−$240");
     expect(within(c).getByText("4.40")).toBeTruthy();         // cost to close
     expect(within(c).getByText("0.231")).toBeTruthy();        // the short call's Δ, from its rule
     expect(within(c).getByText("38 DTE")).toBeTruthy();
@@ -96,9 +96,9 @@ describe("the cards, on the owner's book", () => {
     draw();
     const short = (id: string) => within(card(id)).getByText("short Δ").nextSibling!.textContent;
     expect(short("h-calls")).toBe("0.330");
-    expect(short("h-puts")).toBe("-0.210");
+    expect(short("h-puts")).toBe("−0.210");
     // a 4-leg holding lists each short leg
-    expect(short("h-ic")).toBe("C7400 0.120 · P6300 -0.250");
+    expect(short("h-ic")).toBe("C7400 0.120 · P6300 −0.250");
   });
 
   it("show a candidate's progress toward its threshold and each Monitor's sentence", () => {
@@ -144,7 +144,7 @@ describe("the cards, on the owner's book", () => {
     const condor = () => within(region("Holdings")).getByRole("group", { name: /iron condor/ })
       .querySelector(".nxp-condor-head [data-money]")!;
     draw();
-    expect(condor().textContent).toBe("-$140");
+    expect(condor().textContent).toBe("−$140");
     cleanup();
     draw({ privacy: true });
     expect(condor().textContent).toBe("$•••");
@@ -160,14 +160,15 @@ describe("the cards, on the owner's book", () => {
 });
 
 describe("the legs, each type marked for its colour and a short leg for its weight (#391)", () => {
-  const IC = ["-C7400 short CALL", "+C7450 long CALL", "-P6300 short PUT", "+P6250 long PUT"];
+  // short first, as every place writes a structure's legs (2026-11-16)
+  const IC = ["−C7400 short CALL", "−P6300 short PUT", "+C7450 long CALL", "+P6250 long PUT"];
 
   it("on a holding's card and a watched spread's, and where the card names each short leg by its Δ", () => {
     draw();
     expect(legMarks(within(card("h-ic")).getByText("short Δ").nextElementSibling!))
       .toEqual(["C7400 short CALL", "P6300 short PUT"]);
     expect(legMarks(card("h-ic").querySelector(".nxp-legs")!)).toEqual(IC);
-    expect(legMarks(card("w-dec31").querySelector(".nxp-legs")!)).toEqual(["-C7600 short CALL", "+C7650 long CALL"]);
+    expect(legMarks(card("w-dec31").querySelector(".nxp-legs")!)).toEqual(["−C7600 short CALL", "+C7650 long CALL"]);
   });
 
   it("in the detail sheet of each", async () => {
@@ -180,7 +181,7 @@ describe("the legs, each type marked for its colour and a short leg for its weig
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     fireEvent.click(within(card("w-dec31")).getByRole("button", { name: /details of/ }));
     await screen.findByRole("dialog");
-    expect(legMarks(line())).toEqual(["-C7600 short CALL", "+C7650 long CALL"]);
+    expect(legMarks(line())).toEqual(["−C7600 short CALL", "+C7650 long CALL"]);
   });
 
   it("in the saved picture, as words only: the letters and signs, never a colour (#394)", () => {
@@ -188,7 +189,7 @@ describe("the legs, each type marked for its colour and a short leg for its weig
                   holdingsAt="23:14:05" session privacy={false} needs={[]} health={null} polledAt={null}
                   error={null} references={[]} hidden={new Set()} takenAt={new Date("2026-11-16T15:00:00Z")} />);
     const ic = [...document.querySelectorAll("tr")].find((tr) => tr.children[0]?.textContent === "1231_IC")!;
-    expect(ic.children[1]!.textContent).toBe("-C7400 +C7450 -P6300 +P6250");
+    expect(ic.children[1]!.textContent).toBe("−C7400 −P6300 +C7450 +P6250");
     expect(document.querySelectorAll(".nx-still .nx-leg, .nx-still [data-type]")).toHaveLength(0);
   });
 });
@@ -224,11 +225,11 @@ describe("the detail sheet", () => {
     const { rerender } = draw();
     fireEvent.click(within(card("h-calls")).getByRole("button", { name: /details of/ }));
     const sheet = await screen.findByRole("dialog");
-    expect(within(sheet).getByText("-$240")).toBeTruthy();
+    expect(within(sheet).getByText("−$240")).toBeTruthy();
     const moved = HOLDINGS.map((h) => h.id === "h-calls" ? { ...h, pnl: -300 } : h);
     rerender(<div className="nx"><PhoneBook quotes={QUOTES} monitors={MONITORS} holdings={moved}
       holdingsError={null} holdingsAt={null} session privacy={false} entryStyle="opportunity" /></div>);
-    expect(within(screen.getByRole("dialog")).getByText("-$300")).toBeTruthy();
+    expect(within(screen.getByRole("dialog")).getByText("−$300")).toBeTruthy();
   });
 });
 
@@ -396,6 +397,14 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     fireEvent.click(within(card("w-7700")).getByRole("button", { name: /details of 1231_C7700/ }));
     const sheet = await screen.findByRole("dialog");
     expect(sheet.querySelector("[data-overlap]")!.textContent).toBe("contains 1231_7700's C7700");
+  });
+
+  it("lists no cost to close in its sheet, as the desk's inspector lists none (2026-11-16)", async () => {
+    overlap();
+    fireEvent.click(within(card("r-8100")).getByRole("button", { name: /details of 1231_8100/ }));
+    const sheet = await screen.findByRole("dialog");
+    const labels = [...within(sheet).getByRole("group", { name: "figures" }).querySelectorAll("dt")].map((d) => d.textContent);
+    expect(labels).toEqual(["value", "Δ", "Γ", "Θ", "ν"]);
   });
 
   it("is placed the same outside the session", () => {

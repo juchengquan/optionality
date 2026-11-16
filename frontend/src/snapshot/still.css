@@ -55,3 +55,5 @@
   box-shadow: none;
 }
 .nx-still thead th, .nx-still tr[data-group] > th { font-weight: 700; }
+/* a figure's column to the right, its header with it, so the places line up (2026-11-16) */
+.nx-still th[data-align="right"], .nx-still td[data-align="right"] { text-align: right; }

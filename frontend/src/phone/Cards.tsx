@@ -15,7 +15,9 @@ import { Glyph } from "../NeedsLine";
 import { entryName, fieldWords, monitorName, QUARANTINED } from "../needs";
 import { RuleWords } from "../RuleWords";
 import type { PlacedHolding } from "../placement";
-import { mutedWords, percent, shortDeltas, shortDeltaWords } from "./figures";
+import { mutedWords, shortDeltas, shortDeltaWords } from "./figures";
+import { percent } from "../shared/numbers";
+import { SHORT_DELTA } from "../shared/words";
 import { ruleState } from "./state";
 import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { MonitorControls } from "../MonitorEdit";
@@ -84,7 +86,7 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
         {/* the Cost to close with its pace gap beside it, one field as the desk's value column draws
             it (the owner, 2026-11-16) — the gap on the card since #374, said in words to a reader */}
         <div><dt>cost to close</dt><dd><CostAndPace holding={holding} /></dd></div>
-        <div><dt>short Δ</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
+        <div><dt>{SHORT_DELTA}</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
       </dl>
       <HoldingStrip holding={holding} />
       {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}

@@ -1,6 +1,6 @@
 /** The watchlist's value cell (#400): always the spread's PRICE — a delta rule's figure is the Δ
  *  column's and its sentence's, never this one's — and out of New York's session the last price read
- *  IN it, with its time on New York's clock: "-4.12 (Fri 16:14)", or a dash where there is none.
+ *  IN it, with its time on New York's clock: "−4.12 (Fri 16:14)", or a dash where there is none.
  *  On the desk, the phone, the picture and its Markdown alike, so the screen and the picture agree.
  *  In the session nothing changes but that a delta rule's figure is no longer called a value.
  */
@@ -86,17 +86,17 @@ const HOLDING: Holding = holding("h-6500", { name: "1231_P6500", strike_date: "2
 
 /** What each row's value cell says, out of the session and in it. */
 const EXPECT: Record<string, [string, string]> = {
-  "w-delta-quiet": ["-4.12 (Fri 16:14)", "-2.40"],
-  "w-price": ["-4.12 (Fri 16:14)", "-2.40"],
-  "w-delta": ["-4.12 (Fri 16:14)", "-2.40"],
+  "w-delta-quiet": ["−4.12 (Fri 16:14)", "−2.40"],
+  "w-price": ["−4.12 (Fri 16:14)", "−2.40"],
+  "w-delta": ["−4.12 (Fri 16:14)", "−2.40"],
   "w-delta-only": ["—", "—"],
-  "w-zero": ["—", "-1.10"],
-  "w-old": ["-0.85 (Fri 6 Nov 16:14)", "-0.90"],
+  "w-zero": ["—", "−1.10"],
+  "w-old": ["−0.85 (Fri 6 Nov 16:14)", "−0.90"],
   "w-key": ["—", "—"],
   "w-ratio": ["1.30 (Fri 16:14)", "1.20"],
   "w-flip": ["3.10 (Fri 16:14)", "3.00"],
-  "w-later": ["-2.80 (Fri 16:14)", "-2.90"],
-  "w-over": ["-3.30 (Fri 16:14)", "-1.50"],
+  "w-later": ["−2.80 (Fri 16:14)", "−2.90"],
+  "w-over": ["−3.30 (Fri 16:14)", "−1.50"],
 };
 const IDS = ROWS.map((r) => r.id);
 const expected = (session: boolean) => IDS.map((id) => EXPECT[id]![session ? 1 : 0]);
@@ -173,7 +173,8 @@ describe("in the picture and its Markdown", () => {
     });
     const rows = readMarkdown(toMarkdown(view)).sections.find((s) => s.title === "Watchlist")!.rows;
     const at = rows[0]!.indexOf("value");
-    return IDS.map((id) => rows.find((r) => r[0] === ROWS.find((x) => x.id === id)!.code)?.[at]);
+    // the text writes a figure's minus as the hyphen (MARKDOWN_FIGURE_MINUS); the page, the true one
+    return IDS.map((id) => rows.find((r) => r[0] === ROWS.find((x) => x.id === id)!.code)?.[at]?.replace(/^-/, "\u2212"));
   };
 
   it("says what the page says, out of the session and in it", () => {
@@ -184,8 +185,8 @@ describe("in the picture and its Markdown", () => {
 
 describe("a last price's time", () => {
   it("is a weekday within six days, and a date before that, on New York's clock", () => {
-    expect(lastPriceWords({ value: -4.12, at: FRIDAY_CLOSE })).toBe("-4.12 (Fri 16:14)");
-    expect(lastPriceWords({ value: -0.85, at: LAST_WEEK })).toBe("-0.85 (Fri 6 Nov 16:14)");
+    expect(lastPriceWords({ value: -4.12, at: FRIDAY_CLOSE })).toBe("−4.12 (Fri 16:14)");
+    expect(lastPriceWords({ value: -0.85, at: LAST_WEEK })).toBe("−0.85 (Fri 6 Nov 16:14)");
     expect(lastPriceWords(null)).toBe("—");
   });
 });
@@ -200,12 +201,12 @@ describe("the last close the service stored (#402)", () => {
   it("is what the value cell says out of the session, before the sweep's last reading", () => {
     const m = monitor("w-p", { last_value: -2.5, last_checked_at: FRIDAY_CLOSE });
     const [p] = withLastKnown([priceRule], [m], "close");
-    expect(lastPriceWords(p!.last_price!)).toBe("-3.85 (Fri 16:14)");
+    expect(lastPriceWords(p!.last_price!)).toBe("−3.85 (Fri 16:14)");
   });
 
   it("gives a spread watched only on its delta a price out of the session", () => {
     const [d] = withLastKnown([deltaRule], [], "close");
-    expect(lastPriceWords(d!.last_price!)).toBe("-3.85 (Fri 16:14)");
+    expect(lastPriceWords(d!.last_price!)).toBe("−3.85 (Fri 16:14)");
   });
 
   it("changes nothing in the session", () => {
@@ -219,6 +220,6 @@ describe("the last close the service stored (#402)", () => {
     expect(p!.last_price).toBeUndefined();
     const [q] = withLastKnown([priceRule], [], "live-or-close");
     expect(q!.price).toBeNull();
-    expect(lastPriceWords(q!.last_price!)).toBe("-3.85 (Fri 16:14)");
+    expect(lastPriceWords(q!.last_price!)).toBe("−3.85 (Fri 16:14)");
   });
 });

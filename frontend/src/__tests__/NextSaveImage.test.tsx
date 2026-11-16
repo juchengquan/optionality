@@ -29,7 +29,7 @@ vi.mock("../shared/snapshot", async (orig) => ({
 const { useSaveImage } = await import("../snapshot/useSaveImage");
 const { Next } = await import("../Next");
 const { holdingService } = await import("../testing/holdingService");
-const { readMarkdown, readPicture } = await import("../testing/plainRead");
+const { readMarkdown, readPicture, signless } = await import("../testing/plainRead");
 
 /** A promise the test settles: the capture, held in flight. */
 function pending<T>() {
@@ -252,7 +252,7 @@ describe("one view from either arrangement, as a picture and as text", () => {
       expect(written).toHaveLength(1);
       expect(written[0]).toMatch(/^# optionality\n/);
       const shot = await picture();
-      expect(readMarkdown(written[0]!)).toEqual(readPicture(shot));
+      expect(signless(readMarkdown(written[0]!))).toEqual(signless(readPicture(shot)));
     });
   }
 

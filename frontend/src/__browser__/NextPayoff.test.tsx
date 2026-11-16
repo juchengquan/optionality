@@ -78,7 +78,7 @@ describe("in the desk's inspector", () => {
         expect(chartFaults(payoff).join(" | ")).toBe("");
         // a real mouse over the breakeven's dot lands on the breakeven: nothing made, nothing lost
         await pointAt(payoff, payoff.querySelector(`[data-breakeven='${be}'] circle`)!);
-        expect(shown(payoff)).toMatch(new RegExp(`^SPX ${be.replace(".", "\\.")}0? \\| .* \\| 0\\.00 pts`));
+        expect(shown(payoff)).toMatch(new RegExp(`^SPX ${Number(be).toFixed(2).replace(".", "\\.")} \\| .* \\| 0\\.00 pts`));
         expect(tipFaults(payoff, insp)).toEqual([]);
         // at either end of the drawing the tooltip still stays inside it
         for (const k of [...payoff.querySelectorAll<SVGLineElement>("[data-strike]")]) {
@@ -108,7 +108,7 @@ describe("in the desk's inspector", () => {
     await userEvent.keyboard("{ArrowRight}");
     expect(said(payoff)).toBe("at expiry with SPX at 6900.50, at SPX now: +5.00 pts per contract · +$1,000");
     await userEvent.keyboard("{End}");
-    expect(said(payoff)).toMatch(/: -45\.00 pts per contract · -\$9,000$/);
+    expect(said(payoff)).toMatch(/: \u221245\.00 pts per contract · \u2212\$9,000$/);
     expect(tipFaults(payoff, insp)).toEqual([]);
   });
 
@@ -117,7 +117,7 @@ describe("in the desk's inspector", () => {
     const insp = await inspector(900, "h-ic");
     const payoff = await payoffIn(insp);
     await pointAt(payoff, payoff.querySelector("[data-strike='7400']")!);
-    expect(shown(payoff)).toBe("SPX 7400 | 499.50 above SPX now | +5.00 pts per contract · $•••");
+    expect(shown(payoff)).toBe("SPX 7400.00 | 499.50 above SPX now | +5.00 pts per contract · $•••");
     expect(payoff.textContent).not.toMatch(/\$\d/);
     expect(chartFaults(payoff).join(" | ")).toBe("");
   });
@@ -140,7 +140,7 @@ describe("in the add form's preview", () => {
       await expect.poll(strikes).toBe("+P7100 −P7150");
       expect(chartFaults(payoff).join(" | ")).toBe("");
       await pointAt(payoff, payoff.querySelector("[data-strike='7100']")!);
-      expect(shown(payoff)).toBe("SPX 7100 | -48.50 pts");
+      expect(shown(payoff)).toBe("SPX 7100.00 | −48.50 pts");
       expect(tipFaults(payoff, spread)).toEqual([]);
       await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7050");
       await expect.poll(strikes).toBe("+P7050 −P7150");
@@ -169,7 +169,7 @@ describe("a maximum outside the window", () => {
         render(<div className="nx" style={{ width }}><DraftPreview subject="x" draft={draft} blank="" spx={spx} spxReason={null} /></div>);
         const payoff = await payoffIn(document.querySelector<HTMLElement>(".nx")!);
         const label = payoff.querySelector(`[data-max='${kind}']`)!;
-        expect(label.textContent).toMatch(kind === "loss" ? /^▼ max loss -6470\.00 pts$/ : /^▲ max profit \+6470\.00 pts$/);
+        expect(label.textContent).toMatch(kind === "loss" ? /^▼ max loss \u22126470\.00 pts$/ : /^▲ max profit \+6470\.00 pts$/);
         expect(payoff.querySelector("[data-marker='spx']")).toBeTruthy();
         expect(chartFaults(payoff).join(" | ")).toBe("");
       });

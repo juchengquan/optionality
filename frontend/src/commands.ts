@@ -9,7 +9,7 @@
  *    threshold or a P&L is the table's to say, live, not a list's to freeze at the moment it opened.
  */
 import type { Monitor } from "./shared/api";
-import { heldLeg, legText, shortDate, signedLeg, type WrittenLeg } from "./shared/format";
+import { heldLeg, legText, shortDate, shortFirst, signedLeg, type WrittenLeg } from "./shared/format";
 import type { ArrangementChoice } from "./shared/prefs";
 import { rowName, tableRows, type DeskRow } from "./desk/columns";
 import { fieldWords, monitorName } from "./needs";
@@ -34,16 +34,17 @@ export interface Findable {
 /** A leg; `short` unset for the one contract a rule watches, which is not a position. */
 type Leg = WrittenLeg;
 
-/** `-2P7150 +P7100`: legs as the table writes them, short as minus and a quantity where it is not 1
- *  (#351); `P7150` for a rule's contract. */
-const legWords = (legs: Leg[]) => legs.map((l) => legText(l, "signs")).join(" ");
+/** `−2P7150 +P7100`: legs as the table writes them, short first and as the true minus, and a quantity
+ *  where it is not 1 (#351); `P7150` for a rule's contract. */
+const legWords = (legs: Leg[]) => shortFirst(legs).map((l) => legText(l, "signs")).join(" ");
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
 /** The words a text is made of, as typed text is split: lower case, and nothing but letters,
  *  digits and the `_`, `-` and `.` that names, dates and prices are written with. */
 export function tokens(text: string): string[] {
-  return text.toLowerCase().replace(/[^a-z0-9_.\-]+/g, " ").split(" ").filter(Boolean);
+  // the true minus the page writes a short leg with is the hyphen-minus a keyboard types
+  return text.replaceAll("\u2212", "-").toLowerCase().replace(/[^a-z0-9_.\-]+/g, " ").split(" ").filter(Boolean);
 }
 
 /** Every way the owner writes an expiry: `261218`, `2026-12-18`, and `dec 18` (or `dec 04`). */

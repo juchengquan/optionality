@@ -3,6 +3,7 @@
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { DASH } from "../shared/format";
 import { servedDelta } from "../legs";
+import { delta } from "../shared/numbers";
 
 /** "Fri 18 Dec 2026": an expiry as a date to read, not a key. Read as a calendar date in UTC, so
  *  the device's zone can never move it a day. */
@@ -16,10 +17,6 @@ export function expiryWords(iso: string): string {
   return EXPIRY.format(new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))).replace(",", "");
 }
 
-export const points = (n: number | null | undefined) => n === null || n === undefined ? DASH : n.toFixed(2);
-export const percent = (share: number | null) => share === null ? DASH : `${Math.round(share * 100)}%`;
-/** Δ to three places, as a rule's sentence writes it (needs.ts: PLACES). */
-export const delta = (n: number | null | undefined) => n === null || n === undefined ? DASH : n.toFixed(3);
 
 /** "×2", or "×•••" under privacy: contracts × points × 100 is the dollar amount privacy hides, so
  *  the count beside a figure in points goes with it (owner's decision, #314). */

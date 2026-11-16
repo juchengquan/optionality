@@ -17,6 +17,7 @@
  *
  *  Hand-written SVG at its measured width, as `SpxPath.tsx` is (the payoff moved to visx in #396).
  */
+import { spx as spxText } from "../shared/numbers";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { shortDate } from "../shared/format";
@@ -92,7 +93,7 @@ export function PriceMapPanel({ id, map, session, note, selected, onSelect }: {
   const H = y0 + BOTTOM;
   const ticks = ticksOf(lo, hi, Math.max(2, Math.floor((to - from) / 90)));
   const spx = map.spx;
-  const spxLabel = spx === null ? null : `SPX ${spx.toFixed(2)}`;
+  const spxLabel = spx === null ? null : `SPX ${spxText(spx)}`;
   const spxLabelX = spx === null ? 0
     : Math.min(Math.max(x(spx), LEFT + textWidth(spxLabel!, 12) / 2), W - RIGHT - textWidth(spxLabel!, 12) / 2);
   const choose = (sid: string) => onSelect(sid);

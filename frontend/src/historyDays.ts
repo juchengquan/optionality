@@ -15,6 +15,7 @@
  *  - **No money**: IV is in %, SPX and strikes in index points. Privacy has nothing to hide here.
  *
  *  Pure, so each is tested without a chart. */
+import { spx as spxText } from "./shared/numbers";
 import type { Holding, Sample } from "./shared/api";
 import type { WrittenLeg } from "./shared/format";
 import { whyShort } from "./burndown";
@@ -113,7 +114,7 @@ export function spxLines(stop: Stop, holding: Valued) {
   const strikes = (now ? holding.short_strikes : stop.sample!.short_strikes) ?? [];
   return {
     day: stopDay(stop),
-    spx: spx !== null ? `SPX ${now ? "now " : ""}${spx.toFixed(2)}`
+    spx: spx !== null ? `SPX ${now ? "now " : ""}${spxText(spx)}`
       : now ? "no SPX now: the valuation could not give it"
         : "no SPX this day: stored before it was recorded, or its batch could not give it",
     value: spx,
