@@ -339,7 +339,8 @@ export function valueEnabled(held: boolean, s: SpreadDraft): boolean {
 
 /** The words beside the value Monitor. */
 export function valueHint(held: boolean, s: SpreadDraft): string {
-  if (!held) return "an entry signal";
+  // none for a watched spread: "Watch it" says its rules are entry signals (2026-11-16)
+  if (!held) return "";
   return isDebit(held, s) ? "a debit spread's stop is a fall in its value: at or below" : "2× the Entry: the stop";
 }
 
@@ -613,3 +614,7 @@ export function takenOver(d: AddDraft, monitors: Monitor[], holdings: HeldLegs[]
   return out === null ? null : out.map((rs) => rs.map((r) => r.monitor));
 }
 
+
+/** The add form's footer, in both forms, held and watched alike: what one save does. It also
+ *  describes the sheet the form is drawn in, which draws no subtitle (2026-11-16). */
+export const ALL_OR_NONE = "One save makes all of it, or none of it if anything is refused.";

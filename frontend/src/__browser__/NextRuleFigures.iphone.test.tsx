@@ -11,6 +11,7 @@ import type { Entry } from "../shared/api";
 import { Next } from "../Next";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
+import { hitBox } from "./targets";
 
 /* Served here and not from a helper beside `nextBook.ts`: only a test may import test support
    (check-test-support). Every route the page calls is answered, and every write refused. */
@@ -65,7 +66,7 @@ function tooSmall(): string[] {
   return [...document.querySelectorAll<HTMLElement>("body :is(button, select, input, a)")]
     .filter((el) => el.getClientRects().length > 0 && el.getAttribute("type") !== "hidden")
     .flatMap((el) => {
-      const r = el.getBoundingClientRect();
+      const r = hitBox(el);
       return r.width < 44 || r.height < 44
         ? [`${el.tagName.toLowerCase()} "${el.getAttribute("aria-label") ?? el.textContent?.trim()}" ${Math.round(r.width)}×${Math.round(r.height)}`]
         : [];

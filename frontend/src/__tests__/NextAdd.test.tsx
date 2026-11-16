@@ -380,7 +380,7 @@ describe("the preview", () => {
 
   it("asks for the payoff once the strikes are typed, per contract, and again when a side flips", async () => {
     open();
-    expect(screen.getByText("type the strikes to see its payoff at expiry")).toBeTruthy();
+    expect(screen.getByText("type the strikes")).toBeTruthy();
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "1.50");
@@ -427,6 +427,57 @@ describe("the desk's sheet", () => {
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
     expect(document.activeElement).toBe(plus);
+  });
+
+  it("draws no subtitle repeating its title, and is described by its footer instead (2026-11-16)", async () => {
+    render(<Next />);
+    fireEvent.click(screen.getByRole("button", { name: "add" }));
+    const panel = screen.getByRole("dialog", { name: "Add a spread or contract" });
+    expect(panel.textContent).not.toContain("saved together");
+    expect(panel.querySelector("[data-slot='sheet-description']")).toBeNull();
+    const described = panel.getAttribute("aria-describedby");
+    expect(described).toBeTruthy();
+    expect(document.getElementById(described!)?.textContent)
+      .toBe("One save makes all of it, or none of it if anything is refused.");
+    // the one contract's form keeps the same footer, so the description never points at nothing
+    fireEvent.click(within(panel).getByRole("button", { name: "one contract" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "Watch it" }));
+    expect(document.getElementById(panel.getAttribute("aria-describedby")!)?.textContent)
+      .toBe("One save makes all of it, or none of it if anything is refused.");
+  });
+});
+
+describe("nothing said twice (2026-11-16)", () => {
+  it("writes a leg's side as − and +, the book's notation, named short and long", () => {
+    open();
+    const side = (j: number) => screen.getByRole("button", { name: new RegExp(`^spread 1, leg ${j} side: `) });
+    expect(side(1).textContent).toBe("\u2212");
+    expect(side(1).getAttribute("aria-label")).toBe("spread 1, leg 1 side: short — flip");
+    expect(side(1).title).toBe("short");
+    expect(side(2).textContent).toBe("+");
+    expect(side(2).getAttribute("aria-label")).toBe("spread 1, leg 2 side: long — flip");
+    expect(side(2).title).toBe("long");
+    fireEvent.click(side(2));
+    expect(side(2).textContent).toBe("\u2212");
+    expect(side(2).title).toBe("short");
+  });
+
+  it("says no hint under a watched spread's rules that repeats what Watch it says of them", () => {
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+    const form = screen.getByRole("form", { name: "add a spread" });
+    // "rules only, as entry signals" is said once, on the choice
+    expect(form.textContent).not.toContain("an entry signal");
+    expect(form.textContent!.split("entry signals")).toHaveLength(2);
+    // a held spread's hints say something the choice does not, and stay
+    fireEvent.click(screen.getByRole("button", { name: "I hold it" }));
+    expect(form.textContent).toContain("2× the Entry: the stop");
+  });
+
+  it("says only \"type the strikes\" under the payoff's own heading", () => {
+    open();
+    expect(screen.getByText("type the strikes")).toBeTruthy();
+    expect(screen.getByRole("form", { name: "add a spread" }).textContent).not.toContain("to see its payoff at expiry");
   });
 });
 

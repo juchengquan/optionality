@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
 import { declared, headerBottom, longBook, overflowsSideways, serveBook, settle } from "./nextBook";
+import { hitBox } from "./targets";
 
 async function show() {
   serveBook();
@@ -32,7 +33,7 @@ async function animationsDone(): Promise<void> {
 
 function tooSmall(): string[] {
   return targets().flatMap((el) => {
-    const r = el.getBoundingClientRect();
+    const r = hitBox(el);
     return r.width < 44 || r.height < 44
       ? [`${el.tagName.toLowerCase()} "${el.getAttribute("aria-label") ?? el.textContent?.trim()}" ${Math.round(r.width)}×${Math.round(r.height)}`]
       : [];
@@ -105,7 +106,7 @@ describe("the header", () => {
       const inner = box(head).right - parseFloat(getComputedStyle(head).paddingRight);
       expect(box(buttons.at(-1)!).right).toBeCloseTo(inner, 0);
       expect(inner).toBeLessThanOrEqual(document.documentElement.clientWidth - 16 + 0.5);
-      for (const b of buttons) expect(Math.min(box(b).width, box(b).height)).toBeGreaterThanOrEqual(44);
+      for (const b of buttons) expect(Math.min(hitBox(b).width, hitBox(b).height)).toBeGreaterThanOrEqual(44);
       expect(overflowsSideways()).toBe(false);
       expect(head.scrollWidth).toBeLessThanOrEqual(head.clientWidth);
     });

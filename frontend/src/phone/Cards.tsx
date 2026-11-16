@@ -10,12 +10,12 @@ import { heldLeg, signedLeg } from "../shared/format";
 import { Leg, Legs } from "../shared/Legs";
 import { Chip, Money } from "../Book";
 import { levelWords } from "../levels";
-import { paceOutcome, paceWords } from "../pace";
+import { costAndPace, paceOutcome } from "../pace";
 import { Glyph } from "../NeedsLine";
 import { entryName, fieldWords, monitorName, QUARANTINED } from "../needs";
 import { RuleWords } from "../RuleWords";
 import type { PlacedHolding } from "../placement";
-import { mutedWords, percent, points, shortDeltas, shortDeltaWords } from "./figures";
+import { mutedWords, percent, shortDeltas, shortDeltaWords } from "./figures";
 import { ruleState } from "./state";
 import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { MonitorControls } from "../MonitorEdit";
@@ -81,17 +81,29 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
         <LevelChip holding={holding} session={session} />
       </div>
       <dl className="nxp-facts">
-        <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
+        {/* the Cost to close with its pace gap beside it, one field as the desk's value column draws
+            it (the owner, 2026-11-16) — the gap on the card since #374, said in words to a reader */}
+        <div><dt>cost to close</dt><dd><CostAndPace holding={holding} /></dd></div>
         <div><dt>short Δ</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
-        {/* the pace gap, which the phone once drew only on a page per holding after the close: one book
-            now, at every hour (#374) */}
-        <div><dt>pace gap</dt><dd data-outcome={paceOutcome(holding.schedule?.pace_gap)}>
-          {paceWords(holding.schedule?.pace_gap)}
-        </dd></div>
       </dl>
       <HoldingStrip holding={holding} />
       {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}
     </article>
+  );
+}
+
+/** "3.05 −1.57": the Cost to close, and its pace gap signed and in its outcome's colour, said in
+ *  words to a pointer and a reader ("3.05, pace gap behind by 1.57"). */
+function CostAndPace({ holding }: { holding: Holding }) {
+  const v = costAndPace(holding);
+  if (v.gap === null) return <>{v.text}</>;
+  return (
+    <>
+      <span className="sr-only">{v.words}</span>
+      <span title={v.words} aria-hidden="true">
+        {v.cost}{" "}<span data-outcome={paceOutcome(holding.schedule?.pace_gap)}>{v.gap}</span>
+      </span>
+    </>
   );
 }
 

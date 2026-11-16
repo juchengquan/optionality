@@ -23,7 +23,7 @@ import { DASH, freshnessWords, shortDate } from "../shared/format";
 import { GROUPS } from "../shared/groups";
 import { drawnReadings, referenceWords } from "../shared/readings";
 
-import { COLUMNS, PINNED, rowName, rowStrip, type DeskColumn, type DeskRow } from "../desk/columns";
+import { PINNED, PLAIN_COLUMNS, rowName, rowStrip, type DeskColumn, type DeskRow } from "../desk/columns";
 import { closedLineText, levelWords } from "../levels";
 import { monitorName, storedRuleWords, type Need } from "../needs";
 import { mutedWords } from "../phone/figures";
@@ -104,9 +104,11 @@ function cellOf(column: DeskColumn, row: DeskRow, privacy: boolean): string {
   return (column.words ?? column.text)(row, privacy);
 }
 
-/** The columns the view carries: the name, then every one the viewer ticked, in the table's order. */
+/** The columns the view carries: the name, then every one the viewer ticked, in the table's order —
+ *  the value and the pace gap apart (`PLAIN_COLUMNS`), the gap ticked with the value, the column the
+ *  screen draws it in (2026-11-16). A "pace_gap" left in the cookie from before hides nothing. */
 function shownColumns(hidden: ReadonlySet<string>): DeskColumn[] {
-  return COLUMNS.filter((c) => c.key === PINNED || !hidden.has(c.key));
+  return PLAIN_COLUMNS.filter((c) => c.key === PINNED || !hidden.has(c.key === "pace_gap" ? "value" : c.key));
 }
 
 // ---- the muted rules, by their reasons

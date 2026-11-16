@@ -241,7 +241,8 @@ describe("what each choice does, said on it (#408)", () => {
   const pairOf = () => ["I hold it", "Watch it"].map((name) => {
     const b = within(panel()).getByRole("button", { name });
     const r = b.getBoundingClientRect();
-    const small = b.querySelector("small")!;
+    // its consequence, under it in its column since 2026-11-16, and still its description
+    const small = document.getElementById(b.getAttribute("aria-describedby")!)!;
     return { r, clipped: b.scrollWidth > b.clientWidth + 0.5 || b.scrollHeight > b.clientHeight + 0.5, small };
   });
 
@@ -258,6 +259,13 @@ describe("what each choice does, said on it (#408)", () => {
           expect(b.clipped).toBe(false);
           expect(b.r.right).toBeLessThanOrEqual(box.right + 0.5);
           expect(b.small.getBoundingClientRect().height).toBeGreaterThan(0);
+          // a control's height (2026-11-16), where its two lines of small type made it 62px; its
+          // words under it, inside its column
+          expect(b.r.height).toBeLessThanOrEqual(26.5);
+          const said = b.small.getBoundingClientRect();
+          expect(said.top).toBeGreaterThanOrEqual(b.r.bottom - 0.5);
+          expect(said.left).toBeGreaterThanOrEqual(b.r.left - 0.5);
+          expect(said.right).toBeLessThanOrEqual(b.r.right + 0.5);
         }
         expect(hold!.small.textContent).toBe("records a holding; its rules become a stop and risk");
         expect(watch!.small.textContent).toBe("rules only, as entry signals");

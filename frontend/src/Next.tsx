@@ -136,6 +136,8 @@ export function Next() {
     setPrefill(null);
   }, []);
   const panelId = useId();
+  // the Add sheet is described by its form's footer (2026-11-16), where a subtitle repeated its title
+  const addSaysId = useId();
   const plusButton = useRef<HTMLButtonElement>(null);
   const closeAdding = useCallback(() => setAdding(false), [setAdding]);
   // the Add sheet's Back entry is the page's too, as Settings' is: the desk's side sheet and the
@@ -221,7 +223,7 @@ export function Next() {
   const addForm = (
     <AddSpread key={prefill?.n ?? 0} initial={prefill?.initial} privacy={privacy} monitors={book.monitors}
                holdings={holdings} spx={spx}
-               spxReason={spxReason} onSaved={saved} onCancel={closeAdding} autoFocus={!phone} />
+               spxReason={spxReason} onSaved={saved} onCancel={closeAdding} autoFocus={!phone} footerId={addSaysId} />
   );
 
   // Settings is the one surface that may say "nothing needs you" (ADR 0012), and where References
@@ -424,7 +426,7 @@ export function Next() {
       {/* the phone's two sheets over the book, one component (#410): mounted in both arrangements
           and open only on the phone, for the reason the desk's below are */}
       <PhoneSheet open={adding && phone} onClose={closeAdding} up={up} entryStyle={entryStyle}
-                  title="Add a spread or contract" description={ADD_SAYS} ownBack={false}>
+                  title="Add a spread or contract" describedBy={addSaysId} ownBack={false}>
         {phone ? addForm : null}
       </PhoneSheet>
       <PhoneSheet open={settingsOpen && phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
@@ -434,7 +436,7 @@ export function Next() {
       {/* Mounted in both arrangements and only OPEN on the desk; their Back entries are the page's,
           kept across a switch of arrangement (above) */}
       <DeskSheet id={panelId} open={adding && !phone} onClose={closeAdding} finalFocus={addReturn}
-                 up={up} entryStyle={entryStyle} title="Add a spread or contract" description={ADD_SAYS} className="data-[side=right]:sm:max-w-3xl">
+                 up={up} entryStyle={entryStyle} title="Add a spread or contract" describedBy={addSaysId} className="data-[side=right]:sm:max-w-3xl">
         {phone ? null : addForm}
       </DeskSheet>
       <DeskSheet open={settingsOpen && !phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
@@ -471,8 +473,6 @@ function landOnMuted(id: string) {
 
 /** What Settings says it is, on the desk's side sheet and the phone's bottom sheet alike. */
 const SETTINGS_SAYS = "This screen's preferences, and where the service stands in full.";
-/** And what Add says it is, on either. */
-const ADD_SAYS = "A spread or one contract, and the Monitors it starts with, saved together.";
 
 /** The header's height, kept on the document as `--nx-head-h` while the page is drawn (#410): the
  *  header is sticky, so a row scrolled into view has to land below it (`scroll-padding-top` on the
@@ -497,22 +497,27 @@ function useHeaderHeight() {
   }, []);
 }
 
+/** What a sheet says it is: a subtitle under its title (Settings'), or, where a subtitle would only
+ *  repeat the title, the id of something inside it that says it (the Add form's footer, 2026-11-16). */
+type Described = { description: string; describedBy?: undefined } | { description?: undefined; describedBy: string };
+
 /** A bottom sheet over the phone's book, closed by Back (ADR 0023): the Add form's since #293, and
  *  Settings' since #410, where Settings had been a screen in the book's place. One component, so the
  *  two open, close and give their Back entry up alike (`useDismissOnBack`, one list for every sheet
  *  the page opens, #408). `ownBack={false}` where the page holds the entry instead: Settings', which
  *  outlives a switch between this sheet and the desk's. */
-function PhoneSheet({ open, onClose, up, entryStyle, title, description, ownBack = true, children }: {
+function PhoneSheet({ open, onClose, up, entryStyle, title, description, describedBy, ownBack = true, children }: {
   open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle;
-  title: string; description: string; ownBack?: boolean; children: React.ReactNode;
-}) {
+  title: string; ownBack?: boolean; children: React.ReactNode;
+} & Described) {
   useDismissOnBack(ownBack && open, onClose);
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={up} data-entry={entryStyle}>
+      <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={up} data-entry={entryStyle}
+                    aria-describedby={describedBy}>
         <SheetHeader>
           <SheetTitle>{title}</SheetTitle>
-          <SheetDescription>{description}</SheetDescription>
+          {description !== undefined ? <SheetDescription>{description}</SheetDescription> : null}
         </SheetHeader>
         <div className="nxp-sheet-body">{children}</div>
       </SheetContent>
@@ -522,20 +527,21 @@ function PhoneSheet({ open, onClose, up, entryStyle, title, description, ownBack
 
 /** A side sheet over the desk's book: Settings', and the Add form's, which was a panel above the
  *  table until it became one like Settings'. */
-function DeskSheet({ id, open, onClose, finalFocus, up, entryStyle, title, description, className, children }: {
+function DeskSheet({ id, open, onClose, finalFocus, up, entryStyle, title, description, describedBy, className, children }: {
   id?: string; open: boolean; onClose: () => void; finalFocus?: () => HTMLElement | null;
   up: UpColour; entryStyle: EntryStyle;
-  title: string; description: string; className?: string; children: React.ReactNode;
-}) {
+  title: string; className?: string; children: React.ReactNode;
+} & Described) {
   // its Back entry is held by the page (Next), across a switch of arrangement
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       {/* drawn in a portal OUTSIDE .nx, so it carries the page's colour tokens itself (next.css:
           .nx-tokens) and the two settings they depend on — without them every glyph was grey */}
-      <SheetContent id={id} finalFocus={finalFocus} className={`overflow-y-auto nx-tokens ${className ?? ""}`} data-up={up} data-entry={entryStyle}>
+      <SheetContent id={id} finalFocus={finalFocus} className={`overflow-y-auto nx-tokens ${className ?? ""}`} data-up={up} data-entry={entryStyle}
+                    aria-describedby={describedBy}>
         <SheetHeader>
           <SheetTitle>{title}</SheetTitle>
-          <SheetDescription>{description}</SheetDescription>
+          {description !== undefined ? <SheetDescription>{description}</SheetDescription> : null}
         </SheetHeader>
         <div className="px-4 pb-4">{children}</div>
       </SheetContent>

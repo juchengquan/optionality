@@ -5,7 +5,7 @@
 .nx-mon-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
 .nx-mon-button {
   padding: 0.125rem 0.625rem; border: 1px solid var(--border); border-radius: var(--radius-md);
-  font-size: 0.8125rem; color: var(--foreground); background: var(--background);
+  font-size: 0.8125rem; line-height: 1.25rem; color: var(--foreground); background: var(--background);
 }
 .nx-mon-button[aria-expanded="true"] { background: var(--foreground); color: var(--background); }
 .nx-mon-button[data-destructive] { color: var(--fault); }

@@ -4,8 +4,8 @@
 .nx-hold { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; margin-top: 0.75rem; }
 .nx-hold-actions, .nx-hold-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem 0.75rem; min-width: 0; }
 .nx-hold button, .nx-closed button {
-  padding: 0.25rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border);
-  font-size: 0.875rem;
+  padding: 0.125rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border);
+  font-size: 0.875rem; line-height: 1.25rem; /* 26px, the page's control height (next.css) */
 }
 .nx-hold button[aria-expanded="true"] { background: var(--foreground); color: var(--background); }
 .nx-hold .nx-hold-primary, .nx-closed .nx-hold-primary { background: var(--foreground); color: var(--background); }

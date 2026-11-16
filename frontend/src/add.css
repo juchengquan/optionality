@@ -10,7 +10,7 @@
 .nx-add-field > span { color: var(--muted-foreground); font-size: 0.75rem; }
 .nx-add input {
   min-width: 0; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-md);
-  padding: 0.25rem 0.5rem; background: var(--background); font-variant-numeric: tabular-nums;
+  padding: 0.125rem 0.5rem; line-height: 1.25rem; background: var(--background); font-variant-numeric: tabular-nums;
 }
 .nx-add input:disabled { opacity: 0.45; }
 .nx-add-name input { width: 14rem; }
@@ -21,16 +21,19 @@
 
 .nx-seg { display: inline-flex; gap: 0.25rem; }
 .nx-seg button, .nx-add-toggle, .nx-add-switch, .nx-add-ghost {
-  padding: 0.25rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border);
-  font-size: 0.875rem;
+  padding: 0.125rem 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border);
+  font-size: 0.875rem; line-height: 1.25rem; /* 26px drawn, the page's control height (next.css) */
 }
 .nx-seg button[aria-pressed="true"] { background: var(--foreground); color: var(--background); }
-/* "I hold it" / "Watch it", each with what choosing it does under its words (#408): two equal
-   columns that wrap their line rather than widen the form, at the phone's width as at the desk's */
-.nx-add-as { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(100%, 30rem); }
-.nx-add-as button { display: flex; flex-direction: column; align-items: flex-start; gap: 0.125rem; text-align: left; }
-.nx-add-as-words { font-weight: 600; }
-.nx-add-as small { font-size: 0.75rem; line-height: 1.25; opacity: 0.8; }
+/* "I hold it" / "Watch it", each with what choosing it does under it (#408): two equal columns, the
+   buttons a control's height and the consequence beneath each in small type, outside the button
+   rather than inside it (2026-11-16), where it made the pair 62px; still its description */
+.nx-add-as {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto auto;
+  grid-auto-flow: column; column-gap: 0.25rem; row-gap: 0.125rem; width: min(100%, 30rem);
+}
+.nx-add-as button { text-align: left; font-weight: 600; }
+.nx-add-as small { font-size: 0.6875rem; line-height: 1.2; color: var(--muted-foreground); padding: 0 0.125rem; }
 
 .nx-add-spread {
   border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 0.5rem 0.75rem 0.75rem;
@@ -45,7 +48,10 @@
 
 .nx-add-legs { display: flex; flex-direction: column; gap: 0.375rem; }
 /* side, quantity (#351), type, strike, and the leg's remove button once there are more than two (#334) */
-.nx-add-leg { display: grid; grid-template-columns: 4.5rem 3rem 4.5rem minmax(0, 8rem) auto; gap: 0.375rem; align-items: center; }
+.nx-add-leg { display: grid; grid-template-columns: 2.25rem 3rem 4.5rem minmax(0, 8rem) auto; gap: 0.375rem; align-items: center; }
+/* a side is its sign alone, − or + (2026-11-16): the book's notation */
+.nx-add-side { padding-inline: 0; }
+[data-side] > .nx-sign:only-child { margin-right: 0; }
 .nx-add-qty { width: 100%; min-width: 0; text-align: center; }
 .nx-add-unleg { display: inline-flex; align-items: center; justify-content: center; padding: 0.25rem 0.5rem; }
 .nx-add-unleg svg { width: 0.875rem; height: 0.875rem; }
@@ -90,7 +96,7 @@
 
 /* on the phone every box is a 44pt target already (next.css); the legs' columns share the width
    rather than overflowing it, the strike taking what the toggles and the remove button leave */
-html[data-nx-arrangement="phone"] .nx-add-leg { grid-template-columns: 4.5rem 3rem 4.5rem minmax(0, 1fr) auto; }
+html[data-nx-arrangement="phone"] .nx-add-leg { grid-template-columns: 44px 3rem 4.5rem minmax(0, 1fr) auto; }
 html[data-nx-arrangement="phone"] .nx-add-name input { width: 100%; }
 html[data-nx-arrangement="phone"] .nx-add-name { flex: 1 1 auto; }
 
@@ -100,7 +106,7 @@ html[data-nx-arrangement="phone"] .nx-add-name { flex: 1 1 auto; }
 /* one contract's Monitor: its sentence, then what it watches, which way, how, and at what */
 .nx-add select {
   min-width: 0; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius-md);
-  padding: 0.25rem 0.5rem; background: var(--background); color: var(--foreground);
+  padding: 0.125rem 0.5rem; line-height: 1.25rem; background: var(--background); color: var(--foreground);
 }
 .nx-add [aria-invalid="true"] { border-color: var(--fault); }
 .nx-add-rule { display: flex; flex-direction: column; gap: 0.375rem; min-width: 0; }

@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Next } from "../Next";
 import { fieldWords } from "../needs";
 import { overflowsSideways, serveContract, settle } from "./nextBook";
+import { hitBox } from "./targets";
 
 afterEach(cleanup);
 
@@ -51,7 +52,7 @@ function tooSmall(root: Element): string[] {
   return [...root.querySelectorAll<HTMLElement>("button, select, input, a")]
     .filter((el) => el.getClientRects().length > 0)
     .flatMap((el) => {
-      const r = el.getBoundingClientRect();
+      const r = hitBox(el);
       return r.width < 44 || r.height < 44
         ? [`${el.tagName.toLowerCase()} "${el.getAttribute("aria-label") ?? el.textContent?.trim()}" ${Math.round(r.width)}×${Math.round(r.height)}`]
         : [];

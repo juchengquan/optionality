@@ -56,7 +56,8 @@ describe("editing a Monitor from the inspector", () => {
     // the draft follows the typing; the distance is still the saved rule's until the service says
     // drawn short (#388), and said in words
     expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("|Δ| ≥ 0.3");
-    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("|Δ| ≥ 0.3");
+    // as typed, the short form IS its words: written once (2026-11-16)
+    expect(within(form).getByTestId("draft").textContent).toBe("|Δ| ≥ 0.3");
     expect(within(form).getByTestId("served").querySelector(".nx-rule-short")!.textContent).toMatch(/↑0\.030$/);
     expect(within(form).getByTestId("served").querySelector(".sr-only")!.textContent).toMatch(/0\.030 away$/);
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
@@ -79,7 +80,7 @@ describe("editing a Monitor from the inspector", () => {
       .getByRole("button", { name: "≤ at or below" }));
     await userEvent.selectOptions(within(form).getByLabelText("compare"), "signed");
     await userEvent.fill(within(form).getByLabelText("threshold"), "-0.5");
-    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("ν ≤ -0.5");
+    expect(within(form).getByTestId("draft").textContent).toBe("ν ≤ -0.5");
     expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("ν ≤ -0.5");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toHaveLength(1));

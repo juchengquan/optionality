@@ -59,14 +59,17 @@ export function expectTyped(root: Element, b: HTMLElement, type: "CALL" | "PUT",
   expect([l.color, opaque(l.fill), opaque(l.border)]).not.toContain(other);
 }
 
-/** The side buttons: in no hue, short solid with "−", long dashed with "+". */
+/** The side buttons: in no hue, short solid with "−", long dashed with "+", the sign alone drawn. */
 export function expectSided(root: Element, b: HTMLElement, side: "short" | "long") {
   const l = look(b);
   const hues = ["call", "put"].map((t) => resolved(root, `var(--${t})`));
   for (const c of [l.color, opaque(l.fill), opaque(l.border)]) expect(hues).not.toContain(c);
-  // the sign is drawn, and said to nobody: the button's own words are its name
+  // the sign alone is drawn — the book's −P6800 +P6750 (2026-11-16) — and said to nobody: the word
+  // is the button's name, and its title to a pointer
   expect(l.sign, `${side}: its sign`).toBe(side === "short" ? "−" : "+");
-  expect(b.textContent).toBe(`${l.sign}${side}`);
+  expect(b.textContent).toBe(l.sign);
+  expect(b.getAttribute("aria-label")).toMatch(new RegExp(`^(${side}|.* side: ${side} — flip)$`));
+  expect(b.title).toBe(side);
   expect(l.style, `${side}: its border`).toBe(side === "short" ? "solid" : "dashed");
 }
 

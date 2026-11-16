@@ -15,7 +15,7 @@ import { monitorName, shapeOf, shortRule, storedRuleWords } from "../needs";
 import { ShortWords } from "../RuleWords";
 import { HistoryOnDemand } from "../HistoryOnDemand";
 import { PaceExplained } from "../PaceExplained";
-import { paceOutcome } from "../pace";
+import { costAndPace, paceOutcome } from "../pace";
 import { HoldingActions, type HoldingWrites } from "../HoldingActions";
 import { DetailBoundary } from "../DetailBoundary";
 import { HoldingPayoff, WatchedPayoff } from "../Payoff";
@@ -444,6 +444,23 @@ function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; priv
   }
   if (column.key === "pnl" && row.kind === "holding") {
     return <><span className="sr-only">{`${label} `}</span><span className="nxd-v"><Money value={row.holding.pnl} privacy={privacy} /></span></>;
+  }
+  // a holding's value: its Cost to close and its pace gap in one field (2026-11-16), the gap in its
+  // outcome's colour, the two said in words to a pointer and a reader
+  if (column.key === "value" && row.kind === "holding") {
+    const v = costAndPace(row.holding);
+    const said = `${label} ${v.words}`;
+    return (
+      <>
+        <span className="sr-only">{said}</span>
+        <span className="nxd-v" title={said} aria-hidden="true">
+          {v.cost}
+          {v.gap !== null
+            ? <>{" "}<span className="nxd-gap" data-outcome={paceOutcome(row.holding.schedule?.pace_gap)}>{v.gap}</span></>
+            : null}
+        </span>
+      </>
+    );
   }
   const outcome = outcomeOf(row, column);
   // a compact cell (the pace gap's sign, #379) is read out as its words, and shows them to a pointer

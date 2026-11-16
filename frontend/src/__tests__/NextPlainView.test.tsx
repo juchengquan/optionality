@@ -69,6 +69,15 @@ describe("the table", () => {
     expect(plainView(input({ hidden: new Set(["name"]) })).columns).toContain("name");
   });
 
+  it("keeps the value and the pace gap apart, the gap ticked with the value it is drawn in on screen (2026-11-16)", () => {
+    // hiding the value, the desk's one field, hides both here
+    const noValue = plainView(input({ hidden: new Set(["value"]) }));
+    expect(noValue.columns).not.toContain("value");
+    expect(noValue.columns).not.toContain("pace gap (pts)");
+    // a cookie from before, when the pace gap had a column of its own on screen, hides nothing
+    expect(plainView(input({ hidden: new Set(["pace_gap"]) })).columns).toEqual(plainView(input()).columns);
+  });
+
   it("puts the holdings first, then the watchlist, then the muted and expired, each by expiry", () => {
     const view = plainView(input());
     expect(view.sections.map((s) => s.title)).toEqual(["Holdings", "Watchlist", "Muted and expired"]);
@@ -108,6 +117,8 @@ describe("the table", () => {
       short_strikes: [served("2026-12-18", "CALL", 6800, 0.62, 38)] });
     const view = plainView(input({ holdings: [...HOLDINGS, behind, past] }));
     expect(cell(view, "1218_P6000", "pace gap (pts)")).toBe("behind by 0.40");
+    // the value and the gap apart, for analysis, where the screen draws them in one field (2026-11-16)
+    expect(cell(view, "1218_P6000", "value")).toBe("1.00");
     // 500.50 points away: whole points, no "pts" and no "away"
     expect(cell(view, "1218_P6400", "SPX→short")).toBe("P6400 501 · 1.25σ");
     expect(cell(view, "1218_C6800", "SPX→short")).toBe("C6800 −101 · −0.25σ");

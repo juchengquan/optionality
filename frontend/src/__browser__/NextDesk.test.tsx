@@ -437,8 +437,8 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
 
 describe("columns are dropped as measured (ADR 0008)", () => {
   /** The one set (#372), in the order drawn, and the order it survives narrowing in. */
-  const ONE_SET = ["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage", "alarm"];
-  const SURVIVAL = ["value", "pnl", "delta", "pace_gap", "dte", "manage", "strip", "captured", "legs", "alarm"];
+  const ONE_SET = ["name", "legs", "value", "pnl", "captured", "delta", "strip", "dte", "manage", "alarm"];
+  const SURVIVAL = ["value", "pnl", "delta", "dte", "manage", "strip", "captured", "legs", "alarm"];
 
   /** Each drawn column's measured width, for a failure to say. */
   const widths = () => [...document.querySelectorAll<HTMLElement>(".nxd-head [data-col]")]
@@ -447,15 +447,15 @@ describe("columns are dropped as measured (ADR 0008)", () => {
   // what each width draws, measured in this engine with the owner's book, in session: one set at
   // every hour (#372)
   const DRAWN: Record<number, { shut: string[]; open: string[] }> = {
-    // the pace gap written signed (#379) is 75px where its words took 122: room for SPX → short at
-    // 900 shut and at 1280 open, which the words had pushed off
+    // the pace gap drawn in the value column (2026-11-16), where it had a column of its own: one
+    // field of 91px where the two took 50 and 75, which leaves manage-by room at 900 open
     900: {
-      shut: ["name", "value", "pnl", "pace_gap", "delta", "strip", "dte", "manage"],
-      open: ["name", "value", "pnl", "pace_gap", "delta", "dte"],
+      shut: ["name", "value", "pnl", "delta", "strip", "dte", "manage"],
+      open: ["name", "value", "pnl", "delta", "dte", "manage"],
     },
     1280: {
-      shut: ["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage"],
-      open: ["name", "value", "pnl", "pace_gap", "delta", "strip", "dte", "manage"],
+      shut: ["name", "legs", "value", "pnl", "captured", "delta", "strip", "dte", "manage"],
+      open: ["name", "value", "pnl", "delta", "strip", "dte", "manage"],
     },
     2560: { shut: ONE_SET, open: ONE_SET },
   };
@@ -471,11 +471,16 @@ describe("columns are dropped as measured (ADR 0008)", () => {
         expect(drawn, `${state}: ${widths()}`).toEqual(DRAWN[width]![state]);
         expect(misfits(), `${state}: ${widths()}`).toEqual([]);
         expect(overflowsSideways()).toBe(false);
-        // the gap signed, its words to a pointer and, in place of the sign, to a reader
-        const gap = rowOf("h-calls").querySelector<HTMLElement>('[data-col="pace_gap"]')!;
-        expect(gap.querySelector<HTMLElement>(".nxd-v")!.textContent).toBe("+0.47");
-        expect(gap.querySelector<HTMLElement>(".nxd-v")!.title).toBe("behind by 0.47");
-        expect(gap.querySelector(".sr-only")!.textContent).toBe("pace gap behind by 0.47");
+        // the gap signed beside the cost, both in words to a pointer and, in place of the sign, to a
+        // reader (#379, 2026-11-16) — and none of it clipped
+        const value = rowOf("h-calls").querySelector<HTMLElement>('[data-col="value"]')!;
+        const drawnValue = value.querySelector<HTMLElement>(".nxd-v")!;
+        expect(drawnValue.textContent).toBe("4.40 +0.47");
+        expect(drawnValue.title).toBe("cost to close 4.40, pace gap behind by 0.47");
+        expect(value.querySelector(".sr-only")!.textContent).toBe("cost to close 4.40, pace gap behind by 0.47");
+        expect(drawnValue.scrollWidth).toBeLessThanOrEqual(drawnValue.clientWidth + 0.5);
+        expect(drawnValue.getBoundingClientRect().right).toBeLessThanOrEqual(value.getBoundingClientRect().right + 0.5);
+        expect(rowOf("h-calls").querySelector('[data-col="pace_gap"]')).toBeNull();
         expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
       }
     });
@@ -487,7 +492,7 @@ describe("columns are dropped as measured (ADR 0008)", () => {
     cleanup();
     await show(900);
     await inspect("h-calls");
-    expect(shown().length).toBeLessThan(10);
+    expect(shown().length).toBeLessThan(9);
     expect(shown()[0]).toBe("name");
   });
 
