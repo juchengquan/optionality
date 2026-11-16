@@ -30,6 +30,7 @@ import { TakeOver } from "./TakeOver";
 import { AddContract } from "./AddContract";
 import { HoldOrWatch } from "./HoldOrWatch";
 import { newContract, type ContractDraft } from "./contract";
+import type { DraftKeeper } from "./addKeep";
 
 /** A draft the form opens with instead of a fresh one: "Record as held" from a watch rule (#408). */
 export type AddInitial =
@@ -63,22 +64,33 @@ type Props = {
   initial?: AddInitial;
   /** the id the footer carries, which describes the sheet it is drawn in (2026-11-16) */
   footerId?: string;
+  /** where the page keeps the drafts, so a switch of arrangement, which draws the form anew in the
+   *  other sheet, carries them over (`addKeep.ts`); absent, they are the form's alone */
+  keeper?: DraftKeeper;
+  /** whether a save is out, when the page holds it: a switch of arrangement mid-save draws the form
+   *  anew in the other sheet, whose Save was otherwise enabled and sent the same spread twice */
+  savingState?: [boolean, (saving: boolean) => void];
 };
 
 /** What to add — a spread, or one contract — and the form for it. */
 export function AddSpread(props: Props) {
-  const [kind, setKind] = useState<"spread" | "contract">(props.initial?.kind ?? "spread");
+  // what the page kept from this form drawn in the other arrangement's sheet, if anything
+  const [kept] = useState(() => props.keeper?.read() ?? null);
+  const [kind, setKind] = useState<"spread" | "contract">(kept?.kind ?? props.initial?.kind ?? "spread");
   // the focus goes into the form when it opens, and stays on the choice when the choice is changed
   const [chosen, setChosen] = useState(false);
   const choose = (k: "spread" | "contract") => { setKind(k); setChosen(true); };
   const [spread, setSpreadDraft] = useState<AddDraft>(
-    () => (props.initial?.kind === "spread" ? props.initial.draft : newDraft(marketDay(props.now))));
+    () => kept?.spread ?? (props.initial?.kind === "spread" ? props.initial.draft : newDraft(marketDay(props.now))));
   const [contract, setContract] = useState<ContractDraft>(
-    () => (props.initial?.kind === "contract" ? props.initial.draft : newContract(marketDay(props.now))));
+    () => kept?.contract ?? (props.initial?.kind === "contract" ? props.initial.draft : newContract(marketDay(props.now))));
+  const { keeper } = props;
+  useEffect(() => { keeper?.keep({ kind, spread, contract }); }, [keeper, kind, spread, contract]);
   const prefilled = props.initial !== undefined;
   // one save in flight for the whole place, not per form: switching form mid-save would otherwise
   // mount a fresh save button that sends the same thing again (review of #340)
-  const [saving, setSaving] = useState(false);
+  const ownSaving = useState(false);
+  const [saving, setSaving] = props.savingState ?? ownSaving;
   return (
     <div className="nx-add-what">
       <div className="nx-seg" role="group" aria-label="what to add">

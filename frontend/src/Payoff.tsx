@@ -37,6 +37,7 @@
  *  `BurndownChart.tsx` gives. Its width is MEASURED rather than scaled from a viewBox, so text
  *  stays its own size in a 272px inspector and on a 390px phone alike.
  */
+import { askedFor } from "./asked";
 import { spx as spxText } from "./shared/numbers";
 import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { scaleLinear } from "@visx/scale";
@@ -113,7 +114,8 @@ const PRICE_FIELDS: ReadonlySet<string> = new Set(["mid_price"]);
 /** A holding's payoff, at the Entry it was taken for, over the contracts held. */
 export function HoldingPayoff({ holding, privacy }: { holding: Holding; privacy: boolean }) {
   const { id, entry, contracts } = holding;
-  const state = usePayoff(id, entry === null ? null : `${id}|${entry}|${contracts}`, () => fetchPayoff(id));
+  // asked again for new legs, a new Entry or count (`askedFor`), never for a poll's new valuation
+  const state = usePayoff(id, entry === null ? null : askedFor(holding), () => fetchPayoff(id));
   // points per contract, and money across the contracts held at the size the valuation served
   const unit: PayoffUnit = { contracts, size: holding.contract_size, hidden: privacy, perContract: true };
   return (

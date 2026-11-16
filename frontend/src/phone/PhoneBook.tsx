@@ -5,6 +5,7 @@ import type { BookProps } from "../Book";
 import { Money } from "../Book";
 import { ClosedLine } from "../ClosedLine";
 import { placeBook, type BookModel, type PlacedHolding } from "../placement";
+import { keptHolding } from "../kept";
 import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
 import { expiryWords } from "./figures";
@@ -20,15 +21,19 @@ import { ErrorWords } from "../shared/ErrorWords";
  *  was opened, and closes itself if what it shows is gone.
  */
 export function PhoneBook({
-  quotes, monitors, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, privacy,
+  quotes, monitors, holdings, holdingsKept, holdingsError, holdingsAt, holdingsServed, session, phase, privacy,
   entryStyle, writes,
   journal,
 }: BookProps) {
   const placed = placeBook(quotes, holdings, monitors);
   const [openId, setOpenId] = useState<string | null>(null);
   const close = useCallback(() => setOpenId(null), []);
-  const subject = openId === null ? null : find(placed, openId);
-  // Gone — a valuation failed, or a rule was deleted — the sheet has closed and given its Back
+  const live = openId === null ? null : find(placed, openId);
+  // a holding out of the book only because a valuation failed stays open, on its last valued
+  // figures, with whatever was typed into its forms (`kept.ts`)
+  const kept = live ? null : keptHolding(openId, quotes, holdings, holdingsKept, monitors);
+  const subject: Subject | null = live ?? (kept ? { kind: "holding", ...kept } : null);
+  // Gone — closed, deleted, or a rule deleted — the sheet has closed and given its Back
   // entry up, so it is forgotten: the next poll that brings the row back must not reopen a sheet
   // nobody asked for, pushing a second entry as it does.
   const gone = openId !== null && subject === null;
@@ -121,7 +126,7 @@ export function PhoneBook({
       {journal}
 
       <DetailSheet subject={subject} onClose={close} quotes={quotes} monitors={monitors}
-                   privacy={privacy} entryStyle={entryStyle} writes={writes} session={session} />
+                   privacy={privacy} entryStyle={entryStyle} writes={writes} session={session} stale={kept !== null} />
     </div>
   );
 }
