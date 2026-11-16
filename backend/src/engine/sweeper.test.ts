@@ -1277,6 +1277,26 @@ describe("a rule muted while the sweep is out", () => {
   });
 });
 
+describe("a rule muted while the expiry notices go out", () => {
+  // The expiry lifecycle sends its notices between reading the watchlist and quarantining what it
+  // cannot read: a rule muted in that window came back disabled as "unreadable", its reason
+  // overwritten, with a notice about a rule nobody watches.
+  it("is not quarantined as unreadable, and keeps the reason it was muted for", async () => {
+    monitor({ strike_date: past() });
+    const bad = combo({ strike_date: "the first of never" });
+    // the owner mutes it while the expiry notice is out, once
+    const muting = (text: string) => {
+      if (sent.length === 0) {
+        db.prepare("update monitors set enabled = 0, disabled_reason = 'manual' where id = ?").run(bad);
+      }
+      sent.push(text);
+    };
+    await sweeper(quoting("option_delta", {}), {}, muting).sweep();
+    expect(row(bad)!.disabled_reason).toBe("manual");
+    expect(sent.filter((t) => t.includes("could not be read"))).toEqual([]);
+  });
+});
+
 /** A rule REDEFINED while the sweep is out (#359's review): a held 1×3 corrected to a 1×2 takes its
  *  value rule with it, and a PATCH to /monitors may change a rule's field (#292). The batch was
  *  valued against the row read BEFORE the fetch, so an answer to the old definition must not be

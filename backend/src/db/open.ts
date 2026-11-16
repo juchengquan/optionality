@@ -61,6 +61,9 @@ export function atomic<T>(db: DatabaseSync, fn: () => T): T {
   try {
     const out = fn();
     if (out instanceof Promise || typeof (out as { then?: unknown })?.then === "function") {
+      // refused, but already running: its eventual rejection must not reach Node as unhandled,
+      // which this process treats as fatal (main.ts)
+      (out as PromiseLike<unknown>).then(undefined, () => {});
       throw new Error("a transaction's body must not await: it would hold the transaction open "
         + "for every other request while it waits");
     }

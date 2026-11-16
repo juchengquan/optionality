@@ -1243,6 +1243,26 @@ class TestARuleMutedWhileTheSweepIsOut:
         assert t.sent == []
 
 
+class TestARuleMutedWhileTheExpiryNoticesGoOut:
+    """The expiry lifecycle sends its notices between reading the watchlist and quarantining what it
+    cannot read: a rule muted in that window came back disabled as "unreadable", its reason
+    overwritten, with a notice about a rule nobody watches."""
+
+    async def test_is_not_quarantined_as_unreadable_and_keeps_its_reason(self, t: Sweeps) -> None:
+        t.monitor(strike_date=t.past())
+        bad = t.combo(strike_date="the first of never")
+
+        def muting(text: str) -> None:
+            # the owner mutes it while the expiry notice is out, once
+            if not t.sent:
+                t.db.execute("update monitors set enabled = 0, disabled_reason = 'manual' where id = ?", (bad,))
+            t.sent.append(text)
+
+        await t.sweeper(quoting("option_delta", {}), send=muting).sweep()
+        assert t.row(bad)["disabled_reason"] == "manual"
+        assert [m for m in t.sent if "could not be read" in m] == []
+
+
 class TestARuleRedefinedWhileTheSweepIsOut:
     """A rule REDEFINED while the sweep is out (#359's review): a held 1×3 corrected to a 1×2 takes its value
     rule with it, and a PATCH to /monitors may change a rule's field (#292). The batch was valued against the

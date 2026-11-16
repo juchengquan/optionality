@@ -339,6 +339,9 @@ export class MonitorSweeper {
     const notices: string[] = [];
     await atomic(db, () => {
       for (const monitor of rows) {
+        // re-read, as the other two quarantines do: the expiry notices were sent after these rows
+        // were read, and a rule muted meanwhile keeps the reason it was muted for
+        if (!stillTheRule(db, monitor)) continue;
         const reason: DisabledReason = "unreadable";
         updateMonitorFields(db, monitor.id, {
           enabled: toSqliteBool(false), disabled_reason: reason,

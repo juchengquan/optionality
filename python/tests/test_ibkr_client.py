@@ -506,6 +506,30 @@ def test_a_close_made_while_connecting_leaves_no_connection_behind() -> None:
     assert [r["code"] for r in strict("normal-with-greeks", ask).records] == [OPTION]
 
 
+def test_a_caller_arriving_as_the_last_one_gives_up_gets_a_connect_of_its_own() -> None:
+    """The last waiter's cancel cancels the shared connect — and a caller arriving in that same tick
+    must start a new one, never be handed the cancelled task and its CancelledError."""
+
+    class Slow(IbkrClient):
+        async def _open(self) -> Any:
+            await asyncio.sleep(0.2)
+            raise ConnectionError("the slow gateway, at last")
+
+    async def run() -> Any:
+        client = Slow(port=1, client_id=31419)
+        a = asyncio.ensure_future(client._connected())
+        await asyncio.sleep(0.01)
+        a.cancel()
+        await asyncio.sleep(0)  # A gives up, and as the last waiter cancels the connect
+        b = asyncio.ensure_future(client._connected())  # B arrives in that tick, cancelled by nobody
+        with pytest.raises(asyncio.CancelledError):
+            await a
+        with pytest.raises(ConnectionError, match="the slow gateway"):
+            await b
+
+    asyncio.run(run())
+
+
 def test_a_failed_ask_tears_down_only_its_own_connection_never_one_opened_since() -> None:
     """Ask A waits on a lookup the gateway never answers. Its connection dies under it, ask B
     reconnects and is answered, and only then does A give up. A's teardown used to close whatever

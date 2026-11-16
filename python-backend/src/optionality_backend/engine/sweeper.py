@@ -391,6 +391,10 @@ class MonitorSweeper:
 
         def apply() -> None:
             for monitor in rows:
+                # re-read, as the other two quarantines do: the expiry notices were sent after these rows
+                # were read, and a rule muted meanwhile keeps the reason it was muted for
+                if not _still_the_rule(db, monitor):
+                    continue
                 reason: DisabledReason = "unreadable"
                 update_monitor_fields(db, monitor["id"], {"enabled": to_sqlite_bool(False), "disabled_reason": reason})
                 # the words are `optionality.lifecycle.unreadable_notice`'s (ADR 0017); this applies it

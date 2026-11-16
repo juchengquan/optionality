@@ -696,6 +696,10 @@ class IbkrClient:
             # nobody would hold the client id
             if self._connect_waiters == 1 and not task.done():
                 task.cancel()
+                # forgotten NOW, not when the task finishes cancelling a tick later: a caller who
+                # arrives in between must start a connect of its own, not inherit this cancel
+                if self._connecting is task:
+                    self._connecting = None
             raise
         finally:
             self._connect_waiters -= 1

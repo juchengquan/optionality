@@ -195,6 +195,20 @@ describe("a transaction", () => {
     expect([count("monitors"), count("positions")]).toEqual([1, 1]);
   });
 
+  it("leaves no unhandled rejection behind when the refused body later fails", async () => {
+    const unhandled: unknown[] = [];
+    const listen = (reason: unknown) => { unhandled.push(reason); };
+    process.on("unhandledRejection", listen);
+    try {
+      expect(() => atomic(db, (async () => { throw new Error("late"); }) as unknown as () => void))
+        .toThrow(/must not await/);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", listen);
+    }
+  });
+
   it("refuses a body that awaits, rolling back what it did before", () => {
     expect(() => atomic(db, (async () => { monitor("a".repeat(32)); }) as unknown as () => void))
       .toThrow(/must not await/);
