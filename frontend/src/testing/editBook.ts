@@ -15,7 +15,7 @@ export const EDIT_HEALTH = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
     fetched_at: "2026-11-10 23:14:05+08:00" },
-  settings: { sweep_seconds: 15, expired_retention_days: 5, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 5, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 
 export interface Write { what: string; body: unknown }

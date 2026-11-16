@@ -11,7 +11,7 @@ import { until } from "../testing/until";
 const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 const spread = {
   id: "w1", code: "1218_7150P", strike_date: "2026-12-18", option_type: "CMB",
@@ -415,7 +415,7 @@ describe("the References strip outside the session (#371)", () => {
       await open();
       await until(() => expect(document.querySelectorAll(".references .reference")).toHaveLength(2));
       for (const r of document.querySelectorAll(".references .reference")) {
-        expect(r.textContent, "every reading says when").toMatch(/(read|tried) at 06:58$/);
+        expect(r.textContent, "every reading says when").toMatch(/(read|tried) at 06:58 SGT$/);
       }
     });
   }
@@ -469,7 +469,7 @@ describe("a holding's history in session (#353)", () => {
         { name: where === "desk" ? "1231_7000P" : "details of 1231_7000P" }));
       await quiet();
       expect(calls.filter((c) => c.endsWith("/samples")), `shut, nothing\n${said()}`).toEqual([]);
-      fireEvent.click(screen.getByRole("button", { name: "history" }));
+      fireEvent.click(screen.getByRole("button", { name: "History" }));
       await quiet();
       expect(calls.filter((c) => c === "/positions/p1/samples"), `opened, once\n${said()}`).toHaveLength(1);
       // three polls with it open, each its own new valuation of the holding
@@ -486,7 +486,7 @@ describe("a holding's history in session (#353)", () => {
 
 describe("the desk inspector's history, by the session (#372)", () => {
   const samplesAsked = () => calls.filter((c) => c === "/positions/p1/samples").length;
-  const history = () => screen.getByRole("button", { name: "history" });
+  const history = () => screen.getByRole("button", { name: "History" });
   const inspect = async () => {
     fireEvent.click(await screen.findByRole("button", { name: "1231_7000P" }));
     await quiet();
@@ -565,7 +565,7 @@ describe("the desk inspector's history, by the session (#372)", () => {
 
 describe("a holding's history in the phone's sheet, by the session (#374)", () => {
   const samples = () => calls.filter((c) => c === "/positions/p1/samples").length;
-  const toggle = () => within(screen.getByRole("dialog")).getByRole("button", { name: "history" });
+  const toggle = () => within(screen.getByRole("dialog")).getByRole("button", { name: "History" });
   async function openSheet() {
     fireEvent.click(await screen.findByRole("button", { name: "details of 1231_7000P" }));
     await screen.findByRole("dialog");
@@ -611,7 +611,7 @@ describe("a holding's history in the phone's sheet, by the session (#374)", () =
     await quiet();
     expect(toggle().getAttribute("aria-expanded")).toBe("false");
     expect(samples(), `still shut, nothing\n${said()}`).toBe(0);
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "close sheet" }));
     await until(() => expect(screen.queryByRole("dialog")).toBeNull());
     await openSheet();
     expect(toggle().getAttribute("aria-expanded")).toBe("true");
@@ -654,7 +654,7 @@ describe("what is read again, and when", () => {
     expect(calls, said()).toContain("/references");
     calls = [];
     fireEvent.change(screen.getByLabelText("code"), { target: { value: "US.QQQ" } });
-    fireEvent.click(screen.getByRole("button", { name: "keep it" }));
+    fireEvent.click(screen.getByRole("button", { name: "add reference" }));
     await until(() => expect(writes).toContain("POST /references"));
     await quiet();
     expect(calls, said()).toContain("/references");
@@ -746,7 +746,9 @@ describe("when part of the service fails", () => {
     const line = await screen.findByRole("status", { name: "needs you" });
     expect(line.textContent).toContain("moomoo down");
     expect(line.textContent).toContain("quarantined");
-    expect(screen.getByRole("alert").textContent).toContain("/quotes → 502");
+    // in plain words, the raw status kept for a pointer (part N)
+    expect(screen.getByRole("alert").textContent).toContain("the service failed (502); tried again at the next poll");
+    expect(screen.getByRole("alert").getAttribute("title")).toBe("/quotes → 502");
   });
 
   it("keeps a watched row's last close, read apart from /quotes, through a Provider outage (#402)", async () => {
@@ -764,8 +766,10 @@ describe("when part of the service fails", () => {
     await act(async () => { vi.advanceTimersByTime(15_000); });
     await quiet();
     expect(calls, said()).toContain("/monitors/closes");
-    await waitFor(() => expect(row().textContent).toContain("−3.85 (Fri 16:14)"));
-    expect(screen.getByRole("alert").textContent).toContain("/quotes → 502");
+    await waitFor(() => expect(row().textContent).toContain("−3.85 (Fri 16:14 ET)"));
+    // in plain words, the raw status kept for a pointer (part N)
+    expect(screen.getByRole("alert").textContent).toContain("the service failed (502); tried again at the next poll");
+    expect(screen.getByRole("alert").getAttribute("title")).toBe("/quotes → 502");
   });
 
   it("does not read the closes on a poll in the session while /quotes answers", async () => {
@@ -900,7 +904,7 @@ describe("one page at every hour (#375)", () => {
       expect(sheet.getAttribute("data-side")).toBe("bottom");
       expect(within(sheet).getByLabelText("up is")).toBeTruthy();
       expect(screen.getByRole("region", { name: "Holdings", hidden: true })).toBeTruthy();
-      fireEvent.click(within(sheet).getByRole("button", { name: "Close" }));
+      fireEvent.click(within(sheet).getByRole("button", { name: "close sheet" }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
       // and Add the sheet it was from the tab bar
       fireEvent.click(within(head).getByRole("button", { name: "add" }));

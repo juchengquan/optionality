@@ -20,15 +20,15 @@
  */
 import type { Entry, Health, Holding, Monitor, Reference } from "../shared/api";
 import { DASH, freshnessWords, shortDate } from "../shared/format";
-import { GROUPS } from "../shared/groups";
+import { GROUPS, headingOf, reasonLabel } from "../shared/groups";
 import { drawnReadings, referenceWords } from "../shared/readings";
 
 import { PINNED, PLAIN_COLUMNS, rowName, rowStrip, type DeskColumn, type DeskRow } from "../desk/columns";
 import { closedLineText, levelWords } from "../levels";
 import { monitorName, storedRuleWords, type Need } from "../needs";
-import { mutedWords } from "../phone/figures";
 import { placeBook, type PlacedHolding } from "../placement";
 import { servedWhen, type MarketPhase } from "../session";
+import { ET, zoneName } from "../shared/times";
 import { compactWords, nearest, strikeName } from "../strip";
 
 /** What the view is made from: the page's figures as they stood at the press. */
@@ -127,8 +127,9 @@ function shownColumns(hidden: ReadonlySet<string>): DeskColumn[] {
 
 // ---- the muted rules, by their reasons
 
-/** Why a rule is off, as the muted rules' heading says it (#400): the phone's words for it. */
-const reasonWords = (reason: string | null) => reason === null ? "reason not recorded" : mutedWords(reason);
+/** Why a rule is off, as the muted rules' heading says it (#400): the page's one set of words for it
+ *  (`shared/groups.ts`, part I). */
+const reasonWords = (reason: string | null) => headingOf(reasonLabel(reason));
 
 /** The muted rules grouped by why they are off, in the desk's fold's order (`GROUPS`), and any reason
  *  it does not know after them, so no rule is dropped. */
@@ -171,7 +172,7 @@ export function plainView(input: PlainInput): PlainView {
   }));
   if (placed.unplaced.length > 0) {
     holdingGroups.push({
-      heading: `rules on held contracts — ${input.holdings === null
+      heading: `Rules on held contracts — ${input.holdings === null
         ? "the holdings are not valued, so the rules about them are listed on their own"
         : "each watches a held contract that no single holding owns, as on a roll day"}`,
       rows: placed.unplaced.map((e) => row({ kind: "rule", entry: e, nested: false })),
@@ -188,7 +189,7 @@ export function plainView(input: PlainInput): PlainView {
   }));
   if (placed.quarantined.length > 0) {
     watchGroups.push({
-      heading: "quarantined — switched off by the service",
+      heading: "Quarantined — switched off by the service",
       rows: placed.quarantined.map((m) => watchRow({ kind: "quarantined", monitor: m })),
     });
   }
@@ -250,14 +251,15 @@ function tidy(view: PlainView): PlainView {
 
 const WALL = (timeZone: string) => new Intl.DateTimeFormat("en-US", {
   timeZone, weekday: "short", day: "numeric", month: "short", year: "numeric",
-  hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short",
+  hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
 
-/** "Sun 15 Nov 2026 12:00 EST", in a zone; null for a zone the browser does not know. */
+/** "Sun 15 Nov 2026 12:00", in a zone, its name said by the caller; null for a zone the browser
+ *  does not know. */
 function wallTime(at: Date, timeZone: string): string | null {
   try {
     const p = Object.fromEntries(WALL(timeZone).formatToParts(at).map((x) => [x.type, x.value]));
-    return `${p.weekday} ${p.day} ${p.month} ${p.year} ${p.hour}:${p.minute} ${p.timeZoneName}`;
+    return `${p.weekday} ${p.day} ${p.month} ${p.year} ${p.hour}:${p.minute}`;
   } catch {
     return null;
   }
@@ -265,13 +267,13 @@ function wallTime(at: Date, timeZone: string): string | null {
 
 const NEW_YORK = "America/New_York";
 
-/** When the view was taken: on New York's clock, which the session is, and on DISPLAY_TZ's, which
- *  every time the service states is in — the second left out where the service has not said its
- *  zone, or it is New York's. */
+/** When the view was taken: on New York's clock, which the session is, marked `ET`, and on
+ *  DISPLAY_TZ's, which every time the service states is in, marked with its short name, `SGT`
+ *  (part F) — the second left out where the service has not said its zone, or it is New York's. */
 export function takenWords(at: Date, displayTz: string | null): string {
-  const ny = `${wallTime(at, NEW_YORK)} (New York)`;
+  const ny = `${wallTime(at, NEW_YORK)} ${ET}`;
   const there = displayTz && displayTz !== NEW_YORK ? wallTime(at, displayTz) : null;
-  return there ? `${ny} · ${there} (${displayTz})` : ny;
+  return there ? `${ny} · ${there} ${zoneName(displayTz!, at)}` : ny;
 }
 
 /** The needs-you line in words, every item named: a picture cannot be opened to read "+2 more". */
@@ -294,7 +296,7 @@ function headerLines(input: PlainInput): PlainLine[] {
     },
     {
       label: "figures",
-      text: freshnessWords(health?.monitor.fetched_at ?? null, input.polledAt, health?.settings.sweep_seconds ?? null),
+      text: freshnessWords(health?.monitor.fetched_at ?? null, input.polledAt, health?.settings.sweep_seconds ?? null, takenAt),
     },
   ];
   if (input.error) lines.push({ label: "warning", text: input.error });

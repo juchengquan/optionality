@@ -24,6 +24,7 @@ import { DirectionPair } from "./DirectionPair";
 import { HoldOrWatch } from "./HoldOrWatch";
 import { TakeOver } from "./TakeOver";
 import { ALL_OR_NONE, type HeldLegs } from "./add";
+import { plainError } from "./shared/errors";
 
 export function AddContract({
   privacy, monitors, holdings, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving, prefilled,
@@ -71,7 +72,7 @@ export function AddContract({
     try {
       onSaved(await addSpreads(out.body));
     } catch (err: unknown) {
-      const text = err instanceof Error ? err.message : String(err);
+      const text = plainError(err);
       setError({ text, at: refusalSpot(text) });
     } finally {
       setSaving(false);
@@ -186,11 +187,11 @@ export function AddContract({
                       it gone, "on" alone said nothing of what was on */}
                   <button type="button" role="switch" aria-checked={draft.rule}
                           className="nx-add-switch" onClick={() => set({ rule: !draft.rule })}>
-                    {draft.rule ? "Monitor on" : "Monitor off"}
+                    {draft.rule ? "rule on" : "rule off"}
                   </button>
                 </div>
               ) : null}
-              <p className="nx-add-sentence" data-testid="contract-draft" aria-live="polite">{ruleOn ? <ShortWords short={words} full={wordsFull} /> : "no Monitor: the holding alone"}</p>
+              <p className="nx-add-sentence" data-testid="contract-draft" aria-live="polite">{ruleOn ? <ShortWords short={words} full={wordsFull} /> : "no rule: the holding alone"}</p>
               <div className="nx-add-rule-fields">
                 <label className="nx-add-field">
                   <span>what it watches</span>

@@ -26,7 +26,7 @@ const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
     fetched_at: "2026-11-10 23:14:05+08:00" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 
 function serveOwnerBook(quotes: object[] = QUOTES, holdings: object[] = HOLDINGS): void {
@@ -237,7 +237,7 @@ describe("the detail sheet", () => {
     await screen.findByRole("dialog");
     await animationsDone();
     expect(history.state?.panel).toBe(true);
-    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
+    await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "close sheet" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await settle();
     // the entry it pushed was taken back off: the page is on the entry it was on before
@@ -255,7 +255,7 @@ describe("a holding's history in its sheet: on demand in session (#353), open ou
       await userEvent.click(within(card(ref)).getByRole("button", { name: /details of/ }));
       const sheet = await screen.findByRole("dialog");
       await animationsDone();
-      const toggle = within(sheet).getByRole("button", { name: "history" });
+      const toggle = within(sheet).getByRole("button", { name: "History" });
       expect(toggle.getAttribute("aria-expanded")).toBe(session ? "false" : "true");
       if (session) {
         expect(sheet.querySelector(".nx-hist")).toBeNull();
@@ -359,11 +359,11 @@ describe("the book outside the session (#374)", () => {
     const first = sheet.querySelector<SVGCircleElement>("[data-sample] [data-mark]")!.getBoundingClientRect();
     const box = svg.getBoundingClientRect();
     await userEvent.click(svg, { position: { x: first.left - box.left + 6, y: first.top - box.top + 14 } });
-    expect(said.textContent).toMatch(/^3 Nov · 45 DTE .* not the close: observed 20:30 New York, after the 16:15 close/);
+    expect(said.textContent).toMatch(/^3 Nov · 45 DTE .* not the close: observed 20:30 ET, after the 16:15 ET close/);
   });
 });
 
-/** "market closed — valued at 01:00" (#371), in the book outside the session: not clipped, nothing
+/** "market closed — valued at 01:00 SGT" (#371), in the book outside the session: not clipped, nothing
  *  pushed sideways. Its words alone since #410 — the header's refresh is the one there is. */
 describe("the market-closed line on the phone", () => {
   const stamped = HOLDINGS.map((h) => ({ ...h, fetched_at: "2026-11-16 01:00:12+08:00" }));
@@ -371,7 +371,7 @@ describe("the market-closed line on the phone", () => {
     outsideTheSession();
     await show(QUOTES, stamped);
     const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
-    expect(line.textContent).toBe("market closed — valued at 01:00");
+    expect(line.textContent).toBe("market closed — valued at 01:00 SGT");
     expect(within(line).queryByRole("button")).toBeNull();
     const box = line.getBoundingClientRect();
     for (const el of [line, ...line.querySelectorAll<HTMLElement>("*")]) {
@@ -399,7 +399,7 @@ describe("a Level's chip outside the session, with its valuation's time", () => 
     await show(QUOTES, levelled);
     for (const ref of ["h-calls", "h-puts", "h-ic"]) {
       const chip = card(ref).querySelector<HTMLElement>(".nx-chip")!;
-      expect(chip.textContent).toMatch(/^at (stop|target) · as valued at 00:59$/);
+      expect(chip.textContent).toMatch(/^at (stop|target) · as valued at 00:59 SGT$/);
       const box = card(ref).getBoundingClientRect();
       const r = chip.getBoundingClientRect();
       expect(r.left >= box.left && r.right <= box.right, `${ref}'s chip inside its card`).toBe(true);
@@ -409,7 +409,7 @@ describe("a Level's chip outside the session, with its valuation's time", () => 
     await userEvent.click(within(card("h-calls")).getByRole("button", { name: /details of/ }));
     const sheet = await screen.findByRole("dialog");
     await animationsDone();
-    expect(sheet.querySelector(".nx-chip")!.textContent).toBe("at stop · as valued at 00:59");
+    expect(sheet.querySelector(".nx-chip")!.textContent).toBe("at stop · as valued at 00:59 SGT");
     expect(pastTheEdge(sheet)).toEqual([]);
     expect(overflowsSideways()).toBe(false);
   });

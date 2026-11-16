@@ -73,7 +73,7 @@ describe("the arrangement is chosen by the measured width", () => {
 /** The desk's header with no switch in it (#375): "optionality", the spacer, and the buttons on one
  *  row at the right — no gap where the Live/Review switch stood, in session and out of it. */
 describe("the header, with no switch", () => {
-  const SUNDAY = new Date("2026-11-15T17:00:00Z"); // 12:00 New York, outside the session
+  const SUNDAY = new Date("2026-11-15T17:00:00Z"); // 12:00 ET, outside the session
   for (const width of [900, 1280, 2560]) for (const outside of [false, true]) {
     it(`at ${width}px ${outside ? "outside the session" : "in session"}: the title, then the buttons on one row`, async () => {
       if (outside) vi.setSystemTime(SUNDAY);

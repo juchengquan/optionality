@@ -202,8 +202,8 @@ describe("the payoff preview", () => {
 
 describe("the save button's words", () => {
   it("says what a save makes, never a count of contracts", () => {
-    expect(contractSaveWords(put())).toBe("Watch it + 1 Monitor");
-    expect(contractSaveWords(put({ held: true, contracts: "7" }))).toBe("Record holding + 1 Monitor");
+    expect(contractSaveWords(put())).toBe("Watch it + 1 rule");
+    expect(contractSaveWords(put({ held: true, contracts: "7" }))).toBe("Record holding + 1 rule");
     expect(contractSaveWords(put({ held: true, rule: false }))).toBe("Record holding");
   });
 });

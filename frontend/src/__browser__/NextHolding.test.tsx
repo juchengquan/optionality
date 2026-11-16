@@ -52,15 +52,15 @@ describe("changing a holding from the inspector", () => {
   it("edits it, closes it with the served Cost to close, corrects the close, and deletes another", async () => {
     const s = await openDesk();
     let insp = await inspect("h-ic");
-    await userEvent.click(within(insp).getByRole("button", { name: "Edit" }));
+    await userEvent.click(within(insp).getByRole("button", { name: "edit" }));
     await userEvent.fill(within(insp).getByLabelText("entry, per contract"), "5.2");
-    await userEvent.click(within(insp).getByRole("button", { name: "Save" }));
+    await userEvent.click(within(insp).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes(s)).toEqual([["PATCH /positions/h-ic", { entry: 5.2 }]]));
 
     insp = screen.getByRole("complementary", { name: /^inspector:/ });
-    await userEvent.click(within(insp).getByRole("button", { name: "Close…" }));
+    await userEvent.click(within(insp).getByRole("button", { name: "close…" }));
     expect(Number((within(insp).getByLabelText("exit, per contract") as HTMLInputElement).value)).toBe(1.225);
-    await userEvent.click(within(insp).getByRole("button", { name: "Close holding" }));
+    await userEvent.click(within(insp).getByRole("button", { name: "close it" }));
     const result = await screen.findByRole("region", { name: "closed 1231_IC" });
     expect(writes(s)[1]).toEqual(["POST /positions/h-ic/close", { exit: 1.225, closed_on: "2026-11-12" }]);
     expect(document.querySelector('[data-ref="h-ic"]')).toBeNull();
@@ -75,10 +75,10 @@ describe("changing a holding from the inspector", () => {
     await userEvent.click(within(result).getByRole("button", { name: "Done" }));
 
     insp = await inspect("h-puts");
-    await userEvent.click(within(insp).getByRole("button", { name: "Delete…" }));
+    await userEvent.click(within(insp).getByRole("button", { name: "delete…" }));
     const ask = within(insp).getByRole("group", { name: "delete 1218_P6400?" });
     expect(ask.textContent).toMatch(/daily samples are deleted with it/);
-    await userEvent.click(within(ask).getByRole("button", { name: "Delete for good" }));
+    await userEvent.click(within(ask).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes(s)[3]).toEqual(["DELETE /positions/h-puts", null]));
     await waitFor(() => expect(document.querySelector('[data-ref="h-puts"]')).toBeNull());
   });
@@ -87,7 +87,7 @@ describe("changing a holding from the inspector", () => {
     it(`fits every form beside the table at ${width}px, pushing nothing sideways`, async () => {
       await openDesk(width);
       const insp = await inspect("h-ic");
-      for (const name of ["Edit", "Close…", "Delete…"]) {
+      for (const name of ["edit", "close…", "delete…"]) {
         await userEvent.click(within(insp).getByRole("button", { name }));
         await settle();
         expect(overflowsSideways()).toBe(false);
@@ -100,7 +100,7 @@ describe("changing a holding from the inspector", () => {
     it(`fits a quantity's correction and its preview in the inspector at ${width}px (#359)`, async () => {
       const s = await openDesk(width);
       const insp = await inspect("h-ic");
-      await userEvent.click(within(insp).getByRole("button", { name: "Edit" }));
+      await userEvent.click(within(insp).getByRole("button", { name: "edit" }));
       const qty = within(insp).getByRole("group", { name: "quantity of each leg" });
       const boxes = within(qty).getAllByLabelText(/^quantity, /);
       expect(boxes).toHaveLength(4);
@@ -112,7 +112,7 @@ describe("changing a holding from the inspector", () => {
       await settle();
       expect(overflowsSideways()).toBe(false);
       expect(pastTheEdge(insp)).toEqual([]);
-      await userEvent.click(within(insp).getByRole("button", { name: "Save" }));
+      await userEvent.click(within(insp).getByRole("button", { name: "save" }));
       await waitFor(() => expect(writes(s)).toHaveLength(1));
       expect((writes(s)[0]![1] as { legs: { qty?: number }[] }).legs.map((l) => l.qty ?? 1)).toEqual([1, 1, 2, 1]);
     });
@@ -121,8 +121,8 @@ describe("changing a holding from the inspector", () => {
   it("draws the close's account above the table, in view and with the focus on it", async () => {
     await openDesk();
     const insp = await inspect("h-ic");
-    await userEvent.click(within(insp).getByRole("button", { name: "Close…" }));
-    await userEvent.click(within(insp).getByRole("button", { name: "Close holding" }));
+    await userEvent.click(within(insp).getByRole("button", { name: "close…" }));
+    await userEvent.click(within(insp).getByRole("button", { name: "close it" }));
     const result = await screen.findByRole("region", { name: "closed 1231_IC" });
     await settle();
     const r = result.getBoundingClientRect();

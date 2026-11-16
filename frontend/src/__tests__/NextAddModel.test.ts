@@ -178,18 +178,18 @@ describe("what it refuses before posting", () => {
   it("a held spread's stop with no Entry to double", () => {
     const d = condor();
     expect(refused({ ...d, spreads: [{ ...d.spreads[0]!, entry: "" }] }))
-      .toBe("spread 1: type the Entry, or the value its Monitor watches for");
+      .toBe("spread 1: type the Entry, or the value its rule watches for");
   });
 
   it("a watched spread's thresholds left blank", () => {
     expect(refused({ ...condor(false), spreads: [{ ...condor(false).spreads[0]!, entry: "" }] }))
-      .toBe("spread 1: type the value its Monitor watches for");
+      .toBe("spread 1: type the value its rule watches for");
   });
 
   it("a watched spread with every Monitor switched off", () => {
     const d = condor(false);
     expect(refused({ ...d, spreads: [{ ...d.spreads[0]!, valueOn: false, deltaOn: false }] }))
-      .toBe("spread 1 is watched and has no Monitor: switch one on");
+      .toBe("spread 1 is watched and has no rule: switch one on");
   });
 
   it("a count that is not a whole number of contracts", () => {
@@ -250,7 +250,7 @@ describe("a debit spread's stop", () => {
     const d = debit();
     const on = { ...d, spreads: [{ ...d.spreads[0]!, valueOn: true }] };
     expect(valueEnabled(true, on.spreads[0]!)).toBe(true);
-    expect(spreadsBody(on)).toEqual({ error: "spread 1: type the value its Monitor watches for" });
+    expect(spreadsBody(on)).toEqual({ error: "spread 1: type the value its rule watches for" });
   });
 
   it("gives a watched figure way to the holding's default when held — an empty ≤, on — and keeps it for Watch (owner, #408)", () => {
@@ -258,7 +258,7 @@ describe("a debit spread's stop", () => {
     const watched = { ...d.spreads[0]!, watchAt: "0.40", watchDirection: "above" as const };
     // held: the entry signal is no stop — the rule stays on, at or below, for the stop to be typed
     expect([valueEnabled(true, watched), valueDirectionShown(true, watched), valueShown(true, watched)]).toEqual([true, "below", ""]);
-    expect(spreadsBody({ ...d, spreads: [watched] })).toEqual({ error: "spread 1: type the value its Monitor watches for" });
+    expect(spreadsBody({ ...d, spreads: [watched] })).toEqual({ error: "spread 1: type the value its rule watches for" });
     // and back on Watch, what was typed
     expect([valueEnabled(false, watched), valueDirectionShown(false, watched), valueShown(false, watched)]).toEqual([true, "above", "0.40"]);
     // the stop typed held is the held one's, and a box emptied to retype stays on
@@ -419,7 +419,7 @@ describe("a structure with no short leg", () => {
     expect(deltaEnabled(d.spreads[0]!)).toBe(false);
     expect(spreadsBody(d)).not.toHaveProperty("error");
     expect(bodyOf(d).spreads[0]!.monitors).toEqual([]);
-    expect(saveWords(d)).toBe("Record holding + 0 Monitors");
+    expect(saveWords(d)).toBe("Record holding + 0 rules");
   });
 
   it("gets one again once a leg is made short, and keeps a switch the owner set", () => {
@@ -427,7 +427,7 @@ describe("a structure with no short leg", () => {
     const key = d.spreads[0]!.key;
     expect(deltaEnabled(flipSide(d, key, 0).spreads[0]!)).toBe(true);
     const on = { ...d, spreads: [{ ...d.spreads[0]!, deltaOn: true }] };
-    expect(spreadsBody(on)).toEqual({ error: "spread 1 has no short leg to watch the delta of: switch that Monitor off" });
+    expect(spreadsBody(on)).toEqual({ error: "spread 1 has no short leg to watch the delta of: switch that rule off" });
   });
 });
 

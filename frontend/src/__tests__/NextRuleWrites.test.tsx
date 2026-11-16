@@ -1,4 +1,4 @@
-/** Renaming a combo and splitting a total entry from a rule's controls (#336), and "Record as held"
+/** Renaming a combo and splitting a total entry from a rule's controls (#336), and "record as held"
  *  from a watch rule's (#408) — in the desk's inspector and the phone's sheet alike. Behaviour: what is
  *  sent, what is said before and after, and where a refusal is said. That it is VISIBLE, 16px and
  *  44pt on a phone is the browser suites' (`__browser__/NextRuleWrites*.test.tsx`). */
@@ -104,7 +104,7 @@ describe("renaming a combo from its editor", () => {
     controls(HELD);
     const form = await openEditor("1218_C7300 value");
     expect(form.textContent).toContain(
-      "Renames this Monitor only: the holding 1218_C7300 keeps its name — the service never renames a holding.");
+      "Renames this rule only: the holding 1218_C7300 keeps its name — the service never renames a holding.");
   });
 });
 
@@ -181,7 +181,7 @@ describe("splitting a total entry", () => {
 describe("Record as held (#408)", () => {
   it("is offered on a watched spread and a watched contract, and not on a rule on something held", () => {
     controls(LONE);
-    expect(screen.getByRole("button", { name: "record 261231 8000C Δ as held" }).textContent).toBe("Record as held");
+    expect(screen.getByRole("button", { name: "record 261231 8000C Δ as held" }).textContent).toBe("record as held");
     cleanup();
     controls(SPREAD);
     expect(screen.getByRole("button", { name: "record 1218_P7150 value as held" })).toBeTruthy();
@@ -348,7 +348,7 @@ describe("through the page, against a service that writes", () => {
     expect(within(form).getByText("Replaces the watch rules: 1218_P7150 |value| ≥ 6.00, 7150 put |Δ| ≥ 0.20")).toBeTruthy();
     fireEvent.change(within(form).getByLabelText("spread 1 entry"), { target: { value: "2.40" } });
     fireEvent.change(within(form).getByLabelText("spread 1 contracts"), { target: { value: "3" } });
-    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 2 Monitors" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 2 rules" }));
     await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
     expect(SpreadsIn.safeParse(writes[0]!.body).success).toBe(true);
     expect(writes[0]!.body).toEqual({
@@ -359,7 +359,7 @@ describe("through the page, against a service that writes", () => {
         monitors: [{ threshold: -4.8, direction: "below", compare: "signed" }, { option_type: "PUT", strike: 7150, threshold: 0.3 }],
       }],
     });
-    expect(await screen.findByText("added 1 holding and 2 Monitors, replacing 2 watch rules")).toBeTruthy();
+    expect(await screen.findByText("added 1 holding and 2 rules, replacing 2 watch rules")).toBeTruthy();
     // both sheets gone — the watch rule the detail showed is gone with it — and the holding in the book
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
     await waitFor(() => expect(detail.isConnected).toBe(false));
@@ -405,7 +405,7 @@ describe("through the page, against a service that writes", () => {
       .getAttribute("aria-pressed")).toBe("true");
     expect(within(form).getByText("Replaces the watch rules: 8000 call |Δ| ≥ 0.10")).toBeTruthy();
     fireEvent.change(within(form).getByLabelText("entry"), { target: { value: "0.8" } });
-    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 1 Monitor" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 1 rule" }));
     await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
     expect(writes[0]!.body).toEqual({
       strike_date: "2026-12-31",
@@ -415,7 +415,7 @@ describe("through the page, against a service that writes", () => {
         monitors: [{ option_type: "CALL", strike: 8000, field: "option_delta", threshold: 0.1, direction: "above", compare: "abs" }],
       }],
     });
-    expect(await screen.findByText("added 1 holding and 1 Monitor, replacing 1 watch rule")).toBeTruthy();
+    expect(await screen.findByText("added 1 holding and 1 rule, replacing 1 watch rule")).toBeTruthy();
     await screen.findByRole("button", { name: "details of 1231_C8000" });
   });
 
@@ -440,7 +440,7 @@ describe("through the page, against a service that writes", () => {
     expect([value(form, "spread 1, leg 1 quantity"), value(form, "spread 1, leg 2 quantity")]).toEqual(["1", "2"]);
     expect(value(form, "spread 1 name")).toBe("1231_+C7700_-2C7750");
     fireEvent.change(within(form).getByLabelText("spread 1 entry"), { target: { value: "0.50" } });
-    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 2 Monitors" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 2 rules" }));
     await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
     expect(writes[0]!.body).toEqual({
       strike_date: "2026-12-31",
@@ -450,7 +450,7 @@ describe("through the page, against a service that writes", () => {
         monitors: [{ threshold: -1, direction: "below", compare: "signed" }, { option_type: "CALL", strike: 7750, threshold: 0.3 }],
       }],
     });
-    expect(await screen.findByText("added 1 holding and 2 Monitors, replacing 1 watch rule")).toBeTruthy();
+    expect(await screen.findByText("added 1 holding and 2 rules, replacing 1 watch rule")).toBeTruthy();
   });
 
   it("starts a watched debit's stop on at ≤ and empty, and says so in words before sending anything (owner, #408)", async () => {
@@ -466,13 +466,13 @@ describe("through the page, against a service that writes", () => {
       .getByRole("form", { name: "add a spread" });
     // bought, as the owner says by typing a debit: the stop is a fall in its value
     fireEvent.change(within(form).getByLabelText("spread 1 entry"), { target: { value: "-2.40" } });
-    expect(within(form).getByRole("switch", { name: "spread 1 value Monitor" }).getAttribute("aria-checked")).toBe("true");
+    expect(within(form).getByRole("switch", { name: "spread 1 value rule" }).getAttribute("aria-checked")).toBe("true");
     expect(within(within(form).getByRole("group", { name: "spread 1 value direction" })).getByRole("button", { name: "≤ at or below" })
       .getAttribute("aria-pressed")).toBe("true");
     expect(value(form, "spread 1 value threshold")).toBe("");
     expect(within(form).getByText(/^Replaces the watch rules: 1218_P7150 \|value\| ≥ 6\.00/)).toBeTruthy();
     fireEvent.click(within(form).getByRole("button", { name: /^Record holding/ }));
-    expect(within(form).getByRole("alert").textContent).toBe("spread 1: type the value its Monitor watches for");
+    expect(within(form).getByRole("alert").textContent).toBe("spread 1: type the value its rule watches for");
     expect(writes).toEqual([]);
   });
 
@@ -490,10 +490,10 @@ describe("through the page, against a service that writes", () => {
     expect(within(form).getByText(
       "Also links to this holding: 1218_P7150 |Θ| ≥ 0.50 — kept as they are; edit or delete them after.")).toBeTruthy();
     fireEvent.change(within(form).getByLabelText("spread 1 entry"), { target: { value: "2.40" } });
-    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 2 Monitors" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 2 rules" }));
     await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
     expect(await screen.findByText(
-      "added 1 holding and 2 Monitors, replacing 2 watch rules; also linked to it: 1218_P7150 |Θ| ≥ 0.50")).toBeTruthy();
+      "added 1 holding and 2 rules, replacing 2 watch rules; also linked to it: 1218_P7150 |Θ| ≥ 0.50")).toBeTruthy();
   });
 
   it("names a watched spread holding the contract as taken over by a held contract, and reads it back", async () => {
@@ -505,8 +505,8 @@ describe("through the page, against a service that writes", () => {
     const form = within(await addSheet()).getByRole("form", { name: "add one contract" });
     expect(within(form).getByText(/^Also links to this holding: cs \|value\| ≥ /)).toBeTruthy();
     fireEvent.change(within(form).getByLabelText("entry"), { target: { value: "0.8" } });
-    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 1 Monitor" }));
-    expect(await screen.findByText(/^added 1 holding and 1 Monitor, replacing 1 watch rule; also linked to it: cs \|value\| ≥ /))
+    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 1 rule" }));
+    expect(await screen.findByText(/^added 1 holding and 1 rule, replacing 1 watch rule; also linked to it: cs \|value\| ≥ /))
       .toBeTruthy();
   });
 
@@ -532,7 +532,7 @@ describe("through the page, against a service that writes", () => {
     const form = within(await addSheet()).getByRole("form", { name: "add one contract" });
     expect(value(form, "name")).toBe("1231_C8000-2");
     fireEvent.change(within(form).getByLabelText("entry"), { target: { value: "0.8" } });
-    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 1 Monitor" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Record holding + 1 rule" }));
     await waitFor(() => expect(writes).toHaveLength(1));
     expect((writes[0]!.body as { spreads: { name: string }[] }).spreads[0]!.name).toBe("1231_C8000-2");
   });

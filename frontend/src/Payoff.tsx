@@ -49,15 +49,18 @@ import { SvgLegSpan } from "./shared/Legs";
 import { fieldWords } from "./needs";
 import { textWidth, tipPlace } from "./burndown";
 import {
-  labelRows, level, payoffWindow, pnlAt, pnlWords, priceStops, readout, shortWords, snapPrice, stepPrice,
+  labelRows, level, payoffWindow, pnlAt, pnlWords, priceStops, readout, snapPrice, stepPrice,
   type PayoffUnit,
 } from "./payoffChart";
 import { newYorkWeekdayWhen } from "./session";
 import { closeWords, payoffAt } from "./watchhistory";
 import "./payoff.css";
+import { plainError } from "./shared/errors";
 
 /** One spread nobody holds: one contract, in points, and no money to hide. */
-const POINTS: PayoffUnit = { contracts: 1, size: null, hidden: false, perContract: false };
+/** One spread nobody holds, in points per contract as a holding's are said (part L): it is one
+ *  contract, and "pts" alone beside a holding's "pts per contract" read as two units. */
+const POINTS: PayoffUnit = { contracts: 1, size: null, hidden: false, perContract: true };
 
 interface PayoffState {
   /** the payoff on screen, and the key it was asked for under */
@@ -87,7 +90,7 @@ function usePayoff(subject: string, key: string | null, load: () => Promise<Payo
     loader.current().then(
       (payoff) => { if (live) setState({ subject, key, payoff, shown: key }); },
       (err: unknown) => {
-        if (live) setState({ subject, key, error: err instanceof Error ? err.message : String(err) });
+        if (live) setState({ subject, key, error: plainError(err, "open it again to retry") });
       },
     );
     return () => { live = false; };
@@ -373,18 +376,17 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
     return { tipW, ...tipPlace({ x: x(at!), y: y(pnl), W, H, tipW, tipH }) };
   })();
 
-  // the maximums, where finite: on their rule inside the window's figures, its label above a
-  // profit's and below a loss's; else at the plot's edge with an arrow, and the label INSIDE the plot
-  // (under a ▲, over a ▼), so it lands on neither SPX's label in the margin over the plot nor the
-  // legs named in the margin under it
+  // the maximums, where finite: a dashed rule at each, inside the window's figures, or at the plot's
+  // edge with an arrow where it is beyond them. Their FIGURES are said once, in the list under the
+  // chart (the owner's standard, part L): a corner label beside the list said each twice
   const maxima = ([["profit", payoff.max_profit], ["loss", payoff.max_loss]] as const)
     .filter((m): m is readonly ["profit" | "loss", number] => m[1] !== null)
     .filter(([kind, v]) => kind === "profit" || v !== payoff.max_profit)
     .map(([kind, v]) => {
       const off = v > top + 1e-9 ? "above" : v < bottom - 1e-9 ? "below" : null;
       const at = off === "above" ? T : off === "below" ? H - B : y(v);
-      const labelY = off === "above" ? at + 12 : off === "below" ? at - 4 : kind === "profit" ? at - 4 : at + 12;
-      return { kind, v, off, at, labelY, words: `${off === "above" ? "▲ " : off === "below" ? "▼ " : ""}max ${kind} ${shortWords(v, unit)}` };
+      // beyond the window: an arrow at the edge says there is more that way, and the list its figure
+      return { kind, v, off, at, labelY: off === "above" ? at + 12 : at - 4 };
     });
   const spxX = spx === null ? null : x(spx);
 
@@ -406,7 +408,7 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
           {maxima.map((m) => (
             <g key={m.kind} className="nx-payoff-max" data-kind={m.kind} data-off={m.off ?? undefined}>
               <line x1={L} x2={W - R} y1={m.at} y2={m.at} />
-              <text data-max={m.kind} x={W - R} y={m.labelY} textAnchor="end">{m.words}</text>
+              {m.off ? <text data-max={m.kind} x={W - R} y={m.labelY} textAnchor="end">{m.off === "above" ? "▲" : "▼"}</text> : null}
             </g>
           ))}
           <LinePath data-curve="" className="nx-payoff-curve" data={corners} x={(c) => x(c.s)} y={(c) => y(c.v)} />

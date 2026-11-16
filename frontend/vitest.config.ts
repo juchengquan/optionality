@@ -10,8 +10,9 @@ export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
   // __browser__ is the other suite: it needs a real layout engine (ADR 0008)
   //
-  // One `setupFiles`, and only one: `testing/keys.setup.ts`, which fails a test whose page drew two
-  // children with one key (#368) — React only logs it. Nothing else is set up, deliberately. Phase 0
+  // Two `setupFiles`, and only these: `testing/keys.setup.ts`, which fails a test whose page drew two
+  // children with one key (#368) — React only logs it — and the zone's reset below. Nothing else is
+  // set up, deliberately. Phase 0
   // planned stubs for ResizeObserver, matchMedia and friends, on the grounds that jsdom lacks them.
   // jsdom does lack them — but Base UI guards their absence itself, verified by running the
   // components with the stubs removed, so the stubs were dropped rather than shipped dead. If a
@@ -21,7 +22,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: ["src/testing/keys.setup.ts"],
+    // and `testing/zone.setup.ts`, which clears the page's DISPLAY_TZ after each test (part F): module
+    // state, set from /health, that one test must not hand the next
+    setupFiles: ["src/testing/keys.setup.ts", "src/testing/zone.setup.ts"],
     exclude: ["**/node_modules/**", "src/__browser__/**"],
     // TZ=UTC, as backend/vitest.config.ts has always had it — and for a sharper reason here.
     // `clockTime` and `snapshotName` deliberately read the DEVICE's zone, which is what "when this

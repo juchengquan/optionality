@@ -237,6 +237,6 @@ export function contractNote(d: ContractDraft): string {
   return `per contract, at a ${d.side === "long" ? "debit" : "credit"} of ${entry.toFixed(2)}`;
 }
 
-/** What a save will make, said on its button: a holding and a Monitor, never contracts. */
+/** What a save will make, said on its button: a holding and a rule (part G), never contracts. */
 export const contractSaveWords = (d: ContractDraft) =>
-  !d.held ? "Watch it + 1 Monitor" : d.rule ? "Record holding + 1 Monitor" : "Record holding";
+  !d.held ? "Watch it + 1 rule" : d.rule ? "Record holding + 1 rule" : "Record holding";

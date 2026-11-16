@@ -88,7 +88,7 @@ describe.each(arrangements)("on the %s, keeping one", (arrangement) => {
     fireEvent.change(within(refs).getByLabelText("code"), { target: { value: "US.SPY" } });
     fireEvent.change(within(refs).getByLabelText("call it"), { target: { value: "SPX" } });
     fireEvent.change(within(refs).getByLabelText("from"), { target: { value: "ibkr" } });
-    fireEvent.click(within(refs).getByRole("button", { name: "keep it" }));
+    fireEvent.click(within(refs).getByRole("button", { name: "add reference" }));
     await waitFor(() => expect(svc.writes).toHaveLength(1));
     expect(svc.writes[0]).toEqual({
       what: "POST /references", body: { code: "US.SPY", label: "SPX", source: "ibkr" },
@@ -103,7 +103,7 @@ describe.each(arrangements)("on the %s, keeping one", (arrangement) => {
     const svc = await open(arrangement, []);
     const refs = await panel(arrangement);
     fireEvent.change(within(refs).getByLabelText("code"), { target: { value: "US.QQQ" } });
-    fireEvent.click(within(refs).getByRole("button", { name: "keep it" }));
+    fireEvent.click(within(refs).getByRole("button", { name: "add reference" }));
     await waitFor(() => expect(svc.writes).toHaveLength(1));
     expect(svc.writes[0]!.body).toEqual({ code: "US.QQQ", source: "moomoo" });
   });
@@ -135,7 +135,9 @@ describe.each(arrangements)("on the %s, keeping one", (arrangement) => {
     const confirm = within(await screen.findByRole("alertdialog"));
     expect(confirm.getByText(/Delete SPX \(moomoo\)\?/)).toBeTruthy();
     expect(svc.writes).toEqual([]);
-    fireEvent.click(confirm.getByRole("button", { name: /delete|remove/i }));
+    // the action, then the safe answer, in the page's words for every question (part H)
+    expect(confirm.getAllByRole("button").map((b) => b.textContent)).toEqual(["delete it", "keep it"]);
+    fireEvent.click(confirm.getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(svc.writes).toEqual([{ what: "DELETE /references/r1", body: null }]));
     // and the list is the service's again: nothing kept
     await waitFor(() => expect(refs.textContent).toContain("nothing kept"));

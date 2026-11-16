@@ -38,7 +38,7 @@ describe("the strip at a desk", () => {
       const { items } = stripLines();
       expect(items).toHaveLength(3);
       for (const item of items) {
-        expect(item.textContent).toMatch(/read at 01:00$/);
+        expect(item.textContent).toMatch(/read at 01:00 SGT$/);
         expect(item.getBoundingClientRect().right, `${item.textContent} past the edge`).toBeLessThanOrEqual(width + 1);
         expect(item.scrollWidth, `${item.textContent} is clipped`).toBeLessThanOrEqual(item.clientWidth + 1);
       }

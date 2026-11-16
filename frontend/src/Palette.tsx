@@ -123,10 +123,10 @@ function Search({ found, findWhy, actions, onChoose }: {
 
   const options = useMemo<Option[]>(() => {
     const finds: Option[] = matching(found, query).map((f) => ({
-      key: `f:${f.ref}`, label: f.name, detail: <FindDetail parts={f.parts} />, why: findWhy, group: "go to", chosen: { find: f },
+      key: `f:${f.ref}`, label: f.name, detail: <FindDetail parts={f.parts} />, why: findWhy, group: "Go to", chosen: { find: f },
     }));
     const acts: Option[] = matching(actions, query).map((a) => ({
-      key: `a:${a.key}`, label: a.label, detail: a.detail, why: a.why, group: "action", chosen: { action: a },
+      key: `a:${a.key}`, label: a.label, detail: a.detail, why: a.why, group: "Actions", chosen: { action: a },
     }));
     // nothing typed: the actions lead, since the book is the table's to list; something typed:
     // what it found leads, since that is what was asked for
@@ -153,8 +153,8 @@ function Search({ found, findWhy, actions, onChoose }: {
     <>
       <input className="nx-palette-box" role="combobox" aria-expanded="true" aria-controls={`${id}-list`}
              aria-autocomplete="list" aria-activedescendant={options[at] ? optionId(options[at]) : undefined}
-             aria-label="find a spread, a Monitor or a holding, or an action" autoFocus autoComplete="off"
-             spellCheck={false} placeholder="Find a spread, Monitor or holding — or add, edit, close, switch…"
+             aria-label="find a spread, a rule or a holding, or an action" autoFocus autoComplete="off"
+             spellCheck={false} placeholder="Find a spread, rule or holding — or add, edit, close, switch…"
              value={query}
              onChange={(e) => { setQuery(e.target.value); setActive(0); setRefused(""); }}
              onKeyDown={(e) => {

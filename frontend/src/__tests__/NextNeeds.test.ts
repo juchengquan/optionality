@@ -15,7 +15,7 @@ const health = (over: Partial<{ ok: boolean; bad: boolean }> = {}) => ({
   db: true,
   provider: { name: "moomoo", ok: over.ok ?? true },
   monitor: { last_sweep_at: "x", alarms: { label: over.bad ? "stalled" : "active", bad: over.bad ?? false }, fetched_at: "x" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 }) as unknown as Health;
 
 /** `held` follows `positions` unless a test says otherwise: a rule linked to a holding watches

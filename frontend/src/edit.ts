@@ -10,6 +10,7 @@ import type { Added, Entry, Holding, Monitor } from "./shared/api";
 import { ruleWords as monitorWords } from "./add";
 import { contractOfCode } from "./contract";
 import { entryName, fieldWords, monitorName, ruleWords, shortRule } from "./needs";
+import { reasonWhy } from "./shared/groups";
 
 /** A rule as the editor needs it, from either door: a row of `/quotes` (on, with figures) or of
  *  `/monitors` (any state, no figures). */
@@ -168,15 +169,15 @@ export function stateOf(r: Rule, today: string): RuleState {
   return r.disabled_reason !== null && r.disabled_reason in QUARANTINE_WHY ? "quarantined" : "muted";
 }
 
-/** A quarantine in full: what the service found, and what would fix it. The short words are the
- *  needs-you line's (`needs.ts`'s `QUARANTINED`); these are said before switching one back on. */
+/** A quarantine in full: the page's one clause for it (`shared/groups.ts`, part I), then what the
+ *  service found and what would fix it. Said before switching one back on. */
 export const QUARANTINE_WHY: Record<string, (r: Rule) => string> = {
   "unknown-contract": (r) =>
-    `the provider does not know its contract ${r.code}: its strike or its expiry is not one it lists`,
+    `${reasonWhy("unknown-contract")} — ${r.code}: its strike or its expiry is not one it lists`,
   "no-figure": (r) =>
-    `its ${fieldWords(r.field)} never arrived, sweep after sweep: what a provider serves depends on the account, so watch a figure it does serve`,
+    `${reasonWhy("no-figure")} — its ${fieldWords(r.field)}, sweep after sweep: what a provider serves depends on the account, so watch a figure it does serve`,
   unreadable: () =>
-    "its stored row cannot be read: a leg or an expiry the service cannot make sense of",
+    `${reasonWhy("unreadable")} — a leg or an expiry the service cannot make sense of`,
 };
 
 /** What a rename does NOT do, said where the name is typed: the service renames the Monitor and
@@ -186,7 +187,7 @@ export const QUARANTINE_WHY: Record<string, (r: Rule) => string> = {
 export function renameNote(r: Rule): string | null {
   const sharing = r.combo ? r.holdings.find((h) => h.name === r.code) : undefined;
   return sharing
-    ? `Renames this Monitor only: the holding ${sharing.name} keeps its name — the service never renames a holding.`
+    ? `Renames this rule only: the holding ${sharing.name} keeps its name — the service never renames a holding.`
     : null;
 }
 

@@ -27,7 +27,7 @@ const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
     fetched_at: "2026-11-10 23:14:05+08:00" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 
 /** A six-leg holding, its legs 50 points apart: more names than a 272px inspector has room for on
@@ -140,7 +140,7 @@ describe("in the add form's preview", () => {
       await expect.poll(strikes).toBe("+P7100 −P7150");
       expect(chartFaults(payoff).join(" | ")).toBe("");
       await pointAt(payoff, payoff.querySelector("[data-strike='7100']")!);
-      expect(shown(payoff)).toBe("SPX 7100.00 | −48.50 pts");
+      expect(shown(payoff)).toBe("SPX 7100.00 | −48.50 pts per contract");
       expect(tipFaults(payoff, spread)).toEqual([]);
       await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7050");
       await expect.poll(strikes).toBe("+P7050 −P7150");
@@ -169,7 +169,10 @@ describe("a maximum outside the window", () => {
         render(<div className="nx" style={{ width }}><DraftPreview subject="x" draft={draft} blank="" spx={spx} spxReason={null} /></div>);
         const payoff = await payoffIn(document.querySelector<HTMLElement>(".nx")!);
         const label = payoff.querySelector(`[data-max='${kind}']`)!;
-        expect(label.textContent).toMatch(kind === "loss" ? /^▼ max loss \u22126470\.00 pts$/ : /^▲ max profit \+6470\.00 pts$/);
+        // the arrow alone: its figure is the list's, said once (part L)
+        expect(label.textContent).toBe(kind === "loss" ? "▼" : "▲");
+        expect(within(payoff).getByText(`max ${kind}`).nextElementSibling!.textContent)
+          .toBe(kind === "loss" ? "\u22126470.00 pts per contract" : "+6470.00 pts per contract");
         expect(payoff.querySelector("[data-marker='spx']")).toBeTruthy();
         expect(chartFaults(payoff).join(" | ")).toBe("");
       });

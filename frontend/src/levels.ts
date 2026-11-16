@@ -1,6 +1,7 @@
 import type { Holding } from "./shared/api";
 import { servedClock } from "./shared/format";
-import { marketDayWords, marketPhase, newYorkWhen, servedInstant, servedWhen, type MarketPhase } from "./session";
+import { marketDayWords, marketPhase, newYorkClock, newYorkWhen, servedInstant, servedWhen, type MarketPhase } from "./session";
+import { zoneOfStamp } from "./shared/times";
 
 /** A holding's Levels as its chip says them, on every surface that draws one (#354, re-keyed to
  *  the session by #371).
@@ -21,17 +22,14 @@ export const LEVEL_WORDS: Record<Level, string> = {
   stop: "at stop", target: "at target", manage: "manage-by",
 };
 
-/** "21:04": the clock the service wrote on a valuation (`servedClock`), to the minute, for a chip,
- *  which is short. */
-export function valuedClock(served: string | null | undefined): string | null {
-  return servedClock(served)?.slice(0, 5) ?? null;
-}
-
 /** "21:04:37": when a valuation was made, for the note that says so above the book and in
  *  Settings — from the same stamp the chips read, so the page states ONE clock for it (#354). All
  *  of one answer's holdings carry the same stamp; null where none has one, or there are none. */
 export function valuedAt(holdings: readonly Holding[]): string | null {
-  return servedClock(valuedStamp(holdings));
+  const stamp = valuedStamp(holdings);
+  const clock = servedClock(stamp);
+  // with its zone by name, as every clock on the page (part F)
+  return clock === null ? null : `${clock} ${zoneOfStamp(stamp)}`;
 }
 
 /** The service's stamp on a valuation, whole (`2026-11-12 21:04:37+08:00`), for words that say its
@@ -57,8 +55,8 @@ export function levelWords(level: Level, holding: Holding, session: boolean, now
     const made = servedInstant(holding.fetched_at);
     const thin = made !== null && ["overnight", "curb"].includes(marketPhase(made));
     if (!thin) return words;
-    const clock = valuedClock(holding.fetched_at);
-    return clock ? `${words} · live at ${clock}` : words;
+    // a session's time, so New York's clock (part F): "live at 03:12 ET"
+    return `${words} · live at ${newYorkClock(made)}`;
   }
   const at = servedWhen(holding.fetched_at, now);
   // a valuation with no time on it is still not live, and is said to be as last valued
@@ -144,6 +142,7 @@ export function closedLineText(
   now: Date = new Date(), phase: MarketPhase = "closed",
 ): string {
   if (phase === "overnight" || phase === "curb") return thinLineWords(holdings, phase);
-  const words = at === null ? null : served ? servedWhen(served, now) ?? at.slice(0, 5) : at.slice(0, 5);
+  // a time with no stamp beside it said to the minute, as a stamp's is
+  const words = at === null ? null : (served ? servedWhen(served, now) : null) ?? at.replace(/^(\d\d:\d\d):\d\d/, "$1");
   return closeLineWords(holdings) ?? (words ? `market closed — valued at ${words}` : "market closed");
 }

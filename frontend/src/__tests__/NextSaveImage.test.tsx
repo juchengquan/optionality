@@ -178,7 +178,7 @@ describe("the page's button", () => {
   const health = {
     db: true, provider: { name: "moomoo", ok: true },
     monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
-    settings: { sweep_seconds: 600, expired_retention_days: 7, manage_by_dte: 21 },
+    settings: { sweep_seconds: 600, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
   };
 
   it("is off while a picture is being taken, and back when it is done", async () => {

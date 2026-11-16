@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { Freshness } from "../shared/Freshness";
 import { marketClock } from "../shared/format";
+import { setDisplayZone } from "../shared/times";
 
 /** The freshness line, in both zones.
  *
@@ -15,12 +16,13 @@ import { marketClock } from "../shared/format";
 describe("the market clock", () => {
   it("names the session time for a summer evening in Singapore", () => {
     // 21:47 on 21 Oct in Singapore is 09:47 in New York — a quarter hour before the open
-    expect(marketClock("2026-10-21 21:47:23+08:00")).toBe("09:47:23 EDT");
+    // marked ET, the market's clock, all year (part F)
+    expect(marketClock("2026-10-21 21:47:23+08:00")).toBe("09:47:23 ET");
   });
 
   it("follows the tz database across the DST change, rather than a fixed offset", () => {
-    // the same local evening in January is an hour further back, and the abbreviation changes
-    expect(marketClock("2026-01-21 21:47:23+08:00")).toBe("08:47:23 EST");
+    // the same local evening in January is an hour further back; the mark stays ET
+    expect(marketClock("2026-01-21 21:47:23+08:00")).toBe("08:47:23 ET");
   });
 
   it("says nothing at all when the service's string is not a time", () => {
@@ -33,12 +35,15 @@ describe("the market clock", () => {
 
 describe("the freshness line", () => {
   it("gives the service's time, the session's, and the screen's", () => {
-    render(<Freshness fetchedAt="2026-10-21 21:47:23+08:00" polledAt="21:48:14" sweepSeconds={15} />);
+    setDisplayZone("Asia/Singapore");
+    render(<Freshness fetchedAt="2026-10-21 21:47:23+08:00" polledAt="21:48:14 SGT" sweepSeconds={15} />);
 
     const line = screen.getByText(/fetched at/);
-    expect(line.textContent).toContain("2026-10-21 21:47:23+08:00");
-    expect(line.textContent, "the session time is missing").toContain("09:47:23 EDT");
-    expect(line.textContent).toContain("screen updated 21:48:14");
+    // the service's stamp by its zone's name, and dated, being from another day — never "+08:00"
+    expect(line.textContent).toContain("fetched at Wed 21 Oct 21:47:23 SGT");
+    expect(line.textContent).not.toContain("+08:00");
+    expect(line.textContent, "the session time is missing").toContain("09:47:23 ET");
+    expect(line.textContent).toContain("screen updated 21:48:14 SGT");
     expect(line.textContent).toContain("sweeps every 15s");
   });
 
@@ -46,6 +51,6 @@ describe("the freshness line", () => {
     render(<Freshness fetchedAt={null} polledAt={null} sweepSeconds={null} />);
 
     expect(screen.getByText(/waiting for first sweep/)).toBeTruthy();
-    expect(screen.queryByText(/EDT|EST/)).toBeNull();
+    expect(screen.queryByText(/\bET\b/)).toBeNull();
   });
 })

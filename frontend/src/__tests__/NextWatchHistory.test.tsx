@@ -285,14 +285,14 @@ describe("a watched spread's payoff at its last close", () => {
     const quotes = QUOTES.map((q) => (q.id === "w-dec18"
       ? { ...q, field: "option_delta", combo_value: -0.12, last_close: close } : q) as Entry);
     const payoff = await payoffOf(quotes, true);
-    expect(within(payoff).getByText("no Entry: drawn at its close, Fri 16:14, 4.12, as the credit")).toBeTruthy();
+    expect(within(payoff).getByText("no Entry: drawn at its close, Fri 16:14 ET, 4.12, as the credit")).toBeTruthy();
     expect(asked.filter((a) => a.startsWith("POST"))[0]).toContain('"entry":4.12');
   });
 
   it("draws at its close out of the session, never at a value quoted out of it", async () => {
     const quotes = QUOTES.map((q) => (q.id === "w-dec18" ? { ...q, last_close: close } : q) as Entry);
     const payoff = await payoffOf(quotes, false);
-    expect(within(payoff).getByText(/drawn at its close, Fri 16:14, 4\.12/)).toBeTruthy();
+    expect(within(payoff).getByText(/drawn at its close, Fri 16:14 ET, 4\.12/)).toBeTruthy();
     expect(asked.filter((a) => a.startsWith("POST")).every((a) => a.includes('"entry":4.12'))).toBe(true);
   });
 

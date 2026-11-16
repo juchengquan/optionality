@@ -5,6 +5,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import type { ArrangementChoice, EntryStyle, UpColour } from "./shared/prefs";
 import { References } from "./shared/References";
 import { Glyph } from "./NeedsLine";
+import { fetchedWords } from "./shared/format";
 import type { Need } from "./needs";
 
 /** The cadences offered, as the old page's Service panel offered them. */
@@ -41,7 +42,7 @@ export function Settings(p: SettingsProps) {
   return (
     <div className="nx-settings">
       <section data-testid="needs">
-        <h3>needs you</h3>
+        <h3>Needs you</h3>
         {/* the claim of a whole list is withdrawn whenever the holdings are not valued, items
             or none: a holding at its Level that no rule watches is the one need only they show */}
         {p.complete ? null
@@ -55,11 +56,11 @@ export function Settings(p: SettingsProps) {
       </section>
 
       <section data-testid="service">
-        <h3>service</h3>
+        <h3>Service</h3>
         <p className="nx-meta">
           {p.health ? `${p.health.provider.name} ${p.health.provider.ok ? "up" : "down"}` : "provider unknown"}
           {p.health ? ` · alarms ${p.health.monitor.alarms.label}` : ""}
-          {p.health?.monitor.last_sweep_at ? ` · last sweep ${p.health.monitor.last_sweep_at}` : ""}
+          {p.health?.monitor.last_sweep_at ? ` · last sweep ${fetchedWords(p.health.monitor.last_sweep_at)}` : ""}
         </p>
       </section>
 
@@ -94,9 +95,13 @@ export function Settings(p: SettingsProps) {
         <NativeSelect id="nx-privacy" value={p.privacy ? "hidden" : "shown"}
                       onChange={(e) => p.onPrivacy(e.target.value === "hidden")}>
           <option value="shown">shown</option>
-          <option value="hidden">hidden — %, Δ and DTE stay</option>
+          <option value="hidden">hidden — %, Δ, DTE and points stay</option>
         </NativeSelect>
-        <FieldDescription>For a screen somebody else can see.</FieldDescription>
+        <FieldDescription>
+          For a screen somebody else can see. Dollars and the count of contracts are hidden; figures in
+          points per contract — cost to close, entry, the pace gap, the payoff — stay, since none says
+          how big a trade is.
+        </FieldDescription>
       </Field>
 
       <Field>

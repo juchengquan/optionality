@@ -40,6 +40,7 @@ import { DraftPreview } from "./Payoff";
 import { DirectionPair, type Direction } from "./DirectionPair";
 import { fieldWords } from "./needs";
 import "./add.css";
+import { plainError } from "./shared/errors";
 
 type Props = {
   privacy: boolean;
@@ -126,7 +127,7 @@ function SpreadForm({
     try {
       onSaved(await addSpreads(out.body));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(plainError(err));
     } finally {
       setSaving(false);
     }
@@ -277,10 +278,10 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, taking,
               </label>
             </div>
           ) : null}
-          <div className="nx-add-monitors" role="group" aria-label={`spread ${n}'s Monitors`}>
+          <div className="nx-add-monitors" role="group" aria-label={`spread ${n}'s rules`}>
             {/* a held credit's stop is the cost to close at or above its figure, and offers no
                 choice; anything else is its value's size, at or above or at or below (#405) */}
-            <MonitorLine on={valueOn} onToggle={() => set({ valueOn: !valueOn })} label={`spread ${n} value Monitor`}
+            <MonitorLine on={valueOn} onToggle={() => set({ valueOn: !valueOn })} label={`spread ${n} value rule`}
                          words={isCreditStop(held, s) ? "cost to close ≥" : `|${fieldWords("mid_price")}|`}
                          direction={valueChoosable(held, s)
                            ? { value: valueDirectionShown(held, s), onChange: (d) => set(valueDirectionChange(held, d)), label: `spread ${n} value direction` }
@@ -288,7 +289,7 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, taking,
                          hint={valueHint(held, s)}
                          value={valueShown(held, s)} onValue={(v) => set(valueChange(held, v))}
                          inputLabel={`spread ${n} value threshold`} />
-            <MonitorLine on={deltaOn} onToggle={() => set({ deltaOn: !deltaOn })} label={`spread ${n} delta Monitor`}
+            <MonitorLine on={deltaOn} onToggle={() => set({ deltaOn: !deltaOn })} label={`spread ${n} delta rule`}
                          words={`short leg${shorts === 1 ? "'s" : "s'"} |Δ|`}
                          direction={{ value: s.deltaDirection, onChange: (d) => set({ deltaDirection: d }), label: `spread ${n} delta direction` }}
                          // nothing under a watched one's: "Watch it" says its rules are entry signals

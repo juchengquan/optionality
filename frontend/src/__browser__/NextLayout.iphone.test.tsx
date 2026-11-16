@@ -101,7 +101,7 @@ describe("under the iPhone profile", () => {
 describe("the header", () => {
   for (const outside of [false, true]) {
     it(`is the title and five buttons on one row, inside the screen, ${outside ? "outside the session" : "in session"}`, async () => {
-      if (outside) vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // Sunday 12:00 New York
+      if (outside) vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // Sunday 12:00 ET
       await show();
       const head = document.querySelector<HTMLElement>(".nx-head")!;
       const kids = [...head.children] as HTMLElement[];
@@ -254,7 +254,7 @@ describe("a holding's sheet on the book", () => {
     await settle();
     return dialog;
   }
-  const toggle = (d: HTMLElement) => within(d).getByRole("button", { name: "history" });
+  const toggle = (d: HTMLElement) => within(d).getByRole("button", { name: "History" });
 
   it("opens with its history open outside the session, every chart inside the screen", async () => {
     vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday: outside the session
@@ -329,7 +329,7 @@ describe("the Settings sheet", () => {
 
   it("closes by its Close button, as the Add sheet does", async () => {
     const sheet = await settings();
-    fireEvent.click(within(sheet).getByRole("button", { name: "Close" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "close sheet" }));
     // gone once its exit has played out, which a loaded suite can stretch past waitFor's 1s
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull(), { timeout: 3000 });
   });
@@ -358,7 +358,7 @@ describe("the Settings sheet", () => {
   it("gives a refusal's toast a 44pt close button", async () => {
     await settings();
     fireEvent.change(screen.getByLabelText("code"), { target: { value: "US.SPY" } });
-    fireEvent.click(screen.getByRole("button", { name: "keep it" }));
+    fireEvent.click(screen.getByRole("button", { name: "add reference" }));
     await screen.findByText("refused by the test service");
     await animationsDone();
     expect(tooSmall()).toEqual([]);

@@ -3,6 +3,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { servedWhen } from "../session";
+import { setDisplayZone } from "../shared/times";
 import { Still } from "../snapshot/Still";
 import type { Reference } from "../shared/api";
 import { ReferenceStrip } from "../shared/ReferenceStrip";
@@ -164,32 +165,35 @@ describe("outside the session, every reading says when it was read", () => {
     fetched_at: "2026-11-13 21:04:40+08:00" });
   const readings = () => [...document.querySelectorAll(".references .reference")].map((r) => r.textContent ?? "");
   // Friday 13 November, 21:30 in the service's +08:00: the stamps are today's, after the last edge
-  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-13T13:30:00Z") }); });
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-13T13:30:00Z") });
+    setDisplayZone("Asia/Singapore");
+  });
   const timeOf = (served: string | null | undefined) => servedWhen(served);
 
   it("puts the service's time on each reading, to the minute", () => {
     render(<ReferenceStrip references={[spx(), vix]} timeOf={timeOf} />);
     expect(readings()).toEqual([
-      "SPX (moomoo) 7587.30+0.40%read at 21:04",
-      "VIX (yahoo) 16.82read at 21:04",
+      "SPX (moomoo) 7587.30+0.40%read at 21:04 SGT",
+      "VIX (yahoo) 16.82read at 21:04 SGT",
     ]);
   });
 
   it("says a dash was TRIED at that time: its source was asked and gave nothing (#371's review)", () => {
     render(<ReferenceStrip references={[spx({ figure: null, change: null, error: "no quote" })]} timeOf={timeOf} />);
-    expect(readings()).toEqual(["SPX (moomoo) —tried at 21:04"]);
+    expect(readings()).toEqual(["SPX (moomoo) —tried at 21:04 SGT"]);
   });
 
   it("dates a reading from another day", () => {
     render(<ReferenceStrip references={[spx({ fetched_at: "2026-11-12 21:04:11+08:00" })]} timeOf={timeOf} />);
-    expect(readings()).toEqual(["SPX (moomoo) 7587.30+0.40%read at Thu 21:04"]);
+    expect(readings()).toEqual(["SPX (moomoo) 7587.30+0.40%read at Thu 21:04 SGT"]);
   });
 
   it("never draws a reading without its time", () => {
     for (const stamp of [undefined, null, "", "x"]) {
       render(<ReferenceStrip references={[spx(), vix, spx({ id: "r3", label: "NDX", fetched_at: stamp as never })]}
                              timeOf={timeOf} />);
-      for (const r of readings()) expect(r, "a reading drawn without its time").toMatch(/(read|tried) at \d\d:\d\d$/);
+      for (const r of readings()) expect(r, "a reading drawn without its time").toMatch(/(read|tried) at \d\d:\d\d SGT$/);
       expect(readings().some((r) => r.startsWith("NDX"))).toBe(false);
       cleanup();
     }
@@ -219,7 +223,7 @@ describe("outside the session, every reading says when it was read", () => {
     still(false);
     // the strip's own words, each with the time it was read; one with no time is not said at all
     expect(line()).toHaveLength(2);
-    for (const r of line()) expect(r, "a reading said without its time").toMatch(/read at 21:04$/);
+    for (const r of line()) expect(r, "a reading said without its time").toMatch(/read at 21:04 SGT$/);
     cleanup();
     still(true);
     expect(line()).toHaveLength(3);

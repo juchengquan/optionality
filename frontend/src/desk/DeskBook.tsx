@@ -3,37 +3,34 @@ import { X } from "lucide-react";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { ColumnPicker } from "../shared/ColumnPickers";
-import { heldLeg, shortDate, shortFirst, signedLeg, type WrittenLeg } from "../shared/format";
-import { figureOf, points } from "../shared/numbers";
-import { POSITION_GREEKS, SHORT_DELTA } from "../shared/words";
-import { Leg, Legs } from "../shared/Legs";
+import { shortDate } from "../shared/format";
+import { Legs } from "../shared/Legs";
+import { SHORT_DELTA } from "../shared/words";
+import { dateWords } from "../shared/times";
+import { HoldingSections, holdingMeta, RuleSections, ruleMeta } from "../DetailSections";
 
-import { GROUPS } from "../shared/groups";
+import { reasonLabel } from "../shared/groups";
 import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../shared/prefs";
 import { Chip, Money, type BookProps } from "../Book";
 import { ClosedLine } from "../ClosedLine";
 import { Glyph } from "../NeedsLine";
 import { monitorName, shapeOf, shortRule, storedRuleWords } from "../needs";
 import { ShortWords } from "../RuleWords";
-import { HistoryOnDemand } from "../HistoryOnDemand";
-import { PaceExplained } from "../PaceExplained";
 import { costAndPace, paceOutcome } from "../pace";
-import { HoldingActions, type HoldingWrites } from "../HoldingActions";
+import type { HoldingWrites } from "../HoldingActions";
 import { DetailBoundary } from "../DetailBoundary";
-import { HoldingPayoff, WatchedPayoff } from "../Payoff";
 import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, FIGURES, heldSpread, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
+  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, heldSpread, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
   type DeskColumn, type DeskRow,
 } from "./columns";
 import { StrikeStrip } from "../StrikeStrip";
-import { joinStrips, stripOfEntry, stripOfHolding } from "../strip";
+import { joinStrips, stripOfHolding } from "../strip";
 import { inFold, NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
 import { useDeskFit } from "./useDeskFit";
 import { PriceMapPanel } from "./PriceMapPanel";
-import { RuleFigures } from "../RuleFigures";
 import { priceMapOf, spxOfBook } from "../pricemap";
 import "./desk.css";
 
@@ -138,7 +135,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
       // the selected rule's own controls come first in its inspector, before any rule under it
       ? inspector.querySelector<HTMLElement>(".nx-mon-actions button")
       : request.then === "close"
-        ? [...inspector.querySelectorAll<HTMLElement>(".nx-hold-actions button")].find((b) => b.textContent === "Close…")
+        ? [...inspector.querySelectorAll<HTMLElement>(".nx-hold-actions button")].find((b) => b.textContent === "close…")
         : null;
     if (button) {
       if (button.getAttribute("aria-expanded") !== "true") button.click();
@@ -201,7 +198,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
       </div>
 
       {current ? <Inspector id={inspectorId} row={current} session={session} privacy={privacy} rows={rows} partners={partners}
-                            onSelect={setSelected} onClose={close} monitors={monitors} writes={props.writes} /> : null}
+                            onSelect={setSelected} onClose={close} quotes={quotes} monitors={monitors} writes={props.writes} /> : null}
       {/* the closed trades' fold (#373): the last thing in the book, across the whole width */}
       {props.journal}
     </div>
@@ -285,7 +282,7 @@ function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed,
       ))}
       {placed.unplaced.length > 0 ? (
         <div className="nxd-expiry" data-testid="unplaced">
-          <h3 className="nxd-group">rules on held contracts</h3>
+          <h3 className="nxd-group">Rules on held contracts</h3>
           <p className="nx-meta nxd-note">
             {holdings === null
               ? "the holdings are not valued, so the rules about them are listed on their own"
@@ -325,7 +322,7 @@ function Watchlist({ placed, ctx }: { placed: BookModel; ctx: Ctx }) {
       {placed.quarantined.length > 0 ? (
         <div className="nxd-quarantined">
           {/* a fault, so never collapsed: nothing watches what these watched (ADR 0023) */}
-          <h3 className="nxd-group">quarantined — switched off by the service</h3>
+          <h3 className="nxd-group">Quarantined — switched off by the service</h3>
           <ul>
             {placed.quarantined.map((m) => (
               <li key={m.id}><Row row={{ kind: "quarantined", monitor: m }} ctx={ctx} /></li>
@@ -347,8 +344,7 @@ function OverlapNote({ overlap }: { overlap: string | null | undefined }) {
  *  muted tables were — with its words for why each is off. */
 function Muted({ monitors }: { monitors: Monitor[] }) {
   if (monitors.length === 0) return null;
-  const reason = (m: Monitor) =>
-    GROUPS.find(([r]) => r === (m.disabled_reason ?? null))?.[1] ?? "Reason not recorded";
+  const reason = (m: Monitor) => reasonLabel(m.disabled_reason);
   return (
     <details className="nxd-muted">
       <summary>{`Muted and expired · ${monitors.length}`}</summary>
@@ -509,9 +505,9 @@ function Fill({ entry }: { entry: Entry }) {
 
 // ---- the inspector
 
-function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClose, monitors, writes }: {
+function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClose, quotes, monitors, writes }: {
   id: string; row: DeskRow; session: boolean; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
-  onSelect: (id: string) => void; onClose: () => void; monitors: Monitor[]; writes?: HoldingWrites;
+  onSelect: (id: string) => void; onClose: () => void; quotes: Entry[]; monitors: Monitor[]; writes?: HoldingWrites;
 }) {
   const name = rowName(row);
   // the focus follows what was opened, so a keyboard reader lands on it
@@ -528,93 +524,44 @@ function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClos
       </div>
       {/* the heading and its close stay outside: a detail that cannot be drawn can still be shut */}
       <DetailBoundary key={subject} what={row.kind === "holding" ? "holding" : "rule"}>
-        {row.kind === "holding" ? <HoldingDetail row={row} session={session} privacy={privacy} partners={partners} onSelect={onSelect} />
+        {/* the meta line, and by the session (#371) whether what is shown updates with the poll */}
+        <p className="nx-meta">
+          {row.kind === "holding" ? holdingMeta(row.holding) : row.kind === "rule" ? ruleMeta(row.entry)
+            : `${dateWords(row.monitor.strike_date)} · ${row.monitor.code}`}
+        </p>
+        <p className="nx-meta nxd-note">{session ? "live: updates with every poll" : "as last valued"}</p>
+        {/* the one order the phone's sheet draws too (part J, `sections.ts`) */}
+        {row.kind === "holding" ? <HoldingDetail row={row} session={session} privacy={privacy} partners={partners}
+                                                 onSelect={onSelect} quotes={quotes} monitors={monitors} writes={writes} />
           : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null}
                                               session={session} privacy={privacy} />
             : <QuarantinedDetail row={row} />}
-        {/* by the session (#371): what is polled is what updates */}
-        <p className="nx-meta nxd-note">{session ? "live: updates with every poll" : "as last valued"}</p>
-        {/* edit, close or delete (#294): keyed by the holding, so a form left open on one is not
-            carried to the next row selected */}
-        {row.kind === "holding" && writes ? (
-          <HoldingActions key={row.holding.id} holding={row.holding} monitors={monitors} rules={row.rules}
-                          privacy={privacy} writes={writes} />
-        ) : null}
       </DetailBoundary>
     </aside>
   );
 }
 
-/** Every column's figure for this row, whether the table drew it or not, and "on pace", which has
- *  no column (#372). */
-function Figures({ row, privacy, extra = [] }: { row: DeskRow; privacy: boolean; extra?: [string, React.ReactNode][] }) {
-  const items: [string, React.ReactNode][] = [];
-  for (const c of FIGURES) {
-    // the strip is drawn whole beneath, with its words
-    if (c.key === "name" || c.key === "alarm" || c.key === "legs" || c.key === "strip") continue;
-    // the words where the table writes a compact form of them (the pace gap, #379)
-    const text = c.words?.(row, privacy) ?? c.text(row, privacy);
-    if (text === "") continue;
-    const outcome = outcomeOf(row, c);
-    const label = c.key === "value" && row.kind === "holding" ? "cost to close"
-      : c.key === "delta" && row.kind === "holding" ? SHORT_DELTA : c.label;
-    items.push([label, c.key === "pnl" && row.kind === "holding"
-      ? <Money value={row.holding.pnl} privacy={privacy} />
-      : outcome ? <span data-outcome={outcome}>{text}</span> : text]);
-  }
-  items.push(...extra);
-  return (
-    <dl className="nxd-kv">
-      {items.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
-    </dl>
-  );
-}
-
-function HoldingDetail({ row, session, privacy, partners, onSelect }: {
+function HoldingDetail({ row, session, privacy, partners, onSelect, quotes, monitors, writes }: {
   row: Extract<DeskRow, { kind: "holding" }>; session: boolean; privacy: boolean; partners: Map<string, Holding>;
-  onSelect: (id: string) => void;
+  onSelect: (id: string) => void; quotes: Entry[]; monitors: Monitor[]; writes?: HoldingWrites;
 }) {
   const h: Holding = row.holding;
-  const s = h.schedule;
-  const g = h.greeks;
-  const extra: [string, React.ReactNode][] = [
-    ["entry", points(h.entry)],
-    // privacy hides the count too: contracts × points × the contract size is the money it hides
-    ["contracts", privacy ? "×•••" : `×${h.contracts}`],
-    // the net greeks, each its field's symbol and places, as the phone's sheet lists them
-    ...POSITION_GREEKS.map(([k, label]): [string, React.ReactNode] => [label, figureOf(k, g[k])]),
-  ];
-  if (s) {
-    extra.push(["target", points(s.target)]);
-    extra.push(["stop", points(s.stop)]);
-  }
   // the condor's other spread, when placement bracketed the two
   const partner = partners.get(h.id) ?? null;
   // its Level, as the row's chip says it: bare in session, and outside it with the valuation it
   // is from (#354, #371)
   const a = attentionOf(row);
   return (
-    <>
-      {a ? <p><AttentionChip kind={a} words={chipWords(row, session)} /></p> : null}
-      <p className="nx-meta">
-        {`${h.strike_date} · ${h.dte} DTE${h.opened_at ? ` · opened ${h.opened_at}` : " · Opened not recorded"}`}
-      </p>
-      {partner ? (
-        <button type="button" className="nxd-link" onClick={() => onSelect(partner.id)}>
-          {`condor with ${partner.name} →`}
-        </button>
-      ) : null}
-      <LegList legs={h.legs.map(heldLeg)} />
-      <InspectorStrip holding={h} partner={partner} />
-      {/* the recorded days (ADR 0023, #295), read once when the section opens (#353): shut in
-          session and open outside it (#372). The detail is keyed by the holding, so the session
-          decides how the NEXT holding opens, and never folds or unfolds this one under the reader */}
-      <HistoryOnDemand holding={h} privacy={privacy} defaultOpen={!session} />
-      <HoldingPayoff holding={h} privacy={privacy} />
-      <Figures row={row} privacy={privacy} extra={extra} />
-      <PaceExplained holding={h} />
-      <Monitors entries={row.rules} />
-    </>
+    <HoldingSections surface="desk" holding={h} rules={row.rules} quotes={quotes} monitors={monitors}
+                     privacy={privacy} session={session} writes={writes}
+                     chip={a ? <AttentionChip kind={a} words={chipWords(row, session)} /> : null}
+                     strip={<InspectorStrip holding={h} partner={partner} />}
+                     ruleLine={(e) => <RuleItem key={e.id} entry={e} />}
+                     extra={partner ? (
+                       <button type="button" className="nxd-link" onClick={() => onSelect(partner.id)}>
+                         {`condor with ${partner.name} →`}
+                       </button>
+                     ) : null} />
   );
 }
 
@@ -632,27 +579,12 @@ function RuleDetail({ entry, rows, overlap, session, privacy }: {
 }) {
   const under = rows.filter((r): r is Extract<DeskRow, { kind: "rule" }> =>
     r.kind === "rule" && r.nested && !r.entry.legs && r.entry.in_combos.includes(entry.id) && !r.entry.held);
+  const a = attentionOf({ kind: "rule", entry, nested: false });
   return (
-    <>
-      {/* a combo drawn in the watchlist because it names a contract its holding does not hold is a
-          watched spread here too (#346): its note says what it shares, in place of "on something
-          held", and its payoff is drawn at its current value */}
-      <p className="nx-meta">
-        {`${entry.strike_date} · ${entry.dte} DTE`
-          + (overlap ? "" : ` · ${entry.held ? "on something held" : "watch only"}`)}
-      </p>
-      {overlap ? <p className="nx-meta" data-overlap="">{overlap}</p> : null}
-      {entry.legs ? <LegList legs={entry.legs.map(signedLeg)} /> : null}
-      {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
-      {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} session={session} /> : null}
-      {/* every figure of its contract or combo, the reason beside each dash (#332) */}
-      <RuleFigures entry={entry} held={entry.held && !overlap} className="nxd-kv" />
-      {entry.error ? <p className="nxd-why">{entry.error}</p> : null}
-      <Monitors entries={[entry, ...under.map((r) => r.entry)]} />
-      {/* a watched row's daily closes (#402), opened as a holding's history is: open outside the
-          session, shut in it (#372) */}
-      {!entry.held || overlap ? <HistoryOnDemand watched={entry} privacy={privacy} defaultOpen={!session} /> : null}
-    </>
+    <RuleSections surface="desk" entry={entry} under={under.map((r) => r.entry)} overlap={overlap}
+                  privacy={privacy} session={session}
+                  chip={a ? <p><AttentionChip kind={a} /></p> : null}
+                  ruleLine={(e) => <RuleItem key={e.id} entry={e} />} />
   );
 }
 
@@ -662,7 +594,6 @@ function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined
   const words = ALARM_COLUMN.words!(row, false);
   return (
     <>
-      <p className="nx-meta">{`${m.strike_date} · ${m.code}`}</p>
       <div className="nxd-monitor" data-state="fault">
         <AttentionChip kind="fault" />
         <span><ShortWords short={text} full={words} /></span>
@@ -673,36 +604,17 @@ function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined
   );
 }
 
-/** The inspector's legs in words, `short 2× PUT 7150`: a quantity after the side where it holds
- *  more than one of its contract (#351), and each type in its colour (#391). */
-function LegList({ legs }: { legs: WrittenLeg[] }) {
+/** A rule in the inspector's Rules section: its chip, its short form (the sentence to a pointer and
+ *  a reader), how far it has come, and its controls. */
+function RuleItem({ entry }: { entry: Entry }) {
+  const row: DeskRow = { kind: "rule", entry, nested: false };
+  const a = attentionOf(row);
   return (
-    <ul className="nxd-legs" aria-label="legs">
-      {shortFirst(legs).map((l, i) => <li key={`${i}:${l.option_type}${l.strike}`}><Leg leg={l} form="words" /></li>)}
-    </ul>
+    <li className="nxd-monitor" data-state={a ?? "calm"}>
+      {a ? <AttentionChip kind={a} /> : null}
+      <span><ShortWords short={ALARM_COLUMN.text(row, false)} full={ALARM_COLUMN.words!(row, false)} /></span>
+      <Fill entry={entry} />
+      <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
+    </li>
   );
 }
-
-function Monitors({ entries }: { entries: Entry[] }) {
-  if (entries.length === 0) return <p className="nx-meta">No Monitors on it.</p>;
-  return (
-    <div className="nxd-monitors">
-      <h4>Monitors</h4>
-      <ul>
-        {entries.map((e) => {
-          const row: DeskRow = { kind: "rule", entry: e, nested: false };
-          const a = attentionOf(row);
-          return (
-            <li key={e.id} className="nxd-monitor" data-state={a ?? "calm"}>
-              {a ? <AttentionChip kind={a} /> : null}
-              <span><ShortWords short={ALARM_COLUMN.text(row, false)} full={ALARM_COLUMN.words!(row, false)} /></span>
-              <Fill entry={e} />
-              <MonitorControls rule={ruleOfEntry(e)} served={e} />
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
-}
-

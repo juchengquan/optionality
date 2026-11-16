@@ -152,7 +152,7 @@ describe("mute, unmute and delete on the phone", () => {
     const off = await screen.findByRole("region", { name: "Switched off" });
     await userEvent.click(within(off).getByRole("button", { name: "switch 261211 8000C Δ back on" }));
     const ask = within(off).getByRole("group", { name: "switch 261211 8000C Δ back on?" });
-    expect(ask.textContent).toMatch(/does not know its contract US\.SPXW261211C8300000/);
+    expect(ask.textContent).toMatch(/does not know its contract — US\.SPXW261211C8300000/);
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "switch it on" }));
     await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/q-unknown", body: { enabled: true } }]));

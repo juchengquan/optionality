@@ -27,6 +27,7 @@ import { fetchVol, type Holding, type Vol } from "./shared/api";
 import { DASH } from "./shared/format";
 import { paceOutcome, paceWords } from "./pace";
 import "./pace.css";
+import { plainError } from "./shared/errors";
 
 export function PaceExplained({ holding }: { holding: Holding }) {
   const s = holding.schedule;
@@ -70,7 +71,7 @@ function useVol(id: string): VolState | null {
     let live = true;
     fetchVol(id).then(
       (vol) => { if (live) setState({ id, vol }); },
-      (err: unknown) => { if (live) setState({ id, error: err instanceof Error ? err.message : String(err) }); },
+      (err: unknown) => { if (live) setState({ id, error: plainError(err, "open it again to retry") }); },
     );
     return () => { live = false; };
   }, [id]);

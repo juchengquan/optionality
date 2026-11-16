@@ -51,3 +51,12 @@ export function costAndPace(h: Pick<Holding, "cost_to_close" | "schedule">): {
   const said = none(g) ? "on pace" : `pace gap ${paceWords(g)}`;
   return { cost, gap: paceSigned(g), text: `${cost} ${paceSigned(g)}`, words: `${cost}, ${said}` };
 }
+
+/** Manage-by as days left, "in 24d", or "due" once reached — the same words on the desk's column,
+ *  its inspector, the phone's sheet and the picture (the owner's standard, part F) — with the
+ *  threshold it counts to as detail, "at 21 DTE". A dash with no schedule. */
+export function manageBy(h: Pick<Holding, "dte" | "schedule">): { text: string; detail: string | null } {
+  const s = h.schedule;
+  if (!s) return { text: DASH, detail: null };
+  return { text: s.manage_by_due ? "due" : `in ${h.dte - s.manage_by_dte}d`, detail: `at ${s.manage_by_dte} DTE` };
+}

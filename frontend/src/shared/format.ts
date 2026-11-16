@@ -1,4 +1,5 @@
 import type { Leg } from "./api";
+import { dateWords, ET, stampParts, zoneOfStamp } from "./times";
 
 /** Display rules the page shares between its arrangements. */
 
@@ -158,7 +159,7 @@ export function clockTime(at: Date): string {
    rather than `hour12: false`, which is the spelling that cannot render midnight as 24:00. */
 const MARKET_CLOCK = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", second: "2-digit",
-  hourCycle: "h23", timeZoneName: "short",
+  hourCycle: "h23",
 });
 
 export function marketClock(served: string | null | undefined): string | null {
@@ -167,14 +168,30 @@ export function marketClock(served: string | null | undefined): string | null {
   // "x" is what every fixture in this repo passes, and a service that has never swept sends
   // nothing at all: "Invalid Date" beside a real figure reads as a fault in the figure
   if (Number.isNaN(at.getTime())) return null;
-  return MARKET_CLOCK.format(at);
+  // the market's clock is marked `ET` all year, as every New York time on the page is (part F)
+  return `${MARKET_CLOCK.format(at)} ${ET}`;
+}
+
+/** "21:04:37 SGT", or "Fri 21:04:37 SGT" where it is not from `now`'s day: when the service fetched,
+ *  on the viewer's clock — the stamp as written, in DISPLAY_TZ — with its zone by name, never the
+ *  `+08:00` it was served with (part F). The stamp whole where it is not one. */
+export function fetchedWords(served: string, now: Date = new Date()): string {
+  const p = stampParts(served);
+  if (!p) return served;
+  const zone = zoneOfStamp(served);
+  const clock = `${p.clock}:${p.seconds} ${zone}`;
+  if (p.offset === null || p.at === null) return clock;
+  const today = new Date(now.getTime() + p.offset * 60_000).toISOString().slice(0, 10);
+  return p.date === today ? clock : `${dateWords(p.date)} ${clock}`;
 }
 
 /** The line's words, for the freshness line (`Freshness.tsx`) and the saved
  *  picture's header and its text (#394). */
-export function freshnessWords(fetchedAt: string | null, polledAt: string | null, sweepSeconds: number | null): string {
+export function freshnessWords(
+  fetchedAt: string | null, polledAt: string | null, sweepSeconds: number | null, now: Date = new Date(),
+): string {
   const session = marketClock(fetchedAt);
-  return (fetchedAt ? `fetched at ${fetchedAt}` : "waiting for first sweep")
+  return (fetchedAt ? `fetched at ${fetchedWords(fetchedAt, now)}` : "waiting for first sweep")
     + (session ? ` · ${session}` : "")
     + (polledAt ? ` · screen updated ${polledAt}` : "")
     + (sweepSeconds ? ` · service sweeps every ${sweepSeconds}s` : "");

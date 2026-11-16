@@ -15,6 +15,8 @@ import { correctClose } from "./shared/api";
 import { correctionBody, exitPrefill, type CloseDraft } from "./holding";
 import { madeWords, storedWords } from "./journal";
 import { DayField, ExitField, type ClosedOutcome } from "./HoldingActions";
+import { dateWords } from "./shared/times";
+import { plainError } from "./shared/errors";
 
 /** Brings the account into view and puts the focus on it — once the sheet it was closed from has
  *  gone. On the phone the close happens in a modal sheet, which locks the page's scroll and, as it
@@ -78,15 +80,15 @@ export function ClosedResult({ outcome, privacy, onDone, onCorrected, served }: 
     <section ref={section} className="nx-closed" aria-label={`closed ${holding.name}`}>
       <h2 ref={heading} tabIndex={-1}>{`Closed ${holding.name}`}</h2>
       <p>
-        {`closed on ${now.closed_on ?? "—"} · entry ${stored(holding.entry) ?? "—"} → exit ${stored(now.exit) ?? "—"} · made `}
+        {`closed on ${now.closed_on ? dateWords(now.closed_on) : "—"} · entry ${stored(holding.entry) ?? "—"} → exit ${stored(now.exit) ?? "—"} · made `}
         <strong data-testid="realized">{made}</strong>
       </p>
       <p className="nx-meta">Points, Entry less Exit across the contracts held: a closed holding has no quote to give it a dollar size.</p>
-      <h3>Its Monitors</h3>
+      <h3>Its rules</h3>
       {fates === null ? (
-        <p className="nx-hold-error">{`The Monitors could not be read back after the close — ${fatesError ?? "no answer"}. The Muted list says where each is.`}</p>
+        <p className="nx-hold-error">{`The rules could not be read back after the close — ${fatesError ?? "no answer"}. The Muted list says where each is.`}</p>
       ) : fates.length === 0 ? (
-        <p className="nx-meta">No Monitor watched it.</p>
+        <p className="nx-meta">No rule watched it.</p>
       ) : (
         <ul className="nx-closed-fates">
           {fates.map((f) => <li key={f.id}><span>{f.name}</span>{` — ${f.fate}`}</li>)}
@@ -139,7 +141,7 @@ export function Correction({ id, name, closedOn, exit, onSaved }: {
       onSaved({ closed_on: answer.closed_on, exit: answer.exit, realized_points: answer.realized_points });
       setSaved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(plainError(err));
     } finally {
       busy.current = false;
       setSaving(false);

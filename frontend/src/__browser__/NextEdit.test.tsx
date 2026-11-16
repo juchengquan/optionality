@@ -148,7 +148,7 @@ describe("mute, unmute and delete from the desk", () => {
     const panel = inspector();
     await userEvent.click(within(panel).getByRole("button", { name: "switch 261211 8000C Δ back on" }));
     const ask = within(panel).getByRole("group", { name: "switch 261211 8000C Δ back on?" });
-    expect(ask.textContent).toMatch(/the provider does not know its contract US\.SPXW261211C8300000/);
+    expect(ask.textContent).toMatch(/the provider does not know its contract — US\.SPXW261211C8300000/);
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "switch it on" }));
     await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/q-unknown", body: { enabled: true } }]));
@@ -157,6 +157,6 @@ describe("mute, unmute and delete from the desk", () => {
   it("says when an expired rule is deleted, from the retention the service serves", async () => {
     await openDesk();
     await userEvent.click(await screen.findByText(/^Muted and expired · /));
-    expect(screen.getByText("expired 2026-11-06 — the service deletes it on 2026-11-12")).toBeTruthy();
+    expect(screen.getByText("expired Fri 6 Nov — the service deletes it on Thu 12 Nov")).toBeTruthy();
   });
 });

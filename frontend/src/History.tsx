@@ -48,6 +48,7 @@ import {
   BEFORE_ENTRY_WORDS, beforeEntryDays, entryCloseDay, thresholdOf, watchedCharted, watchedSamples, withBeforeEntry,
 } from "./watchhistory";
 import "./history.css";
+import { plainError } from "./shared/errors";
 
 interface Answer<T> {
   id: string;
@@ -71,7 +72,7 @@ function useAnswer<T>(id: string, fetch: (id: string) => Promise<T>): Answer<T> 
         setState(isSamples(samples) ? { id, samples: samples as T }
           : { id, error: "the service answered without them" });
       },
-      (err: unknown) => { if (live) setState({ id, error: err instanceof Error ? err.message : String(err) }); },
+      (err: unknown) => { if (live) setState({ id, error: plainError(err, "open it again to retry") }); },
     );
     return () => { live = false; };
     // the fetch is a module function, the same on every render: the id is what is asked about

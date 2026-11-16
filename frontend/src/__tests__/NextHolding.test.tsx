@@ -75,12 +75,12 @@ for (const arrangement of ["desk", "phone"] as const) {
       const d = await detail(arrangement, "h-ic");
       // mounted empty, so a screen reader announces it when it fills
       expect(within(d).getByRole("status").textContent).toBe("");
-      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      fireEvent.click(within(d).getByRole("button", { name: "edit" }));
       const form = within(d).getByRole("form", { name: "edit 1231_IC" });
       expect((within(form).getByLabelText("entry, per contract") as HTMLInputElement).value).toBe("5");
       typeIn(within(form).getByLabelText("entry, per contract"), "5.4");
       typeIn(within(form).getByLabelText("opened"), "2026-11-04");
-      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      fireEvent.click(within(form).getByRole("button", { name: "save" }));
       await waitFor(() => expect(writes(s)).toEqual(["PATCH /positions/h-ic"]));
       expect(s.writes()[0]!.body).toEqual({ entry: 5.4, opened_at: "2026-11-04" });
       await waitFor(() => expect(s.stored.get("h-ic")!.entry).toBe(5.4));
@@ -92,14 +92,14 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      fireEvent.click(within(d).getByRole("button", { name: "edit" }));
       const form = within(d).getByRole("form", { name: "edit 1231_IC" });
       expect(within(form).queryByLabelText(/strike|name/)).toBeNull();
       expect(form.textContent).toMatch(/the service does not edit them/);
       // a wrong name is not worth the samples; delete-and-add-again is for wrong LEGS, and says the cost
       expect(form.textContent).toMatch(/A wrong name cannot be changed, and the daily samples are worth more than the name/);
       expect(form.textContent).toMatch(/A wrong strike or side is a different holding: delete it and add it again — which deletes its daily samples for good/);
-      expect(form.textContent).toMatch(/its 1 Monitor is kept/);
+      expect(form.textContent).toMatch(/its 1 rule is kept/);
       expect(form.textContent).not.toMatch(/Recorded wrongly\? Delete it/);
     });
 
@@ -107,7 +107,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book(), monitors: withValueRule() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      fireEvent.click(within(d).getByRole("button", { name: "edit" }));
       const form = within(d).getByRole("form", { name: "edit 1231_IC" });
       const qty = within(form).getByRole("group", { name: "quantity of each leg" });
       const putQty = within(qty).getByLabelText("quantity, short PUT 6300") as HTMLInputElement;
@@ -124,7 +124,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       expect(qty.textContent).toMatch(/daily samples are kept as they are/);
       // worded from the rules the page has: 1231_IC values the whole condor, so it follows
       expect(qty.textContent).toMatch(/1231_IC values the whole structure, so it takes the new quantities and starts unrung/);
-      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      fireEvent.click(within(form).getByRole("button", { name: "save" }));
       await waitFor(() => expect(writes(s)).toEqual(["PATCH /positions/h-ic"]));
       // ...and said after it from what the service answered, with the rule's editor to rename it
       await waitFor(() => expect(within(d).getByRole("status").textContent)
@@ -142,12 +142,12 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      fireEvent.click(within(d).getByRole("button", { name: "edit" }));
       const qty = within(d).getByRole("group", { name: "quantity of each leg" });
       typeIn(within(qty).getByLabelText("quantity, short PUT 6300"), "2");
       expect(qty.textContent).toMatch(/No rule values this structure as a whole, so no rule's legs change/);
       expect(qty.textContent).not.toMatch(/takes the new quantities/);
-      fireEvent.click(within(d).getByRole("button", { name: "Save" }));
+      fireEvent.click(within(d).getByRole("button", { name: "save" }));
       await waitFor(() => expect(within(d).getByRole("status").textContent).toBe("saved 1231_IC"));
       expect(within(d).queryByRole("group", { name: "rename the rules that followed" })).toBeNull();
     });
@@ -156,12 +156,12 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      fireEvent.click(within(d).getByRole("button", { name: "edit" }));
       const form = within(d).getByRole("form", { name: "edit 1231_IC" });
       const qty = within(form).getByRole("group", { name: "quantity of each leg" });
       s.refuse.set("PATCH /positions/h-ic", { status: 404, detail: "position not found" });
       typeIn(within(qty).getByLabelText("quantity, short PUT 6300"), "2");
-      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      fireEvent.click(within(form).getByRole("button", { name: "save" }));
       await waitFor(() => expect(within(form).getByRole("alert").textContent).toBe("position not found"));
       expect(within(qty).queryByRole("alert")).toBeNull();
     });
@@ -170,17 +170,17 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      fireEvent.click(within(d).getByRole("button", { name: "edit" }));
       const form = within(d).getByRole("form", { name: "edit 1231_IC" });
       const qty = within(form).getByRole("group", { name: "quantity of each leg" });
       typeIn(within(qty).getByLabelText("quantity, short PUT 6300"), "11");
-      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      fireEvent.click(within(form).getByRole("button", { name: "save" }));
       expect(within(qty).getByRole("alert").textContent).toBe("short PUT 6300: a quantity is a whole number from 1 to 10");
       expect(writes(s)).toEqual([]);
 
       s.refuse.set("PATCH /positions/h-ic", { status: 422, detail: "position '1231_IC' is closed: a leg's quantity is corrected only while it is held" });
       typeIn(within(qty).getByLabelText("quantity, short PUT 6300"), "2");
-      fireEvent.click(within(form).getByRole("button", { name: "Save" }));
+      fireEvent.click(within(form).getByRole("button", { name: "save" }));
       await waitFor(() => expect(within(qty).getByRole("alert").textContent).toMatch(/is closed/));
     });
 
@@ -188,12 +188,12 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
       const form = within(d).getByRole("form", { name: "close 1231_IC" });
       const exit = within(form).getByLabelText("exit, per contract") as HTMLInputElement;
       expect(Number(exit.value)).toBe(1.225);
       expect((within(form).getByLabelText("closed on") as HTMLInputElement).value).toBe("2026-11-12");
-      fireEvent.click(within(form).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(form).getByRole("button", { name: "close it" }));
       await waitFor(() => expect(writes(s)).toEqual(["POST /positions/h-ic/close"]));
       expect(s.writes()[0]!.body).toEqual({ exit: 1.225, closed_on: "2026-11-12" });
       expect(s.stored.get("h-ic")!.exit).toBe(1.225);
@@ -203,12 +203,12 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-long");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
       const form = within(d).getByRole("form", { name: "close 1218_LP6800" });
       const exit = within(form).getByLabelText("exit, per contract") as HTMLInputElement;
       expect(Number(exit.value)).toBe(-7.25);
       typeIn(exit, "-7.4");
-      fireEvent.click(within(form).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(form).getByRole("button", { name: "close it" }));
       await waitFor(() => expect(s.stored.get("h-long")!.closed_on).toBe("2026-11-12"));
       expect(s.writes()[0]!.body).toEqual({ exit: -7.4, closed_on: "2026-11-12" });
       expect(s.stored.get("h-long")!.exit).toBe(-7.4);
@@ -227,10 +227,10 @@ for (const arrangement of ["desk", "phone"] as const) {
       // a poll asked before the close and answered after it still lists the holding
       s.stale.values = true;
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
       const form = within(d).getByRole("form", { name: "close 1231_IC" });
       typeIn(within(form).getByLabelText("exit, per contract"), "1.5");
-      fireEvent.click(within(form).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(form).getByRole("button", { name: "close it" }));
 
       const result = await screen.findByRole("region", { name: "closed 1231_IC" });
       expect(document.querySelector('[data-ref="h-ic"]')).toBeNull();
@@ -253,8 +253,8 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
-      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
+      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "close it" }));
       const result = await screen.findByRole("region", { name: "closed 1231_IC" });
       const fix = within(result).getByRole("form", { name: "correct the close of 1231_IC" });
       expect((within(fix).getByLabelText("exit, per contract") as HTMLInputElement).value).toBe("1.225");
@@ -263,7 +263,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
       await waitFor(() => expect(within(result).getByTestId("realized").textContent).toBe("7.8 pts"));
       expect(s.writes().at(-1)).toEqual({ method: "PATCH", path: "/positions/h-ic", body: { exit: 1.1, closed_on: "2026-11-11" } });
-      expect(within(result).getByText(/closed on 2026-11-11/)).toBeTruthy();
+      expect(within(result).getByText(/closed on Wed 11 Nov/)).toBeTruthy();
     });
 
     it("asks before deleting, says the samples go with it, and offers closing instead", async () => {
@@ -272,18 +272,18 @@ for (const arrangement of ["desk", "phone"] as const) {
       // a poll asked before the delete and answered after it still lists the holding
       s.stale.values = true;
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Delete…" }));
+      fireEvent.click(within(d).getByRole("button", { name: "delete…" }));
       const ask = within(d).getByRole("group", { name: "delete 1231_IC?" });
       expect(ask.textContent).toMatch(/daily samples are deleted with it/);
       expect(ask.textContent).toMatch(/cannot be re-entered/);
       expect(ask.textContent).toMatch(/If this was a real trade, close it instead/);
       expect(writes(s)).toEqual([]);
-      fireEvent.click(within(ask).getByRole("button", { name: "Keep it" }));
+      fireEvent.click(within(ask).getByRole("button", { name: "keep it" }));
       expect(within(d).queryByRole("group", { name: "delete 1231_IC?" })).toBeNull();
       expect(writes(s)).toEqual([]);
 
-      fireEvent.click(within(d).getByRole("button", { name: "Delete…" }));
-      fireEvent.click(within(within(d).getByRole("group", { name: "delete 1231_IC?" })).getByRole("button", { name: "Delete for good" }));
+      fireEvent.click(within(d).getByRole("button", { name: "delete…" }));
+      fireEvent.click(within(within(d).getByRole("group", { name: "delete 1231_IC?" })).getByRole("button", { name: "delete it" }));
       await waitFor(() => expect(writes(s)).toEqual(["DELETE /positions/h-ic"]));
       await waitFor(() => expect(document.querySelector('[data-ref="h-ic"]')).toBeNull());
       // and it stays off the live view when the re-read still lists it
@@ -295,11 +295,11 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
       const exit = within(d).getByLabelText("exit, per contract");
       const hint = document.getElementById(exit.getAttribute("aria-describedby") ?? "")!;
       expect(hint.textContent).toMatch(/signed like the Cost to close/);
-      expect(hint.textContent).toMatch(/Starts at the Cost to close as last valued, at 2026-11-12 23:14:05\+08:00/);
+      expect(hint.textContent).toMatch(/Starts at the Cost to close as last valued, at Thu 12 Nov 23:14:05 SGT/);
       expect(hint.textContent).not.toMatch(/Cost to close now/);
     });
 
@@ -307,7 +307,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
       const form = within(d).getByRole("form", { name: "close 1231_IC" });
       fireEvent.submit(form);
       fireEvent.submit(form);
@@ -319,8 +319,8 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
-      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
+      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "close it" }));
       const result = await screen.findByRole("region", { name: "closed 1231_IC" });
       const fix = within(result).getByRole("form", { name: "correct the close of 1231_IC" });
       // mounted empty, so a screen reader announces it when it fills
@@ -336,8 +336,8 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
-      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
+      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "close it" }));
       const result = await screen.findByRole("region", { name: "closed 1231_IC" });
       expect(result.textContent).toMatch(/entry 5 → exit 1\.225/);
     });
@@ -346,14 +346,14 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       let d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
-      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
+      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "close it" }));
       const first = await screen.findByRole("region", { name: "closed 1231_IC" });
       typeIn(within(first).getByLabelText("exit, per contract"), "1.3");
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "1231_IC" })).toBeNull());
       d = await detail(arrangement, "h-calls");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
-      fireEvent.click(within(within(d).getByRole("form", { name: "close 1218_C7300" })).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
+      fireEvent.click(within(within(d).getByRole("form", { name: "close 1218_C7300" })).getByRole("button", { name: "close it" }));
       const second = await screen.findByRole("region", { name: "closed 1218_C7300" });
       const again = screen.getByRole("region", { name: "closed 1231_IC" });
       expect((within(again).getByLabelText("exit, per contract") as HTMLInputElement).value).toBe("1.3");
@@ -366,8 +366,8 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Delete…" }));
-      fireEvent.click(within(within(d).getByRole("group", { name: "delete 1231_IC?" })).getByRole("button", { name: "Close it instead" }));
+      fireEvent.click(within(d).getByRole("button", { name: "delete…" }));
+      fireEvent.click(within(within(d).getByRole("group", { name: "delete 1231_IC?" })).getByRole("button", { name: "close it instead" }));
       expect(within(d).getByRole("form", { name: "close 1231_IC" })).toBeTruthy();
     });
 
@@ -376,10 +376,10 @@ for (const arrangement of ["desk", "phone"] as const) {
       s.refuse.set("POST /positions/h-ic/close", { status: 422, detail: "closed on 2026-11-02, before it was opened on 2026-11-03" });
       await open(arrangement, s);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
       const form = within(d).getByRole("form", { name: "close 1231_IC" });
       typeIn(within(form).getByLabelText("closed on"), "2026-11-02");
-      fireEvent.click(within(form).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(form).getByRole("button", { name: "close it" }));
       expect((await within(form).findByRole("alert")).textContent).toBe("closed on 2026-11-02, before it was opened on 2026-11-03");
       expect((within(form).getByLabelText("closed on") as HTMLInputElement).value).toBe("2026-11-02");
       expect(document.querySelector('[data-ref="h-ic"]')).not.toBeNull();
@@ -389,10 +389,10 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = holdingService({ holdings: book() });
       await open(arrangement, s, true);
       const d = await detail(arrangement, "h-ic");
-      fireEvent.click(within(d).getByRole("button", { name: "Edit" }));
+      fireEvent.click(within(d).getByRole("button", { name: "edit" }));
       expect(within(d).getByLabelText("contracts").classList.contains("nx-private")).toBe(true);
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
-      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
+      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "close it" }));
       const result = await screen.findByRole("region", { name: "closed 1231_IC" });
       expect(within(result).getByTestId("realized").textContent).toBe("••• pts");
       expect(result.textContent).not.toMatch(/×2/);
@@ -408,8 +408,8 @@ describe("the day a close starts at", () => {
     const s = holdingService({ holdings: book() });
     await open("desk", s, false, NY_EVENING);
     const d = await detail("desk", "h-ic");
-    fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
-    fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "Close holding" }));
+    fireEvent.click(within(d).getByRole("button", { name: "close…" }));
+    fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "close it" }));
     await waitFor(() => expect(writes(s)).toEqual(["POST /positions/h-ic/close"]));
     expect(s.writes()[0]!.body).toEqual({ exit: 1.225, closed_on: "2026-11-12" });
   });
@@ -419,18 +419,18 @@ describe("the day a close starts at", () => {
     const s = holdingService({ holdings: [...book(), expired as Holding] });
     await open("desk", s, false, NY_EVENING);
     let d = await detail("desk", "h-old");
-    fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
+    fireEvent.click(within(d).getByRole("button", { name: "close…" }));
     let form = within(d).getByRole("form", { name: "close 1106_P6000" });
     // blank is unknown (ADR 0022): 0 is offered in words, never typed for the owner
     expect((within(form).getByLabelText("exit, per contract") as HTMLInputElement).value).toBe("");
     expect(form.textContent).toMatch(/expired worthless\? type 0/i);
-    fireEvent.click(within(form).getByRole("button", { name: "Close holding" }));
+    fireEvent.click(within(form).getByRole("button", { name: "close it" }));
     await waitFor(() => expect(writes(s)).toEqual(["POST /positions/h-old/close"]));
     expect(s.writes()[0]!.body).toEqual({ exit: null, closed_on: "2026-11-06" });
     // and no hint on one still to expire
     await screen.findByRole("region", { name: "closed 1106_P6000" });
     d = await detail("desk", "h-ic");
-    fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
+    fireEvent.click(within(d).getByRole("button", { name: "close…" }));
     form = within(d).getByRole("form", { name: "close 1231_IC" });
     expect(form.textContent).not.toMatch(/expired worthless/i);
   });
@@ -441,7 +441,7 @@ describe("on the desk's inspector", () => {
     const s = holdingService({ holdings: book() });
     await open("desk", s);
     const d = await detail("desk", "h-ic");
-    const edit = within(d).getByRole("button", { name: "Edit" });
+    const edit = within(d).getByRole("button", { name: "edit" });
     fireEvent.click(edit);
     const entry = within(d).getByLabelText("entry, per contract");
     expect(document.activeElement).toBe(entry);
@@ -455,8 +455,8 @@ describe("on the desk's inspector", () => {
     const s = holdingService({ holdings: book() });
     await open("desk", s);
     const d = await detail("desk", "h-ic");
-    fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
-    fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "Close holding" }));
+    fireEvent.click(within(d).getByRole("button", { name: "close…" }));
+    fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "close it" }));
     const result = await screen.findByRole("region", { name: "closed 1231_IC" });
     await waitFor(() => expect(document.activeElement).toBe(within(result).getByRole("heading", { name: "Closed 1231_IC" })));
     fireEvent.click(within(result).getByRole("button", { name: "Done" }));
@@ -473,7 +473,7 @@ describe("the quantity's preview, under a poll (#359's review)", () => {
     const draw = (holding: Holding) =>
       <HoldingActions holding={holding} monitors={[]} rules={[]} privacy={false} writes={writes} />;
     const { rerender } = render(draw(h));
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "edit" }));
     typeIn(screen.getByLabelText("quantity, short PUT 6300"), "2");
     await waitFor(() => expect(screen.getByRole("group", { name: "what the correction changes" }).textContent).toMatch(/max loss/));
     const asked = () => s.sent.filter((w) => w.path === "/positions/payoff").length;

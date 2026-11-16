@@ -135,9 +135,9 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     const said = within(chart).getByRole("status");
     expect(said.textContent).toMatch(/3 Nov · 45 DTE/);
     // the rule is New York's, so the time is said on New York's clock: 09:30 in Singapore is 20:30
-    expect(said.textContent).toMatch(/not the close: observed 20:30 New York, after the 16:15 close/);
+    expect(said.textContent).toMatch(/not the close: observed 20:30 ET, after the 16:15 ET close/);
     // and in the crosshair's tooltip, shorter
-    expect(tipOf(chart)?.textContent).toMatch(/not the close: 20:30 New York, after the 16:15 close/);
+    expect(tipOf(chart)?.textContent).toMatch(/not the close: 20:30 ET, after the 16:15 ET close/);
   });
 
   it("says what an overnight fill and a row from before observed times are", async () => {
@@ -146,7 +146,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
     pointAt(chart, dayOf(chart, "[data-timing='before-open']"));
     expect(within(chart).getByRole("status").textContent)
-      .toMatch(/not the close: observed 00:05 New York, before the 09:30 open/);
+      .toMatch(/not the close: observed 00:05 ET, before the 09:30 ET open/);
     pointAt(chart, dayOf(chart, "[data-timing='unrecorded']"));
     expect(within(chart).getByRole("status").textContent).toMatch(/whether it was the close is not known/);
   });
@@ -196,7 +196,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(7));
     pointAt(chart, dayOf(chart, "[data-timing='close']"));
-    expect(within(chart).getByRole("status").textContent).toMatch(/— in hours \(observed 16:00 New York\)$/);
+    expect(within(chart).getByRole("status").textContent).toMatch(/— in hours \(observed 16:00 ET\)$/);
     // a close says nothing about the close in the tooltip
     expect(tipOf(chart)?.querySelector(".nx-bd-tip-why")).toBeNull();
   });
@@ -731,7 +731,7 @@ describe("in the phone's holding sheet outside the session, open from the start 
     fireEvent.pointerUp(svg, { clientX: x + 2, pointerType: "touch" });
     fireEvent.click(svg, { clientX: x + 2 });
     expect(within(chart).getByRole("status").textContent)
-      .toMatch(/not the close: observed 00:05 New York, before the 09:30 open/);
+      .toMatch(/not the close: observed 00:05 ET, before the 09:30 ET open/);
     // lifting the finger off leaves it said, where a mouse leaving lets it go
     fireEvent.pointerLeave(svg, { pointerType: "touch" });
     expect(tipOf(chart)).toBeTruthy();
@@ -753,7 +753,7 @@ describe("in the phone's holding sheet outside the session, open from the start 
 });
 
 /** The section that opens a holding's history (#353), wherever it is drawn. */
-const toggleOf = (root: HTMLElement) => within(root).getByRole("button", { name: "history" });
+const toggleOf = (root: HTMLElement) => within(root).getByRole("button", { name: "History" });
 
 /** Its toggle's state, and the box it controls: named by `aria-controls`, and there to be named
  *  whether it is open or shut. */
@@ -809,7 +809,7 @@ describe("in session, on demand (#353): the desk's inspector", () => {
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(answer) });
       }));
       const { insp } = await inspect("h-calls", "1218_C7300", { session: true });
-      fireEvent.click(within(insp).getByRole("button", { name: "history" }));
+      fireEvent.click(within(insp).getByRole("button", { name: "History" }));
       expect(await within(insp).findByText(/the samples could not be read — the service answered without them/))
         .toBeTruthy();
     });
@@ -891,11 +891,11 @@ describe("HistoryOnDemand opened by default (#371, for #372 and #374)", () => {
 
   it("starts open and reads the samples once, at once, when told to", async () => {
     render(<HistoryOnDemand holding={HOLDINGS[0]!} privacy={false} defaultOpen />);
-    expect(screen.getByRole("button", { name: "history" }).getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("button", { name: "History" }).getAttribute("aria-expanded")).toBe("true");
     await waitFor(() => expect(reads).toEqual(["/positions/h-puts/samples"]));
     // shut and opened again, it asks nothing more
-    fireEvent.click(screen.getByRole("button", { name: "history" }));
-    fireEvent.click(screen.getByRole("button", { name: "history" }));
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    fireEvent.click(screen.getByRole("button", { name: "History" }));
     await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
     expect(reads).toEqual(["/positions/h-puts/samples"]);
   });
@@ -903,7 +903,7 @@ describe("HistoryOnDemand opened by default (#371, for #372 and #374)", () => {
   for (const given of [{}, { defaultOpen: false }]) {
     it(`starts shut and reads nothing ${"defaultOpen" in given ? "when told not to open" : "by default"}`, async () => {
       render(<HistoryOnDemand holding={HOLDINGS[0]!} privacy={false} {...given} />);
-      expect(screen.getByRole("button", { name: "history" }).getAttribute("aria-expanded")).toBe("false");
+      expect(screen.getByRole("button", { name: "History" }).getAttribute("aria-expanded")).toBe("false");
       await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
       expect(reads).toEqual([]);
     });
@@ -990,9 +990,9 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
     hover(iv, xOf(iv, 45));
     for (const panel of all) {
       expect(tipOf(panel)!.querySelector(".nx-bd-tip-why")?.textContent)
-        .toBe("not the close: 20:30 New York, after the 16:15 close");
+        .toBe("not the close: 20:30 ET, after the 16:15 ET close");
     }
-    expect(said(spx)).toMatch(/ — not the close: 20:30 New York, after the 16:15 close$/);
+    expect(said(spx)).toMatch(/ — not the close: 20:30 ET, after the 16:15 ET close$/);
   });
 
   it("says so in a panel with no figure for the day, rather than drawing nothing", async () => {

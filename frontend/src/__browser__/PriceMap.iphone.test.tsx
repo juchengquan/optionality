@@ -15,7 +15,7 @@ const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
     fetched_at: "2026-11-10 23:14:05+08:00" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 
 let unanswered: string[] = [];
@@ -103,7 +103,7 @@ describe("the phone", () => {
           }
         }
       }
-      await userEvent.click(within(sheet).getByRole("button", { name: "Close" }));
+      await userEvent.click(within(sheet).getByRole("button", { name: "close sheet" }));
       await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     }
     expect(faults).toEqual([]);

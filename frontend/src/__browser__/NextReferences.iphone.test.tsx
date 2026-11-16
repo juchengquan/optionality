@@ -38,7 +38,7 @@ describe("the strip on a phone", () => {
       await show();
       const { items, lines } = stripLines();
       expect(items).toHaveLength(3);
-      if (outside) for (const item of items) expect(item.textContent).toMatch(/read at 01:00$/);
+      if (outside) for (const item of items) expect(item.textContent).toMatch(/read at 01:00 SGT$/);
       // each one whole, inside the page: a figure clipped at the edge is the shape of bug a green
       // suite hides
       for (const item of items) {

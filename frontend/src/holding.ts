@@ -14,7 +14,7 @@
  */
 import { readNumber } from "./shared/numbers";
 import type { Holding, Monitor } from "./shared/api";
-import { GROUPS } from "./shared/groups";
+import { reasonLabel } from "./shared/groups";
 
 /** A number as typed: null for blank, NaN for something that is not one. */
 function typed(text: string): number | null {
@@ -171,8 +171,7 @@ export interface Fate {
   fate: string;
 }
 
-const reasonWords = (reason: string | null) =>
-  GROUPS.find(([r]) => r === reason)?.[1] ?? "Reason not recorded";
+const reasonWords = (reason: string | null) => reasonLabel(reason);
 
 /** What became of each Monitor, as the service now reports it: the close's own list of the rules
  *  it switched off, and `/monitors` read back AFTER the close for the rest. Nothing is inferred

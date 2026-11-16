@@ -37,7 +37,7 @@ export function References({
 
   return (
     <section data-testid="references">
-      <h3 className="text-sm font-semibold mb-1">on the page</h3>
+      <h3 className="text-sm font-semibold mb-1">On the page</h3>
       {pending ? <p className="meta" role="status">refreshing references…</p> : null}
       {references.length === 0 ? (
         <p className="meta">nothing kept — the strip above the tables stays away until there is</p>
@@ -126,7 +126,8 @@ export function References({
             said" rather than "it is live".
           </FieldDescription>
         </Field>
-        <Button type="submit" size="sm" variant="secondary" disabled={pending}>keep it</Button>
+        {/* "add", as what it does (part H); named in full, since the header's add is beside it */}
+        <Button type="submit" size="sm" variant="secondary" disabled={pending} aria-label="add reference">add</Button>
       </form>
     </section>
   );

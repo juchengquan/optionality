@@ -17,6 +17,7 @@
  */
 import type { Entry } from "./shared/api";
 import { DASH, shortStamp } from "./shared/format";
+import { newYorkWhen } from "./session";
 import { figureOf, iv, points } from "./shared/numbers";
 import { fieldWords } from "./needs";
 import { priceOf } from "./lastknown";
@@ -113,8 +114,9 @@ function contractFigures(entry: Entry): RuleFigure[] {
     detail(one("ask_price", "ask", points)),
     detail(lastFigure),
     // the last TRADE, which is not the quote's freshness (`fetched_at`): a far strike can go days
-    // without a print, so the date stays (format.shortStamp)
-    detail(stamp !== null ? { key: "update_time", label: "last trade", text: shortStamp(stamp), why: null }
+    // without a print, so the date stays — on New York's clock, a trade being the market's (part F),
+    // "Mon 16 Nov 00:22 ET"; a stamp with no zone, which names no instant, as written
+    detail(stamp !== null ? { key: "update_time", label: "last trade", text: newYorkWhen(stamp) ?? shortStamp(stamp), why: null }
       : { key: "update_time", label: "last trade", text: DASH, why: untraded ? NO_TRADE : NO_STAMP }),
   ];
 }

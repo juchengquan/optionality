@@ -1,4 +1,5 @@
 import { trueMinus } from "./shared/numbers";
+import { REASONS } from "./shared/groups";
 import type { Entry, Health, Holding, Monitor } from "./shared/api";
 import { shortContract, shortDate } from "./shared/format";
 import { overlapOf } from "./placement";
@@ -28,14 +29,13 @@ export interface Need {
  *  then the good news, an entry signal before a Target because it is the one that will not wait. */
 const ORDER: NeedKind[] = ["fault", "stop", "alarm", "entry", "target", "manage"];
 
-/** The three quarantines (CONTEXT.md: Quarantine), each said as the fact about the data it is.
- *  The other reasons a rule is off — muted by hand, expired, its holding closed — are somebody's
- *  choice or the calendar, and are not news. */
-export const QUARANTINED: Record<string, string> = {
-  "unknown-contract": "the provider does not know its contract",
-  "no-figure": "its figure never arrives",
-  unreadable: "its stored row cannot be read",
-};
+/** The three quarantines (CONTEXT.md: Quarantine), each said as the fact about the data it is, in
+ *  the page's one set of words for why a rule is off (`shared/groups.ts`, part I). The other
+ *  reasons — muted by you, expired, its holding closed — are somebody's choice or the calendar, and
+ *  are not news. */
+export const QUARANTINED: Record<string, string> = Object.fromEntries(
+  REASONS.filter((r) => r.quarantine).map((r) => [r.reason!, r.why]),
+);
 
 /** A rule on the watchlist, rather than one about something held: nothing it watches is held.
  *

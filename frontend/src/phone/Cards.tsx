@@ -12,7 +12,8 @@ import { Chip, Money } from "../Book";
 import { levelWords } from "../levels";
 import { costAndPace, paceOutcome } from "../pace";
 import { Glyph } from "../NeedsLine";
-import { entryName, fieldWords, monitorName, QUARANTINED } from "../needs";
+import { entryName, fieldWords, monitorName } from "../needs";
+import { reasonWhy } from "../shared/groups";
 import { RuleWords } from "../RuleWords";
 import type { PlacedHolding } from "../placement";
 import { mutedWords, shortDeltas, shortDeltaWords } from "./figures";
@@ -23,6 +24,10 @@ import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfMonitor } from "../edit";
 import { stripOfEntry } from "../strip";
+import { ruleCells } from "../desk/columns";
+
+/** Whether a card's value is a held spread's cost to close, as its desk row reads it (`heldSpread`). */
+const heldSpreadValue = (e: Entry, overlap: string | null) => Boolean(e.legs) && e.held && !overlap;
 
 /** The button that makes a whole card one target. It is drawn over the card, so the card's text
  *  stays text to a screen reader and the button says what a tap does. */
@@ -56,6 +61,8 @@ export function RuleLine({ entry, marked = true, children }: {
       <span className="nxp-rule-name">{entryName(entry)}</span>
       <span className="nxp-sentence"><RuleWords entry={entry} /></span>
       {state ? <Chip state={state} /> : null}
+      {/* how far it has come, as a watch card draws it (part K) */}
+      <Progress entry={entry} />
       {entry.error ? <span className="nxp-error">{entry.error}</span> : null}
       {children}
     </li>
@@ -74,7 +81,7 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
       <header className="nxp-head">
         <span className="nxp-name">{holding.name}</span>
         <span className="nxp-legs"><Legs legs={holding.legs.map(heldLeg)} /></span>
-        <span className="nxp-pill">{`${holding.dte} DTE`}</span>
+        {/* no DTE here: its expiry's heading says it, once (part K) */}
       </header>
       <div className="nxp-hero">
         <Money value={holding.pnl} privacy={privacy} />
@@ -125,14 +132,15 @@ export function Progress({ entry }: { entry: Entry }) {
 }
 
 /** A watched spread — or a single contract, or a rule on something held that no drawn holding
- *  owns — with its progress toward the threshold and the rules that sit under it, and, for a
- *  spread that only partly overlaps a holding, what it shares and with whom (#346). A watchlist
- *  card out of the session says its last in-session price and when (#400), `value`; in the session
- *  it says none, as before. */
-export function RuleCard({ entry, under, overlap = null, value, onOpen }: {
-  entry: Entry; under: Entry[]; overlap?: string | null; value?: string; onOpen: () => void;
+ *  owns — with its value and Δ as its desk row writes them (part K; out of the session a watchlist
+ *  row's value is its last in-session price and when, #400), its progress toward the threshold and
+ *  the rules that sit under it, and, for a spread that only partly overlaps a holding, what it
+ *  shares and with whom (#346). */
+export function RuleCard({ entry, under, overlap = null, onOpen }: {
+  entry: Entry; under: Entry[]; overlap?: string | null; onOpen: () => void;
 }) {
   const state = ruleState(entry);
+  const cells = ruleCells(entry, overlap);
   return (
     <article className="nxp-card nxp-watch" data-ref={entry.id} data-state={state ?? "calm"}>
       <OpenCard name={entryName(entry)} onOpen={onOpen} />
@@ -142,7 +150,10 @@ export function RuleCard({ entry, under, overlap = null, value, onOpen }: {
         {state ? <Chip state={state} /> : null}
       </header>
       {overlap ? <p className="nxp-meta nxp-overlap" data-overlap="">{overlap}</p> : null}
-      {value !== undefined ? <p className="nxp-meta" data-value="">{`value ${value}`}</p> : null}
+      <dl className="nxp-facts nxp-watch-figs">
+        <div data-value=""><dt>{heldSpreadValue(entry, overlap) ? "cost to close" : "value"}</dt><dd>{cells.value}</dd></div>
+        <div data-delta=""><dt>Δ</dt><dd>{cells.delta}</dd></div>
+      </dl>
       <Progress entry={entry} />
       <p className="nxp-sentence"><RuleWords entry={entry} /></p>
       {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
@@ -162,7 +173,7 @@ export function OffList({ quarantined, muted }: { quarantined: Monitor[]; muted:
           <span className="nxp-name">{monitorName(m)}</span>
           <span className="nxp-sentence">{fieldWords(m.field)}</span>
           <span className="nx-chip" data-attention="fault"><OctagonAlert aria-hidden="true" />quarantined</span>
-          <span className="nxp-meta">{QUARANTINED[m.disabled_reason ?? ""] ?? m.disabled_reason}</span>
+          <span className="nxp-meta">{reasonWhy(m.disabled_reason)}</span>
           <MonitorControls rule={ruleOfMonitor(m)} served={null} />
         </li>
       ))}

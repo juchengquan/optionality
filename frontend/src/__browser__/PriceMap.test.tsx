@@ -22,7 +22,7 @@ const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
     fetched_at: "2026-11-10 23:14:05+08:00" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 
 /** Requests the page made that this suite does not answer: each one is a failure. */
@@ -232,7 +232,7 @@ describe("the price map panel", () => {
   });
 });
 
-/** A Sunday, 12:00 New York: outside the session, where the inspector's history starts open
+/** A Sunday, 12:00 ET: outside the session, where the inspector's history starts open
  *  (#372). In session it starts shut. */
 const OUTSIDE_THE_SESSION = new Date("2026-11-15T17:00:00Z");
 

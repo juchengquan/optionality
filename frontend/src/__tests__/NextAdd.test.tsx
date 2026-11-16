@@ -75,7 +75,7 @@ describe("the add form", () => {
   it("saves a condor as two holdings and four Monitors in one request the route accepts", async () => {
     const { onSaved } = open();
     enterCondor();
-    const save = screen.getByRole("button", { name: "Record 2 holdings + 4 Monitors" });
+    const save = screen.getByRole("button", { name: "Record 2 holdings + 4 rules" });
     fireEvent.click(save);
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(posted()).toHaveLength(1);
@@ -88,9 +88,9 @@ describe("the add form", () => {
   it("creates no Monitor that was switched off", async () => {
     const { onSaved } = open();
     enterCondor();
-    fireEvent.click(screen.getByRole("switch", { name: "spread 2 delta Monitor" }));
-    expect(screen.getByRole("switch", { name: "spread 2 delta Monitor" }).getAttribute("aria-checked")).toBe("false");
-    fireEvent.click(screen.getByRole("button", { name: "Record 2 holdings + 3 Monitors" }));
+    fireEvent.click(screen.getByRole("switch", { name: "spread 2 delta rule" }));
+    expect(screen.getByRole("switch", { name: "spread 2 delta rule" }).getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(screen.getByRole("button", { name: "Record 2 holdings + 3 rules" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     const body = posted()[0]!.body as { spreads: { monitors: unknown[] }[] };
     expect(body.spreads[1]!.monitors).toEqual([{ threshold: -2.5, direction: "below", compare: "signed" }]);
@@ -125,7 +125,7 @@ describe("the add form", () => {
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 value threshold", "1.8");
     type("spread 1 delta threshold", "0.15");
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 Monitors" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 rules" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: unknown[] }).spreads[0]).toEqual({
       name: "1218_P7150_P7100", held: false,
@@ -148,7 +148,7 @@ describe("the add form", () => {
 
   it("words a held credit's stop as its cost to close, and a watched spread's as its value", () => {
     open();
-    const line = () => screen.getByRole("switch", { name: "spread 1 value Monitor" }).parentElement!.textContent;
+    const line = () => screen.getByRole("switch", { name: "spread 1 value rule" }).parentElement!.textContent;
     expect(line()).toMatch(/^on\s*cost to close ≥/);
     fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
     expect(line()).toMatch(/^on\s*\|/);
@@ -160,7 +160,7 @@ describe("the add form", () => {
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "-1.50");
-    expect(screen.getByRole("switch", { name: "spread 1 value Monitor" }).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByRole("switch", { name: "spread 1 value rule" }).getAttribute("aria-checked")).toBe("false");
     expect(screen.getByText("a debit spread's stop is a fall in its value: at or below")).toBeTruthy();
   });
 
@@ -169,7 +169,7 @@ describe("the add form", () => {
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "30");
-    expect(screen.getByRole("switch", { name: "spread 1 value Monitor" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("switch", { name: "spread 1 value rule" }).getAttribute("aria-checked")).toBe("true");
     expect((await screen.findByRole("status", { name: "spread 1's stop" })).textContent)
       .toBe("the stop at 60.00 can never fire: this spread costs at most 50.00 to close");
     // a leg changed: the curve on screen is no longer this draft's, so neither is its warning
@@ -242,7 +242,7 @@ describe("legs added and removed (#334)", () => {
       fireEvent.click(screen.getByRole("button", { name: `spread 1, leg ${n} type: PUT — change` }));
       type("spread 1 entry", "3");
       await waitFor(() => expect(drafts().at(-1)?.legs).toHaveLength(n));
-      fireEvent.click(screen.getByRole("button", { name: "Record holding + 3 Monitors" }));
+      fireEvent.click(screen.getByRole("button", { name: "Record holding + 3 rules" }));
       await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
       const body = posted()[0]!.body as { spreads: { legs: { side: string; option_type: string; strike: number }[]; monitors: unknown[] }[] };
       expect(SpreadsIn.safeParse(body).success).toBe(true);
@@ -305,9 +305,9 @@ describe("legs added and removed (#334)", () => {
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     fireEvent.click(screen.getByRole("button", { name: "spread 1, leg 1 side: short — flip" }));
-    expect(screen.getByRole("switch", { name: "spread 1 delta Monitor" }).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByRole("switch", { name: "spread 1 delta rule" }).getAttribute("aria-checked")).toBe("false");
     type("spread 1 entry", "-4");
-    fireEvent.click(screen.getByRole("button", { name: "Record holding + 0 Monitors" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 0 rules" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([]);
   });
@@ -326,7 +326,7 @@ describe("a quantity per leg (#351)", () => {
     type("spread 1 entry", "-1.20");
     await waitFor(() => expect(drafts().at(-1)?.legs[1]).toEqual({ side: "short", option_type: "PUT", strike: 7150, qty: 2 }));
     // a debit: its stop is switched off, and the short leg's |Δ| is one Monitor
-    fireEvent.click(screen.getByRole("button", { name: "Record holding + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 1 rule" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     const body = posted()[0]!.body as { spreads: { name: string; legs: unknown[]; monitors: unknown[] }[] };
     expect(SpreadsIn.safeParse(body).success).toBe(true);
@@ -365,7 +365,7 @@ describe("the preview", () => {
     await waitFor(() => expect(strikes()).toBe("+P7100 −P7150"));
     fireEvent.keyDown(chart, { key: "Home" });
     // below both strikes: the 50-point width less the 1.50 taken, per contract
-    expect(said()).toMatch(/: \u221248\.50 pts$/);
+    expect(said()).toMatch(/: \u221248\.50 pts per contract$/);
 
     // the long leg typed a digit at a time, from 7100 to 7050
     type("spread 1, leg 2 strike", "705");
@@ -373,9 +373,9 @@ describe("the preview", () => {
     await waitFor(() => expect(strikes()).toBe("+P7050 −P7150"));
     const redrawn = screen.getByRole("group", { name: /payoff at expiry by SPX price/ });
     fireEvent.keyDown(redrawn, { key: "Home" });
-    expect(said()).toMatch(/: \u221298\.50 pts$/);
+    expect(said()).toMatch(/: \u221298\.50 pts per contract$/);
     fireEvent.keyDown(redrawn, { key: "End" });
-    expect(said()).toMatch(/: \+1\.50 pts$/);
+    expect(said()).toMatch(/: \+1\.50 pts per contract$/);
   });
 
   it("asks for the payoff once the strikes are typed, per contract, and again when a side flips", async () => {
@@ -408,7 +408,7 @@ describe("the desk's sheet", () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => {
       const path = String(url).replace(/^.*\/api/, "");
       const body = path === "/health"
-        ? { db: true, provider: { name: "moomoo", ok: true }, monitor: { last_sweep_at: null, alarms: { label: "watching", bad: false }, fetched_at: null }, settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 } }
+        ? { db: true, provider: { name: "moomoo", ok: true }, monitor: { last_sweep_at: null, alarms: { label: "watching", bad: false }, fetched_at: null }, settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" } }
         : [];
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
     }));
@@ -502,7 +502,7 @@ describe("a spread's rules at or above, or at or below (#405)", () => {
     press("value", "≤ at or below");
     press("delta", "≤ at or below");
     expect([pressed("value"), pressed("delta")]).toEqual([["≤"], ["≤"]]);
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 Monitors" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 rules" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     const body = posted()[0]!.body as { spreads: { monitors: unknown[] }[] };
     expect(SpreadsIn.safeParse(body).success).toBe(true);
@@ -515,17 +515,17 @@ describe("a spread's rules at or above, or at or below (#405)", () => {
   it("words a watched spread's value as its size, and goes back to ≥ when asked", async () => {
     const { onSaved } = open();
     fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
-    const line = screen.getByRole("switch", { name: "spread 1 value Monitor" }).parentElement!;
+    const line = screen.getByRole("switch", { name: "spread 1 value rule" }).parentElement!;
     expect(line.textContent).toMatch(/^on\s*\|/);
     expect(line.textContent).toContain(`|${fieldWords("mid_price")}|`);
     type("expiry", "2026-12-18");
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 value threshold", "1.8");
-    fireEvent.click(screen.getByRole("switch", { name: "spread 1 delta Monitor" }));
+    fireEvent.click(screen.getByRole("switch", { name: "spread 1 delta rule" }));
     press("value", "≤ at or below");
     press("value", "≥ at or above");
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 rule" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([{ threshold: 1.8 }]);
   });
@@ -536,11 +536,11 @@ describe("a spread's rules at or above, or at or below (#405)", () => {
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "1.50");
-    const line = screen.getByRole("switch", { name: "spread 1 value Monitor" }).parentElement!;
+    const line = screen.getByRole("switch", { name: "spread 1 value rule" }).parentElement!;
     expect(line.textContent).toMatch(/^on\s*cost to close ≥/);
     expect(screen.queryByRole("group", { name: "spread 1 value direction" })).toBeNull();
     press("delta", "≤ at or below");
-    fireEvent.click(screen.getByRole("button", { name: "Record holding + 2 Monitors" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 2 rules" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
       { threshold: -3, direction: "below", compare: "signed" },
@@ -554,11 +554,11 @@ describe("a spread's rules at or above, or at or below (#405)", () => {
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "-1.50");
-    fireEvent.click(screen.getByRole("switch", { name: "spread 1 value Monitor" }));
+    fireEvent.click(screen.getByRole("switch", { name: "spread 1 value rule" }));
     expect(pressed("value")).toEqual(["≤"]);
     expect(pressed("delta")).toEqual(["≥"]);
     type("spread 1 value threshold", "0.75");
-    fireEvent.click(screen.getByRole("button", { name: "Record holding + 2 Monitors" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 2 rules" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors[0])
       .toEqual({ threshold: 0.75, direction: "below" });
@@ -566,7 +566,7 @@ describe("a spread's rules at or above, or at or below (#405)", () => {
 
   it("calls a held spread's |Δ| ≥ a risk, and its |Δ| ≤ a close-cheap signal", () => {
     open();
-    const line = () => screen.getByRole("switch", { name: "spread 1 delta Monitor" }).parentElement!;
+    const line = () => screen.getByRole("switch", { name: "spread 1 delta rule" }).parentElement!;
     expect(line().querySelector("small")!.textContent).toBe("risk");
     press("delta", "≤ at or below");
     expect(line().querySelector("small")!.textContent).toBe("close-cheap signal");
@@ -580,18 +580,18 @@ describe("a spread's rules at or above, or at or below (#405)", () => {
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "-1.50");
-    fireEvent.click(screen.getByRole("switch", { name: "spread 1 value Monitor" }));
+    fireEvent.click(screen.getByRole("switch", { name: "spread 1 value rule" }));
     press("value", "≥ at or above");
     expect(pressed("value")).toEqual(["≥"]);
     type("spread 1 value threshold", "3");
-    fireEvent.click(screen.getByRole("button", { name: "Record holding + 2 Monitors" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 2 rules" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors[0]).toEqual({ threshold: 3 });
   });
 
   it("switches a rule's pair off with its rule", () => {
     open();
-    fireEvent.click(screen.getByRole("switch", { name: "spread 1 delta Monitor" }));
+    fireEvent.click(screen.getByRole("switch", { name: "spread 1 delta rule" }));
     for (const b of within(pair("delta")).getAllByRole("button")) expect((b as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -657,7 +657,7 @@ describe("switching Watch and Hold (#408)", () => {
     type("spread 2, leg 2 strike", "7750");
     type("spread 2 value threshold", "1.10");
     fireEvent.click(within(screen.getByRole("group", { name: "spread 2 value direction" })).getByRole("button", { name: "≤ at or below" }));
-    fireEvent.click(screen.getByRole("switch", { name: "spread 2 delta Monitor" }));
+    fireEvent.click(screen.getByRole("switch", { name: "spread 2 delta rule" }));
 
     toHold();
     type("opened", "2026-11-09");
@@ -667,7 +667,7 @@ describe("switching Watch and Hold (#408)", () => {
     type("spread 2 contracts", "2");
     // the watched figures, entry signals, give way to the holding's defaults (owner, #408): a
     // debit's stop on, at or below, empty for the stop; a credit's at 2× its Entry
-    expect(screen.getByRole("switch", { name: "spread 1 value Monitor" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("switch", { name: "spread 1 value rule" }).getAttribute("aria-checked")).toBe("true");
     expect(pressedIn("spread 1 value direction")).toEqual(["≤"]);
     expect([value("spread 1 value threshold"), value("spread 2 value threshold")]).toEqual(["", "2.50"]);
     type("spread 1 value threshold", "0.30");
@@ -685,7 +685,7 @@ describe("switching Watch and Hold (#408)", () => {
       expect([pressedIn("spread 1 value direction"), pressedIn("spread 2 value direction")]).toEqual([["≥"], ["≤"]]);
       expect(value("spread 1 delta threshold")).toBe("0.12");
       expect(pressedIn("spread 1 delta direction")).toEqual(["≤"]);
-      expect(screen.getByRole("switch", { name: "spread 2 delta Monitor" }).getAttribute("aria-checked")).toBe("false");
+      expect(screen.getByRole("switch", { name: "spread 2 delta rule" }).getAttribute("aria-checked")).toBe("false");
       expect(screen.queryByLabelText("opened")).toBeNull();
       expect(screen.queryByLabelText("spread 1 entry")).toBeNull();
       toHold();
@@ -739,7 +739,7 @@ describe("switching Watch and Hold (#408)", () => {
     expect(value("spread 1 value threshold")).toBe("3.00");
     type("spread 1 value threshold", "2.80");
     toWatch();
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 Monitors" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 rules" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors)
       .toEqual([{ threshold: 0.4 }, { option_type: "PUT", strike: 7150, threshold: 0.15 }]);
