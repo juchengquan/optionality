@@ -90,11 +90,20 @@ type Conids = Map<string, number>;
 
 export class IbkrClient {
   private socket: TwsSocket | null = null;
+  /** The connect in flight, shared by every caller who arrives while it runs. IB Gateway allows
+   *  one connection per client id, and the sweep, the dashboard's poll and a creation probe can
+   *  all find the client cold at once: each opening a socket of its own sent the gateway a second
+   *  session on one id, and the refusal's teardown then closed whichever socket had won. */
+  private connecting: Promise<TwsSocket> | null = null;
+  /** Bumped by `close()`, so a connect that completes after it knows it is no longer wanted and
+   *  hangs up rather than leaving a socket nobody holds. */
+  private generation = 0;
   private readonly conids: Conids = new Map();
   private readonly config: IbkrConfig;
   private nextId = 1;
-  /** Every message the gateway sends, routed by the id that asked for it. */
-  private readonly waiting = new Map<number, (m: Incoming) => void>();
+  /** Every message the gateway sends, routed by the id that asked for it — and the socket that
+   *  asked, so tearing one socket down drops only its own listeners. */
+  private readonly waiting = new Map<number, { socket: TwsSocket; read: (m: Incoming) => void }>();
 
   constructor(config: IbkrConfig) {
     this.config = config;
@@ -116,29 +125,60 @@ export class IbkrClient {
   }
 
   close(): void {
-    this.socket?.close();
+    this.generation += 1;
+    this.connecting = null;
+    if (this.socket) this.drop(this.socket);
+  }
+
+  /** Hang up ONE socket, and forget what was learnt or asked over it. The client's socket is
+   *  forgotten only if it is this one: an ask that failed on a socket since replaced must not
+   *  close the replacement, nor drop the listeners of the asks running on it. */
+  private drop(socket: TwsSocket): void {
+    socket.close();
+    for (const [id, entry] of this.waiting) if (entry.socket === socket) this.waiting.delete(id);
+    if (this.socket !== socket) return;
     this.socket = null;
     this.conids.clear();
-    this.waiting.clear();
   }
 
   /** The one bounded call: figures for these codes, and which of them could not be priced. */
   async fetchQuotes(codes: string[]): Promise<QuoteBatch> {
     if (codes.length === 0) return { records: [], unknown: [] };
+    // a connect that fails has already hung up its own socket, and is nobody else's to tear down
+    const socket = await this.connected();
     try {
-      return await this.ask(codes);
+      return await this.ask(socket, codes);
     } catch (err) {
       // tear down so the next call reconnects, as `opend/client.ts` does: a socket that has
       // quietly died otherwise produces a silent stream of empty batches rather than a failure
-      this.close();
+      this.drop(socket);
       throw err;
     }
   }
 
-  private async connected(): Promise<TwsSocket> {
-    if (this.socket?.connected) return this.socket;
+  /** The held socket, or ONE connect shared by everyone who asks while it runs. */
+  private connected(): Promise<TwsSocket> {
+    if (this.socket?.connected) return Promise.resolve(this.socket);
+    if (!this.connecting) {
+      const connecting = this.open().finally(() => {
+        if (this.connecting === connecting) this.connecting = null;
+      });
+      this.connecting = connecting;
+    }
+    return this.connecting;
+  }
+
+  private async open(): Promise<TwsSocket> {
+    const generation = this.generation;
+    // one that died underneath us: its listeners and conids go with it before a new one starts
+    if (this.socket) this.drop(this.socket);
     const socket = new TwsSocket(this.config);
+    // a refused or failed handshake closes this socket itself (`socket.ts`), and only this one
     await socket.connect((message) => this.route(message));
+    if (generation !== this.generation) {
+      socket.close();
+      throw new Error("IB Gateway client was closed while it was connecting");
+    }
     this.socket = socket;
     socket.send(reqMarketDataType(MARKET_DATA_DELAYED_FROZEN));
     return socket;
@@ -146,11 +186,10 @@ export class IbkrClient {
 
   private route(message: Incoming): void {
     if (!("reqId" in message)) return;
-    this.waiting.get(message.reqId)?.(message);
+    this.waiting.get(message.reqId)?.read(message);
   }
 
-  private async ask(codes: string[]): Promise<QuoteBatch> {
-    const socket = await this.connected();
+  private async ask(socket: TwsSocket, codes: string[]): Promise<QuoteBatch> {
 
     // a code this client cannot name is unknown without a call: the gateway would answer the same
     // thing, and spending a request to hear it is a request bought for nothing
@@ -320,7 +359,7 @@ export class IbkrClient {
         quiet = setTimeout(() => finish(value), quietMs);
       };
       const timer = setTimeout(() => finish(null), requestTimeoutMs);
-      this.waiting.set(id, (message) => read(message, finish, settle));
+      this.waiting.set(id, { socket, read: (message) => read(message, finish, settle) });
       socket.send(payload);
     });
   }

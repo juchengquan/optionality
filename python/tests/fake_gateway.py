@@ -147,14 +147,31 @@ class FakeGateway:
     reply at once, and a cancel that comes before the last of them stops the rest and is answered
     with nothing, as the gateway answered a snapshot cancelled before its end. The corpus is
     replayed at once; pacing is for a client test whose claim is WHEN.
+
+    `one_session_per_client_id` refuses a startApi whose client id another open connection already
+    holds, with `client-id-in-use`'s refusal — the TypeScript stub's `oneSessionPerClientId`. Off
+    by default, because whether the real gateway refuses or DISPLACES the first in silence is
+    unverified; on, a second socket on one id shows up as a refusal rather than passing unseen.
     """
 
     def __init__(
-        self, conversation: dict[str, Any], server_version: str | None = None, pace: float | None = None
+        self,
+        conversation: dict[str, Any],
+        server_version: str | None = None,
+        pace: float | None = None,
+        one_session_per_client_id: bool = False,
     ) -> None:
         self.conversation = conversation
         self.server_version = server_version
         self.pace = pace
+        self._refusal: list[Message] = (
+            load_conversation("client-id-in-use")["handshake"]["onStartApi"] if one_session_per_client_id else []
+        )
+        self.one_session_per_client_id = one_session_per_client_id
+        #: which open connection holds each client id, for `one_session_per_client_id`
+        self._holders: dict[str, asyncio.StreamWriter] = {}
+        #: startApi messages it has been sent, over the stub's life: one per session a client tried
+        self.sessions_asked = 0
         self.port = 0
         #: contract lookups asked, over the stub's life — so a test can see the conid cache save one
         self.lookups = 0
@@ -174,6 +191,12 @@ class FakeGateway:
     def connections(self) -> int:
         """Clients connected right now, so a test can see one let go."""
         return len(self._open)
+
+    def drop_connections(self) -> None:
+        """Abort every connection open now and stay listening — a dropped network's effect on a
+        client, without the gateway going. The TypeScript stub's `dropConnections`."""
+        for writer in list(self._open):
+            writer.transport.abort()
 
     async def close(self) -> None:
         """Aborted, not just closed: a client still holding its end would otherwise keep
@@ -244,19 +267,36 @@ class FakeGateway:
                         send([[self.server_version or version, *clock]])
                         continue
                     self.received.append(fields)
-                    self._answer(fields, answered, send, reply, stop)
+                    self._answer(fields, answered, send, reply, stop, writer)
                 await writer.drain()
         except (ConnectionError, asyncio.IncompleteReadError):
             pass  # a client closing its end is not a fault
         finally:
             stop()
             self._open.discard(writer)
+            for client_id in [k for k, w in self._holders.items() if w is writer]:
+                del self._holders[client_id]
             writer.close()
 
-    def _answer(self, fields: Message, answered: dict[str, dict[str, Any]], send: Any, reply: Any, stop: Any) -> None:
+    def _answer(
+        self,
+        fields: Message,
+        answered: dict[str, dict[str, Any]],
+        send: Any,
+        reply: Any,
+        stop: Any,
+        writer: asyncio.StreamWriter,
+    ) -> None:
         message_id = fields[0] if fields else ""
         req_id = fields[2] if len(fields) > 2 else ""
         if message_id == START_API:
+            self.sessions_asked += 1
+            client_id = req_id  # startApi carries the client id where a request carries its id
+            holder = self._holders.get(client_id)
+            if self.one_session_per_client_id and holder is not None and holder is not writer and not holder.is_closing():
+                send(self._refusal)
+                return
+            self._holders[client_id] = writer
             # rule 2: the session's messages, in the order the gateway sent them
             send(self.conversation["handshake"]["onStartApi"])
             return
@@ -291,8 +331,12 @@ class FakeGateway:
 
 
 async def start_fake_gateway(
-    conversation: str | dict[str, Any], server_version: str | None = None, pace: float | None = None
+    conversation: str | dict[str, Any],
+    server_version: str | None = None,
+    pace: float | None = None,
+    *,
+    one_session_per_client_id: bool = False,
 ) -> FakeGateway:
     """A stub replaying a conversation, by name or as data."""
     data = load_conversation(conversation) if isinstance(conversation, str) else conversation
-    return await FakeGateway(data, server_version, pace).start()
+    return await FakeGateway(data, server_version, pace, one_session_per_client_id).start()

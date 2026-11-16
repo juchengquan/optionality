@@ -605,11 +605,21 @@ class IbkrClient:
         self.request_timeout_ms = request_timeout_ms
         self.quiet_ms = quiet_ms
         self._client: Client | None = None
+        #: the connect in flight, shared by every caller who arrives while it runs (`client.ts`'s
+        #: `connecting`): IB Gateway allows one connection per client id, and the sweep, the
+        #: dashboard's poll and a creation probe can all find the client cold at once
+        self._connecting: asyncio.Task[Client] | None = None
+        #: callers waiting on `_connecting`, so the last one to give up cancels it
+        self._connect_waiters = 0
+        #: bumped by `close`, so a connect that completes after it hangs up rather than leaving a
+        #: connection nobody holds
+        self._generation = 0
         #: a conid, once resolved, for the life of the connection: a contract's identity does not
         #: change, and asking again is a call spent to be told the same thing
         self._conids: dict[str, int] = {}
-        #: every message the gateway sends, routed by the id that asked for it
-        self._waiting: dict[int, Callable[[_Incoming], None]] = {}
+        #: every message the gateway sends, routed by the id that asked for it — with the connection
+        #: that asked, so tearing one down drops only its own listeners
+        self._waiting: dict[int, tuple[Client, Callable[[_Incoming], None]]] = {}
         self._next_id = 1
 
     @property
@@ -627,32 +637,76 @@ class IbkrClient:
 
     def close(self) -> None:
         """Idempotent. Drops the conids with the connection, because a reconnect is where a stale
-        assumption would otherwise survive."""
-        client, self._client = self._client, None
-        if client is not None:
-            _detach(client)
+        assumption would otherwise survive. A connect still in flight finishes for nobody and
+        hangs up (`_start`)."""
+        self._generation += 1
+        self._connecting = None
         self._conids.clear()
-        self._waiting.clear()
+        if self._client is not None:
+            self._drop(self._client)
+
+    def _drop(self, client: "Client") -> None:
+        """Hang up ONE connection, and forget what was asked over it. The client's own connection
+        is forgotten only if it is this one: an ask that failed on a connection since replaced must
+        not close the replacement, nor drop the listeners of the asks running on it."""
+        _detach(client)
+        for req_id in [k for k, (owner, _) in self._waiting.items() if owner is client]:
+            del self._waiting[req_id]
+        if self._client is client:
+            self._client = None
+            self._conids.clear()
 
     async def fetch_quotes(self, codes: list[str]) -> Batch:
         """The one bounded call: figures for these codes, and which of them could not be priced."""
         if not codes:
             return Batch(records=[], unknown=[])
+        # a connect that fails has already hung up its own connection, and is nobody else's
+        client = await self._connected()
         try:
-            return await self._ask(codes)
+            return await self._ask(client, codes)
         except BaseException:
             # torn down so the next call reconnects, as `opend` does: a socket that has quietly
             # died otherwise produces a silent stream of empty batches rather than a failure
-            self.close()
+            self._drop(client)
             raise
 
     async def _connected(self) -> "Client":
+        """The held connection, or ONE connect shared by everyone who asks while it runs."""
         if self._client is not None and self._client.isReady():
             return self._client
+        task = self._connecting
+        if task is None:
+            # the generation is read NOW, not when the task first runs: a close in between must count
+            task = asyncio.ensure_future(self._start(self._generation))
+            self._connecting = task
+
+            def forget(done: "asyncio.Task[Client]") -> None:
+                if self._connecting is done:
+                    self._connecting = None
+                if not done.cancelled():
+                    done.exception()  # retrieved: every caller has been told, or none was waiting
+
+            task.add_done_callback(forget)
+        self._connect_waiters += 1
+        try:
+            # shielded, so one caller giving up does not cancel the connect under the others
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            # the last caller to give up takes the connect with it: a connect left running for
+            # nobody would hold the client id
+            if self._connect_waiters == 1 and not task.done():
+                task.cancel()
+            raise
+        finally:
+            self._connect_waiters -= 1
+
+    async def _start(self, generation: int) -> "Client":
         if self._client is not None:
-            _detach(self._client)  # gone underneath us; its reader must not route stale messages
-            self._client = None
+            self._drop(self._client)  # gone underneath us; its reader must not route stale messages
         client = await self._open()
+        if generation != self._generation:
+            _detach(client)
+            raise ConnectionError("IB Gateway client was closed while it was connecting")
         self._client = client
         client.reqMarketDataType(MARKET_DATA_DELAYED_FROZEN)
         return client
@@ -701,16 +755,15 @@ class IbkrClient:
     def _route(self, message: _Incoming) -> None:
         if message.req_id is None:
             return
-        listener = self._waiting.get(message.req_id)
-        if listener is not None:
-            listener(message)
+        entry = self._waiting.get(message.req_id)
+        if entry is not None:
+            entry[1](message)
 
     def _id(self) -> int:
         req_id, self._next_id = self._next_id, self._next_id + 1
         return req_id
 
-    async def _ask(self, codes: list[str]) -> Batch:
-        client = await self._connected()
+    async def _ask(self, client: "Client", codes: list[str]) -> Batch:
 
         # a code this client cannot name is unknown without a call: the gateway would answer the
         # same thing, and spending a request to hear it is a request bought for nothing
@@ -879,7 +932,7 @@ class IbkrClient:
             quiet = loop.call_later(self.quiet_ms / 1000, finish, value)
 
         timer = loop.call_later(self.request_timeout_ms / 1000, finish, None)
-        self._waiting[req_id] = lambda message: read(message, finish, settle)
+        self._waiting[req_id] = (client, lambda message: read(message, finish, settle))
         try:
             _send(client, send)
         except BaseException:
