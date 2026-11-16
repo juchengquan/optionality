@@ -5,7 +5,7 @@
  *  against bad data, which the next night copies faithfully over the last good one — so a history is
  *  kept: 14 nights, and the first backup of each of the last 12 months.
  */
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -212,6 +212,25 @@ describe("restoring a nightly backup", () => {
     expect(saved).toHaveLength(1);
     expect(retainDeploy([...saved, ...Array.from({ length: 20 }, (_, i) => `optionality-ts.db.bak-202610${10 + i}-120000`)]).drop)
       .not.toContain(saved[0]);
+  });
+
+  it("checks a backup without a live file at all, under --check, and writes nothing", () => {
+    // what `make restore` runs BEFORE it stops the API: a bad FROM must never cost the service
+    const good = nightlyOf(3);
+    const before = readdirSync(dir).sort();
+    expect(run("--check", good)).toMatch(/intact/);
+    expect(readdirSync(dir).sort()).toEqual(before);
+  });
+
+  it("refuses a backup that is not intact, or not there, under --check", () => {
+    const bad = join(dir, "bad.db.gz");
+    writeFileSync(bad, gzipSync(Buffer.from("not a database")));
+    for (const from of [bad, join(dir, "missing.db.gz")]) {
+      const r = spawnSync(process.execPath, [RESTORE, "--check", from], { encoding: "utf8" });
+      expect(r.status, from).toBe(1);
+      expect(r.stderr).toMatch(/not restoring, the backup is not intact/);
+    }
+    expect(readdirSync(dir).filter((f) => f.includes("restore-tmp"))).toEqual([]);
   });
 
   it("refuses a backup that is not intact, and leaves the live file alone", () => {

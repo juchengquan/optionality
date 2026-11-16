@@ -1,8 +1,8 @@
 .PHONY: check lint check-boundaries check-test-support check-seams check-module-map check-make-targets cases check-cases scenarios check-scenarios format test test-ui test-ui-fast test-ui-layout test-lib test-api typecheck check-api \
 	launchd-api-install launchd-api-restart launchd-api-uninstall api-logs \
-	serve build-ui check-ui check-served-root resolve-ui deploy deploy-after-pull deploy-backup use \
+	serve build-ui check-ui check-served-root resolve-ui deploy deploy-verify deploy-after-pull deploy-backup use \
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
-	backup restore launchd-backup-install launchd-backup-uninstall backup-logs \
+	backup restore launchd-backup-install launchd-backup-uninstall backup-logs rotate-logs \
 	launchd-opend-install launchd-opend-uninstall opend-logs check-opend opend-sync \
 	test-tools py-cut py-tag ibkr-fake-gateway check-py-backend check-workspace-links
 
@@ -36,6 +36,9 @@ UI_BASE ?= /opt/
 # one, and on the live tree a rewritten lock is a dirty tree that breaks the next `git pull`.
 # Not `--silent`: with it a lock that does not match prints NOTHING and the step just fails.
 JS_INSTALL = bun install --frozen-lockfile
+# the Python install, both workspace members; `--locked` for JS_INSTALL's reason. A variable so
+# tools/deploy.test.mjs can run `make deploy` itself with the installs stubbed.
+UV_SYNC = uv sync --all-packages --locked
 
 # ruff for the Python, and the package boundaries for everything (ADR 0014): no package may reach
 # into another's source tree, only into what it publishes. See tools/check-boundaries.mjs.
@@ -222,29 +225,78 @@ resolve-ui:
 # Which backend the API agent runs is READ from its installed plist, never assumed — and a Python
 # this tree cannot back (the guard in tools/use-backend.mjs) stops the deploy before the restart.
 #
-# The pull and the rest are TWO make invocations on purpose. make reads this file once, before the
-# first line runs, so a single recipe that pulls goes on to run the recipe it read BEFORE the pull:
-# the deploy that lands a change to these steps would run the old ones. #412 was such a change —
-# the old recipe's `npm install`, against a tree whose package-lock.json the pull had just deleted,
-# would have re-resolved packages with no lock and restarted the live API on them. A second make
-# reads the file the pull brought, so what runs is always what was merged.
+# CHECK FIRST, THEN MOVE THE TREE. Caddy serves frontend/dist straight from this checkout, so the
+# moment the tree moves the dashboard is the new one — and this used to `git pull` first, so any
+# failure after it (an install, the link check, `uv sync --locked`, the Python guard, the backup)
+# left the NEW dashboard in front of the OLD API: the drift of 2026-11-12. Now:
+#
+#   1. fetch, and refuse what is not a fast-forward;
+#   2. `deploy-verify` — the installs, the link check and the guard — for the FETCHED commit, in a
+#      temporary worktree beside this one, by THAT commit's Makefile (`make -C`);
+#   3. the backup (`deploy-backup`), still before anything here changes;
+#   4. fast-forward to exactly the commit that was checked;
+#   5. `deploy-after-pull`, by the Makefile the merge brought: the same installs here — fast, from the
+#      caches step 2 warmed — then restart both agents and WAIT for /health to answer 200 from the
+#      new process, failing loudly when it does not (tools/use-backend.mjs `restart`).
+#
+# A failure in 1–3 leaves HEAD and frontend/dist exactly as they were. tools/deploy.test.mjs runs
+# this recipe against a fixture repository to hold that.
+#
+# The tree move and the rest are TWO make invocations on purpose. make reads this file once, before
+# the first line runs, so a single recipe that moves the tree goes on to run the recipe it read
+# BEFORE the move: the deploy that lands a change to these steps would run the old ones. #412 was
+# such a change — the old recipe's `npm install`, against a tree whose package-lock.json the pull
+# had just deleted, would have re-resolved packages with no lock and restarted the live API on them.
+# A second make reads the file the merge brought, so what runs is always what was merged — and the
+# same holds for step 2, which runs the fetched commit's own `deploy-verify`.
 #
 # The schema step is the backend's own: whichever runs applies what is pending in
 # schema/migrations/ at boot and fails fatally if one does not (ADR 0011).
 deploy:
-	git pull --ff-only
-	$(MAKE) deploy-after-pull
+	@set -e; \
+	git fetch --quiet; \
+	from=$$(git rev-parse HEAD); to=$$(git rev-parse '@{u}'); \
+	unchanged="nothing here changed: HEAD is still $$(git rev-parse --short $$from), and so is the dashboard"; \
+	if ! git merge-base --is-ancestor $$from $$to; then \
+		echo "make deploy: $$(git rev-parse --short $$to) is not a fast-forward of HEAD; $$unchanged"; exit 1; \
+	fi; \
+	wt=$$(mktemp -d "$${TMPDIR:-/tmp}/optionality-deploy.XXXXXX"); \
+	cleanup='git worktree remove --force "$$wt" >/dev/null 2>&1 || true; rm -rf "$$wt"'; \
+	trap "$$cleanup" EXIT; trap "$$cleanup; exit 130" INT TERM HUP; \
+	git worktree add --quiet --detach "$$wt" $$to; \
+	echo "checking $$(git rev-parse --short $$to) in $$wt, before anything here changes"; \
+	if ! $(MAKE) --no-print-directory -C "$$wt" deploy-verify; then \
+		echo "make deploy: the checks failed for $$(git rev-parse --short $$to) (above); $$unchanged"; exit 1; \
+	fi; \
+	git worktree remove --force "$$wt"; \
+	if ! $(MAKE) --no-print-directory deploy-backup; then \
+		echo "make deploy: the backup failed (above); $$unchanged"; exit 1; \
+	fi; \
+	git merge --ff-only --quiet $$to; \
+	if ! $(MAKE) --no-print-directory deploy-after-pull DEPLOY_BACKED_UP=1; then \
+		echo "make deploy: the tree is at $$(git rev-parse --short $$to) and the dashboard serves its bundle, but the"; \
+		echo "  API is not confirmed on it (above). Fix what it says and run 'make deploy' again."; exit 1; \
+	fi
 
-# `make deploy` past the pull; not for running alone.
-deploy-after-pull:
+# What a commit must pass before the live tree moves to it, run in the tree it is to check: the
+# installs, the workspace links and the Python guard. `make deploy` runs the FETCHED commit's copy in
+# a temporary worktree; `deploy-after-pull` runs it again here.
+deploy-verify:
 	$(JS_INSTALL)
 	node tools/check-workspace-links.mjs
-	uv sync --all-packages --locked
-	@backend=$$(node tools/use-backend.mjs installed) && echo "restarting $(API_LABEL), which runs the $$backend backend"
-	$(MAKE) deploy-backup
-	$(MAKE) launchd-api-restart
-	$(MAKE) launchd-ui-restart
-	@echo "both services restarted"
+	$(UV_SYNC)
+	@backend=$$(node tools/use-backend.mjs installed) && echo "$(API_LABEL) runs the $$backend backend, and this tree can back it"
+
+# `make deploy` past the tree move; not for running alone. It takes the backup itself unless
+# deploy says it has (DEPLOY_BACKED_UP), because the deploy that FIRST lands this recipe is run by
+# the one before it, which pulled and then called this with nothing.
+deploy-after-pull: deploy-verify
+	$(if $(DEPLOY_BACKED_UP),,$(MAKE) --no-print-directory deploy-backup)
+	$(MAKE) --no-print-directory launchd-ui-restart
+	@$(MAKE) --no-print-directory launchd-api-restart || { \
+		echo "make deploy: the API did not come back on $$(git rev-parse --short HEAD), and the dashboard already serves"; \
+		echo "  its bundle. Read ~/Library/Logs/optionality-api.log ('make api-logs')."; exit 1; }
+	@echo "both services restarted, and /health answers 200"
 
 # The backup every restart takes first, so it predates whatever migration the restarted backend
 # applies at boot: `make deploy`'s and `make use`'s, which are the same backup on purpose.
@@ -362,8 +414,9 @@ launchd-api-install:
 	node tools/use-backend.mjs render $(or $(BACKEND),ts) $(API_PLIST)
 	launchctl bootstrap gui/$$(id -u) $(API_PLIST)
 
+# kickstart, and wait until a NEW process answers /health with 200 (tools/use-backend.mjs `restart`)
 launchd-api-restart:
-	launchctl kickstart -k gui/$$(id -u)/$(API_LABEL)
+	node tools/use-backend.mjs restart
 
 launchd-api-uninstall:
 	-launchctl bootout gui/$$(id -u)/$(API_LABEL)
@@ -378,15 +431,19 @@ api-logs:
 backup:
 	node backend/tools/backup/nightly.ts $(TS_DB) "$(BACKUP_DIR)"
 
-# Put a nightly backup back: stops the API, restores (keeping what it replaces), starts the API, whose
-# boot migrates an older file forward. FROM is a file from $(BACKUP_DIR).
+# Put a nightly backup back: checks the backup, stops the API, restores (keeping what it replaces),
+# then ALWAYS starts the API again and waits for /health — its boot migrates an older file forward.
+# FROM is a file from $(BACKUP_DIR). The order, and why, is tools/restore.mjs; DRY_RUN=1 prints it.
 restore:
 	@test -n "$(FROM)" || { echo "usage: make restore FROM=$(BACKUP_DIR)/optionality-ts-YYYYMMDD.db.gz"; exit 1; }
-	-launchctl bootout gui/$$(id -u)/$(API_LABEL)
-	@while launchctl print gui/$$(id -u)/$(API_LABEL) >/dev/null 2>&1; do sleep 1; done
-	node backend/tools/backup/restore.ts "$(FROM)" $(TS_DB)
-	launchctl bootstrap gui/$$(id -u) $(API_PLIST)
-	@sleep 3; curl -fsS http://127.0.0.1:31415/health | head -c 200; echo
+	node tools/restore.mjs "$(FROM)" $(TS_DB)
+
+# The agents' logs in ~/Library/Logs, copied aside gzipped and emptied in place once over 10 MB,
+# three kept (tools/rotate-logs.mjs says why copy-and-truncate). The backup agent runs it every night
+# after the backup — reinstall that agent (`make launchd-backup-install`) to pick it up — and this
+# runs it now. No sudo, unlike newsyslog.
+rotate-logs:
+	node tools/rotate-logs.mjs $(HOME)/Library/Logs
 
 launchd-backup-install:
 	@test -n "$(NODE_BIN)" || { echo "node not found"; exit 1; }

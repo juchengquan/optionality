@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 
 import {
-  LABEL, PORT, backendOf, drySystem, readBacklog, refusals, renderPlist, switchTo, systemFor,
+  LABEL, PORT, backendOf, drySystem, readBacklog, refusals, renderPlist, restartLive, switchTo, systemFor,
 } from "./use-backend.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
@@ -217,9 +217,11 @@ describe("the guard: the live service never switches to a half-ported Python", (
 
 /** The system `switchTo` drives, scripted: every call is recorded, and each answer is whatever the
  *  test says — launchctl's exit codes, whether the port is held, what /health answers. */
-function scripted({ print = () => 113, bootstrap = 0, held = () => false, health = () => 200 } = {}) {
+function scripted({
+  print = () => 113, bootstrap = 0, held = () => false, health = () => 200, listener = () => null, kickstart = 0,
+} = {}) {
   const calls = [];
-  let prints = 0, polls = 0, checks = 0;
+  let prints = 0, polls = 0, checks = 0, listens = 0;
   return {
     calls,
     dry: false,
@@ -227,14 +229,53 @@ function scripted({ print = () => 113, bootstrap = 0, held = () => false, health
       calls.push(`launchctl ${args.join(" ")}`);
       if (args[0] === "print") return { status: print(prints++), output: "" };
       if (args[0] === "bootstrap") return { status: bootstrap, output: bootstrap ? "Bootstrap failed: 5: Input/output error" : "" };
+      if (args[0] === "kickstart") return { status: kickstart, output: kickstart ? "Could not find service" : "" };
       return { status: 0, output: "" };
     },
     write(path, text) { calls.push(`write ${path}`); this.written = text; },
     async portHeld(port) { calls.push(`port ${port}`); return held(checks++); },
     async health(url) { calls.push(`health ${url}`); return health(polls++); },
+    async listener(port) { calls.push(`listener ${port}`); return listener(listens++); },
+    run(cmd, args) { calls.push(`run ${[cmd, ...args].join(" ")}`); return 0; },
     async sleep() {},
   };
 }
+
+describe("restarting the live backend in place, as `make deploy` does", () => {
+  const UID = 99999;
+  const URL_ = `http://127.0.0.1:${PORT}/health`;
+  const options = (sys) => ({ uid: UID, sys, say: () => {}, url: URL_, waits: { health: 3 } });
+
+  it("kickstarts the agent and waits for /health to answer 200", async () => {
+    const sys = scripted({ health: (n) => (n < 1 ? null : 200) });
+    await restartLive(options(sys));
+    expect(sys.calls).toEqual([
+      `listener ${PORT}`,
+      `launchctl kickstart -k gui/${UID}/${LABEL}`,
+      `health ${URL_}`,
+      `health ${URL_}`,
+    ]);
+  });
+
+  it("does not take a 200 from the process it replaced for the new one's", async () => {
+    // kickstart can return while the old process still answers: its 200 says nothing of the new code
+    const sys = scripted({ listener: (n) => (n < 3 ? 4242 : 5151) });
+    await restartLive(options(sys));
+    expect(sys.calls.filter((c) => c.startsWith("health"))).toHaveLength(3);
+  });
+
+  it("fails, saying where to look, when no new process answers 200 in time", async () => {
+    for (const sys of [scripted({ health: () => 503 }), scripted({ listener: () => 4242 })]) {
+      await expect(restartLive(options(sys))).rejects.toThrow(/no 200 from .*\/health.*optionality-api\.log/s);
+    }
+  });
+
+  it("fails before it waits when launchd will not kickstart the agent", async () => {
+    const sys = scripted({ kickstart: 113 });
+    await expect(restartLive(options(sys))).rejects.toThrow(/kickstart.*Could not find service/);
+    expect(sys.calls.some((c) => c.startsWith("health"))).toBe(false);
+  });
+});
 
 describe.skipIf(!darwin)("switching", () => {
   // a launchd domain nobody has, and a HOME of its own: were a real system ever to get this far, it

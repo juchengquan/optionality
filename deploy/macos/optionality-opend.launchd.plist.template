@@ -31,10 +31,11 @@
     <key>ProgramArguments</key>
     <array>
         <string>__REPO__/deploy/macos/opend.sh</string>
-        <!-- idempotent and quiet when all is well: starts a dead OpenD, restarts a husk whose API
-             port is shut, and only REPORTS one that is up without a confirmed session — because
-             that may need a human at the login window, and a restart a minute against an expired
-             credential is a watchdog flapping a provider. -->
+        <!-- idempotent and quiet when all is well: starts a dead OpenD, and otherwise mostly
+             REPORTS — a shut API port (usually a login prompt), a shut or disabled websocket, an
+             unconfirmed session — because a restart a minute against an expired credential is a
+             watchdog flapping a provider. It restarts only an OpenD it started itself, after 15
+             minutes shut, and never stops one started by hand (2026-11-12; opend.sh says why). -->
         <string>ensure</string>
     </array>
     <key>WorkingDirectory</key>
