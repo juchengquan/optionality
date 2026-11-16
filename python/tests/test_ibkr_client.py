@@ -431,7 +431,9 @@ def test_an_ask_abandoned_mid_handshake_lets_go_of_the_connection() -> None:
 # connection the client held and dropped every caller's listeners. `client.test.ts`, ported.
 
 
-def strict(conversation: str, test: Callable[[IbkrClient, FakeGateway], Awaitable[Any]], request_timeout_ms: int = 1000) -> Any:
+def strict(
+    conversation: str, test: Callable[[IbkrClient, FakeGateway], Awaitable[Any]], request_timeout_ms: int = 1000
+) -> Any:
     """`against`, on a stub that refuses a second session on one client id."""
 
     async def run() -> Any:
@@ -477,7 +479,9 @@ def test_callers_who_arrive_together_share_one_connect() -> None:
 
 def test_a_refused_connect_fails_every_caller_and_leaves_no_connection_open() -> None:
     async def ask(client: IbkrClient, gateway: FakeGateway) -> Any:
-        asks = await asyncio.gather(client.fetch_quotes([OPTION]), client.fetch_quotes([OPTION]), return_exceptions=True)
+        asks = await asyncio.gather(
+            client.fetch_quotes([OPTION]), client.fetch_quotes([OPTION]), return_exceptions=True
+        )
         await until(lambda: gateway.connections == 0)
         return asks, gateway.sessions_asked
 

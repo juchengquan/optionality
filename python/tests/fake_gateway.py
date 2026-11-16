@@ -293,7 +293,12 @@ class FakeGateway:
             self.sessions_asked += 1
             client_id = req_id  # startApi carries the client id where a request carries its id
             holder = self._holders.get(client_id)
-            if self.one_session_per_client_id and holder is not None and holder is not writer and not holder.is_closing():
+            if (
+                self.one_session_per_client_id
+                and holder is not None
+                and holder is not writer
+                and not holder.is_closing()
+            ):
                 send(self._refusal)
                 return
             self._holders[client_id] = writer

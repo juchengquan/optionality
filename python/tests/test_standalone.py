@@ -162,9 +162,13 @@ def reaches_the_backend(path: Path) -> list[str]:
         func = node.func
         called = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else None
         first = node.args[0]
-        if called in ("import_module", "__import__") and isinstance(first, ast.Constant) and isinstance(first.value, str):
-            if first.value.split(".")[0] == BACKEND:
-                found.append(f"{path.name}:{node.lineno} imports {first.value}")
+        if (
+            called in ("import_module", "__import__")
+            and isinstance(first, ast.Constant)
+            and isinstance(first.value, str)
+            and first.value.split(".")[0] == BACKEND
+        ):
+            found.append(f"{path.name}:{node.lineno} imports {first.value}")
     return found
 
 

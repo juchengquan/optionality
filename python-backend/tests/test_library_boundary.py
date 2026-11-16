@@ -156,8 +156,10 @@ def file_breaches(path: Path, rel: Path) -> list[tuple[int, str]]:
         # so it is resolved against the package it is given, as importlib resolves it
         if called == "import_module" and node.args:
             name = folded(node.args[0])
-            given = node.args[1] if len(node.args) > 1 else next(
-                (k.value for k in node.keywords if k.arg == "package"), None
+            given = (
+                node.args[1]
+                if len(node.args) > 1
+                else next((k.value for k in node.keywords if k.arg == "package"), None)
             )
             anchor = folded(given) if given is not None else None
             if name is not None and name.startswith(".") and anchor is not None:
