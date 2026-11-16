@@ -20,7 +20,7 @@
  *  become a second `getUpdates` consumer or send the owner a message (CLAUDE.md), and `PORT=0`
  *  by default, so the port each case takes first is never the live one.
  */
-import { spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdtempSync } from "node:fs";
 import { type Server, createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -28,6 +28,9 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
+import { startFakeGateway, type FakeGateway } from "optionality/vendors/ibkr/fake";
+
+import { createSingleMonitor } from "./create-monitor.ts";
 import { createDatabase } from "./db/open.ts";
 
 const MAIN = join(import.meta.dirname, "main.ts");
@@ -97,4 +100,80 @@ describe("booting the service", () => {
     expect(stderr).toMatch(/unknown provider 'nope'/);
     expect(stderr, "the message must offer the names that do exist").toMatch(/moomoo/);
   }, 30_000);
+});
+
+/** Boot it to SERVE, and give back the port it took once it says it is up. The caller stops it. */
+function serve(env: Record<string, string>): Promise<{ child: ChildProcess; port: number; log: () => string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [MAIN], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { PATH: process.env.PATH ?? "", PORT: "0", ...env },
+    });
+    let log = "";
+    const timer = setTimeout(() => { child.kill("SIGKILL"); reject(new Error(`never came up:\n${log}`)); }, 20_000);
+    const read = (chunk: Buffer) => {
+      log += String(chunk);
+      const up = /optionality backend on 127\.0\.0\.1:(\d+)/.exec(log);
+      if (up) { clearTimeout(timer); resolve({ child, port: Number(up[1]), log: () => log }); }
+    };
+    child.stdout!.on("data", read);
+    child.stderr!.on("data", read);
+    child.on("exit", (code) => { clearTimeout(timer); reject(new Error(`exited ${code}:\n${log}`)); });
+  });
+}
+
+describe("IB Gateway as the Provider", () => {
+  // The descriptor handed the client's own instance on as the Provider, and `main.ts` hands its
+  // `fetchQuotes` on DETACHED — to the sweeper, the bot and every route — so every call failed
+  // with "this.close is not a function" from inside the client. Only a boot shows it: the
+  // harness's Providers are closures, which have no `this` to lose.
+  let gateway: FakeGateway;
+  let child: ChildProcess | undefined;
+  afterAll(async () => {
+    child?.kill("SIGTERM");
+    await gateway?.close();
+  });
+
+  it("sweeps and answers /quotes through the gateway", async () => {
+    // the recorded option, moved to 2099 so that no real date ever expires the rule under test:
+    // the boot reads the real clock
+    const first = await startFakeGateway(0);
+    const recorded = first.conversation;
+    await first.close();
+    const moved = JSON.parse(JSON.stringify(recorded)
+      .replaceAll("20261218", "20991218").replaceAll("261218", "991218"));
+    gateway = await startFakeGateway(0, { conversation: moved });
+    const code = "US.SPXW991218C8100000";
+
+    const path = join(mkdtempSync(join(tmpdir(), "boot-")), "optionality-ts.db");
+    const db = createDatabase(path);
+    await createSingleMonitor({
+      db, now: () => new Date(),
+      fetchQuotes: async (codes) => ({ records: codes.map((c) => ({ code: c })), unknown: [] }),
+    }, { strike_date: "2099-12-18", option_type: "CALL", strike: 8100, threshold: 0.3 });
+    db.close();
+
+    const up = await serve({
+      OPTIONALITY_DB_PATH: path, OPTIONALITY_PROVIDER: "ibkr",
+      IBKR_HOST: "127.0.0.1", IBKR_PORT: String(gateway.port), IBKR_CLIENT_ID: "31499",
+    });
+    child = up.child;
+    const base = `http://127.0.0.1:${up.port}`;
+
+    // the first sweep runs at boot; wait for it to have been judged
+    let health: any;
+    for (let i = 0; i < 100; i++) {
+      health = await (await fetch(`${base}/health`)).json();
+      if (health.monitor?.last_sweep_at) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(health.provider, up.log()).toEqual({ name: "ibkr", ok: true });
+    expect(health.monitor.last_sweep_ok, up.log()).toBe(true);
+
+    const resp = await fetch(`${base}/quotes`);
+    expect(resp.status, up.log()).toBe(200);
+    const quotes = await resp.json();
+    expect(quotes.map((q: { code: string }) => q.code)).toContain(code);
+    expect(up.log()).not.toMatch(/is not a function/);
+  }, 40_000);
 });
