@@ -23,6 +23,7 @@ import { ReferenceStrip } from "./shared/ReferenceStrip";
 import { useDismissOnBack } from "./shared/useDismissOnBack";
 import { AddSpread, type AddInitial } from "./AddSpread";
 import { heldFromWatch } from "./add";
+import { draftKeeper } from "./addKeep";
 import { contractFromWatch } from "./contract";
 import { takenOverBy, type Rule } from "./edit";
 import { ClosedResult } from "./ClosedResult";
@@ -45,7 +46,7 @@ import { needsYou } from "./needs";
 import { Palette, paletteShortcut, type Chosen } from "./Palette";
 import { findables, HOLD_WHY, paletteActions } from "./commands";
 import { placeBook } from "./placement";
-import { beingOperated } from "./poll";
+import { beingOperated, givenUpAfter, skipWhileOut } from "./poll";
 import { Settings } from "./Settings";
 import { Still, type StillProps } from "./snapshot/Still";
 import { useSaveImage } from "./snapshot/useSaveImage";
@@ -121,7 +122,7 @@ export function Next() {
   // a closed trade deleted from the journal leaves it at once, and the re-read says the rest
   const { drop: dropTrade } = journal;
   const tradeDeleted = useCallback((id: string) => { dropTrade(id); rereadJournal(); }, [dropTrade, rereadJournal]);
-  const { holdings, writes, outcomes, dismissOutcome } = useHoldingWrites(book.holdings, book.reload, rereadJournal);
+  const { holdings, holdingsKept, writes, outcomes, dismissOutcome } = useHoldingWrites(book.holdings, book.holdingsKept, book.reload, rereadJournal);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   // Settings' Back entry is the PAGE's, held for as long as Settings is open, whichever sheet draws
@@ -135,13 +136,21 @@ export function Next() {
   // what the form opens with: a fresh draft, or one prefilled by "Record as held" (#408) — numbered,
   // so a second prefill while the form is open draws a new form rather than keeping the last one's
   const [prefill, setPrefill] = useState<{ n: number; initial: AddInitial } | null>(null);
+  // ...and what has been typed into it, kept here so a switch of arrangement, which draws the form
+  // anew in the other sheet, carries it over; emptied whenever the form opens or closes (addKeep.ts)
+  const [addKeeper] = useState(draftKeeper);
+  // ...and whether its save is out, for the same reason: the form drawn anew mid-save must not send it again
+  const addSaving = useState(false);
+  const [, setAddSaving] = addSaving;
   // the button that opened the sheet: a rule's "Record as held" (#408), or null for "+"
   const opener = useRef<HTMLElement | null>(null);
   const setAdding = useCallback((open: boolean) => {
     if (open) opener.current = null;
+    addKeeper.clear();
+    setAddSaving(false);
     setAddingNow(open);
     setPrefill(null);
-  }, []);
+  }, [addKeeper, setAddSaving]);
   const panelId = useId();
   // the Add sheet is described by its form's footer (2026-11-16), where a subtitle repeated its title
   const addSaysId = useId();
@@ -191,6 +200,7 @@ export function Next() {
   const recordAsHeld = useCallback((rule: Rule, served: Entry | null, from: HTMLElement | null) => {
     const open = (initial: AddInitial) => {
       opener.current = from;
+      addKeeper.clear();
       setAddingNow(true);
       setPrefill((p) => ({ n: (p?.n ?? 0) + 1, initial }));
     };
@@ -214,7 +224,7 @@ export function Next() {
         const draft = contractFromWatch(rule, today, names);
         if (draft) open({ kind: "contract", draft });
       });
-  }, []);
+  }, [addKeeper]);
   const monitorActions = useMemo<MonitorActions>(() => ({
     patch: async (id, body) => { await patchMonitor(id, body as Record<string, unknown>); await reload(); },
     remove: async (id) => { await deleteMonitor(id); await reload(); },
@@ -231,7 +241,8 @@ export function Next() {
   const addForm = (
     <AddSpread key={prefill?.n ?? 0} initial={prefill?.initial} privacy={privacy} monitors={book.monitors}
                holdings={holdings} spx={spx}
-               spxReason={spxReason} onSaved={saved} onCancel={closeAdding} autoFocus={!phone} footerId={addSaysId} />
+               spxReason={spxReason} onSaved={saved} onCancel={closeAdding} autoFocus={!phone} footerId={addSaysId}
+               keeper={addKeeper} savingState={addSaving} />
   );
 
   // Settings is the one surface that may say "nothing needs you" (ADR 0012), and where References
@@ -330,7 +341,7 @@ export function Next() {
 
   // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
   const bookProps: BookProps = {
-    quotes, monitors: book.monitors, holdings,
+    quotes, monitors: book.monitors, holdings, holdingsKept,
     holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, session, phase, privacy, entryStyle, writes,
     journal: (
       <JournalFold open={journalOpen} onToggle={toggleJournal}
@@ -570,12 +581,19 @@ function DeskSheet({ id, open, onClose, finalFocus, up, entryStyle, title, descr
  *  after it cannot bring it back. Neither can return — there is no reopen (ADR 0022) — so the list
  *  only grows, by one per write.
  */
-function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>, rereadJournal: () => void) {
+function useHoldingWrites(
+  valued: Holding[] | null, keptValued: Holding[] | null, reload: () => Promise<void>, rereadJournal: () => void,
+) {
   const [departed, setDeparted] = useState<ReadonlySet<string>>(new Set());
   const [outcomes, setOutcomes] = useState<ClosedOutcome[]>([]);
   const holdings = useMemo(
     () => (valued === null || departed.size === 0 ? valued : valued.filter((h) => !departed.has(h.id))),
     [valued, departed],
+  );
+  // ...and the last valuation kept through a failure: never one closed or deleted here
+  const holdingsKept = useMemo(
+    () => (keptValued === null || departed.size === 0 ? keptValued : keptValued.filter((h) => !departed.has(h.id))),
+    [keptValued, departed],
   );
   const writes = useMemo<HoldingWrites>(() => {
     const depart = (id: string) => setDeparted((d) => new Set([...d, id]));
@@ -599,7 +617,7 @@ function useHoldingWrites(valued: Holding[] | null, reload: () => Promise<void>,
   const dismissOutcome = useCallback(
     (id: string) => setOutcomes((all) => all.filter((o) => o.closed.id !== id)), [],
   );
-  return { holdings, writes, outcomes, dismissOutcome };
+  return { holdings, holdingsKept, writes, outcomes, dismissOutcome };
 }
 
 /** What the page reads, and when: by New York's session, and by nothing else on screen (#371; ADR
@@ -629,6 +647,9 @@ function useBook(session: boolean, edge: number, regular: boolean) {
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
   const [holdingsAt, setHoldingsAt] = useState<string | null>(null);
   const [holdingsServed, setHoldingsServed] = useState<string | null>(null);
+  // the last valuation that succeeded, kept through the failures after it for the one holding open
+  // in the inspector or the sheet (`kept.ts`); the book never draws it
+  const [lastValued, setLastValued] = useState<Holding[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   // what was thrown, as thrown: the banner's title, beside its plain words (part N)
   const [errorRaw, setErrorRaw] = useState<string | null>(null);
@@ -698,6 +719,7 @@ function useBook(session: boolean, edge: number, regular: boolean) {
       if (mine < landed.current) return;
       landed.current = mine;
       setHoldings(valued);
+      setLastValued(valued);
       // the service's own stamp, as each chip reads it (#354): one clock, whatever the device's zone.
       // None where the answer carries none — nothing held — rather than the device's clock in its
       // place: the market-closed line then says no time (#371)
@@ -758,19 +780,38 @@ function useBook(session: boolean, edge: number, regular: boolean) {
     if (health) setRefresh(readRefresh(health.settings.sweep_seconds));
   }, [health]);
 
+  // The poll's reads, each SKIPPED by a tick while the last one it asked is still out
+  // (`skipWhileOut`): with a Provider slower than the poll — OpenD's 10 s request limit against a
+  // 5 s or 15 s poll — every tick otherwise stacked another /quotes and another valuation against
+  // it (ADR 0010: a poll is not free). Only the poll's: a refresh, a save or an edge of the session
+  // still asks afresh, for a read that started after it, and the newer answer still wins (above).
+  // ...for at most two polls' worth, and never less than a minute — far past the service's own
+  // bounded vendor calls (OpenD's 10 s, a Reference's 8 s): one read that never settles must not
+  // stop the poll for good
+  const cadence = useRef(refresh);
+  cadence.current = refresh;
+  const [pollLine] = useState(() => skipWhileOut(loadLine, () => givenUpAfter(cadence.current)));
+  const [pollHoldings] = useState(() => skipWhileOut(loadHoldings, () => givenUpAfter(cadence.current)));
+
   useEffect(() => {
     const id = setInterval(() => {
       // the line at every hour; the holdings and the References only in session
-      if (!beingOperated(document.activeElement)) void load(session);
+      if (beingOperated(document.activeElement)) return;
+      if (session) void loadReferences();
+      void pollLine();
+      if (session) void pollHoldings();
     }, refresh * 1000);
     return () => clearInterval(id);
-  }, [refresh, load, session, pollFrom]);
+  }, [refresh, session, pollFrom, loadReferences, pollLine, pollHoldings]);
 
   /** Everything once, from the header's refresh — the one refresh button since #410, which took the
    *  market-closed line's away: the line, the holdings' valuation, the References and the closes.
    *  Outside the session that is one valuation and one read of the References, and the poll goes on
    *  asking only for the line. */
   const refreshNow = useCallback(async () => {
+    // a refresh is a fresh start: whatever the poll is still waiting on, its next tick asks again
+    pollLine.reset();
+    pollHoldings.reset();
     setRefreshing(true);
     try {
       await Promise.all([load(true), loadCloses()]);
@@ -779,7 +820,7 @@ function useBook(session: boolean, edge: number, regular: boolean) {
       // restarts the interval: a press just before a tick must displace it, not add a batch
       setPollFrom((n) => n + 1);
     }
-  }, [load, loadCloses]);
+  }, [load, loadCloses, pollLine, pollHoldings]);
 
   /** A change the service has to make, then the page as the service now tells it. */
   const act = useCallback(async (fn: () => Promise<void>) => {
@@ -807,6 +848,7 @@ function useBook(session: boolean, edge: number, regular: boolean) {
 
   return {
     quotes, monitors, health, references, holdings, holdingsError, holdingsAt, holdingsServed, error, errorRaw, polledAt,
+    holdingsKept: holdings === null && holdingsError !== null ? lastValued : null,
     closes, quotesFailed,
     refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
     referencesPending: referencesPending > 0, reload,

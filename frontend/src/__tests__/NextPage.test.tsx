@@ -705,19 +705,43 @@ describe("what is read again, and when", () => {
   });
 
   it("still lands a valuation when every one takes longer than the poll", async () => {
-    // a half-up Provider answers in 10-18 s, past a 15 s poll: each answer then has a newer ask
-    // behind it, and dropping every answer that does left the old figures drawn for ever
+    // a half-up Provider answers in 10-18 s, past a 15 s poll: dropping every answer that had a
+    // newer ask behind it left the old figures drawn for ever. The poll no longer stacks a newer
+    // ask behind one still out (`skipWhileOut`): the ticks meanwhile ask nothing, and the answer lands
     at(SESSION);
     await open();
     await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
     held = [];
     for (let i = 0; i < 3; i++) await act(async () => { vi.advanceTimersByTime(15_000); });
-    await until(() => expect(held!.length).toBe(3));
+    await until(() => expect(held!.length).toBe(1));
     await act(async () => { held![0]!.settle(false); });
     await waitFor(() => expect(screen.getByText(/could not be valued/)).toBeTruthy());
     expect(document.querySelector('[data-ref="p1"]')).toBeNull();
+    // the next tick asks again, and its answer lands
+    await act(async () => { vi.advanceTimersByTime(15_000); });
+    await until(() => expect(held!.length).toBe(2));
     await act(async () => { held![1]!.settle(true); });
     await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
+  });
+
+  it("lands a poll's valuation that answers before a refresh asked after it, then the refresh's", async () => {
+    // the poll asks, the owner presses refresh while it is out, and the POLL's answers first: it
+    // is the newest to have landed, so it is drawn — "only the latest ASK lands" would drop it and
+    // draw nothing new until the refresh answered, which with a slow Provider is never
+    document.cookie = "ui_arrangement=desk;path=/";
+    at(SESSION);
+    await open();
+    await waitFor(() => expect(document.querySelector('[data-ref="p1"]')).toBeTruthy());
+    held = [];
+    await act(async () => { vi.advanceTimersByTime(15_000); }); // the poll's: #0
+    await until(() => expect(held!.length).toBe(1));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "refresh now" })); });
+    await until(() => expect(held!.length).toBe(2)); // the refresh's: #1
+    const money = () => document.querySelector('[data-ref="p1"] [data-money]')!.textContent;
+    await act(async () => { held![0]!.settle(true, [{ ...holding, pnl: 150 }]); });
+    await waitFor(() => expect(money()).toBe("+$150"));
+    await act(async () => { held![1]!.settle(true, [{ ...holding, pnl: 210 }]); });
+    await waitFor(() => expect(money()).toBe("+$210"));
   });
 
   it("forgets when the holdings were valued once a valuation fails", async () => {

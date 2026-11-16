@@ -24,6 +24,7 @@ import { points, vega as vegaText } from "./shared/numbers";
 import { useEffect, useState } from "react";
 
 import { fetchVol, type Holding, type Vol } from "./shared/api";
+import { askedFor } from "./asked";
 import { DASH } from "./shared/format";
 import { paceOutcome, paceWords } from "./pace";
 import "./pace.css";
@@ -53,7 +54,7 @@ export function PaceExplained({ holding }: { holding: Holding }) {
           where SPX is.
         </p>
       ) : null}
-      <Split id={holding.id} />
+      <Split id={holding.id} ask={askedFor(holding)} />
     </section>
   );
 }
@@ -66,17 +67,18 @@ interface VolState {
 
 /** The split for `id`, asked for once per id. What is kept is the last ANSWER, under the id it
  *  answered, and shown only while that is still the id asked about. */
-function useVol(id: string): VolState | null {
+function useVol(id: string, ask: string = id): VolState | null {
   const [state, setState] = useState<VolState | null>(null);
   useEffect(() => {
     let live = true;
+    // kept under what it was asked FOR: new legs, a new Entry, count or Opened ask again (`askedFor`)
     fetchVol(id).then(
-      (vol) => { if (live) setState({ id, vol }); },
-      (err: unknown) => { if (live) setState({ id, error: rawError(err) }); },
+      (vol) => { if (live) setState({ id: ask, vol }); },
+      (err: unknown) => { if (live) setState({ id: ask, error: rawError(err) }); },
     );
     return () => { live = false; };
-  }, [id]);
-  return state?.id === id ? state : null;
+  }, [id, ask]);
+  return state?.id === ask ? state : null;
 }
 
 const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
@@ -100,8 +102,8 @@ function atWords(at: string, timing: Vol["timing"]): string {
  *  is said in words and never as a sign (ADR 0011). */
 const costWords = (n: number) => `${n >= 0 ? "cost" : "saved"} you ${Math.abs(n).toFixed(2)}`;
 
-function Split({ id }: { id: string }) {
-  const state = useVol(id);
+function Split({ id, ask }: { id: string; ask: string }) {
+  const state = useVol(id, ask);
   if (state === null) return <p className="nx-pace-note">reading what vol did…</p>;
   // a failed read costs the split and nothing else: the rest came with the holding
   if (state.vol === undefined) {

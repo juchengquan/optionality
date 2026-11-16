@@ -113,3 +113,8 @@
 }
 .nxp-sheet-body { padding: 0 1rem 1.25rem; min-width: 0; overflow-wrap: anywhere; }
 .nxp-sheet .nxp-progress { margin-top: 0.75rem; }
+
+/* a holding kept through a failed valuation (kept.ts): said at the top of the sheet, over its
+   figures, which are dimmed so they are not read as current */
+.nxp-stale { margin: 0; color: var(--foreground); font-weight: 600; }
+.nxp-sheet[data-stale] .nxp-hero, .nxp-sheet[data-stale] .nxp-facts { opacity: 0.55; }

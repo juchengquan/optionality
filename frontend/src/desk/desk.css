@@ -227,3 +227,8 @@
 .nxd-maptoggle[aria-expanded="true"] { color: var(--foreground); border-color: var(--foreground); }
 /* the toggle shares the picker's corner, but not its square icon-button size */
 .nxd-picker .nxd-maptoggle { width: auto; padding: 0 0.6rem; }
+
+/* a holding kept through a failed valuation (kept.ts): said at the top, and its figures dimmed so
+   they are not read as current */
+.nxd-stale { margin: 0 0 0.5rem; color: var(--foreground); font-weight: 600; }
+.nxd-inspector[data-stale] .nxd-kv, .nxd-inspector[data-stale] .nx-chip { opacity: 0.55; }

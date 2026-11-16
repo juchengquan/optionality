@@ -19,6 +19,7 @@ import { ShortWords } from "../RuleWords";
 import { costAndPace, paceOutcome } from "../pace";
 import type { HoldingWrites } from "../HoldingActions";
 import { DetailBoundary } from "../DetailBoundary";
+import { keptHolding, STALE_WORDS } from "../kept";
 import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
@@ -82,10 +83,14 @@ export function DeskBook({ selection, ...props }: BookProps & {
   // palette can read it and land on a row; a desk drawn alone keeps its own.
   const own = useState<DeskSelection>(NOTHING_SELECTED);
   const [sel, setSel] = selection ?? own;
-  const selectedRow = sel.id === null ? null : rows.find((r) => rowId(r) === sel.id) ?? null;
+  const liveRow = sel.id === null ? null : rows.find((r) => rowId(r) === sel.id) ?? null;
+  // a holding out of the book only because a valuation failed stays selected, on its last valued
+  // figures, with whatever was typed into its forms (`kept.ts`)
+  const kept = liveRow ? null : keptHolding(sel.id, quotes, holdings, props.holdingsKept, monitors);
+  const selectedRow: DeskRow | null = liveRow ?? (kept ? { kind: "holding", ...kept } : null);
   const current = sel.open ? selectedRow : null;
-  // a row that leaves the book takes the selection with it: kept, it reopened the inspector by
-  // itself when the row came back, as on the poll after one failed valuation
+  // a row that leaves the book otherwise takes the selection with it: kept, it reopened the
+  // inspector by itself when the row came back
   useEffect(() => { if (sel.id !== null && !selectedRow) setSel(NOTHING_SELECTED); }, [sel.id, selectedRow, setSel]);
   const setSelected = useCallback((id: string) => setSel({ id, open: true }), [setSel]);
 
@@ -199,7 +204,8 @@ export function DeskBook({ selection, ...props }: BookProps & {
       </div>
 
       {current ? <Inspector id={inspectorId} row={current} session={session} privacy={privacy} rows={rows} partners={partners}
-                            onSelect={setSelected} onClose={close} quotes={quotes} monitors={monitors} writes={props.writes} /> : null}
+                            onSelect={setSelected} onClose={close} quotes={quotes} monitors={monitors} writes={props.writes}
+                            stale={kept !== null} /> : null}
       {/* the closed trades' fold (#373): the last thing in the book, across the whole width */}
       {props.journal}
     </div>
@@ -493,9 +499,11 @@ function Fill({ entry }: { entry: Entry }) {
 
 // ---- the inspector
 
-function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClose, quotes, monitors, writes }: {
+function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClose, quotes, monitors, writes, stale = false }: {
   id: string; row: DeskRow; session: boolean; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
   onSelect: (id: string) => void; onClose: () => void; quotes: Entry[]; monitors: Monitor[]; writes?: HoldingWrites;
+  /** drawn from the last valuation that succeeded, the ones since having failed (`kept.ts`) */
+  stale?: boolean;
 }) {
   const name = rowName(row);
   // the focus follows what was opened, so a keyboard reader lands on it
@@ -503,13 +511,14 @@ function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClos
   const subject = rowId(row);
   useEffect(() => { heading.current?.focus(); }, [subject]);
   return (
-    <aside id={id} className="nxd-inspector" aria-label={`inspector: ${name}`}>
+    <aside id={id} className="nxd-inspector" aria-label={`inspector: ${name}`} data-stale={stale ? "" : undefined}>
       <div className="nxd-insp-head">
         <h3 ref={heading} tabIndex={-1}>{name}</h3>
         <button type="button" className="nxd-close" aria-label="close the inspector" onClick={onClose}>
           <X aria-hidden="true" />
         </button>
       </div>
+      {stale ? <p className="nx-meta nxd-stale" role="status">{STALE_WORDS}</p> : null}
       {/* the heading and its close stay outside: a detail that cannot be drawn can still be shut */}
       <DetailBoundary key={subject} what={row.kind === "holding" ? "holding" : "rule"}>
         {/* the meta line, and by the session (#371) whether what is shown updates with the poll */}
@@ -517,9 +526,10 @@ function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClos
           {row.kind === "holding" ? holdingMeta(row.holding) : row.kind === "rule" ? ruleMeta(row.entry)
             : `${dateWords(row.monitor.strike_date)} · ${row.monitor.code}`}
         </p>
-        <p className="nx-meta nxd-note">{session ? "live: updates with every poll" : "as last valued"}</p>
+        <p className="nx-meta nxd-note">{session && !stale ? "live: updates with every poll" : "as last valued"}</p>
         {/* the one order the phone's sheet draws too (part J, `sections.ts`) */}
-        {row.kind === "holding" ? <HoldingDetail row={row} session={session} privacy={privacy} partners={partners}
+        {/* stale, its Level says which valuation it is from, as outside the session */}
+        {row.kind === "holding" ? <HoldingDetail row={row} session={session && !stale} privacy={privacy} partners={partners}
                                                  onSelect={onSelect} quotes={quotes} monitors={monitors} writes={writes} />
           : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null}
                                               session={session} privacy={privacy} />

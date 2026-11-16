@@ -18,6 +18,10 @@ export interface BookProps {
    *  nobody can vouch for, as the old page did (#301) */
   holdings: Holding[] | null;
   holdingsError: string | null;
+  /** the last valuation that succeeded, while `holdings` is null because one failed since: only the
+   *  holding already open in the inspector or the sheet is drawn from it, said to be stale, so a
+   *  failed poll costs no half-typed form (`kept.ts`). The book itself never draws it */
+  holdingsKept?: Holding[] | null;
   /** when the service last valued them, from its own stamp: said outside the session, where they
    *  are not polled ("market closed — valued at 21:04", #371) */
   holdingsAt: string | null;

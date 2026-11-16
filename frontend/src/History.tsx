@@ -30,6 +30,7 @@
  *  margins they share (`Gutters`) and the one mapping they all use (`dayScale`), DTE from `span` at
  *  the left margin to 0 at the right.
  */
+import { askedFor } from "./asked";
 import { tick } from "./shared/numbers";
 import { useEffect, useRef, useState } from "react";
 import { scaleLinear } from "@visx/scale";
@@ -63,22 +64,24 @@ interface Answer<T> {
  *  this one while its own are asked for, and an answer for a holding no longer shown lands
  *  nowhere. A 200 that carries no days — null, a string, an object without its list — is said as
  *  a failure: kept as an answer, it left the charts on "reading the samples…" for ever (#353). */
-function useAnswer<T>(id: string, fetch: (id: string) => Promise<T>): Answer<T> | null {
+function useAnswer<T>(id: string, fetch: (id: string) => Promise<T>, ask: string = id): Answer<T> | null {
   const [state, setState] = useState<Answer<T> | null>(null);
   useEffect(() => {
     let live = true;
+    // kept under what it was asked FOR (`ask`): a holding's legs corrected, or its Entry, count or
+    // Opened edited, is asked again, as another id is (`askedFor`)
     fetch(id).then(
       (samples: unknown) => {
         if (!live) return;
-        setState(isSamples(samples) ? { id, samples: samples as T }
-          : { id, error: "the service answered without them" });
+        setState(isSamples(samples) ? { id: ask, samples: samples as T }
+          : { id: ask, error: "the service answered without them" });
       },
-      (err: unknown) => { if (live) setState({ id, error: rawError(err) }); },
+      (err: unknown) => { if (live) setState({ id: ask, error: rawError(err) }); },
     );
     return () => { live = false; };
     // the fetch is a module function, the same on every render: the id is what is asked about
-  }, [id, fetch]);
-  return state?.id === id ? state : null;
+  }, [id, ask, fetch]);
+  return state?.id === ask ? state : null;
 }
 
 /** Whether an answer is the samples at all: an object carrying its list of days. */
@@ -118,7 +121,7 @@ function useCross(id: string, served: Samples | undefined, holding: Charted): Cr
 }
 
 export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy: boolean }) {
-  const state = useAnswer(holding.id, fetchSamples);
+  const state = useAnswer(holding.id, fetchSamples, askedFor(holding));
   const size = holding.contract_size ?? null;
   const unit: Unit = {
     size: size ?? 1, contracts: holding.contracts, money: size !== null, hidden: privacy,

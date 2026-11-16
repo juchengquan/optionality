@@ -166,10 +166,14 @@ function Renames({ account, monitors }: { account: Corrected; monitors: Monitor[
   );
 }
 
-function EditForm({ id, holding, watching, privacy, now, monitors, onCancel, onSaved }: {
+function EditForm({ id, holding: served, watching, privacy, now, monitors, onCancel, onSaved }: {
   id: string; holding: Holding; watching: number; privacy: boolean; now?: Date; monitors: Monitor[];
   onCancel: () => void; onSaved: (answer: Corrected) => void;
 }) {
+  // the holding as the form OPENED on it is its ground, as a correction's is (ClosedResult.tsx): what
+  // a save sends is what was changed here, never the draft's difference from a holding another
+  // device has edited since, which would undo that edit
+  const [holding] = useState(served);
   const [draft, setDraft] = useState<EditDraft>(() => editDraft(holding));
   // said where it belongs: a quantity's refusal beside the quantities, everything else by the buttons
   const [error, setError] = useState<{ text: string; at: "qty" | null } | null>(null);
@@ -350,6 +354,9 @@ function CloseForm({ id, holding, now, onCancel, onClosed }: {
   const [draft, setDraft] = useState<CloseDraft>(() => ({
     exit: exitPrefill(holding.cost_to_close), closedOn: closeDay(holding.strike_date, marketDay(now)),
   }));
+  // what the Exit was prefilled from, and when that was valued: kept with the prefill, which a poll
+  // does not change, so the hint names the figure in the box rather than the latest valuation
+  const [prefilledFrom] = useState(() => ({ served: holding.cost_to_close, at: holding.fetched_at }));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // a REF as well as the state: two submits in one tick both read the state from before either set
@@ -389,7 +396,7 @@ function CloseForm({ id, holding, now, onCancel, onClosed }: {
       </p>
       <div className="nx-hold-row">
         <ExitField inputRef={first} value={draft.exit} onChange={(exit) => change({ exit })}
-                   served={holding.cost_to_close} valuedAt={holding.fetched_at}
+                   served={prefilledFrom.served} valuedAt={prefilledFrom.at}
                    // never prefilled: blank is "unknown" (ADR 0022), and 0 is the owner's to say
                    expired={expired} />
         <DayField value={draft.closedOn} onChange={(closedOn) => change({ closedOn })} />
