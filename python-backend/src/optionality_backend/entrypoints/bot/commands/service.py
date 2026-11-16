@@ -17,9 +17,9 @@ disagree about a cost, a P&L or a Level.
   abbreviation where the TypeScript's has ICU's. The two agree on UTC, America/New_York and every zone
   whose abbreviation is an offset — Asia/Singapore among them — and part where only tzdata has a name
   (Asia/Kolkata's IST); `timefmt.py` says where that is measured.
-- **Valuing raises on a stored holding it cannot hydrate** (`holdings.py`, issue #266), where the
-  TypeScript values it, so such a row is "Holdings failed: …" here and a table row there. Every failure
-  is caught as `except Exception`, never wider, so a cancelled task stays cancelled.
+- **A stored holding the reader refuses is named under the table** (`holdings.py`, #422), as the
+  TypeScript names it: "⚠️ <reason> — id <id>", escaped where the reply is HTML. Every failure is caught
+  as `except Exception`, never wider, so a cancelled task stays cancelled.
 - `help` shadows the builtin inside this module and the table's: it is the TypeScript's name, and the
   name the owner types.
 """

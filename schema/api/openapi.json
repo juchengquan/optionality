@@ -1850,7 +1850,10 @@
                         "type": "string"
                       },
                       "contracts": {
-                        "type": "number"
+                        "type": [
+                          "number",
+                          "null"
+                        ]
                       },
                       "entry": {
                         "type": [
@@ -1976,7 +1979,10 @@
                       "type": "string"
                     },
                     "contracts": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "entry": {
                       "type": [
@@ -2225,7 +2231,10 @@
                         "type": "string"
                       },
                       "contracts": {
-                        "type": "number"
+                        "type": [
+                          "number",
+                          "null"
+                        ]
                       },
                       "entry": {
                         "type": [
@@ -3682,7 +3691,10 @@
                       "type": "string"
                     },
                     "contracts": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "entry": {
                       "type": [
@@ -4021,7 +4033,10 @@
                       "type": "string"
                     },
                     "contracts": {
-                      "type": "number"
+                      "type": [
+                        "number",
+                        "null"
+                      ]
                     },
                     "entry": {
                       "type": [

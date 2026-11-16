@@ -26,11 +26,13 @@ and not on a Monitor.
   here it is also what keeps the request alive: the library's `PacedSample` takes a map or None and
   refuses anything else, where the TypeScript's `paceExplained` would read an array as a map of
   nothing and answer null.
-- **Hydrating validates** (`hydrate.py`, issue #266): a stored holding whose legs parse but are not legs
-  is refused where it is read, so `/values` answers it with its 502 (`holdings.py` says why), and a
-  POST or DELETE whose re-adoption reads it — whenever a rule is orphaned
-  (`monitors.adopt_orphan_monitors`) — fails and rolls back where the TypeScript would cast the row and
-  carry on. No door scenario holds a row like that.
+- **Hydrating validates** (`hydrate.py`, issue #266), as the TypeScript's does: a stored holding the
+  reader refuses is LISTED by `/values` and `GET /positions` with its reason and no legs, every column
+  the schema would refuse served as None (`out_unreadable`), and the routes that work from its legs —
+  PATCH of legs, `/vol`, `/payoff`, `/samples` — answer 422 with the reader's words (#422). Linking,
+  re-adoption and the close's hand-over read only the holdings that can be read
+  (`monitors.readable_open_positions`), so one such row fails nothing beside it. Door scenarios hold
+  each of these.
 - **The probe's codes are sorted as JavaScript sorts**, by UTF-16 code unit, as `holdings.py`'s are.
 """
 
@@ -43,6 +45,7 @@ from fastapi import APIRouter, Depends, Path, Response
 from optionality.contract import build_spx_code
 from optionality.exit import dte_at_open, exit_levels, on_pace
 from optionality.expiry import days_to_expiry, market_date, sample_timing, taken_in_session, valued_timing
+from optionality.js import js_string
 from optionality.monitor import monitor_leg_codes
 from optionality.payoff import payoff_at_expiry
 from optionality.position import (
@@ -72,7 +75,6 @@ from ....db.queries import (
     list_position_samples,
     list_positions,
     monitors_watching,
-    open_positions,
     update_monitor_fields,
     update_position_fields,
 )
@@ -81,7 +83,7 @@ from ....db.time import display_stored, to_sql_datetime
 from ....db.values import from_sqlite_json, new_id, to_sqlite_bool, to_sqlite_json
 from ....holdings import HoldingValue, UnreadableHolding, _exit_policy, holding_values
 from ....hydrate import to_monitor, to_position
-from ....monitors import adopt_orphan_monitors
+from ....monitors import adopt_orphan_monitors, readable_open_positions
 from ....ports import verify_contracts
 from ....schemas.monitor import DisabledReason
 from ....schemas.position import (
@@ -123,7 +125,8 @@ class PositionOut(BaseModel):
     name: str
     strategy: str | None
     strike_date: str
-    contracts: float
+    #: None only on a holding that cannot be read (`unreadable`), whose stored count is not a number
+    contracts: float | None
     entry: float | None
     legs: list[LegOut]
     created_at: str | None
@@ -435,8 +438,10 @@ def _closed_on_fault(row: PositionRow, closed_on: str, opened_at: str | None, to
 
 
 def _held_codes(db: sqlite3.Connection) -> set[str]:
+    """Every contract some OPEN holding holds — of the holdings that can be read: one that cannot names no
+    contract anyone can vouch for, and failed every close beside it (#422's review)."""
     """Every contract some OPEN holding holds."""
-    return {code for p in open_positions(db) for code in position_leg_codes(to_position(p))}
+    return {code for p in readable_open_positions(db) for code in position_leg_codes(p)}
 
 
 def _still_held(monitor: MonitorRow, held: set[str]) -> bool:
@@ -472,6 +477,8 @@ def position_routes(deps: Deps) -> APIRouter:
 
     def out(row: PositionRow, unreadable: str | None | Literal[False] = False) -> dict[str, Any]:
         reason = unreadable_reason(row) if unreadable is False else unreadable
+        if reason is not None:
+            return out_unreadable(row, reason)
         return {
             "id": row["id"],
             "name": row["name"],
@@ -480,7 +487,7 @@ def position_routes(deps: Deps) -> APIRouter:
             "contracts": row["contracts"],
             "entry": row["entry"],
             # an unreadable row's legs are not served: they are what could not be read
-            "legs": from_sqlite_json(row["legs"]) if reason is None else [],
+            "legs": from_sqlite_json(row["legs"]),
             "created_at": display_stored(row["created_at"], tz),
             # a plain date, NOT display_stored: created_at is an instant and converts to DISPLAY_TZ,
             # while Opened is the calendar day a trade was put on and has no time to convert
@@ -491,6 +498,58 @@ def position_routes(deps: Deps) -> APIRouter:
             "realized_points": None if row["closed_on"] is None else _realized(row),
             "unreadable": reason,
         }
+
+    def out_unreadable(row: PositionRow, reason: str) -> dict[str, Any]:
+        """An unreadable holding as it can still be served: every column the schema would refuse — the very
+        values that made it unreadable — as None, its legs as none, and nothing computed from them. Served
+        at all, so it can be deleted (#422's review: these failed the response's own schema, and took the
+        whole listing with them). Mirrors `positions.ts`' `outUnreadable`."""
+
+        def text(v: Any) -> str | None:
+            return v if isinstance(v, str) else None
+
+        def string(v: Any) -> str:
+            """JavaScript's `String(v)` for what a column can hold: text as it is, a number as JS writes it."""
+            if isinstance(v, str):
+                return v
+            if isinstance(v, int | float) and not isinstance(v, bool):
+                return js_string(v)
+            return "" if v is None else str(v)
+
+        def finite(v: Any) -> float | None:
+            ok = isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
+            return v if ok else None
+
+        whole = row["contracts"]
+        whole_ok = isinstance(whole, int | float) and not isinstance(whole, bool) and float(whole).is_integer()
+        try:
+            created = display_stored(row["created_at"], tz) if isinstance(row["created_at"], str) else None
+        except Exception:  # noqa: BLE001 — an instant that will not read is none
+            created = None
+        return {
+            "id": string(row["id"]),
+            "name": string(row["name"]),
+            "strategy": text(row["strategy"]),
+            # always text: the schema's, and the one column a person reads to find the row
+            "strike_date": string(row["strike_date"]),
+            "contracts": whole if whole_ok else None,
+            "entry": finite(row["entry"]),
+            "legs": [],
+            "created_at": created,
+            "opened_at": text(row["opened_at"]),
+            "closed_on": text(row["closed_on"]),
+            "exit": finite(row["exit"]),
+            "realized_points": None,
+            "unreadable": reason,
+        }
+
+    def readable(row: PositionRow) -> Position:
+        """The holding, read, or a 422 naming why it cannot be: every route that works from its legs or its
+        expiry answers this rather than a 500 on a row the book lists as unreadable (#422)."""
+        try:
+            return to_position(row)
+        except Exception as err:
+            raise http_error(422, str(err)) from err
 
     router = APIRouter()
 
@@ -611,6 +670,7 @@ def position_routes(deps: Deps) -> APIRouter:
         row = find_position(db, id_)
         if row is None:
             raise not_found("position")
+        position = readable(row)
         stored = list_position_samples(db, id_)
         samples = [
             PacedSample(
@@ -624,7 +684,7 @@ def position_routes(deps: Deps) -> APIRouter:
             )
             for s in stored
         ]
-        explained = pace_explained(samples, to_position(row), deps.now()).model_dump(by_alias=True)
+        explained = pace_explained(samples, position, deps.now()).model_dump(by_alias=True)
         # The vol part is re-measured under the legs as they now are, from per-contract readings, so a
         # correction leaves it true (#359). The gap is not: it is read off the last sample's stored Cost to
         # close, which a sample from before the correction summed under the old quantities.
@@ -654,6 +714,7 @@ def position_routes(deps: Deps) -> APIRouter:
         row = find_position(db, id_)
         if row is None:
             raise not_found("position")
+        position = readable(row)
         opened_dte = None if row["opened_at"] is None else dte_at_open(row["strike_date"], row["opened_at"])
         levels = (
             None if opened_dte is None else exit_levels(row["entry"], opened_dte, opened_dte, _exit_policy(settings))
@@ -661,7 +722,7 @@ def position_routes(deps: Deps) -> APIRouter:
         # the held shorts, as the strike strip places them (`/positions/values`)
         shorts = [
             build_spx_code(row["strike_date"], leg.option_type, leg.strike)
-            for leg in to_position(row).legs
+            for leg in position.legs
             if leg.side == "short"
         ]
 
@@ -719,10 +780,10 @@ def position_routes(deps: Deps) -> APIRouter:
                     "on_pace": None,
                     "before_correction": False,
                 }
-                for day in before_entry(db, row, to_position(row), tz)
+                for day in before_entry(db, row, position, tz)
             ],
             "entry_close": None
-            if (entry := entry_close(db, row, to_position(row), own, tz)) is None
+            if (entry := entry_close(db, row, position, own, tz)) is None
             else {
                 **{k: v for k, v in entry.items() if k != "value"},
                 "cost_to_close": entry["value"],
@@ -738,10 +799,10 @@ def position_routes(deps: Deps) -> APIRouter:
         row = find_position(db, id_)
         if row is None:
             raise not_found("position")
+        position = readable(row)
         # a curve is drawn at a credit; without one there is nothing honest to draw
         if row["entry"] is None:
             raise http_error(422, f"position '{row['name']}' has no entry: record what was taken in to draw its payoff")
-        position = to_position(row)
         return payoff_at_expiry(list(position.legs), row["entry"], row["contracts"]).model_dump()
 
     @router.post(
@@ -818,7 +879,7 @@ def position_routes(deps: Deps) -> APIRouter:
             raise http_error(
                 422, f"position '{row['name']}' is closed: a leg's quantity is corrected only while it is held"
             )
-        correction = None if given.legs is None else corrected_legs(row["name"], to_position(row).legs, given.legs)
+        correction = None if given.legs is None else corrected_legs(row["name"], readable(row).legs, given.legs)
         if isinstance(correction, Fault):
             raise http_error(422, correction.fault)
         if row["closed_on"] is not None:

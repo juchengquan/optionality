@@ -268,7 +268,12 @@ class TestAPosition:
             pytest.param({"entry": "6.4"}, "entry must be a number or null", id="an entry as text"),
             pytest.param({"strategy": BLOB}, "strategy must be text or null", id="a strategy that is bytes"),
             pytest.param({"opened_at": 20261012}, "opened_at must be text or null", id="an opened that is a number"),
-            pytest.param({"strike_date": None}, "strike_date must be text", id="a strike date that is missing"),
+            pytest.param({"strike_date": None}, "strike_date must be a date", id="a strike date that is missing"),
+            # #422's review: an expiry that is no date cannot be valued, and failed the whole book later
+            pytest.param({"strike_date": "garbage"}, "strike_date must be a date", id="a strike date that is no date"),
+            pytest.param(
+                {"strike_date": "2026-02-30"}, "strike_date must be a date", id="a strike date that never was"
+            ),
         ],
     )
     def test_refuses_naming_the_holding_and_the_field(self, over, why):

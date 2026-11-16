@@ -22,6 +22,12 @@ const DOWN = "connect ECONNREFUSED 127.0.0.1:33333";
 
 /** The book as it stands: the condor held, its short call watched on delta, its call spread
  *  watched as a combo, both rules linked to the holding. */
+/** A holding the service cannot read (#422): a side of "sold", which no leg has had since ADR 0013. */
+const BROKEN = position({
+  id: "pos-9", name: "dec-broken",
+  legs: [{ side: "sold", option_type: "CALL", strike: 7500 }, { side: "long", option_type: "CALL", strike: 7550 }],
+});
+
 const held = {
   positions: [position({ id: "pos-1" })],
   monitors: [monitor({ id: "mon-1", scope: "leg" }), combo({ id: "mon-2", scope: "calls" })],
@@ -929,6 +935,83 @@ export const HTTP: readonly HttpInput[] = [
       },
     }),
     request: request("GET", "/positions"),
+  },
+  // --- a holding the service cannot read, everywhere it could have failed the book (#422's review)
+  {
+    // the only holdings are unreadable: listed, and no Provider asked — there is nothing to price
+    name: "GET /positions/values lists a holding that cannot be read when it is the only one",
+    world: world({ tables: { positions: [BROKEN] }, provider: { down: "connect ECONNREFUSED 127.0.0.1:33333" } }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // an Entry of "abc" failed the response's own schema, and took the whole listing with it: it is
+    // served as null on the one row that cannot be read
+    name: "GET /positions/values lists a holding whose stored entry is no number",
+    world: world({
+      tables: { positions: [position({ id: "pos-1" }), position({ id: "pos-2", name: "dec-text-entry", entry: "abc" })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    name: "GET /positions lists a holding whose stored count is no number",
+    world: world({
+      tables: { positions: [position({ id: "pos-1" }), position({ id: "pos-2", name: "dec-text-count", contracts: "two" })] },
+    }),
+    request: request("GET", "/positions"),
+  },
+  {
+    // an expiry that is no date was "moomoo call failed: invalid strike_date" for the whole book; it
+    // is the holding's own fault now, read as such, with no DTE to count
+    name: "GET /positions/values lists a holding whose expiry is no date",
+    world: world({
+      tables: { positions: [position({ id: "pos-1" }), position({ id: "pos-2", name: "dec-no-date", strike_date: "garbage" })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    name: "POST /monitors links a new rule beside a holding that cannot be read",
+    world: world({ tables: { positions: [position({ id: "pos-1" }), BROKEN] }, provider: { quotes: BOOK } }),
+    request: request("POST", "/monitors", single),
+  },
+  {
+    name: "POST /spreads records a spread beside a holding that cannot be read",
+    world: world({ tables: { positions: [BROKEN] }, provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [PUT_SPREAD] }),
+  },
+  {
+    name: "POST /positions/{id}/close closes a holding beside one that cannot be read",
+    world: world({ tables: { ...held, positions: [...held.positions, BROKEN] } }),
+    request: request("POST", "/positions/pos-1/close", { exit: 1.25 }),
+  },
+  {
+    name: "DELETE /positions/{id} deletes a holding with linked rules beside one that cannot be read",
+    world: world({ tables: { ...held, positions: [...held.positions, BROKEN] } }),
+    request: request("DELETE", "/positions/pos-1"),
+  },
+  {
+    // every route that works from a holding's legs answers why, rather than a 500
+    name: "PATCH /positions/{id} refuses to correct the legs of a holding that cannot be read",
+    world: world({ tables: { positions: [BROKEN] } }),
+    request: request("PATCH", "/positions/pos-9", {
+      legs: [{ side: "short", option_type: "CALL", strike: 7500 }, { side: "long", option_type: "CALL", strike: 7550 }],
+    }),
+  },
+  {
+    name: "GET /positions/{id}/vol refuses a holding that cannot be read, saying why",
+    world: world({ tables: { positions: [BROKEN] } }),
+    request: request("GET", "/positions/pos-9/vol"),
+  },
+  {
+    name: "GET /positions/{id}/payoff refuses a holding that cannot be read, saying why",
+    world: world({ tables: { positions: [BROKEN] } }),
+    request: request("GET", "/positions/pos-9/payoff"),
+  },
+  {
+    name: "GET /positions/{id}/samples refuses a holding that cannot be read, saying why",
+    world: world({ tables: { positions: [BROKEN] } }),
+    request: request("GET", "/positions/pos-9/samples"),
   },
   {
     name: "GET /positions/values answers 502 naming the Provider when it is down",

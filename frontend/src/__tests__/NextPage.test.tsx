@@ -1150,17 +1150,34 @@ describe("a holding the service cannot read (#422)", () => {
       await quiet();
       const listed = await screen.findByRole("status", { name: "holdings that cannot be read" });
       expect(within(listed).getByText("1231_broken")).toBeTruthy();
-      expect(listed.textContent).toContain("cannot be read — fix it or delete it");
+      expect(listed.textContent).toContain("cannot be read — its stored row is damaged");
       // the service's reason and the id, one tap away (#420's standard)
       const details = listed.querySelector("details[data-raw] code");
       expect(details?.textContent).toContain("legs[0].side must be");
       expect(details?.textContent).toContain("(id p9)");
       // a fault in the line, in the same plain words
-      expect(document.body.textContent).toContain("1231_broken cannot be read — fix it or delete it");
+      expect(document.body.textContent).toContain("1231_broken cannot be read — its stored row is damaged");
       // and the readable holding is drawn as ever, while the broken one is no row of the book
       expect(screen.getAllByText("1231_7000P").length).toBeGreaterThan(0);
       expect(document.querySelectorAll("[data-unreadable]").length).toBe(1);
       expect(screen.getAllByText("1231_broken"), "drawn once, in its list, and in no row of the book").toHaveLength(1);
     });
   }
+
+  it("leads the needs-you banner to its item, which offers the delete a mistaken record is given", async () => {
+    document.cookie = "ui_arrangement=phone;path=/";
+    alsoValued = [broken];
+    at(SESSION);
+    await open();
+    await quiet();
+    const banners = screen.getByRole("status", { name: "needs you" });
+    fireEvent.click(within(banners).getByRole("button", { name: /1231_broken cannot be read/ }));
+    const item = document.querySelector<HTMLElement>('[data-ref="p9"]')!;
+    expect(item.hasAttribute("data-unreadable"), "the banner leads to the unreadable holding's own item").toBe(true);
+    await waitFor(() => expect(item.hasAttribute("data-revealed")).toBe(true));
+    fireEvent.click(within(item).getByRole("button", { name: "delete…" }));
+    fireEvent.click(await within(item).findByRole("button", { name: "delete it" }));
+    await waitFor(() => expect(writes).toContain("DELETE /positions/p9"));
+    await waitFor(() => expect(document.querySelector('[data-unreadable="p9"]')).toBeNull());
+  });
 });

@@ -447,7 +447,7 @@ export function Next() {
                         onCorrected={() => { rereadJournal(); void book.reload(); }}
                         served={journal.trades?.find((t) => t.id === o.closed.id) ?? null} />
         ))}
-        <UnreadableHoldings rows={unreadable} />
+        <UnreadableHoldings rows={unreadable} onDeleted={writes.deleted} />
         {phone ? <PhoneBook {...bookProps} /> : <DeskBook {...bookProps} selection={deskSelection} />}
       </main>
 

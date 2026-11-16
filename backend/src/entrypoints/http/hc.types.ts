@@ -206,7 +206,8 @@ export type HcChecks = [
 
   // positions -------------------------------------------------------------------------
   Checked<Known<Ok<E["positions"]>>>,
-  Checked<Exactly<Ok<E["positions"]>[number]["contracts"], number>>,
+  // null only on a holding the service cannot read (#422)
+  Checked<Exactly<Ok<E["positions"]>[number]["contracts"], number | null>>,
   Checked<Exactly<Ok<E["positions"]>[number]["entry"], number | null>>,
   Checked<Exactly<Ok<E["positions"]>[number]["strategy"], string | null>>,
   Checked<Exactly<Ok<E["positions"]>[number]["legs"],

@@ -10,16 +10,21 @@
  *  them with a NaN where the sign should be, while the Python port's models refused the same row and
  *  quarantined it: two backends acting differently on one database file with every gate green. Now
  *  a row is refused HERE, before any figure is computed from it, and every caller that can meet one
- *  already hydrates inside the guard that quarantines a rule it cannot read, or leaves out a holding
- *  (`engine/sweeper.ts`). Legs that are not JSON at all are refused the same way, with JSON.parse's
+ *  already hydrates inside a guard: the sweep quarantines a rule it cannot read and leaves out a
+ *  holding (`engine/sweeper.ts`), and every reader of the book lists an unreadable holding apart,
+ *  with this reader's words, rather than failing on it (#422). Legs that are not JSON at all are refused the same way, with JSON.parse's
  *  error as the cause.
  *
- *  What is checked is what the domain's TYPES say, and nothing more: a value of the right kind that
- *  is still wrong — a strike date that is no date, a threshold of 0 — is the domain's to refuse, and
- *  already is. The first fault in field order is the one named, in words the Python's `hydrate.py`
- *  repeats exactly, because `/positions/values` answers with them. Only a hand edit, a bad import
- *  or a damaged restore writes such a row; the write paths validate.
+ *  What is checked is what the domain's TYPES say, and one thing more: a HOLDING's strike date must
+ *  read as a date, because one that does not cannot be valued at all and, refused later, failed the
+ *  whole book (#422's review). Any other value of the right kind that is still wrong — a rule's
+ *  strike date that is no date, a threshold of 0 — is the domain's to refuse, and already is. The
+ *  first fault in field order is the one named, in words the Python's `hydrate.py` repeats exactly,
+ *  because `/positions/values`, `GET /positions` and the bot list an unreadable holding with them, and
+ *  the routes that need its legs answer 422 with them (#422). Only a hand edit, a bad import or a
+ *  damaged restore writes such a row; the write paths validate.
  */
+import { normalizeStrikeDate } from "optionality/domain/contract";
 import type { Leg, Position, Side } from "optionality/domain/position";
 import type { Monitor, MonitorLeg } from "optionality/domain/monitor";
 import { fromSqliteJson } from "./db/values.ts";
@@ -37,6 +42,18 @@ const SIGN: Rule = [(v) => v === 1 || v === -1, "1 or -1"];
 const OPTION_TYPE: Rule = [(v) => v === "CALL" || v === "PUT", '"CALL" or "PUT"'];
 const SIDE: Rule = [(v) => v === "short" || v === "long", '"short" or "long"'];
 const QTY: Rule = [(v) => Number.isInteger(v) && (v as number) >= 1, "a whole number, 1 or more"];
+/** A holding's expiry: text the domain reads as a date. Checked here, for a POSITION, because a
+ *  holding whose expiry is no date cannot be valued, priced or counted down — and refused anywhere
+ *  later it failed the whole book with "invalid strike_date" (#422's review). */
+const EXPIRY: Rule = [(v) => {
+  if (typeof v !== "string") return false;
+  try {
+    normalizeStrikeDate(v);
+    return true;
+  } catch {
+    return false;
+  }
+}, "a date"];
 
 /** Reads one row's values, refusing the first that is not what its rule says. */
 function reader(kind: string, name: unknown) {
@@ -102,7 +119,7 @@ export function toPosition(row: PositionRow): Position & { id: string } {
     name: take<string>("name", row.name, TEXT),
     strategy: take<string | null>("strategy", row.strategy, TEXT_OR_NULL),
     opened_at: take<string | null>("opened_at", row.opened_at, TEXT_OR_NULL),
-    strike_date: take<string>("strike_date", row.strike_date, TEXT),
+    strike_date: take<string>("strike_date", row.strike_date, EXPIRY),
     contracts: take<number>("contracts", row.contracts, WHOLE),
     entry: take<number | null>("entry", row.entry, NUMBER_OR_NULL),
   };
