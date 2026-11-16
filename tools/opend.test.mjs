@@ -230,6 +230,19 @@ describe.skipIf(!darwin)("opend.sh ensure, against a fake OpenD", () => {
     process.kill(other.pid, "SIGKILL");
   });
 
+  it("starts OpenD, and kills nothing, when a stale PID file names a live process that is not OpenD", () => {
+    // a reused pid: without the check that it is still an OpenD, `ensure` took it for its own husk
+    const other = spawn("sleep", ["30"], { stdio: "ignore", detached: true });
+    other.unref();
+    writeFileSync(join(dir, "OpenD", "opend.pid"), `${other.pid}\n`);
+    const r = run("ensure", { OPEND_RESTART_AFTER: "0" });
+    expect(r.status, r.all).toBe(0);
+    expect(r.out).toMatch(/not running; starting it/);
+    expect(alive(other.pid)).toBe(true);
+    expect(starts()).toBe(1);
+    process.kill(other.pid, "SIGKILL");
+  });
+
   it("reports a shut websocket port with the API port open, and restarts nothing", async () => {
     const pid = await byHand("serve", `${api}`);
     const r = run("ensure");
