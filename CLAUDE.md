@@ -102,14 +102,27 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `@esbuild/<platform>` itself, and `make build-ui` from an install with EVERY script skipped was
   byte-identical (#412). A `trustedDependencies` list REPLACES bun's built-in list rather than adding
   to it (measured: naming `protobufjs` blocked esbuild's) — read what a script does before adding one.
-- `make deploy` — **the only correct way to land a merge**: pull, install BOTH backends (`bun install
-  --frozen-lockfile` and `uv sync --all-packages --locked`, whichever is live), back up the DB, restart BOTH agents (the
-  API applies pending migrations at boot). Which backend the API agent runs is READ from its
-  installed plist, never assumed, and a Python this tree cannot back stops the deploy before the
-  restart. The pull and the rest are two `make` runs (`deploy` pulls, then runs `deploy-after-pull`
-  from the file it just pulled), because make reads the Makefile once: a single recipe would run
-  the steps as they were BEFORE the pull, and #412's own first deploy would have run `npm install`
-  with no lock. launchd does not watch the repo and the agents
+- `make deploy` — **the only correct way to land a merge**, and it CHECKS BEFORE IT MOVES THE TREE,
+  because Caddy serves `frontend/dist` from this checkout: the moment the tree moves, the dashboard
+  is the new one. In order: (1) `git fetch`, refusing what is not a fast-forward; (2)
+  `deploy-verify` for the FETCHED commit, by that commit's own Makefile, in a temporary worktree
+  (`make -C`): install BOTH backends (`bun install --frozen-lockfile` and `uv sync --all-packages
+  --locked`, whichever is live), the workspace-link check, and the Python guard — which backend
+  the API agent runs is READ from its installed plist, never assumed, and a Python that commit
+  cannot back stops here; (3) back up the DB; (4) fast-forward to exactly the commit checked; (5)
+  `deploy-after-pull`, by the Makefile the merge brought: the same installs here, fast from the
+  caches (2) warmed, restart BOTH agents (the API applies pending migrations at boot), and WAIT
+  for `/health` to answer 200 from the NEW process (`make launchd-api-restart`, which is
+  `tools/use-backend.mjs restart`) — exiting non-zero, and saying where to look, when it does not.
+  A failure in (1)–(3) leaves HEAD and `frontend/dist` exactly as they were; it used to `git pull`
+  first, and on 2026-11-12 a failure after the pull left the new dashboard in front of the old API.
+  `tools/deploy.test.mjs` runs the real recipe against a fixture repository to hold that.
+  The tree move and the rest are two `make` runs (`deploy` moves it, then runs `deploy-after-pull`
+  from the file it brought), because make reads the Makefile once: a single recipe would run
+  the steps as they were BEFORE the move, and #412's own first deploy would have run `npm install`
+  with no lock. `deploy-after-pull` takes the backup itself unless `deploy` says it has
+  (`DEPLOY_BACKED_UP`), because the first deploy of a changed recipe is run by the recipe before
+  it. launchd does not watch the repo and the agents
   run this working tree, so a merge that skips this leaves stale code running. Doing the steps by hand
   is how the dashboard and the API drift apart.
 - `make use BACKEND=ts|python` — **switch the live backend** (ADR 0021, Decision 3): the guard, the
@@ -776,7 +789,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 
 - Branch → PR → the owner merges (never merge or push to main directly). Restart the agent after landing.
 - `.env` is gitignored and holds live Telegram credentials — never commit it or echo its secrets into
-  committed files. `data/optionality-ts.db` is live state (watchlist, holdings, their daily samples — the samples
+  committed files. It is mode 600 (`chmod 600 .env`; set on the live machine on 2026-11-16): it
+  holds the bot token, the websocket key and the moomoo account in clear. `data/optionality-ts.db` is live state (watchlist, holdings, their daily samples — the samples
   are the one thing that cannot be re-entered). Two sets of backups, both SQLite's online backup,
   NEVER `cp`: in WAL mode `cp` leaves the write-ahead log behind, so the copy is current only to the
   last checkpoint — 1 row of 500 when measured — and is still valid SQLite, which is what makes it
@@ -826,10 +840,16 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   for two reasons: that script backgrounds OpenD and returns, so KeepAlive would see the job end
   and restart it for ever; and KeepAlive can only see whether a process EXISTS, where the failure
   that matters is an OpenD up with its websocket port shut — which looks healthy to the operating
-  system while the dashboard shows dashes. `ensure` starts a dead OpenD, restarts a husk whose API
-  port is shut, and only REPORTS one that is up without a confirmed session, because that may need
-  a human at the login window and a restart a minute against an expired credential is a watchdog
-  flapping a provider.
+  system while the dashboard shows dashes. `ensure` starts a dead OpenD and otherwise mostly
+  REPORTS, because a restart a minute against an expired credential is a watchdog flapping a
+  provider: one up without a confirmed session; one whose websocket is shut, or OFF in
+  `OpenD.xml` (the 2026-11-11 failure above); and one whose API port is shut, which usually means
+  it is waiting at a login prompt. It restarts only an OpenD IT started (`opend.pid`), alone, whose
+  API port has been shut for 15 minutes (`OPEND_RESTART_AFTER`), and NEVER stops one it did not
+  start: on 2026-11-12 it read a shut port as a husk, restarted every minute, and killed the OpenD
+  the owner had started by hand to log in. A report is said once and then every 30 minutes while
+  it stands (`OPEND_REPORT_EVERY`). `opend.sh stop`, run by hand, stops EVERY OpenD.
+  `tools/opend.test.mjs` holds all of it against a fake OpenD and a stub `pgrep`.
   **`AbandonProcessGroup` is not optional here.** `opend.sh start` backgrounds OpenD and returns,
   and launchd tears down the rest of a job's process group when the job's own process exits —
   taking OpenD with it. Without that key the watchdog killed what it started, 27 seconds after
@@ -851,7 +871,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
     into `BACKUP_DIR`, keeping 14 nights and the first of each of 12 months. `BACKUP_DIR` is a
     folder in iCloud Drive (`~/Library/Mobile Documents/com~apple~CloudDocs/optionality-backups`),
     which is what takes them off this machine; the Python-era archive is in its `archive/`.
-  - Restore only with `make restore FROM=<file>`. Copying a backup over the live file leaves its
+    The same agent then rotates the agents' logs (`make rotate-logs`, `tools/rotate-logs.mjs`):
+    each `~/Library/Logs/optionality-*.log` over 10 MB is copied aside gzipped and emptied IN
+    PLACE, three copies kept — never renamed, because launchd holds each log open for as long as
+    its agent runs. No sudo. Caddy's had reached 54 MB on 2026-11-16.
+  - Restore only with `make restore FROM=<file>` (`tools/restore.mjs`): it checks the backup
+    (`restore.ts --check`) BEFORE it stops the API, so a bad FROM never costs the service, and
+    starts the API again and waits for `/health` whatever happens after the stop. `DRY_RUN=1`
+    prints it. Copying a backup over the live file leaves its
     `-wal` beside it, and SQLite replays that old log onto the restored data.
 - The Telegram bot token allows ONE `getUpdates` consumer: never run two service instances against it, and
   avoid external `getUpdates` curls while the service runs.
