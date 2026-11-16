@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
 import { overflowsSideways, serveAdding, settle } from "./nextBook";
+import { hitBox } from "./targets";
 
 afterEach(cleanup);
 
@@ -56,7 +57,7 @@ function tooSmall(root: Element): string[] {
   return [...root.querySelectorAll<HTMLElement>("button, select, input, a")]
     .filter((el) => el.getClientRects().length > 0)
     .flatMap((el) => {
-      const r = el.getBoundingClientRect();
+      const r = hitBox(el);
       return r.width < 44 || r.height < 44
         ? [`${el.tagName.toLowerCase()} "${el.getAttribute("aria-label") ?? el.textContent?.trim()}" ${Math.round(r.width)}×${Math.round(r.height)}`]
         : [];
@@ -231,13 +232,23 @@ describe("what each choice does, said on it (#408)", () => {
       expect(tooSmall(pair)).toEqual([]);
       expect(pastTheEdge(pair)).toEqual([]);
       const [hold, watch] = ["I hold it", "Watch it"].map((name) => within(pair).getByRole("button", { name }));
+      const said = (b: HTMLElement) => document.getElementById(b.getAttribute("aria-describedby")!)!;
       for (const b of [hold!, watch!]) {
-        expect(b.scrollWidth).toBeLessThanOrEqual(b.clientWidth + 0.5);
-        expect(b.scrollHeight).toBeLessThanOrEqual(b.clientHeight + 0.5);
-        expect(b.querySelector("small")!.getBoundingClientRect().height).toBeGreaterThan(0);
+        // its words inside what is drawn: measured on the words, since the button's invisible area
+        // (its ::after) reaches past its box on purpose
+        const words = document.createRange();
+        words.selectNodeContents(b);
+        const w = words.getBoundingClientRect(), box = b.getBoundingClientRect();
+        expect(w.top).toBeGreaterThanOrEqual(box.top - 0.5);
+        expect(w.bottom).toBeLessThanOrEqual(box.bottom + 0.5);
+        expect(w.right).toBeLessThanOrEqual(box.right + 0.5);
+        expect(said(b).getBoundingClientRect().height).toBeGreaterThan(0);
+        // drawn a phone button's 32px (2026-11-16), where it was 62, its consequence under it
+        expect(b.getBoundingClientRect().height).toBeLessThanOrEqual(32.5);
+        expect(said(b).getBoundingClientRect().top).toBeGreaterThanOrEqual(b.getBoundingClientRect().bottom - 0.5);
       }
-      expect(hold!.querySelector("small")!.textContent).toBe("records a holding; its rules become a stop and risk");
-      expect(watch!.querySelector("small")!.textContent).toBe("rules only, as entry signals");
+      expect(said(hold!).textContent).toBe("records a holding; its rules become a stop and risk");
+      expect(said(watch!).textContent).toBe("rules only, as entry signals");
       expect(Math.abs(hold!.getBoundingClientRect().top - watch!.getBoundingClientRect().top)).toBeLessThan(1);
       expect(tooSmall(sheet)).toEqual([]);
       expect(pastTheEdge(sheet)).toEqual([]);

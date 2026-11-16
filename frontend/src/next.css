@@ -167,6 +167,15 @@ html[data-nx-arrangement="desk"] { scroll-padding-top: calc(var(--nx-head-h, 0px
 .nx-settings { display: flex; flex-direction: column; gap: 1.25rem; }
 .nx-settings h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.25rem; }
 
+/* ---- the controls' drawn height (the owner, 2026-11-16) ----
+   One height for the page's buttons on the desk, 26px where they were 28 to 32: the header's, the
+   Add and Settings sheets', the inspector's. The phone draws them at 32 with a 44pt target (below). */
+:root { --nx-control-h: 1.625rem; }
+:is(.nx, .nx-tokens) [data-slot="button"] { height: var(--nx-control-h); }
+:is(.nx, .nx-tokens) [data-slot="button"]:is(.size-7, .size-8) { width: var(--nx-control-h); }
+/* a sheet's close and the inspector's, square */
+:is(.nx, .nx-tokens) :is([data-slot="sheet-close"], .nxd-close) { height: var(--nx-control-h); width: var(--nx-control-h); }
+
 /* ---- the phone ---- */
 .nx[data-arrangement="phone"] { --nx-gutter: 16px; }
 /* a landscape iPhone is still the phone (844px), and viewport-fit=cover puts the notch's side
@@ -185,7 +194,30 @@ html[data-nx-arrangement="desk"] { scroll-padding-top: calc(var(--nx-head-h, 0px
    DOCUMENT, not on .nx: a confirmation dialog and a toast are drawn in portals outside the page,
    and their buttons are targets too. Unlayered, so it wins over the components' own sizes, which
    are Tailwind utilities in a layer. */
-html[data-nx-arrangement="phone"] :is(button, select, input, a) { min-height: 44px; min-width: 44px; }
+html[data-nx-arrangement="phone"] :is(select, input, a) { min-height: 44px; min-width: 44px; }
+/* A button is DRAWN smaller than its target (the owner, 2026-11-16): 32px high, and 44pt to a finger
+   through an invisible area above and below it, its ::after, exactly as tall as the 44pt needs and
+   no taller (none on a button already taller). The area belongs to the button, so a tap on it is a
+   tap on the button; a neighbour's own area over it would shorten it, which is why the suites
+   measure where a tap LANDS (`__browser__/targets.ts`) rather than a box. */
+html[data-nx-arrangement="phone"] button { min-height: 2rem; min-width: 44px; }
+html[data-nx-arrangement="phone"] button::after {
+  content: ""; position: absolute; left: 0; right: 0;
+  top: min(0px, calc((100% - 44px) / 2)); bottom: min(0px, calc((100% - 44px) / 2));
+  /* over anything positioned that is drawn after the button: the strike strip under a watched
+     spread's Monitor buttons lay over the bottom 6px of their area (review of #415) */
+  z-index: 1;
+}
+/* the area is placed against its button, which takes a position for it — in a layer, so a button
+   placed by a utility (a sheet's close, `absolute`) or by the page's own rules keeps its own */
+@layer components {
+  html[data-nx-arrangement="phone"] button { position: relative; }
+}
+/* the area reaches 6px above and below a button, so a row of buttons wrapped or stacked under
+   another sits 12px from it at least, or each would lie over the other's. What is guaranteed, and
+   measured by every phone suite (`__browser__/targets.ts`): each control's 44pt is its own — no
+   other control's area, and nothing else of its layer, lies over it */
+html[data-nx-arrangement="phone"] :is(.nx-add-row, [data-slot="alert-dialog-footer"]) { row-gap: 0.75rem; }
 html[data-nx-arrangement="phone"] :is(select, input, textarea) { font-size: 16px; }
 /* A rule's short form (#388): its spaces separate the rule, the figure and the distance, so they are
    kept; it may still wrap at one on a narrow screen. */

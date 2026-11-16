@@ -739,3 +739,35 @@ The owner asked for the desk's Add to be what its Settings is. Decided:
 
 What this supersedes, marked where it stands above: "on the desk the panel above the table" in
 #408's "Record as held", and with it the add panel's region above the table (#293).
+
+## Amended 2026-11-16: one field for cost and pace, nothing said twice, smaller buttons
+
+The owner decided, from the live page:
+
+- **A holding's Cost to close and its pace gap are one field**, drawn `3.05 −1.57`: the gap keeps
+  #379's sign rule and colour (`+` behind, in the loss colour; `−`, the true minus, ahead), and the
+  two are said in words to a pointer and a reader ("cost to close 3.05, pace gap behind by 1.57").
+  No gap, the cost alone; no cost, a dash. On the desk it is the value column, and the pace gap's own
+  column goes: its key joins the retired ones (#372), so a column cookie that names it hides
+  nothing, the picker no longer offers it, and reset clears it. On the phone's card it is the one
+  "cost to close" field. The saved picture and Copy as text keep the value and the pace gap in
+  columns of their own, for analysis, ticked together with the value; the inspector and the phone's
+  detail sheet keep them apart too.
+- **The Add sheet says nothing twice.** No subtitle under its title (its footer, "One save makes all
+  of it…", now in both forms, held or watched, is the sheet's description); a draft rule whose short
+  form IS its words is written once (`ShortWords`), not once drawn and once for a reader; no
+  "Watching a contract records no holding", nor "an entry signal" under a watched spread's rules —
+  "Watch it" says both; no line beside a held contract's Monitor switch repeating the sentence under
+  it; the payoff's blank is "type the strikes" under its own heading.
+- **A leg's side is drawn − or +**, the book's notation (−P6800 +P6750), named "short" or "long"
+  and titled with the word.
+- **Buttons are drawn smaller**: 26px on the desk, where they were 28 to 32. On the phone a button
+  is drawn 32px and keeps its 44pt target through an invisible area above and below it (its
+  `::after`, raised over positioned content drawn after it — the strike strip under a watched
+  spread's Monitor buttons had covered its bottom 6px). What is guaranteed is measured, not
+  assumed: every phone suite asks where a tap LANDS (`__browser__/targets.ts`), and each control's
+  44pt must be its own — no other control's area and nothing else of its layer over it. Rows of
+  buttons that wrap or stack sit 12px apart for that reason. "I hold it" and "Watch it" are a
+  control's height, each consequence drawn under its button rather than inside it (#408's
+  description, unchanged). The held contract's Monitor switch says "Monitor on" / "Monitor off".
+- **A gap of nothing to two places is "on pace"**, drawn 0.00 in no colour — never "ahead by 0.00".

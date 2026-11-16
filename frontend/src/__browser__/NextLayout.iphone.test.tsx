@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
 import { declared, headerBottom, longBook, overflowsSideways, serveBook, settle } from "./nextBook";
+import { hitBox } from "./targets";
 
 async function show() {
   serveBook();
@@ -27,12 +28,25 @@ function targets(): HTMLElement[] {
 
 /** A dialog opens with a zoom from 95%, and a box measured mid-animation is 95% of its size. */
 async function animationsDone(): Promise<void> {
-  await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)));
+  // until the page is still: no animation running and no dialog still in its starting style. One
+  // snapshot of the animations missed a transition that had not begun yet, and a sheet measured
+  // mid-rise read 669.5 for a bottom edge of 664 (review of #415)
+  for (let i = 0; i < 60; i++) {
+    const running = document.getAnimations();
+    const starting = document.querySelector("[data-starting-style], [data-ending-style]");
+    if (running.length === 0 && starting === null) {
+      await new Promise((r) => setTimeout(r, 50));
+      if (document.getAnimations().length === 0) return;
+      continue;
+    }
+    await Promise.all(running.map((a) => a.finished.catch(() => undefined)));
+    await new Promise((r) => setTimeout(r, 25));
+  }
 }
 
 function tooSmall(): string[] {
   return targets().flatMap((el) => {
-    const r = el.getBoundingClientRect();
+    const r = hitBox(el);
     return r.width < 44 || r.height < 44
       ? [`${el.tagName.toLowerCase()} "${el.getAttribute("aria-label") ?? el.textContent?.trim()}" ${Math.round(r.width)}×${Math.round(r.height)}`]
       : [];
@@ -105,7 +119,7 @@ describe("the header", () => {
       const inner = box(head).right - parseFloat(getComputedStyle(head).paddingRight);
       expect(box(buttons.at(-1)!).right).toBeCloseTo(inner, 0);
       expect(inner).toBeLessThanOrEqual(document.documentElement.clientWidth - 16 + 0.5);
-      for (const b of buttons) expect(Math.min(box(b).width, box(b).height)).toBeGreaterThanOrEqual(44);
+      for (const b of buttons) expect(Math.min(hitBox(b).width, hitBox(b).height)).toBeGreaterThanOrEqual(44);
       expect(overflowsSideways()).toBe(false);
       expect(head.scrollWidth).toBeLessThanOrEqual(head.clientWidth);
     });

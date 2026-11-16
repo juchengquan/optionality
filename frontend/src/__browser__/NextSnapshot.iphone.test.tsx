@@ -14,6 +14,7 @@ import { settle } from "./nextBook";
 import { readPicture } from "../testing/plainRead";
 import { catchShare, CONTROLS, decode, forgetShare, still } from "./picture";
 import { bookTable, inkIn, measurePlain, PLAIN_GROUND } from "../testing/plainPicture";
+import { hitBox } from "./targets";
 
 /** Every node handed to the rasterizer, with its text as it stood then (NextSnapshot.test.tsx). */
 const captured = vi.hoisted(() => [] as { node: HTMLElement; text: string }[]);
@@ -90,7 +91,7 @@ describe("saving the phone's book as an image", () => {
   it("is a target a finger can hit, and so is copying it as text", async () => {
     await show();
     for (const button of [save(), screen.getByRole("button", { name: "copy as text" })]) {
-      const r = button.getBoundingClientRect();
+      const r = hitBox(button);
       expect(r.width).toBeGreaterThanOrEqual(44);
       expect(r.height).toBeGreaterThanOrEqual(44);
     }

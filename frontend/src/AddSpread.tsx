@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { marketDay } from "./shared/format";
 import { SideSign } from "./shared/Legs";
 import {
-  addLeg, addSpread, deltaEnabled, isCreditStop, derivedName, deltaShown, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
+  ALL_OR_NONE, addLeg, addSpread, deltaEnabled, isCreditStop, derivedName, deltaShown, flipSide, MAX_LEGS, MIN_LEGS, newDraft, previewOf,
   removeLeg, removeSpread, replaces, saveWords, setLeg, setSpread, spreadsBody, stopWarning, takenOver, valueChange,
   valueChoosable, valueDirectionChange, valueDirectionShown, valueEnabled, valueHint, valueShown,
   type AddDraft, type HeldLegs, type Preset, type SpreadDraft,
@@ -59,6 +59,8 @@ type Props = {
   now?: Date;
   /** a draft to open with, prefilled from a watch rule (#408) */
   initial?: AddInitial;
+  /** the id the footer carries, which describes the sheet it is drawn in (2026-11-16) */
+  footerId?: string;
 };
 
 /** What to add — a spread, or one contract — and the form for it. */
@@ -85,7 +87,7 @@ export function AddSpread(props: Props) {
         ? <SpreadForm {...props} autoFocus={props.autoFocus && !chosen} draft={spread} setDraft={setSpreadDraft}
                       saving={saving} setSaving={setSaving} prefilled={prefilled} />
         : <AddContract privacy={props.privacy} monitors={props.monitors} holdings={props.holdings} spx={props.spx} spxReason={props.spxReason}
-                       onSaved={props.onSaved} onCancel={props.onCancel} today={marketDay(props.now)}
+                       onSaved={props.onSaved} onCancel={props.onCancel} today={marketDay(props.now)} footerId={props.footerId}
                        autoFocus={props.autoFocus && !chosen} prefilled={prefilled}
                        draft={contract} setDraft={setContract} saving={saving} setSaving={setSaving} />}
     </div>
@@ -94,7 +96,7 @@ export function AddSpread(props: Props) {
 
 function SpreadForm({
   privacy, monitors, holdings, spx, spxReason, onSaved, onCancel, autoFocus, draft, setDraft, saving, setSaving, prefilled,
-  initial,
+  initial, footerId,
 }: Props & {
   draft: AddDraft; setDraft: (d: AddDraft) => void; saving: boolean; setSaving: (s: boolean) => void;
   /** opened from a watch rule: the focus goes to the Entry, the expiry being there already */
@@ -172,7 +174,7 @@ function SpreadForm({
         <Button type="submit" disabled={saving}>{saving ? "saving…" : saveWords(draft)}</Button>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
-      <p className="nx-meta">One save makes all of it, or none of it if anything is refused.</p>
+      <p id={footerId} className="nx-meta">{ALL_OR_NONE}</p>
     </form>
   );
 }
@@ -224,9 +226,11 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, taking,
           <ol className="nx-add-legs">
             {s.legs.map((l, j) => (
               <li key={l.key} className="nx-add-leg" data-side={l.side}>
-                <button type="button" className="nx-add-toggle" data-side={l.side}
+                {/* − and +, the book's own notation for a leg (−P6800 +P6750), the word to a pointer and a
+                    reader (2026-11-16) */}
+                <button type="button" className="nx-add-toggle nx-add-side" data-side={l.side} title={l.side}
                         aria-label={`spread ${n}, leg ${j + 1} side: ${l.side} — flip`}
-                        onClick={() => onChange(flipSide(draft, s.key, j))}><SideSign side={l.side} />{l.side}</button>
+                        onClick={() => onChange(flipSide(draft, s.key, j))}><SideSign side={l.side} /></button>
                 {/* how many of the contract, "1" until changed: a butterfly's middle, a ratio's 2 (#351) */}
                 <input aria-label={`spread ${n}, leg ${j + 1} quantity`} className="nx-add-qty" inputMode="numeric"
                        value={l.qty} autoComplete="off"
@@ -287,7 +291,8 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, taking,
             <MonitorLine on={deltaOn} onToggle={() => set({ deltaOn: !deltaOn })} label={`spread ${n} delta Monitor`}
                          words={`short leg${shorts === 1 ? "'s" : "s'"} |Δ|`}
                          direction={{ value: s.deltaDirection, onChange: (d) => set({ deltaDirection: d }), label: `spread ${n} delta direction` }}
-                         hint={shorts === 0 ? "no short leg to watch" : !held ? "an entry signal"
+                         // nothing under a watched one's: "Watch it" says its rules are entry signals
+                         hint={shorts === 0 ? "no short leg to watch" : !held ? ""
                            // a held short leg's delta falling is the spread gone cheap to close, not a risk
                            : s.deltaDirection === "below" ? "close-cheap signal" : "risk"}
                          value={deltaShown(held, s)} onValue={(v) => set({ deltaAt: v })}
@@ -310,7 +315,7 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, taking,
           ) : null}
         </div>
         <DraftPreview subject={`${id}-${s.key}`} draft={preview} spx={spx} spxReason={spxReason} onDrawn={setDrawn}
-                      blank="type the strikes to see its payoff at expiry"
+                      blank="type the strikes"
                       note={`per contract, at ${Math.abs(credit).toFixed(2)} ${credit < 0 ? "debit" : "credit"}${held ? "" : ": the value it watches for"}`} />
       </div>
     </fieldset>
@@ -333,7 +338,7 @@ function MonitorLine({ on, onToggle, label, words, direction, hint, value, onVal
                                   onChange={direction.onChange} /> : null}
       <input aria-label={inputLabel} inputMode="decimal" value={value} disabled={!on}
              onChange={(e) => onValue(e.target.value)} />
-      <small className="nx-meta">{hint}</small>
+      {hint ? <small className="nx-meta">{hint}</small> : null}
     </div>
   );
 }

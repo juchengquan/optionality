@@ -13,6 +13,7 @@ import { serveRuleEdits, type Refusals } from "../testing/ruleEdits";
 import { QUOTES } from "../testing/ownerBook";
 import type { Entry } from "../shared/api";
 import { overflowsSideways, settle } from "./nextBook";
+import { hitBox } from "./targets";
 
 beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
 afterEach(() => { cleanup(); vi.useRealTimers(); document.cookie = "ui_privacy=; max-age=0; path=/"; });
@@ -56,7 +57,7 @@ function measured(sheet: HTMLElement, form: HTMLElement) {
   expect(small).toEqual([]);
   const tiny = [...sheet.querySelectorAll<HTMLElement>(".nx-mon button, .nx-mon input, .nx-mon select")]
     .filter((el) => el.getClientRects().length > 0)
-    .filter((el) => { const r = el.getBoundingClientRect(); return r.width < 44 || r.height < 44; })
+    .filter((el) => { const r = hitBox(el); return r.width < 44 || r.height < 44; })
     .map((el) => el.getAttribute("aria-label") ?? el.id ?? el.textContent);
   expect(tiny).toEqual([]);
   const edge = document.documentElement.clientWidth;
@@ -141,7 +142,7 @@ describe("Record as held from a watch rule's sheet (#408)", () => {
   /** Every control a finger has to hit inside `root`, under 44pt. */
   const tooSmall = (root: Element) => [...root.querySelectorAll<HTMLElement>("button, select, input, a")]
     .filter((el) => el.getClientRects().length > 0)
-    .filter((el) => { const r = el.getBoundingClientRect(); return r.width < 44 || r.height < 44; })
+    .filter((el) => { const r = hitBox(el); return r.width < 44 || r.height < 44; })
     .map((el) => el.getAttribute("aria-label") ?? el.textContent);
   const pastTheEdge = (root: Element) => [...root.querySelectorAll<HTMLElement>("*")]
     .filter((el) => el.getBoundingClientRect().right > document.documentElement.clientWidth + 0.5)

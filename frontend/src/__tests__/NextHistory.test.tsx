@@ -210,7 +210,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(within(chart).getByText("$ to close, 2 contracts")).toBeTruthy();
     pointAt(chart, dayOf(chart, ""));
     expect(within(chart).getByRole("status").textContent)
-      .toMatch(/· to close, 2 contracts: \$1,000 · on pace \$1,000 · ahead by 0\.00 —/);
+      .toMatch(/· to close, 2 contracts: \$1,000 · on pace \$1,000 · on pace —/);
     expect(tipOf(chart)?.textContent).toMatch(/to close, 2 contracts: \$1,000/);
   });
 
@@ -221,7 +221,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(within(chart).queryByText(/contracts/)).toBeNull();
     pointAt(chart, dayOf(chart, ""));
     expect(within(chart).getByRole("status").textContent)
-      .toMatch(/· to close, per contract: 5\.00 pts · on pace 5\.00 pts · ahead by 0\.00 —/);
+      .toMatch(/· to close, per contract: 5\.00 pts · on pace 5\.00 pts · on pace —/);
     expect(tipOf(chart)?.textContent).not.toMatch(/contracts|\$/);
   });
 

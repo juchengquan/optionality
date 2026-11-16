@@ -5,10 +5,16 @@
  *  positive is BEHIND — costing more to buy back than time alone accounts for — and anything else
  *  is ahead, to two places. One home here, since `PaceLine` went with that page (#301).
  */
+import type { Holding } from "./shared/api";
 import { DASH } from "./shared/format";
+
+/** A gap that is nothing to the two places it is written in: said "on pace", in no colour — never
+ *  "ahead by 0.00", which named a side the figure did not show (review of #415). */
+const none = (gap: number) => Math.abs(gap).toFixed(2) === "0.00";
 
 export function paceWords(gap: number | null | undefined): string {
   if (gap === null || gap === undefined) return DASH;
+  if (none(gap)) return "on pace";
   return `${gap > 0 ? "behind" : "ahead"} by ${Math.abs(gap).toFixed(2)}`;
 }
 
@@ -19,11 +25,28 @@ export function paceWords(gap: number | null | undefined): string {
 export function paceSigned(gap: number | null | undefined): string {
   if (gap === null || gap === undefined) return DASH;
   const figure = Math.abs(gap).toFixed(2);
-  return gap > 0 ? `+${figure}` : gap < 0 ? `\u2212${figure}` : figure;
+  if (none(gap)) return figure;
+  return gap > 0 ? `+${figure}` : `\u2212${figure}`;
 }
 
 /** The outcome colour a gap is drawn in: behind is a loss, ahead a gain, and none for no gap or a
  *  gap of exactly zero — the colour the desk's column already gave the signed figure. */
 export function paceOutcome(gap: number | null | undefined): "loss" | "gain" | undefined {
-  return gap ? (gap > 0 ? "loss" : "gain") : undefined;
+  return gap && !none(gap) ? (gap > 0 ? "loss" : "gain") : undefined;
+}
+
+/** A holding's Cost to close with its pace gap beside it, as the desk's value column and the
+ *  phone's card draw them in one field (the owner, 2026-11-16): `text`, "3.05 −1.57", the gap in
+ *  `paceSigned`'s compact form; `words`, the same said in full, "3.05, pace gap behind by 1.57", for
+ *  a pointer and a reader. No gap, the cost alone; no cost, a dash — a gap without the figure it is
+ *  measured on would read as the cost. */
+export function costAndPace(h: Pick<Holding, "cost_to_close" | "schedule">): {
+  cost: string; gap: string | null; text: string; words: string;
+} {
+  if (h.cost_to_close === null || h.cost_to_close === undefined) return { cost: DASH, gap: null, text: DASH, words: DASH };
+  const cost = h.cost_to_close.toFixed(2);
+  const g = h.schedule?.pace_gap;
+  if (g === null || g === undefined) return { cost, gap: null, text: cost, words: cost };
+  const said = none(g) ? "on pace" : `pace gap ${paceWords(g)}`;
+  return { cost, gap: paceSigned(g), text: `${cost} ${paceSigned(g)}`, words: `${cost}, ${said}` };
 }

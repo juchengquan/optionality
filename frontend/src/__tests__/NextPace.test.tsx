@@ -70,7 +70,9 @@ function props(over: Partial<BookProps> = {}): BookProps {
 const volAsked = () => asked.filter((a) => a.endsWith("/vol"));
 const deskRow = (id: string) =>
   [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === id)!;
-const paceCell = (id: string) => deskRow(id).querySelector<HTMLElement>('[data-col="pace_gap"] .nxd-v');
+/** The value cell, where the gap is drawn beside the cost since 2026-11-16, and the gap in it. */
+const valueCell = (id: string) => deskRow(id).querySelector<HTMLElement>('[data-col="value"] .nxd-v');
+const gapIn = (el: HTMLElement | null) => el?.querySelector<HTMLElement>("[data-outcome]") ?? null;
 
 function inspect(id: string, name: string) {
   fireEvent.click(within(deskRow(id)).getByRole("button", { name }));
@@ -83,16 +85,41 @@ const splitOf = async (root: HTMLElement) => {
   return pace.querySelector<HTMLElement>("[data-split]")!;
 };
 
-describe("the gap in the desk's column: signed, its words beside it for a pointer and a reader (#379)", () => {
-  it("writes behind as + and ahead as −, in the outcome colour, and a dash without a schedule", () => {
+describe("the gap beside the cost in the desk's value column: signed, its words beside it for a pointer and a reader (#379, 2026-11-16)", () => {
+  it("writes behind as + and ahead as −, in the outcome colour, and the cost alone without a schedule", () => {
     render(<DeskBook {...props()} />);
-    expect(paceCell("h-calls")?.textContent).toBe("+0.47");
-    expect(paceCell("h-calls")?.title).toBe("behind by 0.47");
-    expect(paceCell("h-calls")?.dataset.outcome).toBe("loss");
-    expect(paceCell("h-puts")?.textContent).toBe("\u22120.50");
-    expect(paceCell("h-puts")?.title).toBe("ahead by 0.50");
-    expect(paceCell("h-puts")?.dataset.outcome).toBe("gain");
-    expect(paceCell("h-ic")?.textContent).toBe("—");
+    expect(gapIn(valueCell("h-calls"))?.textContent).toBe("+0.47");
+    expect(valueCell("h-calls")?.title).toBe("cost to close 4.40, pace gap behind by 0.47");
+    expect(gapIn(valueCell("h-calls"))?.dataset.outcome).toBe("loss");
+    expect(gapIn(valueCell("h-puts"))?.textContent).toBe("\u22120.50");
+    expect(valueCell("h-puts")?.title).toBe("cost to close 1.00, pace gap ahead by 0.50");
+    expect(gapIn(valueCell("h-puts"))?.dataset.outcome).toBe("gain");
+    expect(valueCell("h-ic")?.textContent).toBe("1.00");
+    expect(gapIn(valueCell("h-ic"))).toBeNull();
+  });
+});
+
+describe("a gap of nothing, to two places (review of #415)", () => {
+  it("is on pace in words, drawn 0.00 in no colour, and never ahead or behind by 0.00", async () => {
+    const { costAndPace, paceOutcome, paceSigned, paceWords } = await import("../pace");
+    for (const g of [0, 0.001, -0.004]) {
+      expect(paceWords(g)).toBe("on pace");
+      expect(paceSigned(g)).toBe("0.00");
+      expect(paceOutcome(g)).toBeUndefined();
+      expect(costAndPace({ cost_to_close: 3.05, schedule: { pace_gap: g } as never }))
+        .toEqual({ cost: "3.05", gap: "0.00", text: "3.05 0.00", words: "3.05, on pace" });
+    }
+    // the first gap that rounds away from nothing is said and coloured as it is
+    expect(paceWords(0.005)).toBe("behind by 0.01");
+    expect(paceOutcome(0.005)).toBe("loss");
+    expect(paceSigned(-0.005)).toBe("\u22120.01");
+  });
+
+  it("is drawn in the desk's value column with no colour and titled on pace", () => {
+    render(<DeskBook {...props({ holdings: scheduled.map((h) => h.id === "h-calls" ? { ...h, schedule: schedule(0) } : h) })} />);
+    expect(valueCell("h-calls")?.textContent).toBe("4.40 0.00");
+    expect(valueCell("h-calls")?.title).toBe("cost to close 4.40, on pace");
+    expect(valueCell("h-calls")?.querySelector("[data-outcome]")?.getAttribute("data-outcome") ?? null).toBeNull();
   });
 });
 
@@ -342,13 +369,20 @@ describe("the pace explained, in the phone's holding detail", () => {
   });
 
   for (const session of [true, false]) {
-    it(`says the gap in words on each holding's card, ${session ? "in" : "out of"} session (#374)`, () => {
+    it(`draws the gap beside the cost on each holding's card, said in words, ${session ? "in" : "out of"} session (#374, 2026-11-16)`, () => {
       drawPhone({ session });
-      for (const [id, words, outcome] of [["h-puts", "ahead by 0.50", "gain"], ["h-calls", "behind by 0.47", "loss"]]) {
-        const gap = within(card(id!)).getByText("pace gap").nextElementSibling as HTMLElement;
-        expect(gap.textContent).toBe(words);
-        expect(gap.dataset.outcome).toBe(outcome);
+      for (const [id, drawn, words, outcome] of [
+        ["h-puts", "1.00 \u22120.50", "1.00, pace gap ahead by 0.50", "gain"],
+        ["h-calls", "4.40 +0.47", "4.40, pace gap behind by 0.47", "loss"],
+      ]) {
+        const dd = within(card(id!)).getByText("cost to close").nextElementSibling as HTMLElement;
+        const shown = dd.querySelector<HTMLElement>('[aria-hidden="true"]')!;
+        expect(shown.textContent).toBe(drawn);
+        expect(shown.title).toBe(words);
+        expect(dd.querySelector(".sr-only")!.textContent).toBe(words);
+        expect(shown.querySelector<HTMLElement>("[data-outcome]")!.dataset.outcome).toBe(outcome);
       }
+      expect(within(card("h-calls")).queryByText("pace gap")).toBeNull();
     });
   }
 });

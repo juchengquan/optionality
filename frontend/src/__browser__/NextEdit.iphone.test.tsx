@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Next } from "../Next";
 import { serveEditing } from "../testing/editBook";
 import { overflowsSideways, settle } from "./nextBook";
+import { hitBox } from "./targets";
 
 /* The page's clock, on a day before every expiry in the owner's book but the expired rule's: a rule
    past its expiry offers no unmute (#292), so a suite on the real clock would change its answers
@@ -65,7 +66,8 @@ describe("editing a Monitor from the sheet", () => {
     const form = await openEditor(sheet, SPREAD);
     await userEvent.fill(within(form).getByLabelText("threshold"), "3");
     expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("|value| ≥ 3");
-    expect(within(form).getByTestId("draft").querySelector(".sr-only")!.textContent).toBe("|value| ≥ 3");
+    // the short form as typed IS its words: written once (2026-11-16)
+    expect(within(form).getByTestId("draft").textContent).toBe("|value| ≥ 3");
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18", body: { threshold: 3 } }]));
     await waitFor(() => expect(within(sheet).queryByRole("form")).toBeNull());
@@ -106,7 +108,7 @@ describe("editing a Monitor from the sheet", () => {
     expect(small).toEqual([]);
     const tiny = [...sheet.querySelectorAll<HTMLElement>(".nx-mon button, .nx-mon input, .nx-mon select")]
       .filter((el) => el.getClientRects().length > 0)
-      .filter((el) => { const r = el.getBoundingClientRect(); return r.width < 44 || r.height < 44; })
+      .filter((el) => { const r = hitBox(el); return r.width < 44 || r.height < 44; })
       .map((el) => el.getAttribute("aria-label") ?? el.textContent);
     expect(tiny).toEqual([]);
     const edge = document.documentElement.clientWidth;

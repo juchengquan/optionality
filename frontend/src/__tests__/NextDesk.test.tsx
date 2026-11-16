@@ -421,10 +421,10 @@ describe("one column set, in session and out of it (#372)", () => {
     ...h, schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4,
       target_dte: 11, manage_by_dte: 21, reached: null, manage_by_due: false },
   }));
-  const ONE_SET = ["name", "legs", "value", "pnl", "captured", "pace_gap", "delta", "strip", "dte", "manage", "alarm"];
+  const ONE_SET = ["name", "legs", "value", "pnl", "captured", "delta", "strip", "dte", "manage", "alarm"];
 
   for (const session of [true, false]) {
-    it(`draws the one set, the pace gap with it, ${session ? "in" : "outside"} the session`, () => {
+    it(`draws the one set, the pace gap in the value column, ${session ? "in" : "outside"} the session`, () => {
       render(<DeskBook {...props({ session, holdings: scheduled })} />);
       expect(headers()).toEqual(ONE_SET);
     });
@@ -439,38 +439,44 @@ describe("one column set, in session and out of it (#372)", () => {
     expect(document.querySelector(".nxd-head")!.textContent).not.toContain("on pace");
   });
 
-  it("says only what the service served: the schedule's own pace gap, or a dash", () => {
-    const mixed = scheduled.map((h) => h.id === "h-ic" ? { ...h, schedule: null } : h);
+  it("says only what the service served: the cost with the schedule's own pace gap, the cost alone, or a dash", () => {
+    const mixed = scheduled.map((h) => h.id === "h-ic" ? { ...h, schedule: null }
+      : h.id === "h-puts" ? { ...h, cost_to_close: null } : h);
     render(<DeskBook {...props({ holdings: mixed })} />);
-    expect(cellText("h-calls", "pace_gap")).toBe("+0.47");
+    // one field (the owner, 2026-11-16): no pace gap column
+    expect(cell("h-calls", "pace_gap")).toBeNull();
+    expect(cellText("h-calls", "value")).toBe("4.40 +0.47");
     expect(cellText("h-calls", "captured")).toBe("50%");
-    expect(cellText("h-calls", "value")).toBe("4.40");
-    // no Opened, no schedule: nothing is drawn in its place
-    expect(cellText("h-ic", "pace_gap")).toBe("—");
+    // no Opened, no schedule: the cost alone, nothing drawn in the gap's place
+    expect(cellText("h-ic", "value")).toBe("1.00");
+    // no cost: a dash, and no gap without the figure it is measured on
+    expect(cellText("h-puts", "value")).toBe("—");
   });
 
   /** What a screen reader hears from a cell: its text, less anything hidden from it. */
   const heard = (el: Element): string => [...el.childNodes].map((n) => n.nodeType === Node.TEXT_NODE ? n.textContent
     : (n as Element).getAttribute("aria-hidden") === "true" ? "" : heard(n as Element)).join("");
 
-  it("writes the pace gap compactly, signed as the service serves it, and says it in words (owner, #379)", () => {
+  it("writes the pace gap compactly beside the cost, signed and coloured, and says both in words (owner, #379, 2026-11-16)", () => {
     // the gap is cost to close less on pace: positive is BEHIND the plan, the bad way
     const mixed = scheduled.map((h) => h.id === "h-puts"
       ? { ...h, schedule: { ...h.schedule!, pace_gap: -0.5 } } : h.id === "h-ic" ? { ...h, schedule: null } : h);
     render(<DeskBook {...props({ holdings: mixed })} />);
-    const behind = cell("h-calls", "pace_gap")!.querySelector<HTMLElement>(".nxd-v")!;
-    expect(behind.textContent).toBe("+0.47");
-    expect(behind.dataset.outcome).toBe("loss");
-    expect(behind.title).toBe("behind by 0.47");
+    const behind = cell("h-calls", "value")!.querySelector<HTMLElement>(".nxd-v")!;
+    expect(behind.textContent).toBe("4.40 +0.47");
+    // the gap alone in the outcome's colour, never the cost
+    expect(behind.querySelector<HTMLElement>("[data-outcome]")!.textContent).toBe("+0.47");
+    expect(behind.querySelector<HTMLElement>("[data-outcome]")!.dataset.outcome).toBe("loss");
+    expect(behind.title).toBe("cost to close 4.40, pace gap behind by 0.47");
     // the true minus sign, not a hyphen
-    const ahead = cell("h-puts", "pace_gap")!.querySelector<HTMLElement>(".nxd-v")!;
-    expect(ahead.textContent).toBe("\u22120.50");
-    expect(ahead.dataset.outcome).toBe("gain");
-    expect(ahead.title).toBe("ahead by 0.50");
+    const ahead = cell("h-puts", "value")!.querySelector<HTMLElement>(".nxd-v")!;
+    expect(ahead.textContent).toBe("1.00 \u22120.50");
+    expect(ahead.querySelector<HTMLElement>("[data-outcome]")!.dataset.outcome).toBe("gain");
+    expect(ahead.title).toBe("cost to close 1.00, pace gap ahead by 0.50");
     // a screen reader hears the words, never "plus" or "minus"
-    expect(heard(cell("h-calls", "pace_gap")!)).toBe("pace gap behind by 0.47");
-    expect(heard(cell("h-puts", "pace_gap")!)).toBe("pace gap ahead by 0.50");
-    expect(heard(cell("h-ic", "pace_gap")!)).toBe("pace gap —");
+    expect(heard(cell("h-calls", "value")!)).toBe("cost to close 4.40, pace gap behind by 0.47");
+    expect(heard(cell("h-puts", "value")!)).toBe("cost to close 1.00, pace gap ahead by 0.50");
+    expect(heard(cell("h-ic", "value")!)).toBe("cost to close 1.00");
   });
 
   it("says the pace gap in words in the inspector, in the table cell's colour", () => {
@@ -518,17 +524,28 @@ describe("the columns", () => {
   it("carry over the old page's column choice", () => {
     document.cookie = "ui_cols_combo=pnl.legs.delta;path=/";
     render(<DeskBook {...props()} />);
-    expect(headers()).toEqual(["name", "value", "captured", "pace_gap", "strip", "dte", "manage", "alarm"]);
+    expect(headers()).toEqual(["name", "value", "captured", "strip", "dte", "manage", "alarm"]);
+  });
+
+  it("break nothing for a viewer who had the pace gap's column in their choice (2026-11-16)", async () => {
+    document.cookie = "ui_cols_combo=pace_gap.delta;path=/";
+    render(<DeskBook {...props()} />);
+    // the value column, which draws the gap now, is drawn; the old key hides nothing
+    expect(headers()).toEqual(["name", "legs", "value", "pnl", "captured", "strip", "dte", "manage", "alarm"]);
+    await userEvent.click(screen.getByRole("button", { name: "book columns" }));
+    const offered = await screen.findByRole("group", { name: "book columns" });
+    expect(offered.textContent).toContain("value");
+    expect(offered.textContent).not.toContain("pace gap");
   });
 
   it("stop at the first that does not fit, rather than skipping to a narrower one (ADR 0008)", () => {
     // P&L is too wide for what is left; delta, after it, would fit on its own
-    const widths: Record<string, number> = { name: 100, value: 50, pnl: 400, delta: 40, pace_gap: 50, dte: 30 };
+    const widths: Record<string, number> = { name: 100, value: 50, pnl: 400, delta: 40, dte: 30 };
     const widthOf = (k: string) => widths[k] ?? 60;
     expect(fitColumns(300, new Set(), widthOf).map((c) => c.key)).toEqual(["name", "value"]);
     // hiding P&L is how room is made for what follows it, and the picker offers exactly that
     expect(fitColumns(300, new Set(["pnl"]), widthOf).map((c) => c.key))
-      .toEqual(["name", "value", "pace_gap", "delta", "dte"]);
+      .toEqual(["name", "value", "delta", "dte", "manage"]);
     // the picker offers what ticking would draw: nothing behind P&L until P&L is hidden
     expect(offerable(300, new Set(), widthOf).has("delta")).toBe(false);
     expect(offerable(300, new Set(["pnl"]), widthOf).has("delta")).toBe(true);
@@ -537,7 +554,7 @@ describe("the columns", () => {
   /** Every row the owner's book draws, as the table does. */
   const ownerRows = (): DeskRow[] => tableRows(placeBook(QUOTES, HOLDINGS, MONITORS));
 
-  it("drop in exactly the survival order as the room shrinks: the rule first, pace gap after DTE", () => {
+  it("drop in exactly the survival order as the room shrinks: the rule first, the value last", () => {
     const rows = ownerRows();
     const widthOf = (key: string) => Math.ceil(charsOf(COLUMNS.find((c) => c.key === key)!, rows, false, true) * 8);
     const all = COLUMNS.reduce((n, c) => n + widthOf(c.key), 0);
@@ -548,10 +565,10 @@ describe("the columns", () => {
       dropped.push(...before.filter((k) => !now.includes(k)));
       before = now;
     }
-    // the reverse of value, P&L, Δ, pace gap, DTE, manage-by, SPX → short, captured, legs, rule
-    expect(dropped).toEqual(["alarm", "legs", "captured", "strip", "manage", "dte", "pace_gap", "delta", "pnl", "value"]);
+    // the reverse of value (with its pace gap), P&L, Δ, DTE, manage-by, SPX → short, captured, legs, rule
+    expect(dropped).toEqual(["alarm", "legs", "captured", "strip", "manage", "dte", "delta", "pnl", "value"]);
     expect(before).toEqual(["name"]);
-    expect(PRIORITY).toEqual(["value", "pnl", "delta", "pace_gap", "dte", "manage", "strip", "captured", "legs", "alarm"]);
+    expect(PRIORITY).toEqual(["value", "pnl", "delta", "dte", "manage", "strip", "captured", "legs", "alarm"]);
   });
 
   it("are dropped widest last (ADR 0008)", () => {

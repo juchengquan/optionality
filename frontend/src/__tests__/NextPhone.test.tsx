@@ -324,19 +324,26 @@ describe("one book, in session and out of it (#374)", () => {
     expect(document.querySelector(".nx-mkt-closed")).toBeNull();
   });
 
-  it("gives each holding's card its pace gap, in words and in its outcome's colour", () => {
+  it("gives each holding's card its cost to close and pace gap in ONE field, the gap in its outcome's colour (2026-11-16)", () => {
     const paced = HOLDINGS.map((h) => ({ ...h, schedule: { ...SCHEDULE, pace_gap: h.id === "h-puts" ? -0.25 : 0.3 } }) as Holding);
-    draw({ holdings: [...paced, { ...HOLDINGS[0]!, id: "h-bare", name: "bare", schedule: null } as Holding] });
-    const gap = (ref: string) => {
-      const facts = [...card(ref).querySelectorAll(".nxp-facts > div")];
-      return facts.find((d) => d.querySelector("dt")?.textContent === "pace gap")?.querySelector("dd") ?? null;
-    };
-    expect(gap("h-calls")?.textContent).toBe("behind by 0.30");
-    expect(gap("h-calls")?.getAttribute("data-outcome")).toBe("loss");
-    expect(gap("h-puts")?.textContent).toBe("ahead by 0.25");
-    expect(gap("h-puts")?.getAttribute("data-outcome")).toBe("gain");
-    // no schedule, no gap: a dash rather than a figure nobody computed
-    expect(gap("h-bare")?.textContent).toBe("—");
+    draw({ holdings: [...paced,
+      { ...HOLDINGS[0]!, id: "h-bare", name: "bare", schedule: null } as Holding,
+      { ...paced[0]!, id: "h-unvalued", name: "unvalued", cost_to_close: null } as Holding] });
+    const terms = (ref: string) => [...card(ref).querySelectorAll(".nxp-facts dt")].map((d) => d.textContent);
+    const field = (ref: string) => [...card(ref).querySelectorAll(".nxp-facts > div")]
+      .find((d) => d.querySelector("dt")?.textContent === "cost to close")!.querySelector("dd")!;
+    const drawn = (ref: string) => field(ref).querySelector<HTMLElement>('[aria-hidden="true"]') ?? field(ref);
+    // one field: no "pace gap" of its own
+    expect(terms("h-calls")).toEqual(["cost to close", "short Δ"]);
+    expect(drawn("h-calls").textContent).toBe("4.40 +0.30");
+    expect(drawn("h-calls").querySelector("[data-outcome]")?.getAttribute("data-outcome")).toBe("loss");
+    expect(drawn("h-puts").textContent).toBe("1.00 \u22120.25");
+    expect(drawn("h-puts").querySelector("[data-outcome]")?.getAttribute("data-outcome")).toBe("gain");
+    // said in words, both of them
+    expect(field("h-puts").querySelector(".sr-only")?.textContent).toBe("1.00, pace gap ahead by 0.25");
+    // no schedule: the cost alone; no cost: a dash and no gap
+    expect(field("h-bare").textContent).toBe("1.00");
+    expect(field("h-unvalued").textContent).toBe("—");
   });
 
   it("still draws the watchlist outside the session, so a banner about it has a card to lead to", () => {

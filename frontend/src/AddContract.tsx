@@ -23,11 +23,14 @@ import { DraftPreview } from "./Payoff";
 import { DirectionPair } from "./DirectionPair";
 import { HoldOrWatch } from "./HoldOrWatch";
 import { TakeOver } from "./TakeOver";
-import type { HeldLegs } from "./add";
+import { ALL_OR_NONE, type HeldLegs } from "./add";
 
 export function AddContract({
   privacy, monitors, holdings, spx, spxReason, onSaved, onCancel, autoFocus, today, draft, setDraft, saving, setSaving, prefilled,
+  footerId,
 }: {
+  /** the id the footer carries, which describes the sheet it is drawn in (2026-11-16) */
+  footerId?: string;
   privacy: boolean;
   /** the open holdings, or null where they are not valued: what a held save takes over (#408) */
   holdings: HeldLegs[] | null;
@@ -144,9 +147,10 @@ export function AddContract({
               <>
                 <div className="nx-add-row">
                   <div className="nx-seg" role="group" aria-label="side">
+                    {/* − and +, the book's notation, named and titled by the word (2026-11-16) */}
                     {(["short", "long"] as const).map((s) => (
-                      <button key={s} type="button" data-side={s} aria-pressed={draft.side === s}
-                              onClick={() => set({ side: s })}><SideSign side={s} />{s}</button>
+                      <button key={s} type="button" data-side={s} aria-pressed={draft.side === s} aria-label={s} title={s}
+                              onClick={() => set({ side: s })}><SideSign side={s} /></button>
                     ))}
                   </div>
                   <label className="nx-add-field nx-add-entry">
@@ -178,14 +182,15 @@ export function AddContract({
             <div className="nx-add-rule" role="group" aria-label="its rule" data-on={ruleOn ? "" : undefined}>
               {held ? (
                 <div className="nx-add-monitor">
-                  <button type="button" role="switch" aria-checked={draft.rule} aria-label="its Monitor"
+                  {/* says what it switches, its words its name (review of #415): with the line beside
+                      it gone, "on" alone said nothing of what was on */}
+                  <button type="button" role="switch" aria-checked={draft.rule}
                           className="nx-add-switch" onClick={() => set({ rule: !draft.rule })}>
-                    {draft.rule ? "on" : "off"}
+                    {draft.rule ? "Monitor on" : "Monitor off"}
                   </button>
-                  <small className="nx-meta">{draft.rule ? "a Monitor on this contract" : "no rule: the holding alone"}</small>
                 </div>
               ) : null}
-              <p className="nx-add-sentence" data-testid="contract-draft" aria-live="polite">{ruleOn ? <ShortWords short={words} full={wordsFull} /> : "no Monitor"}</p>
+              <p className="nx-add-sentence" data-testid="contract-draft" aria-live="polite">{ruleOn ? <ShortWords short={words} full={wordsFull} /> : "no Monitor: the holding alone"}</p>
               <div className="nx-add-rule-fields">
                 <label className="nx-add-field">
                   <span>what it watches</span>
@@ -222,7 +227,7 @@ export function AddContract({
           </div>
           {held ? (
             <DraftPreview subject={`${id}-contract`} draft={preview} spx={spx} spxReason={spxReason}
-                          blank="type the strike to see its payoff at expiry"
+                          blank="type the strike"
                           note={contractNote(draft)} />
           ) : null}
         </div>
@@ -233,9 +238,8 @@ export function AddContract({
         <Button type="submit" disabled={saving}>{saving ? "saving…" : contractSaveWords(draft)}</Button>
         <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
       </div>
-      <p className="nx-meta">
-        {held ? "One save makes all of it, or none of it if anything is refused." : "Watching a contract records no holding."}
-      </p>
+      {/* the one footer, held or watched: "Watch it" already says a watched one records no holding */}
+      <p id={footerId} className="nx-meta">{ALL_OR_NONE}</p>
     </form>
   );
 }

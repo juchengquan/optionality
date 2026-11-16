@@ -6,8 +6,9 @@
  *
  *  Each button's NAME stays its two or three words: the consequence is its description, so a voice
  *  user says what is printed largest, and a screen reader hears the rest after it. The spread form
- *  and the one-contract form draw the same pair. */
-import { useId } from "react";
+ *  and the one-contract form draw the same pair. Since 2026-11-16 each consequence is drawn under
+ *  its button, in the pair's column, rather than inside it. */
+import { Fragment, useId } from "react";
 
 import "./add.css";
 
@@ -22,12 +23,14 @@ export function HoldOrWatch({ held, onHeld }: { held: boolean; onHeld: (held: bo
   ];
   return (
     <div className="nx-seg nx-add-as" role="group" aria-label="add as">
+      {/* each consequence under its button rather than inside it (2026-11-16): the pair is a control's
+          height, where two lines of small type in each made it 62px; still its description */}
       {choices.map((c) => (
-        <button key={c.words} type="button" aria-pressed={held === c.value} aria-label={c.words}
-                aria-describedby={`${id}-${c.value}`} onClick={() => onHeld(c.value)}>
-          <span className="nx-add-as-words">{c.words}</span>
+        <Fragment key={c.words}>
+          <button type="button" aria-pressed={held === c.value} aria-describedby={`${id}-${c.value}`}
+                  onClick={() => onHeld(c.value)}>{c.words}</button>
           <small id={`${id}-${c.value}`}>{c.means}</small>
-        </button>
+        </Fragment>
       ))}
     </div>
   );

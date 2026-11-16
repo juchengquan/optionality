@@ -180,7 +180,7 @@ describe("a watched contract", () => {
     fireEvent.change(screen.getByLabelText("what it watches"), { target: { value: "mid_price" } });
     fireEvent.click(within(screen.getByRole("group", { name: "direction" })).getByRole("button", { name: "≤ at or below" }));
     type("threshold", "0.50");
-    expect(screen.getByTestId("contract-draft").querySelector(".sr-only")!.textContent).toMatch(/≤ 0\.50$/);
+    expect(screen.getByTestId("contract-draft").textContent).toMatch(/≤ 0\.50$/);
     fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0] as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
@@ -192,9 +192,9 @@ describe("a watched contract", () => {
     hold();
     const buttons = () => within(screen.getByRole("group", { name: "direction" })).getAllByRole("button") as HTMLButtonElement[];
     expect(buttons().map((b) => b.disabled)).toEqual([false, false]);
-    fireEvent.click(screen.getByRole("switch", { name: "its Monitor" }));
+    fireEvent.click(screen.getByRole("switch", { name: /^Monitor (on|off)$/ }));
     expect(buttons().map((b) => b.disabled)).toEqual([true, true]);
-    fireEvent.click(screen.getByRole("switch", { name: "its Monitor" }));
+    fireEvent.click(screen.getByRole("switch", { name: /^Monitor (on|off)$/ }));
     expect(buttons().map((b) => b.disabled)).toEqual([false, false]);
   });
 
@@ -210,11 +210,11 @@ describe("a watched contract", () => {
   it("says the rule in words as it is typed", () => {
     open();
     enterPut();
-    // drawn short (#388), said and titled in words
+    // drawn short (#388), which as typed IS its words: written once, for a reader too (2026-11-16)
     const draft = screen.getByTestId("contract-draft");
     expect(draft.querySelector(".nx-rule-short")!.textContent).toBe("7150 put |Δ| ≥ 0.15");
-    expect(draft.querySelector<HTMLElement>(".nx-rule-short")!.title).toBe("7150 put |Δ| ≥ 0.15");
-    expect(draft.querySelector(".sr-only")!.textContent).toBe("7150 put |Δ| ≥ 0.15");
+    expect(draft.textContent).toBe("7150 put |Δ| ≥ 0.15");
+    expect(draft.querySelector(".sr-only")).toBeNull();
   });
 
   it("says a signed threshold of 0 beside the box as it is typed, and sends nothing", () => {
@@ -232,7 +232,7 @@ describe("a watched contract", () => {
 
   it("offers no 'no rule': a watched contract with none would record nothing", () => {
     open();
-    expect(screen.queryByRole("switch", { name: "its Monitor" })).toBeNull();
+    expect(screen.queryByRole("switch", { name: /^Monitor (on|off)$/ })).toBeNull();
   });
 });
 
@@ -262,7 +262,7 @@ describe("a held contract", () => {
 
   it("records the holding with no rule when its Monitor is switched off", async () => {
     const { onSaved } = hold();
-    const rule = screen.getByRole("switch", { name: "its Monitor" });
+    const rule = screen.getByRole("switch", { name: /^Monitor (on|off)$/ });
     expect(rule.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(rule);
     expect(rule.getAttribute("aria-checked")).toBe("false");
@@ -429,5 +429,55 @@ describe("switching Watch and Hold (#408)", () => {
         monitors: [{ option_type: "CALL", strike: 7700, field: "option_theta", threshold: -0.5, direction: "below", compare: "signed" }],
       }],
     });
+  });
+});
+
+describe("nothing said twice (2026-11-16)", () => {
+  it("writes the draft's rule ONCE, where the short form and the words are the same", () => {
+    const { form } = open();
+    fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+    const said = screen.getByTestId("contract-draft");
+    expect(said.textContent).toBe("… put |Δ| ≥ …");
+    enterPut();
+    expect(said.textContent).toBe("7150 put |Δ| ≥ 0.15");
+    expect(form.textContent!.split("7150 put |Δ| ≥ 0.15")).toHaveLength(2);
+  });
+
+  it("says nothing under a watched contract that Watch it already says, and keeps the one footer", () => {
+    const { form } = open();
+    fireEvent.click(screen.getByRole("button", { name: "Watch it" }));
+    expect(form.textContent).not.toContain("records no holding");
+    expect(form.textContent).toContain("One save makes all of it, or none of it if anything is refused.");
+  });
+
+  it("says a held contract's rule once: no line beside its switch repeating the sentence", () => {
+    const { form } = hold();
+    expect(form.textContent).not.toContain("a Monitor on this contract");
+    // the switch says what it switches, drawn and to a reader (review of #415), where "on" alone did not
+    const toggle = screen.getByRole("switch", { name: "Monitor on" });
+    expect(toggle.textContent).toBe("Monitor on");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.textContent).toBe("Monitor off");
+    expect(screen.getByRole("switch", { name: "Monitor off" })).toBe(toggle);
+    expect(screen.getByTestId("contract-draft").textContent).toBe("no Monitor: the holding alone");
+    expect(form.textContent!.split("no Monitor")).toHaveLength(2);
+    expect(form.textContent).not.toContain("no rule:");
+  });
+
+  it("writes the side as − and +, named short and long, the word in its tooltip", () => {
+    hold();
+    const pair = screen.getByRole("group", { name: "side" });
+    const [short, long] = within(pair).getAllByRole("button") as HTMLButtonElement[];
+    expect([short!.textContent, long!.textContent]).toEqual(["\u2212", "+"]);
+    expect(within(pair).getByRole("button", { name: "short" })).toBe(short);
+    expect(within(pair).getByRole("button", { name: "long" })).toBe(long);
+    expect([short!.title, long!.title]).toEqual(["short", "long"]);
+  });
+
+  it("says only \"type the strike\" under the payoff's own heading", () => {
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "I hold it" }));
+    expect(screen.getByText("type the strike")).toBeTruthy();
   });
 });

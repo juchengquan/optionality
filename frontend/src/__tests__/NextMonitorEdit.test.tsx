@@ -171,16 +171,17 @@ describe("editing a rule in place", () => {
     controls({ entry: DELTA });
     const form = await openEditor("261218 7150P Δ");
     const draft = within(form).getByTestId("draft");
-    // drawn short as typed (#388), and said in words
+    // drawn short as typed (#388) — which IS its words, so written once, with no copy beside it
+    // for a reader (2026-11-16)
     const drawn = () => draft.querySelector<HTMLElement>(".nx-rule-short")!;
     expect(drawn().textContent).toBe("|Δ| ≥ 0.2");
-    expect(drawn().title).toBe("|Δ| ≥ 0.2");
+    expect(draft.textContent).toBe("|Δ| ≥ 0.2");
     choose(form, "threshold", "0.3");
     expect(drawn().textContent).toBe("|Δ| ≥ 0.3");
     choose(form, "compare", "signed");
     choose(form, "direction", "below");
     expect(drawn().textContent).toBe("Δ ≤ 0.3");
-    expect(draft.querySelector(".sr-only")!.textContent).toBe("Δ ≤ 0.3");
+    expect(draft.textContent).toBe("Δ ≤ 0.3");
     // the figure and how far it is are the SERVED row's, said as such until it is saved
     const served = within(form).getByTestId("served");
     expect(served.querySelector(".nx-rule-short")!.textContent).toBe(shortSentence(DELTA));
