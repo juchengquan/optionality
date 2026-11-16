@@ -48,6 +48,12 @@ const PGREP = `#!/bin/sh
 ps -axo pid=,command= | grep -F "$FAKE_ROOT/OpenD/OpenD.app/" | grep -v grep | awk '{print $1}'
 `;
 
+/** A listener of this process's own on `port`: the kernel completes a connect to it even while
+ *  spawnSync holds the event loop, which is all a port probe asks. */
+function listen(port) {
+  return new Promise((resolve) => { const s = createServer().listen(port, "127.0.0.1", () => resolve(s)); });
+}
+
 function freePort() {
   return new Promise((resolve) => {
     const s = createServer().listen(0, "127.0.0.1", () => {
@@ -188,12 +194,34 @@ describe.skipIf(!darwin)("opend.sh ensure, against a fake OpenD", () => {
     expect(starts()).toBe(2);
   });
 
+  it("restarts its own at most ONCE while the port stays shut, and again only after it has opened", async () => {
+    // a rejected credential: the restarted OpenD sits at the same prompt, and a per-pid timer gave it
+    // a fresh 15 minutes and another restart, for ever
+    await byScript("prompt");
+    const tick = () => run("ensure", { OPEND_RESTART_AFTER: "0", FAKE_OPEND_MODE: "prompt", FAKE_OPEND_PORTS: "" });
+    expect(tick().out).toMatch(/restarting it, once/);
+    expect(starts()).toBe(2);
+    const later = [tick(), tick(), tick()];
+    expect(starts()).toBe(2);
+    expect(later.map((r) => r.status)).toEqual([2, 2, 2]);
+    expect(later[0].err).toMatch(/restarted it\s+once\. Not restarting again until the port has opened/);
+
+    // the port opens (a login by hand at the window): the episode is over
+    const open = await Promise.all([api, ws].map((port) => listen(port)));
+    expect(tick().status).toBe(0);
+    expect(existsSync(join(dir, "OpenD", "opend.shut-since"))).toBe(false);
+    await Promise.all(open.map((server) => new Promise((r) => server.close(r))));
+    // and a new one may be restarted once more
+    expect(tick().out).toMatch(/restarting it, once/);
+    expect(starts()).toBe(3);
+  });
+
   it("times the back-off from when it first saw the port shut, not from each tick", async () => {
     await byScript("prompt");
     expect(run("ensure", { OPEND_RESTART_AFTER: "900" }).status).toBe(2);
     const since = join(dir, "OpenD", "opend.shut-since");
-    const [pid] = readFileSync(since, "utf8").trim().split(" ");
-    writeFileSync(since, `${pid} ${Math.floor(Date.now() / 1000) - 901}\n`);
+    expect(readFileSync(since, "utf8").trim()).toMatch(/^\d+ 0$/);
+    writeFileSync(since, `${Math.floor(Date.now() / 1000) - 901} 0\n`);
     const r = run("ensure", { OPEND_RESTART_AFTER: "900" });
     expect(r.out, r.all).toMatch(/restarting it/);
     expect(starts()).toBe(2);
@@ -204,6 +232,8 @@ describe.skipIf(!darwin)("opend.sh ensure, against a fake OpenD", () => {
     const r = run("ensure", { OPEND_RESTART_AFTER: "0" });
     expect(r.status, r.all).toBe(2);
     expect(r.err).toMatch(/not started by this script/);
+    // the script's own path, not zsh's $0 inside a function ("run `ensure stop`")
+    expect(r.err).toContain(`run \`${SCRIPT} stop\``);
     expect(alive(pid)).toBe(true);
     expect(starts()).toBe(1);
   });
@@ -250,6 +280,16 @@ describe.skipIf(!darwin)("opend.sh ensure, against a fake OpenD", () => {
     expect(r.err).toMatch(new RegExp(`websocket.*127\\.0\\.0\\.1:${ws}.*shut`, "s"));
     expect(alive(pid)).toBe(true);
     expect(starts()).toBe(1);
+  });
+
+  it("reports a fault again when it returns soon after a recovery, inside the repeat window", async () => {
+    await byHand("serve", `${api}`);
+    const tick = () => run("ensure", { OPEND_REPORT_EVERY: "1800" });
+    expect(tick().err).toMatch(/websocket.*shut/s);
+    const server = await listen(ws);
+    expect(tick()).toMatchObject({ status: 0, all: "" });
+    await new Promise((r) => server.close(r));
+    expect(tick().err).toMatch(/websocket.*shut/s);
   });
 
   it("reports a websocket commented out of OpenD.xml, as an OpenD `update` leaves it (2026-11-11)", async () => {

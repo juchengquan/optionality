@@ -7,8 +7,9 @@
  *  a FROM that was not intact left the service down, and a failure anywhere after the stop left it
  *  down too, since the start was the recipe's next line.
  */
-import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { createServer } from "node:http";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -151,5 +152,54 @@ describe.skipIf(!darwin)("make restore's command line, under DRY_RUN=1", () => {
 
   it("answers its usage without arguments", () => {
     expect(cli([]).status).toBe(2);
+  });
+});
+
+describe.skipIf(!darwin)("make restore, interrupted between the stop and the start", () => {
+  // ^C reaches every process in the terminal's group, and closing the terminal sends SIGHUP: either
+  // between the stop and the start used to leave the API stopped, the first by killing launchctl and
+  // restore.ts under restore.mjs, the second by killing restore.mjs itself
+  it("finishes the stop it began, restores, and starts the API again, through SIGINT and SIGHUP", async () => {
+    const stubs = join(dir, "stubs");
+    mkdirSync(stubs);
+    const calls = join(dir, "calls");
+    writeFileSync(join(stubs, "launchctl"), `#!/bin/sh
+echo "start $1" >> "${calls}"
+case "$1" in
+  bootout) touch "${calls}.stopping"; sleep 2 ;;
+  print) exit 113 ;;
+esac
+echo "done $1" >> "${calls}"
+`);
+    chmodSync(join(stubs, "launchctl"), 0o755);
+    const server = createServer((req, res) => { res.writeHead(200); res.end("{}"); });
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    const live = join(dir, "live.db");
+    const db = new DatabaseSync(live);
+    db.exec("CREATE TABLE monitors (id INTEGER PRIMARY KEY)");
+    db.close();
+
+    const child = spawn(process.execPath, [SCRIPT, backupOf(3), live], {
+      detached: true, stdio: "ignore",
+      env: {
+        PATH: `${stubs}:/usr/bin:/bin:/usr/sbin`, HOME: join(dir, "home"),
+        API_HEALTH_URL: `http://127.0.0.1:${server.address().port}/health`,
+      },
+    });
+    const exited = new Promise((resolve) => child.once("exit", (code, signal) => resolve({ code, signal })));
+    for (let i = 0; i < 200 && !existsSync(`${calls}.stopping`); i++) await new Promise((r) => setTimeout(r, 25));
+    expect(existsSync(`${calls}.stopping`)).toBe(true);
+    process.kill(-child.pid, "SIGINT");
+    process.kill(-child.pid, "SIGHUP");
+    const end = await exited;
+    server.close();
+
+    expect(end).toEqual({ code: 0, signal: null });
+    expect(readFileSync(calls, "utf8").split("\n").filter(Boolean)).toEqual([
+      "start bootout", "done bootout", "start print", "start bootstrap", "done bootstrap",
+    ]);
+    const back = new DatabaseSync(live, { readOnly: true });
+    expect(back.prepare("select count(*) n from monitors").get()).toEqual({ n: 3 });
+    back.close();
   });
 });

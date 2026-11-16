@@ -261,7 +261,8 @@ deploy:
 		echo "make deploy: $$(git rev-parse --short $$to) is not a fast-forward of HEAD; $$unchanged"; exit 1; \
 	fi; \
 	wt=$$(mktemp -d "$${TMPDIR:-/tmp}/optionality-deploy.XXXXXX"); \
-	trap 'git worktree remove --force "$$wt" >/dev/null 2>&1 || true; rm -rf "$$wt"' EXIT; \
+	cleanup='git worktree remove --force "$$wt" >/dev/null 2>&1 || true; rm -rf "$$wt"'; \
+	trap "$$cleanup" EXIT; trap "$$cleanup; exit 130" INT TERM HUP; \
 	git worktree add --quiet --detach "$$wt" $$to; \
 	echo "checking $$(git rev-parse --short $$to) in $$wt, before anything here changes"; \
 	if ! $(MAKE) --no-print-directory -C "$$wt" deploy-verify; then \

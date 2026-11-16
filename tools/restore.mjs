@@ -15,7 +15,9 @@
  *    4. bootstrap and wait for /health — ALWAYS, whatever happened in 2 and 3. The API's boot
  *       migrates an older file forward.
  *
- *  A signal arriving between 2 and 4 is held until 4 has run, for the same reason.
+ *  A ^C, a hang-up or a kill arriving between 2 and 4 is held until 4 has run, for the same reason,
+ *  and launchctl and restore.ts run in a session of their own, so the terminal's signals never
+ *  reach them half-way (use-backend.mjs's system).
  *
  *  Behind `use-backend.mjs`'s system, so `DRY_RUN=1` prints the launchctl calls and the restore and
  *  does none of them (the check in step 1 still runs: it only reads), and `restore.test.mjs` drives
@@ -34,6 +36,7 @@ const USAGE = "usage: make restore FROM=<BACKUP_DIR>/optionality-ts-YYYYMMDD.db.
  *  whatever the system, because it only reads. Its own words go to stderr. */
 function intact(from, { node, repo }) {
   const r = spawnSync(node, [RESTORE, "--check", from], { cwd: repo, stdio: ["ignore", "inherit", "inherit"] });
+  // before the stop: a ^C here is the owner changing their mind, and nothing needs finishing
   return r.status === 0;
 }
 
@@ -86,10 +89,12 @@ async function main([from, live]) {
     process.exitCode = 2;
     return;
   }
-  // held, not obeyed: a ^C between the stop and the start must not leave the API stopped
+  // held, not obeyed: a ^C, a closed terminal or a kill between the stop and the start must not
+  // leave the API stopped. The children are detached (use-backend.mjs), so these reach only us. A
+  // hang-up also takes the terminal, so a write to it may fail: that must not stop the restore.
+  for (const stream of [process.stdout, process.stderr]) stream.on("error", () => {});
   const hold = () => console.error("finishing first: the API is started again before this exits");
-  process.on("SIGINT", hold);
-  process.on("SIGTERM", hold);
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, hold);
   await restoreLive({
     from, live, home: process.env.HOME || homedir(), uid: process.getuid(), sys: systemFor(process.env),
   });

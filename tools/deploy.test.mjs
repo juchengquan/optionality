@@ -12,7 +12,7 @@
  *  left the NEW frontend/dist live — Caddy serves it from disk — in front of the OLD API. And it
  *  printed "both services restarted" without asking either one.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -28,6 +28,7 @@ const darwin = process.platform === "darwin";
 const STEP = `#!/bin/sh
 echo "$1 $(pwd -P)" >> "$DEPLOY_LOG"
 if [ "$FAIL_AT" = "$1" ]; then echo "stub: $1 failed" >&2; exit 1; fi
+if [ "$HANG_AT" = "$1" ]; then touch "$DEPLOY_LOG.hung"; sleep 30; fi
 `;
 
 /** A node script standing in for one of the recipe's own, at the same path. */
@@ -171,19 +172,27 @@ function landB(makefile) {
   return git(seed, "rev-parse", "HEAD");
 }
 
+const makeArgs = (target, vars = []) =>
+  ["--no-print-directory", "-C", live, target, "JS_INSTALL=step js", "UV_SYNC=step uv", ...vars];
+
 function make(target, { failAt = "", vars = [] } = {}) {
-  const r = spawnSync("make", ["--no-print-directory", "-C", live, target, "JS_INSTALL=step js", "UV_SYNC=step uv", ...vars], {
+  const r = spawnSync("make", makeArgs(target, vars), {
     encoding: "utf8",
     timeout: 50_000,
-    env: {
+    env: makeEnv(failAt),
+  });
+  return { status: r.status, all: `${r.stdout}${r.stderr}` };
+}
+
+function makeEnv(failAt = "", extra = {}) {
+  return {
       PATH: `${stubs}:${dirname(process.execPath)}:/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin`,
       HOME: home, TMPDIR: join(dir, "tmp/"), ...GIT_ENV,
       DEPLOY_LOG: log, FAIL_AT: failAt,
       API_HEALTH_URL: `http://127.0.0.1:${apiPort}/health`, API_HEALTH_WAIT: "3",
       FAKE_API: join(dir, "api.py"), FAKE_API_PORT: String(apiPort), FAKE_API_PID: join(dir, "api.pid"),
-    },
-  });
-  return { status: r.status, all: `${r.stdout}${r.stderr}` };
+      ...extra,
+  };
 }
 
 const steps = () => (existsSync(log) ? readFileSync(log, "utf8").split("\n").filter(Boolean) : []);
@@ -256,6 +265,25 @@ describe.skipIf(!darwin)("make deploy", () => {
     expect(r.all).toMatch(/the fetched deploy-verify/);
     expect(r.all).toMatch(/the fetched deploy-after-pull/);
   });
+
+  for (const signal of ["SIGINT", "SIGHUP", "SIGTERM"]) {
+    it(`removes its temporary worktree when ${signal} stops it during the checks`, async () => {
+      // ^C, a closed terminal or a kill reaches the whole process group. Measured with make 3.81 and
+      // bash 3.2 as /bin/sh: the EXIT trap alone ran for INT and HUP and NOT for TERM.
+      const a = git(live, "rev-parse", "HEAD");
+      landB();
+      const child = spawn("make", makeArgs("deploy"), { env: makeEnv("", { HANG_AT: "js" }), detached: true, stdio: "ignore" });
+      const exited = new Promise((resolve) => child.once("exit", resolve));
+      for (let i = 0; i < 200 && !existsSync(`${log}.hung`); i++) await new Promise((r) => setTimeout(r, 50));
+      expect(existsSync(`${log}.hung`)).toBe(true);
+      process.kill(-child.pid, signal);
+      await exited;
+      await new Promise((r) => setTimeout(r, 300));
+      expect(worktrees()).toBe(1);
+      expect(spawnSync("ls", [join(dir, "tmp")], { encoding: "utf8" }).stdout.trim()).toBe("");
+      expect(git(live, "rev-parse", "HEAD")).toBe(a);
+    });
+  }
 
   it("refuses what is not a fast-forward, and changes nothing", () => {
     landB();

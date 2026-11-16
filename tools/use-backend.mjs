@@ -210,8 +210,12 @@ function refuse(backend, repo) {
 function realSystem() {
   return {
     dry: false,
+    // Both run DETACHED, in a session of their own: the terminal's ^C and hang-up go to its whole
+    // process group, and a launchctl or restore.ts killed half-way between a stop and a start is
+    // the API left down (`make restore`, which holds those signals itself). Their output is
+    // captured and passed on, so neither writes to a terminal that may have gone.
     launchctl(args) {
-      const r = spawnSync("launchctl", args, { encoding: "utf8" });
+      const r = spawnSync("launchctl", args, { encoding: "utf8", detached: true });
       return { status: r.status ?? 1, output: `${r.stdout ?? ""}${r.stderr ?? ""}` };
     },
     write(path, text) {
@@ -241,9 +245,12 @@ function realSystem() {
       const pid = (r.stdout ?? "").split("\n").find(Boolean);
       return pid ? Number(pid) : null;
     },
-    /** Run a command to completion, its output on ours; its exit status. */
+    /** Run a command to completion, detached, its output passed on to ours; its exit status. */
     run(cmd, args) {
-      return spawnSync(cmd, args, { stdio: "inherit" }).status ?? 1;
+      const r = spawnSync(cmd, args, { encoding: "utf8", detached: true, stdio: ["ignore", "pipe", "pipe"] });
+      if (r.stdout) process.stdout.write(r.stdout);
+      if (r.stderr) process.stderr.write(r.stderr);
+      return r.status ?? 1;
     },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };

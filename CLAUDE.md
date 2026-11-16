@@ -845,8 +845,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   provider: one up without a confirmed session; one whose websocket is shut, or OFF in
   `OpenD.xml` (the 2026-11-11 failure above); and one whose API port is shut, which usually means
   it is waiting at a login prompt. It restarts only an OpenD IT started (`opend.pid`), alone, whose
-  API port has been shut for 15 minutes (`OPEND_RESTART_AFTER`), and NEVER stops one it did not
-  start: on 2026-11-12 it read a shut port as a husk, restarted every minute, and killed the OpenD
+  API port has been shut for 15 minutes (`OPEND_RESTART_AFTER`) — ONCE per shut episode, which
+  lasts until the port opens, because a rejected credential leaves the new OpenD at the same
+  prompt — and NEVER stops one it did not start: on 2026-11-12 it read a shut port as a husk, restarted every minute, and killed the OpenD
   the owner had started by hand to log in. A report is said once and then every 30 minutes while
   it stands (`OPEND_REPORT_EVERY`). `opend.sh stop`, run by hand, stops EVERY OpenD.
   `tools/opend.test.mjs` holds all of it against a fake OpenD and a stub `pgrep`.
@@ -878,7 +879,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   - Restore only with `make restore FROM=<file>` (`tools/restore.mjs`): it checks the backup
     (`restore.ts --check`) BEFORE it stops the API, so a bad FROM never costs the service, and
     starts the API again and waits for `/health` whatever happens after the stop. `DRY_RUN=1`
-    prints it. Copying a backup over the live file leaves its
+    prints it. A ^C, hang-up or kill between the stop and the start is held, and launchctl and
+  `restore.ts` run in a session of their own so the terminal's signals never reach them. Copying a backup over the live file leaves its
     `-wal` beside it, and SQLite replays that old log onto the restored data.
 - The Telegram bot token allows ONE `getUpdates` consumer: never run two service instances against it, and
   avoid external `getUpdates` curls while the service runs.

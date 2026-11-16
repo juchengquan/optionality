@@ -19,6 +19,9 @@ set -euo pipefail
 # Usage: ./openD.sh {start|stop|restart|status|health|ensure}
 
 SCRIPT_DIR=${0:A:h}
+# This script's own path, for the messages that tell you to run it. Saved here because inside a
+# function zsh's $0 is the FUNCTION's name: the report said "run `ensure stop`".
+SELF=${0:A}
 # Overridable, because the committed copy of this script lives in a repository rather than beside
 # _workspace: `${SCRIPT_DIR}/_workspace/OpenD` is right for ~/openD.sh and wrong for deploy/opend.sh.
 OPEND_PATH=${OPEND_PATH:-${SCRIPT_DIR}/_workspace/OpenD}
@@ -26,8 +29,9 @@ OPEND_BIN=${OPEND_PATH}/OpenD.app/Contents/MacOS/OpenD
 OPEND_CFG=${OPEND_PATH}/OpenD.xml
 PID_FILE=${OPEND_PATH}/opend.pid
 LOG_FILE=${OPEND_PATH}/opend.log
-# `ensure`'s memory between ticks: since when ITS OpenD's API port has been shut ("<pid> <epoch>"),
-# and the last thing it reported ("<what> <epoch>"), so a report is said once rather than every minute.
+# `ensure`'s memory between ticks: the current SHUT EPISODE of its own OpenD's API port ("<epoch it
+# was first seen shut> <restarts so far>"), kept until the port opens; and the last thing it reported
+# ("<what> <epoch>"), so a report is said once rather than every minute.
 SHUT_FILE=${OPEND_PATH}/opend.shut-since
 REPORT_FILE=${OPEND_PATH}/opend.reported
 
@@ -58,8 +62,9 @@ WS_IP=${WS_IP:-127.0.0.1}
 WS_PORT=$(sed -n 's|^[^!]*<websocket_port>\(.*\)</websocket_port>.*|\1|p' "$OPEND_CFG" 2>/dev/null | head -1)
 
 # How long `ensure` lets an OpenD THIS SCRIPT STARTED sit with its API port shut before restarting
-# it. Not a minute: a shut port usually means OpenD is waiting at a login prompt, and a restart a
-# minute is a watchdog flapping a provider. One it did not start is never restarted at all.
+# it — ONCE per episode. Not a minute: a shut port usually means OpenD is waiting at a login prompt,
+# and a restart a minute is a watchdog flapping a provider; nor every 15 minutes for ever, which is
+# what a rejected credential made of a per-pid timer. One it did not start is never restarted.
 RESTART_AFTER=${OPEND_RESTART_AFTER:-900}
 # How often `ensure` repeats a report while nothing changes. Once a minute is a log nobody reads.
 REPORT_EVERY=${OPEND_REPORT_EVERY:-1800}
@@ -298,7 +303,7 @@ terminate() {
       kill -9 "$pid" 2>/dev/null || true
     fi
   done
-  rm -f "$PID_FILE" "$SHUT_FILE"
+  rm -f "$PID_FILE"
 }
 
 stop() {
@@ -312,6 +317,7 @@ stop() {
     return 0
   fi
   terminate "${pids[@]}"
+  rm -f "$SHUT_FILE"
   print "OpenD stopped."
 }
 
@@ -331,18 +337,21 @@ report() {
   print -u2 -l -- "$@"
 }
 
-shut_for() {
-  # Seconds pid $1's API port has been shut, counted from the first tick that saw it shut.
-  local pid=$1 now was="" since=""
+shut_episode() {
+  # The current shut episode as "<seconds shut> <restarts so far>", starting one if none is open.
+  # An episode lasts until the API port opens, or OpenD stops altogether — NOT until a restart, or
+  # its own OpenD at a rejected-login prompt would get a fresh timer, and a restart, every quarter
+  # of an hour for ever.
+  local now since="" restarts=""
   now=$(date +%s)
   if [[ -f $SHUT_FILE ]]; then
-    read -r was since <"$SHUT_FILE" || true
+    read -r since restarts <"$SHUT_FILE" || true
   fi
-  if [[ $was != "$pid" || -z $since ]]; then
-    since=$now
-    print "$pid $since" >"$SHUT_FILE"
+  if [[ $since != <-> || $restarts != <-> ]]; then
+    since=$now restarts=0
+    print "$since $restarts" >"$SHUT_FILE"
   fi
-  print $(( now - since ))
+  print "$(( now - since )) $restarts"
 }
 
 ensure() {
@@ -363,9 +372,12 @@ ensure() {
   #                               · one this script did NOT start (no PID file: Finder, a terminal)
   #                                 is never stopped, however long its port stays shut;
   #                               · neither is anything while such a one is running beside its own;
-  #                               · its OWN, alone, is restarted only once the port has been shut
-  #                                 for RESTART_AFTER seconds (15 minutes) — a husk that will not
-  #                                 recover, rather than a login that has not happened yet.
+  #                               · its OWN, alone, is restarted once the port has been shut for
+  #                                 RESTART_AFTER seconds (15 minutes) — a husk that will not
+  #                                 recover, rather than a login that has not happened yet — and
+  #                                 only ONCE per shut episode: a rejected credential leaves the new
+  #                                 OpenD at the same prompt, so after that it reports until the
+  #                                 port opens.
   #   - API up, websocket shut or OFF     → REPORT. The service talks to OpenD over the websocket,
   #                             so this is dashes with a healthy-looking OpenD; it is a config
   #                             fault (an OpenD `update` rewrites OpenD.xml), not a restartable one.
@@ -390,11 +402,10 @@ ensure() {
     own=$(own_pid) || own=""
     others=$(all_pids | grep -vx -- "${own:-none}" || true)
     if [[ -z $own ]]; then
-      rm -f "$SHUT_FILE"
       report "foreign-shut" \
         "$stamp OpenD (pid $pid) is running but ${OPEND_IP}:${OPEND_PORT} is shut. Not restarting it:" \
         "  it was not started by this script (by hand, or from Finder), so it may be at its login" \
-        "  window. Log in there, or run \`$0 stop\` to let this watchdog start its own."
+        "  window. Log in there, or run \`$SELF stop\` to let this watchdog start its own."
       return 2
     fi
     if [[ -n $others ]]; then
@@ -403,9 +414,19 @@ ensure() {
         "  beside its own (pid $own): pids ${(f)others}. Not restarting either -- someone is logging in."
       return 2
     fi
-    shut=$(shut_for "$own")
+    local -a episode
+    episode=(${=$(shut_episode)})
+    shut=${episode[1]}
+    if (( episode[2] >= 1 )); then
+      report "own-shut-restarted" \
+        "$stamp OpenD (pid $own) still has ${OPEND_IP}:${OPEND_PORT} shut after this script restarted it" \
+        "  once. Not restarting again until the port has opened: it is most likely at a login prompt." \
+        "  Log in by hand: $OPEND_BIN --cfg_files $OPEND_CFG"
+      return 2
+    fi
     if (( shut >= RESTART_AFTER )); then
-      print "$stamp OpenD (pid $own, started by this script) has had ${OPEND_IP}:${OPEND_PORT} shut for ${shut}s; restarting it."
+      print "$stamp OpenD (pid $own, started by this script) has had ${OPEND_IP}:${OPEND_PORT} shut for ${shut}s; restarting it, once."
+      print "${$(<"$SHUT_FILE")% *} 1" >"$SHUT_FILE"
       terminate "$own"
       rm -f "$REPORT_FILE"
       start
@@ -468,5 +489,5 @@ case ${1:-} in
   restart)       stop; start ;;
   status)        status ;;
   health|check)  health ;;
-  *)             print -u2 "Usage: $0 {start|stop|restart|status|health|ensure}"; exit 1 ;;
+  *)             print -u2 "Usage: $SELF {start|stop|restart|status|health|ensure}"; exit 1 ;;
 esac
