@@ -25,7 +25,7 @@ for the next writer.
 
 import inspect
 import sqlite3
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from pathlib import Path
 
 from .migrate import stamp_all
@@ -64,20 +64,28 @@ def create_database(path: Path | str) -> sqlite3.Connection:
     return db
 
 
-async def atomic[T](db: sqlite3.Connection, fn: Callable[[], T | Awaitable[T]]) -> T:
+async def atomic[T](db: sqlite3.Connection, fn: Callable[[], T]) -> T:
     """Run `fn` inside a transaction, rolling back if it raises.
 
     Written out rather than taken from a library because this is the operation the delete paths
     depend on: clearing `monitor_positions` and removing the row it pointed at have to happen together
-    or not at all. `fn` may answer a value or an awaitable, and is awaited only in the second case.
+    or not at all. A coroutine function, still `async` so its callers await it as the TypeScript's
+    did, but it never yields: a body that answers an awaitable is refused, because one connection
+    serves every request, the sweep and the bot, and a transaction open across an `await` is open for
+    all of them. `db/open.ts` is synchronous for the same reason.
     """
     db.execute("BEGIN")
     try:
         out = fn()
         if inspect.isawaitable(out):
-            out = await out
+            if inspect.iscoroutine(out):
+                out.close()  # never run, and never "never awaited"
+            raise TypeError(
+                "a transaction's body must not await: it would hold the transaction open for every other "
+                "request while it waits"
+            )
         db.execute("COMMIT")
-        return out  # type: ignore[return-value]
+        return out
     except BaseException:
         db.execute("ROLLBACK")
         raise

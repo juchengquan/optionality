@@ -933,17 +933,20 @@ class TestTheManageByNotice:
     Monitor thresholds are untouched — this is a notice about a Position, not an Alarm."""
 
     @staticmethod
-    def held(b: Book, name: str, opened_at: str | None, dte_left: int) -> str:
+    def held(
+        b: Book, name: str, opened_at: str | None, dte_left: int, created_at: str = "2026-08-01 00:00:00.000000"
+    ) -> str:
         id_ = name.ljust(32, "0")
         b.db.execute(
             """insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
                               opened_at, manage_notified_at)
-       values (?, ?, null, ?, 1, 6.86, ?, '2026-08-01 00:00:00.000000', ?, null)""",
+       values (?, ?, null, ?, 1, 6.86, ?, ?, ?, null)""",
             (
                 id_,
                 name,
                 b.days_from_now(dte_left),
                 to_sqlite_json([{"side": "short", "option_type": "CALL", "strike": 8050}]),
+                created_at,
                 opened_at,
             ),
         )
@@ -1087,6 +1090,23 @@ class TestTheManageByNotice:
         id_ = self.held(b, "condor", b.days_from_now(-26), 19)
         await b.sweeper(self.priceless(b, 19)).sweep()
         assert self.notices(b) == ["⏰ condor is at 19 DTE — manage by 21\nentry 6.86\non-pace 4.46"]
+        assert self.notified_at(b, id_)
+
+    async def test_counts_no_session_that_opened_before_the_holding_was_recorded(self, b: Book) -> None:
+        # 18:30 New York on Thursday 1 October, the day it was Opened at 21 DTE — inside its window from
+        # that day — and recorded a minute ago. Thursday's session closed two hours before the service
+        # knew of it, so it has had no session at all, and the notice waits for a cost as any other
+        b.now = datetime(2026, 10, 1, 22, 30, tzinfo=UTC)
+        id_ = self.held(b, "evening", b.days_from_now(0), 21, "2026-10-01 22:29:00.000000")
+        await b.sweeper(self.priceless(b, 21)).sweep()
+        assert self.notices(b) == [], "Thursday's session could not have priced it"
+        assert self.notified_at(b, id_) is None
+
+        # Friday's session runs and closes with still no price: now the wait is over
+        b.now = datetime(2026, 10, 2, 21, 0, tzinfo=UTC)  # 17:00 New York, Friday
+        await b.sweeper(quoting("option_delta", {build_spx_code("2026-10-22", "CALL", 8050): 0.2})).sweep()
+        assert len(self.notices(b)) == 1
+        assert "now" not in self.notices(b)[0]
         assert self.notified_at(b, id_)
 
     async def test_overnight_gth_says_the_batch_s_cost_where_it_quotes_every_leg(self, b: Book) -> None:

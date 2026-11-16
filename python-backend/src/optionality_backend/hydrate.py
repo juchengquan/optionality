@@ -6,7 +6,8 @@ two has to be converted, and doing it here means no row type ever claims to be s
 no domain function ever parses JSON.
 
 **A row is CHECKED on its way in** (#266), by the TypeScript's own rules in the TypeScript's own words:
-what the domain's types say and nothing more, the first fault in field order named, as a `ValueError`.
+what the domain's types say and — for a holding — that its expiry reads as a date (#422's review), the
+first fault in field order named, as a `ValueError`.
 The library's models validate too, but by pydantic's rules — which coerce a strike of "8100" and a sign
 of "1" that the TypeScript refuses — and in pydantic's words, which `/positions/values` would answer
 with. So the check comes first, and a row it passes is one the models accept as they stand. Until #266
@@ -28,6 +29,7 @@ import math
 from collections.abc import Callable
 from typing import Any, NoReturn
 
+from optionality.contract import normalize_strike_date
 from optionality.monitor import Monitor
 from optionality.position import Position
 
@@ -55,6 +57,22 @@ QTY: Rule = (
     lambda v: _is_number(v) and (isinstance(v, int) or v.is_integer()) and v >= 1,
     "a whole number, 1 or more",
 )
+
+
+def _reads_as_a_date(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        normalize_strike_date(value)
+    except Exception:  # noqa: BLE001 — the TypeScript's bare `catch`: whatever the domain refuses with
+        return False
+    return True
+
+
+#: a holding's expiry: text the domain reads as a date. Checked here, for a POSITION, because a holding
+#: whose expiry is no date cannot be valued, priced or counted down — and refused anywhere later it
+#: failed the whole book with "invalid strike_date" (#422's review). Mirrors `hydrate.ts`.
+EXPIRY: Rule = (_reads_as_a_date, "a date")
 
 
 class _Reader:
@@ -123,7 +141,7 @@ def to_position(row: PositionRow) -> Position:
         "name": read.take("name", row["name"], TEXT),
         "strategy": read.take("strategy", row["strategy"], TEXT_OR_NULL),
         "opened_at": read.take("opened_at", row["opened_at"], TEXT_OR_NULL),
-        "strike_date": read.take("strike_date", row["strike_date"], TEXT),
+        "strike_date": read.take("strike_date", row["strike_date"], EXPIRY),
         "contracts": read.take("contracts", row["contracts"], WHOLE),
         "entry": read.take("entry", row["entry"], NUMBER_OR_NULL),
     }

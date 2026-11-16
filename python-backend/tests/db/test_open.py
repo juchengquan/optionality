@@ -9,6 +9,7 @@ Python counterpart says what Python does instead. What only the Python can get w
 import asyncio
 import sqlite3
 import threading
+import warnings
 from datetime import UTC, datetime
 
 import pytest
@@ -149,7 +150,7 @@ def count(db, table):
 
 class TestATransaction:
     async def test_commits_everything_when_the_body_finishes(self, db):
-        async def body():
+        def body():
             monitor(db, "a" * 32)
             position(db, "b" * 32, "one")
 
@@ -158,7 +159,7 @@ class TestATransaction:
         assert count(db, "positions") == 1
 
     async def test_rolls_everything_back_when_the_body_throws(self, db):
-        async def body():
+        def body():
             monitor(db, "a" * 32)
             raise RuntimeError("boom")
 
@@ -173,7 +174,7 @@ class TestATransaction:
         position(db, "p" * 32, "one")
         db.execute("insert into monitor_positions values (?, ?)", ("m" * 32, "p" * 32))
 
-        async def body():
+        def body():
             db.execute("delete from monitor_positions where monitor_id = ?", ("m" * 32,))
             raise RuntimeError("interrupted")
 
@@ -184,7 +185,7 @@ class TestATransaction:
     async def test_rolls_back_when_a_constraint_fails_partway_through(self, db):
         monitor(db, "a" * 32)
 
-        async def body():
+        def body():
             position(db, "b" * 32, "one")
             monitor(db, "c" * 32)  # duplicate code+field
 
@@ -194,10 +195,26 @@ class TestATransaction:
         assert count(db, "monitors") == 1
 
     async def test_returns_what_the_body_returned(self, db):
-        async def body():
+        def body():
             return 42
 
         assert await atomic(db, body) == 42
+
+    async def test_never_yields_while_open_so_two_begun_together_both_commit(self, db):
+        # The TypeScript's awaited even a synchronous body, holding the transaction open across a turn
+        # of the loop; this one never did, and the test holds it to that
+        await asyncio.gather(
+            atomic(db, lambda: monitor(db, "a" * 32)), atomic(db, lambda: position(db, "b" * 32, "one"))
+        )
+        assert (count(db, "monitors"), count(db, "positions")) == (1, 1)
+
+    async def test_refuses_a_body_that_awaits_rolling_back_what_it_did_before(self, db):
+        async def body():
+            monitor(db, "a" * 32)
+
+        with pytest.raises(TypeError, match="must not await"):
+            await atomic(db, body)
+        assert count(db, "monitors") == 0
 
 
 class TestBindingValues:
@@ -251,24 +268,25 @@ class TestWhatOnlyThePythonCanGetWrong:
         assert caught and "same thread" in str(caught[0])
 
     async def test_a_body_that_answers_a_plain_value_is_not_awaited(self, db):
-        # `fn: () => T | Promise<T>`: a synchronous body is a body too
+        # `fn: () => T`: a synchronous body is the only body
         assert await atomic(db, lambda: 7) == 7
 
-    async def test_rolls_back_a_body_that_was_cancelled_and_does_not_swallow_the_cancel(self, db):
-        # JavaScript has no cancellation; asyncio does, and a task cancelled inside the transaction
-        # must not leave BEGIN open for the next writer to trip over
-        started = asyncio.Event()
+    async def test_an_async_body_is_never_started_so_nothing_is_left_to_cancel(self, db):
+        # JavaScript has no cancellation; asyncio does, and a body cancelled inside the transaction
+        # once had to roll back without swallowing the cancel. An async body is now refused before it
+        # runs a line — closed, so asyncio never warns it was "never awaited" — and BEGIN is not
+        # left open for the next writer to trip over
+        ran = []
 
         async def body():
+            ran.append(True)
             monitor(db, "a" * 32)
-            started.set()
-            await asyncio.sleep(10)
 
-        task = asyncio.create_task(atomic(db, body))
-        await started.wait()
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            with pytest.raises(TypeError, match="must not await"):
+                await atomic(db, body)
+        assert ran == []
         assert count(db, "monitors") == 0
         assert db.in_transaction is False
 

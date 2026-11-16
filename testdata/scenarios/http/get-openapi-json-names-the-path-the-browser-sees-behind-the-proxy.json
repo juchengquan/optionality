@@ -1891,7 +1891,10 @@
                               "type": "string"
                             },
                             "contracts": {
-                              "type": "number"
+                              "type": [
+                                "number",
+                                "null"
+                              ]
                             },
                             "entry": {
                               "type": [
@@ -1957,6 +1960,12 @@
                                 "number",
                                 "null"
                               ]
+                            },
+                            "unreadable": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
                             }
                           },
                           "required": [
@@ -1971,7 +1980,8 @@
                             "opened_at",
                             "closed_on",
                             "exit",
-                            "realized_points"
+                            "realized_points",
+                            "unreadable"
                           ]
                         }
                       }
@@ -2010,7 +2020,10 @@
                             "type": "string"
                           },
                           "contracts": {
-                            "type": "number"
+                            "type": [
+                              "number",
+                              "null"
+                            ]
                           },
                           "entry": {
                             "type": [
@@ -2076,6 +2089,12 @@
                               "number",
                               "null"
                             ]
+                          },
+                          "unreadable": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -2090,7 +2109,8 @@
                           "opened_at",
                           "closed_on",
                           "exit",
-                          "realized_points"
+                          "realized_points",
+                          "unreadable"
                         ]
                       }
                     }
@@ -2252,7 +2272,10 @@
                               "type": "string"
                             },
                             "contracts": {
-                              "type": "number"
+                              "type": [
+                                "number",
+                                "null"
+                              ]
                             },
                             "entry": {
                               "type": [
@@ -2316,6 +2339,12 @@
                             "realized_points": {
                               "type": [
                                 "number",
+                                "null"
+                              ]
+                            },
+                            "unreadable": {
+                              "type": [
+                                "string",
                                 "null"
                               ]
                             },
@@ -2572,6 +2601,7 @@
                             "closed_on",
                             "exit",
                             "realized_points",
+                            "unreadable",
                             "cost_to_close",
                             "pnl",
                             "captured",
@@ -3702,7 +3732,10 @@
                             "type": "string"
                           },
                           "contracts": {
-                            "type": "number"
+                            "type": [
+                              "number",
+                              "null"
+                            ]
                           },
                           "entry": {
                             "type": [
@@ -3766,6 +3799,12 @@
                           "realized_points": {
                             "type": [
                               "number",
+                              "null"
+                            ]
+                          },
+                          "unreadable": {
+                            "type": [
+                              "string",
                               "null"
                             ]
                           },
@@ -3834,6 +3873,7 @@
                           "closed_on",
                           "exit",
                           "realized_points",
+                          "unreadable",
                           "followed_monitors",
                           "rescoped_monitors"
                         ]
@@ -4034,7 +4074,10 @@
                             "type": "string"
                           },
                           "contracts": {
-                            "type": "number"
+                            "type": [
+                              "number",
+                              "null"
+                            ]
                           },
                           "entry": {
                             "type": [
@@ -4101,6 +4144,12 @@
                               "null"
                             ]
                           },
+                          "unreadable": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "disabled_monitors": {
                             "type": "array",
                             "items": {
@@ -4133,6 +4182,7 @@
                           "closed_on",
                           "exit",
                           "realized_points",
+                          "unreadable",
                           "disabled_monitors"
                         ]
                       }

@@ -654,7 +654,12 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   A rule the engine cannot evaluate → quarantine (disable + Telegram notice, NEVER delete), for either
   fault: an unknown contract, or a watched figure that has not arrived for `QUARANTINE_AFTER_SILENT_SWEEPS`
   consecutive sweeps (observed, never declared — what a provider serves depends on the account, not on its
-  code; 0 only logs). An UNQUOTED book is HELD, not counted (#380): a price rule (`mid_price`) whose legs
+  code; 0 only logs). A HOLDING whose stored row cannot be read (`toPosition` refuses it — legs that are
+  not legs, an Entry of text, an expiry that is no date) never fails the book (#422, the owner's
+  decision): `/positions/values`, `GET /positions` and the bot's `/holdings` value every other holding
+  and list it with its id and the reader's reason (`unreadable`), so it can be deleted; the routes that
+  need its legs answer 422 saying why, and linking, adoption and a close read only readable holdings
+  (`readableOpenPositions`). An UNQUOTED book is HELD, not counted (#380): a price rule (`mid_price`) whose legs
   all came back but not all with a two-sided quote — moomoo's 0/0 out of hours, IB Gateway's empty sides,
   the open quoting one leg first — is neither evaluated nor counted toward quarantine, at any hour, by
   the batch and never the clock (`holdsWithoutQuote`): its bell, figure and last check stay as the last

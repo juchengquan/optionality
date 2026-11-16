@@ -137,8 +137,8 @@ describe("a transaction", () => {
   const count = (t: string) =>
     (db.prepare(`select count(*) n from ${t}`).get() as { n: number }).n;
 
-  it("commits everything when the body finishes", async () => {
-    await atomic(db, async () => {
+  it("commits everything when the body finishes", () => {
+    atomic(db, () => {
       monitor("a".repeat(32));
       position("b".repeat(32), "one");
     });
@@ -146,40 +146,73 @@ describe("a transaction", () => {
     expect(count("positions")).toBe(1);
   });
 
-  it("rolls everything back when the body throws", async () => {
-    await expect(atomic(db, async () => {
+  it("rolls everything back when the body throws", () => {
+    expect(() => atomic(db, () => {
       monitor("a".repeat(32));
       throw new Error("boom");
-    })).rejects.toThrow("boom");
+    })).toThrow("boom");
     expect(count("monitors")).toBe(0);
   });
 
-  it("rolls back a half-finished delete, which is the case it exists for", async () => {
+  it("rolls back a half-finished delete, which is the case it exists for", () => {
     // clearing monitor_positions and removing what it pointed at must happen together: a commit
     // in between leaves either an orphan link or a monitor nothing can delete
     monitor("m".repeat(32));
     position("p".repeat(32), "one");
     db.prepare("insert into monitor_positions values (?, ?)").run("m".repeat(32), "p".repeat(32));
 
-    await expect(atomic(db, async () => {
+    expect(() => atomic(db, () => {
       db.prepare("delete from monitor_positions where monitor_id = ?").run("m".repeat(32));
       throw new Error("interrupted");
-    })).rejects.toThrow("interrupted");
+    })).toThrow("interrupted");
     expect(count("monitor_positions")).toBe(1);
   });
 
-  it("rolls back when a constraint fails partway through", async () => {
+  it("rolls back when a constraint fails partway through", () => {
     monitor("a".repeat(32));
-    await expect(atomic(db, async () => {
+    expect(() => atomic(db, () => {
       position("b".repeat(32), "one");
       monitor("c".repeat(32)); // duplicate code+field
-    })).rejects.toThrow();
+    })).toThrow();
     expect(count("positions")).toBe(0);
     expect(count("monitors")).toBe(1);
   });
 
-  it("returns what the body returned", async () => {
-    expect(await atomic(db, async () => 42)).toBe(42);
+  it("returns what the body returned", () => {
+    expect(atomic(db, () => 42)).toBe(42);
+  });
+
+  // It awaited the body, so even a synchronous one held the transaction open across a turn of the
+  // event loop: a second transaction begun meanwhile — two requests, or a request and a sweep —
+  // met "cannot start a transaction within a transaction", and any other statement run then was
+  // committed or rolled back with somebody else's work.
+  it("never yields while open, so two begun together both commit", async () => {
+    const [a, b] = await Promise.allSettled([
+      Promise.resolve().then(() => atomic(db, () => monitor("a".repeat(32)))),
+      Promise.resolve().then(() => atomic(db, () => position("b".repeat(32), "one"))),
+    ]);
+    expect([a.status, b.status]).toEqual(["fulfilled", "fulfilled"]);
+    expect([count("monitors"), count("positions")]).toEqual([1, 1]);
+  });
+
+  it("leaves no unhandled rejection behind when the refused body later fails", async () => {
+    const unhandled: unknown[] = [];
+    const listen = (reason: unknown) => { unhandled.push(reason); };
+    process.on("unhandledRejection", listen);
+    try {
+      expect(() => atomic(db, (async () => { throw new Error("late"); }) as unknown as () => void))
+        .toThrow(/must not await/);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", listen);
+    }
+  });
+
+  it("refuses a body that awaits, rolling back what it did before", () => {
+    expect(() => atomic(db, (async () => { monitor("a".repeat(32)); }) as unknown as () => void))
+      .toThrow(/must not await/);
+    expect(count("monitors")).toBe(0);
   });
 });
 

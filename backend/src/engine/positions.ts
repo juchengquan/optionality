@@ -24,7 +24,7 @@ import {
   findPositionSample, recordPositionSample, stampManageNotified,
 } from "../db/queries/index.ts";
 import type { PositionRow } from "../db/rows.ts";
-import { toSqlDatetime } from "../db/time.ts";
+import { fromSqlDatetime, toSqlDatetime } from "../db/time.ts";
 import { toSqliteJson } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import type { Notifier } from "../notify.ts";
@@ -63,7 +63,8 @@ export interface PositionSweepDeps {
  *  no row that has a cost, the batch's, as the page's live valuation would be. Where neither gives a
  *  cost the notice is not sent and not stamped, and the next sweep asks again — in the session at
  *  the latest, where the batch prices it. The wait is BOUNDED: once a whole session has closed since
- *  the holding entered the window (`sessionClosedSince`) with still no cost, the notice goes without
+ *  the holding entered the window (`sessionClosedSince`) — one that opened after the holding was
+ *  recorded, so one put on in the evening is not owed its notice at once — with still no cost, the notice goes without
  *  its "now" line, stamped as usual, rather than never.
  */
 export async function noticeManageBy(
@@ -87,7 +88,10 @@ export async function noticeManageBy(
       // no cost yet: HELD, unsent and unstamped, until a sweep has one to say — but not for ever: once
       // a whole session has closed since the holding entered the window with still no price, a wait
       // will not bring one, and it goes without its "now" line, as it did before #380
-      if (cost === null && !sessionClosedSince(windowEntered(row.strike_date, row.opened_at, settings.exitManageByDte), at)) continue;
+      // counted only from a session that opened after the holding was RECORDED: one put on in the
+      // evening of the day it entered the window has had no session yet, whatever its Opened says
+      const entered = windowEntered(row.strike_date, row.opened_at, settings.exitManageByDte);
+      if (cost === null && !sessionClosedSince(entered, at, fromSqlDatetime(row.created_at))) continue;
       const pace = onPace(row.entry, dteAtOpen(row.strike_date, row.opened_at), close?.dte ?? dte);
 
       let line = `⏰ ${row.name} is at ${dte} DTE — manage by ${settings.exitManageByDte}`;

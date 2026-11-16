@@ -22,12 +22,17 @@ from optionality.monitor import Monitor, monitor_leg_codes
 from optionality.quote import ByCode
 
 
-def silence_reason(monitor: Monitor, priced: set[str]) -> str:
+def silence_reason(monitor: Monitor, priced: set[str], by_code: ByCode | None = None) -> str:
     """Why a figure did not arrive, in the words the notice uses. Sorted, so the sentence does not
-    depend on the order a provider happened to answer in."""
-    unpriced = [code for code in monitor_leg_codes(monitor) if code not in priced]
+    depend on the order a provider happened to answer in. A field SENT and still no figure — text or a
+    flag where a number belongs — is said to be not a number, never missing."""
+    codes = monitor_leg_codes(monitor)
+    unpriced = [code for code in codes if code not in priced]
     if unpriced:
         return f"no quote for {', '.join(sorted(unpriced))}"
+    by_code = by_code or {}
+    if any((by_code.get(code) or {}).get(monitor.field) is not None for code in codes):
+        return f"{monitor.field} is not a number in the quote"
     return f"no {monitor.field} in the quote"
 
 
@@ -69,14 +74,16 @@ def _named(monitor: Monitor) -> str:
     return f"{monitor.code} {rule_short(rule_shape(monitor))}"
 
 
-def silence_verdict(monitor: Monitor, priced: set[str], sweeps_so_far: int, limit: int) -> SilenceVerdict:
+def silence_verdict(
+    monitor: Monitor, priced: set[str], sweeps_so_far: int, limit: int, by_code: ByCode | None = None
+) -> SilenceVerdict:
     """A sweep in which this rule's figure did not arrive.
 
     A `limit` of 0 only logs, by the invariant: quarantine is OBSERVED, never declared, and what a
     provider serves depends on the account rather than on its code.
     """
     count = sweeps_so_far + 1
-    why = silence_reason(monitor, priced)
+    why = silence_reason(monitor, priced, by_code)
     if limit > 0 and count >= limit:
         return SilenceVerdict(
             count=None,

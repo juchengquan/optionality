@@ -890,15 +890,15 @@ describe("what a row's sentence reads", () => {
     expect([e!.watched, e!.distance, e!.fill, e!.triggered]).toEqual([null, null, null, false]);
   });
 
-  it("serves no figure for an infinite reading, and still rings and fills on it as the sweep would", async () => {
+  it("serves no figure for an infinite reading, and neither rings nor fills on it, as the sweep", async () => {
     // JSON has no Infinity, so in the reply it would fail the schema and take every row with it.
-    // The bar and the bell are decided on it exactly as before — the sweep alarms on it too — so
-    // this row rings with no figure to show, and a null distance says nothing either way
+    // No market quotes one either: `monitorValue` reads a non-finite figure as none, as it reads
+    // text, so the sweep counts it toward silence rather than alarming — and the row agrees
     monitor({ field: "option_open_interest", threshold: 1000 });
     for (const reading of [Infinity, "Infinity", -Infinity]) {
       const [e] = await run(quoting({ [CODE]: { option_open_interest: reading } }));
       expect([e!.watched, e!.distance, e!.fill, e!.triggered], String(reading))
-        .toEqual([null, null, 100, true]);
+        .toEqual([null, null, null, false]);
     }
   });
 });

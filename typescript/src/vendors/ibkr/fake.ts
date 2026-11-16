@@ -61,6 +61,12 @@ export interface FakeOptions {
   serverVersion?: number;
   /** Send each reply at its recorded `atMs` times this, rather than every reply at once. */
   pace?: number;
+  /** Refuse a startApi whose client id another open connection already holds, with
+   *  `client-id-in-use`'s refusal. Off by default, because whether the real gateway refuses or
+   *  DISPLACES the first in silence is unverified (that recording's provenance says so); on, it is
+   *  the stricter of the two, which is what a client test of "one connection per client id"
+   *  wants: a second socket shows up as a refusal rather than passing unseen. */
+  oneSessionPerClientId?: boolean;
 }
 
 /** Listening, with the port it actually got (0 asks the OS for a free one). */
@@ -74,6 +80,13 @@ export interface FakeGateway {
   /** Every message a client sent after its version range, in order, over the stub's life — so a
    *  test can hold a client to what it sends, as the Python stub's `received` does. */
   received: string[][];
+  /** Clients connected right now, so a test can see one let go — or one too many held. */
+  readonly connections: number;
+  /** startApi messages it has been sent, over the stub's life: one per session a client tried. */
+  readonly sessionsAsked: number;
+  /** Abort every connection open now and stay listening — a dropped network's effect on a
+   *  client, without the gateway going. The Python stub's `drop_connections`. */
+  dropConnections: () => void;
   close: () => Promise<void>;
 }
 
@@ -108,12 +121,20 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
   const counts = { lookups: 0 };
   const received: string[][] = [];
   const open = new Set<Socket>();
+  /** which open connection holds each client id, for `oneSessionPerClientId` */
+  const holders = new Map<string, Socket>();
+  const refusal = options.oneSessionPerClientId
+    ? loadConversation("client-id-in-use").handshake.onStartApi : [];
+  let sessionsAsked = 0;
   /** how many requests each request-and-contract has had, keyed by the first exchange naming it */
   const turns = new Map<Exchange, number>();
 
   const server = createServer((socket) => {
     open.add(socket);
-    socket.on("close", () => open.delete(socket));
+    socket.on("close", () => {
+      open.delete(socket);
+      for (const [id, holder] of holders) if (holder === socket) holders.delete(id);
+    });
     let buffer: Buffer = Buffer.alloc(0);
     let greeted = false;
     /** market-data requests answered on this connection, by id, for what a cancel is told */
@@ -171,6 +192,14 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
         received.push(f);
 
         if (f[0] === START_API) {
+          sessionsAsked += 1;
+          const clientId = f[2] ?? "";
+          const holder = holders.get(clientId);
+          if (options.oneSessionPerClientId && holder && holder !== socket && !holder.destroyed) {
+            send(refusal);
+            continue;
+          }
+          holders.set(clientId, socket);
           send(conversation.handshake.onStartApi);
           continue;
         }
@@ -210,6 +239,9 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
         conversation,
         get lookups() { return counts.lookups; },
         received,
+        get connections() { return open.size; },
+        get sessionsAsked() { return sessionsAsked; },
+        dropConnections: () => { for (const socket of open) socket.destroy(); },
         close: () => new Promise<void>((done) => {
           // destroyed, not just closed: `server.close()` waits for open connections to end, so a
           // client still holding one makes it hang for ever — which it did, as a 10s hook timeout

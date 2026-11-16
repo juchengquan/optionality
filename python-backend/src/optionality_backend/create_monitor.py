@@ -42,7 +42,7 @@ from datetime import datetime
 from typing import Literal, TypeGuard, cast
 
 from optionality.contract import build_spx_code
-from optionality.monitor import combo_field_error, threshold_fault
+from optionality.monitor import combo_field_error, threshold_fault, watch_field_error
 
 from .db.open import atomic
 from .db.queries import find_monitor, find_monitor_by_code_field, insert_monitor
@@ -117,6 +117,14 @@ class BadThreshold:
 
 
 @dataclass(frozen=True)
+class BadField:
+    """A field no quote carries as a figure (`watch_field_error`): text, a flag, or a stray word."""
+
+    message: str
+    kind: Literal["field"] = dataclasses.field(default="field", init=False)
+
+
+@dataclass(frozen=True)
 class BadComboField:
     message: str
     kind: Literal["combo-field"] = dataclasses.field(default="combo-field", init=False)
@@ -135,11 +143,11 @@ class Duplicate:
     kind: Literal["duplicate"] = dataclasses.field(default="duplicate", init=False)
 
 
-type CreateFault = BadThreshold | BadComboField | UnknownContract | Duplicate
+type CreateFault = BadThreshold | BadField | BadComboField | UnknownContract | Duplicate
 
 
 def is_fault(result: MonitorRow | CreateFault) -> TypeGuard[CreateFault]:
-    return isinstance(result, (BadThreshold, BadComboField, UnknownContract, Duplicate))
+    return isinstance(result, (BadThreshold, BadField, BadComboField, UnknownContract, Duplicate))
 
 
 def _blank(deps: CreateDeps, **over: object) -> MonitorRow:
@@ -206,12 +214,16 @@ def _or[T](value: T | None, default: T) -> T:
 
 
 async def create_single_monitor(deps: CreateDeps, given: SingleInput) -> MonitorRow | CreateFault:
+    field_ = _or(given.field, DEFAULT_SINGLE_FIELD)
+    unwatchable = watch_field_error(field_)
+    if unwatchable:
+        return BadField(message=unwatchable)
+
     compare = _or(given.compare, DEFAULT_COMPARE)
     if threshold_fault(compare, given.threshold):
         return BadThreshold(compare=compare, threshold=given.threshold)
 
     code = build_spx_code(given.strike_date, given.option_type, given.strike)
-    field_ = _or(given.field, DEFAULT_SINGLE_FIELD)
     enabled = _or(given.enabled, DEFAULT_ENABLED)
 
     return await _finish(
@@ -239,6 +251,9 @@ async def create_combo_monitor(deps: CreateDeps, given: ComboInput) -> MonitorRo
     field_ = _or(given.field, DEFAULT_COMBO_FIELD)
     # checked here rather than in the schema: inside a union, a refinement's message is buried under the
     # other branch's "field required" errors
+    unwatchable = watch_field_error(field_)
+    if unwatchable:
+        return BadField(message=unwatchable)
     not_additive = combo_field_error(field_)
     if not_additive:
         return BadComboField(message=not_additive)

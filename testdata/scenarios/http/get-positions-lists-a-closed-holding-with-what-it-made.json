@@ -111,7 +111,8 @@
           "opened_at": "2026-10-12",
           "closed_on": "2026-11-06",
           "exit": 1.25,
-          "realized_points": 5.15
+          "realized_points": 5.15,
+          "unreadable": null
         }
       ]
     },

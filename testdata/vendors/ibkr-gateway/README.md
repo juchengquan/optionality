@@ -133,6 +133,14 @@ The rules `typescript/src/vendors/ibkr/fake.ts` follows, which a stub in any lan
    and nothing after it. Send nothing for reqMarketDataType (`59`) or anything else; the real
    gateway sends nothing for the first, and the rest are not part of a quote fetch.
 
+One rule is OPT-IN, for a client test and never for the corpus: told to (`oneSessionPerClientId`,
+`one_session_per_client_id`), a stub answers a startApi whose client id another OPEN connection
+holds with `client-id-in-use`'s `onStartApi` instead of the session's, so a client that opens a
+second socket on one id is refused rather than passing unseen. Off by default, because whether
+the real gateway refuses that second session or lets it displace the first in silence is
+unverified (`client-id-in-use`'s provenance). Both stubs also count the startApi messages they
+were sent and the connections open, and can drop every connection while staying up.
+
 `ib_async`'s `IB.connectAsync` sends more than a quote fetch on connect: the account's positions
 whatever its fetch flags say, and open and completed orders unless `readonly=True`. No recording
 holds any of it, and none should — a quote fetch has nothing account-shaped in it (ADR 0019). So

@@ -1,3 +1,5 @@
+import { createConnection } from "node:net";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import { IbkrClient } from "./client.ts";
@@ -406,6 +408,77 @@ describe("a gateway that will not answer", () => {
     });
     client = fresh;
     expect((await fresh.fetchQuotes([OPTION])).records).toHaveLength(1);
+  });
+});
+
+describe("one connection per client id", () => {
+  // IB Gateway allows one connection per client id. The sweep, the dashboard's poll and a creation
+  // probe can all arrive while the client is cold, and each used to open a socket of its own with
+  // the same id: the gateway refused the second, and that refusal's teardown closed whatever
+  // socket the client held and dropped every caller's listeners.
+  const cold = async (options: FakeOptions = {}, requestTimeoutMs = 1500) => {
+    const c = await connected({ oneSessionPerClientId: true, ...options }, requestTimeoutMs);
+    let opened = 0;
+    const counting = new IbkrClient({
+      host: "127.0.0.1", port: gateway!.port, clientId: 31419, requestTimeoutMs,
+      connect: (host, port) => { opened += 1; return createConnection({ host, port }); },
+    });
+    c.close();
+    client = counting;
+    return { c: counting, opened: () => opened };
+  };
+
+  it("shares one connect between callers who arrive together", async () => {
+    const { c, opened } = await cold();
+    const asks = await Promise.allSettled([
+      c.fetchQuotes([OPTION]), c.fetchQuotes([OPTION]), c.fetchQuotes([OPTION]), c.reachable(),
+    ]);
+    expect(asks.map((a) => a.status)).toEqual(["fulfilled", "fulfilled", "fulfilled", "fulfilled"]);
+    for (const a of asks.slice(0, 3)) {
+      expect((a as PromiseFulfilledResult<any>).value.records.map((r: any) => r.code)).toEqual([OPTION]);
+    }
+    expect(opened()).toBe(1);
+    expect(gateway!.sessionsAsked).toBe(1);
+    expect(gateway!.connections).toBe(1);
+  });
+
+  it("fails every caller of a refused connect with the refusal, and leaves no socket open", async () => {
+    const { c, opened } = await cold({ conversation: "client-id-in-use" });
+    const asks = await Promise.allSettled([c.fetchQuotes([OPTION]), c.fetchQuotes([OPTION])]);
+    for (const a of asks) {
+      expect(a.status).toBe("rejected");
+      expect(String((a as PromiseRejectedResult).reason)).toMatch(/refused the session: 326/);
+    }
+    expect(opened()).toBe(1);
+    await waitFor(() => gateway!.connections === 0);
+  });
+
+  it("opens no socket that outlives a close made while it was connecting", async () => {
+    const { c } = await cold();
+    const ask = c.fetchQuotes([OPTION]);
+    c.close();
+    await expect(ask).rejects.toThrow(/closed/);
+    await waitFor(() => gateway!.connections === 0);
+    // and the client still works afterwards
+    expect((await c.fetchQuotes([OPTION])).records).toHaveLength(1);
+  });
+
+  it("tears down only the socket a failed ask used, never one opened since", async () => {
+    // Ask A waits on a lookup the gateway never answers. Its socket dies under it, ask B
+    // reconnects and is answered, and only then does A give up. A's teardown used to close
+    // whatever socket the client held — B's — so the next ask paid a handshake again, and an ask
+    // running on it would have lost its listeners.
+    const c = await connected({ conversation: "never-answers" }, 600);
+    const a = c.fetchQuotes(["US.SPXW261218C8200000"]);
+    await waitFor(() => gateway!.lookups === 1);
+    gateway!.dropConnections();
+    await waitFor(() => !(c as unknown as { socket: { connected: boolean } | null }).socket?.connected);
+    expect((await c.fetchQuotes([OPTION])).records.map((r) => r.code)).toEqual([OPTION]);
+    expect(gateway!.sessionsAsked).toBe(2);
+    await expect(a).rejects.toThrow(/answered none of them/);
+    await waitFor(() => gateway!.connections === 1);
+    expect((await c.fetchQuotes([OPTION])).records).toHaveLength(1);
+    expect(gateway!.sessionsAsked, "B's connection must have survived A's failure").toBe(2);
   });
 });
 

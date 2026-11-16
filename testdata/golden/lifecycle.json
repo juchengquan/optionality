@@ -206,6 +206,95 @@
       "expect": "no quote for US.SPXW261120C7100000"
     },
     {
+      "fn": "silenceReason",
+      "name": "a field sent as text is not a number, not missing",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_type",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7100000"
+          ]
+        },
+        {
+          "US.SPXW261120C7100000": {
+            "code": "US.SPXW261120C7100000",
+            "option_type": "CALL"
+          }
+        }
+      ],
+      "expect": "option_type is not a number in the quote"
+    },
+    {
+      "fn": "silenceReason",
+      "name": "a field the quote does not carry is still missing",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7100000"
+          ]
+        },
+        {
+          "US.SPXW261120C7100000": {
+            "code": "US.SPXW261120C7100000"
+          }
+        }
+      ],
+      "expect": "no option_delta in the quote"
+    },
+    {
+      "fn": "silenceVerdict",
+      "name": "a field sent as a flag is quarantined as not a number",
+      "args": [
+        {
+          "code": "US.SPXW261120C7100000",
+          "strike_date": "2026-11-20",
+          "option_type": "CALL",
+          "strike": 7100,
+          "field": "suspension",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs"
+        },
+        {
+          "$set": [
+            "US.SPXW261120C7100000"
+          ]
+        },
+        0,
+        1,
+        {
+          "US.SPXW261120C7100000": {
+            "code": "US.SPXW261120C7100000",
+            "suspension": false
+          }
+        }
+      ],
+      "expect": {
+        "count": null,
+        "quarantine": true,
+        "notice": "⚠️ monitor US.SPXW261120C7100000 |suspension| ≥ 0.30 disabled: suspension is not a number in the quote for 1 consecutive sweeps"
+      }
+    },
+    {
       "fn": "silenceVerdict",
       "name": "a first silent sweep only counts",
       "args": [

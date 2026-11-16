@@ -194,6 +194,27 @@ def test_positions_are_only_what_is_still_held(service):
     assert [p.name for p in api.positions(service.url)] == ["1120_IC"]
 
 
+def test_a_holding_the_service_cannot_read_is_left_out(service):
+    # since #422 the service lists such a row, with no legs and why: valued here, it would be an empty
+    # structure passed off as the holding
+    broken = {
+        **CONDOR,
+        "name": "broken",
+        "legs": [],
+        "closed_on": None,
+        "exit": None,
+        "realized_points": None,
+        "unreadable": "position broken cannot be read: legs must be a list",
+    }
+    service.routes = {
+        "/positions": (
+            200,
+            [{**CONDOR, "closed_on": None, "exit": None, "realized_points": None, "unreadable": None}, broken],
+        )
+    }
+    assert [p.name for p in api.positions(service.url)] == ["1120_IC"]
+
+
 def test_closed_positions_carry_how_they_ended(service):
     service.routes = {
         "/positions": (200, [{**CONDOR, "closed_on": None, "exit": None, "realized_points": None}, CLOSED])

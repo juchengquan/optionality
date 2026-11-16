@@ -9,7 +9,7 @@ import { journalOf, madeWords, storedWords } from "../journal";
 const row = (id: string, over: Partial<Recorded>): Recorded => ({
   id, name: id, strategy: null, strike_date: "2026-12-18", contracts: 1, entry: 2,
   legs: [{ side: "short", option_type: "PUT", strike: 6400 }, { side: "long", option_type: "PUT", strike: 6350 }],
-  created_at: null, opened_at: "2026-11-03", closed_on: null, exit: null, realized_points: null, ...over,
+  created_at: null, opened_at: "2026-11-03", closed_on: null, exit: null, realized_points: null, unreadable: null, ...over,
 });
 
 describe("the journal", () => {

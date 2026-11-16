@@ -30,10 +30,21 @@ export const ibkrVendor: ProviderVendor = {
     // Held for the life of the process, not opened per ask: a handshake and a session start on
     // every dashboard refresh is 5,760 of them a day to read two numbers, which is the waste
     // `opend/client.ts` already rejected for websockets.
-    return new IbkrClient({
+    const client = new IbkrClient({
       host: settings.ibkrHost,
       port: settings.ibkrPort,
       clientId: settings.ibkrClientId,
     });
+    // A plain object of closures, as moomoo's descriptor hands back, and never the instance:
+    // `main.ts` and every route pass `provider.fetchQuotes` on DETACHED, and a class method
+    // extracted from its instance has no `this` — every ask then failed with "this.close is not a
+    // function" from inside the client. `openVendors` already wraps the sources for the same
+    // reason; the Provider is handed on by more hands than that one.
+    return {
+      name: client.name,
+      fetchQuotes: (codes) => client.fetchQuotes(codes),
+      reachable: () => client.reachable(),
+      close: () => client.close(),
+    };
   },
 };

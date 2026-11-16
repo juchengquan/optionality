@@ -35,7 +35,7 @@ import type { MonitorRow } from "./db/rows.ts";
 import { newId, toSqliteBool, toSqliteJson } from "./db/values.ts";
 import { toSqlDatetime } from "./db/time.ts";
 import { buildSpxCode } from "optionality/domain/contract";
-import { comboFieldError, thresholdFault } from "optionality/domain/monitor";
+import { comboFieldError, thresholdFault, watchFieldError } from "optionality/domain/monitor";
 import { linkToPositions } from "./monitors.ts";
 import {
   DEFAULT_COMBO_FIELD, DEFAULT_COMPARE, DEFAULT_DIRECTION, DEFAULT_ENABLED, DEFAULT_SINGLE_FIELD,
@@ -84,6 +84,8 @@ export type CreateFault =
    *  The bot's is deliberately longer than the API's — it is read without the form that produced
    *  it (bot/format.ts) — so the compare and threshold come back rather than a sentence. */
   | { kind: "threshold"; compare: string; threshold: number }
+  /** a field no quote carries as a figure (`watchFieldError`): text, a flag, or a stray word */
+  | { kind: "field"; message: string }
   | { kind: "combo-field"; message: string }
   | { kind: "unknown-contract"; message: string }
   | { kind: "duplicate"; code: string; field: string };
@@ -145,13 +147,16 @@ async function finish(
 export async function createSingleMonitor(
   deps: CreateDeps, input: SingleInput,
 ): Promise<MonitorRow | CreateFault> {
+  const field = input.field ?? DEFAULT_SINGLE_FIELD;
+  const unwatchable = watchFieldError(field);
+  if (unwatchable) return { kind: "field", message: unwatchable };
+
   const compare = input.compare ?? DEFAULT_COMPARE;
   if (thresholdFault(compare, input.threshold)) {
     return { kind: "threshold", compare, threshold: input.threshold };
   }
 
   const code = buildSpxCode(input.strike_date, input.option_type, input.strike);
-  const field = input.field ?? DEFAULT_SINGLE_FIELD;
   const enabled = input.enabled ?? DEFAULT_ENABLED;
 
   return finish(deps, code, field, [code], () => blank(deps, {
@@ -174,6 +179,8 @@ export async function createComboMonitor(
   const field = input.field ?? DEFAULT_COMBO_FIELD;
   // checked here rather than in the schema: inside a union, a refinement's message is buried
   // under the other branch's "field required" errors
+  const unwatchable = watchFieldError(field);
+  if (unwatchable) return { kind: "field", message: unwatchable };
   const notAdditive = comboFieldError(field);
   if (notAdditive) return { kind: "combo-field", message: notAdditive };
 

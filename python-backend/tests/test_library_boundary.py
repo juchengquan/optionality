@@ -32,6 +32,7 @@ import itertools
 from pathlib import Path
 
 import pytest
+from optionality.no_trading import folded
 from reading import every_string, python_files
 
 BACKEND = Path(__file__).resolve().parents[1]
@@ -146,6 +147,39 @@ def file_breaches(path: Path, rel: Path) -> list[tuple[int, str]]:
         elif isinstance(node, ast.Name) and node.id in BY_PATH:
             found.add((node.lineno, f"uses {node.id}, which imports by path rather than by name"))
 
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        called = func.attr if isinstance(func, ast.Attribute) else func.id if isinstance(func, ast.Name) else None
+        # `import_module(".x", package="optionality")`: a relative name means nothing on its own,
+        # so it is resolved against the package it is given, as importlib resolves it
+        if called == "import_module" and node.args:
+            name = folded(node.args[0])
+            given = (
+                node.args[1]
+                if len(node.args) > 1
+                else next((k.value for k in node.keywords if k.arg == "package"), None)
+            )
+            anchor = folded(given) if given is not None else None
+            if name is not None and name.startswith(".") and anchor is not None:
+                dots = len(name) - len(name.lstrip("."))
+                base = anchor.split(".")
+                if dots - 1 < len(base):
+                    full = ".".join([*base[: len(base) - (dots - 1)], *filter(None, [name[dots:]])])
+                    module(node.lineno, full)
+        # `getattr(optionality, "_ported")`: an attribute named as a string
+        if called in ("getattr", "hasattr") and len(node.args) >= 2:
+            chain = dotted(node.args[0])
+            attr = folded(node.args[1])
+            if chain is not None and attr is not None and chain[0] in bound:
+                full = [*bound[chain[0]].split("."), *chain[1:], attr]
+                for depth in range(2, len(full) + 1):
+                    why = library_refusal(full[:depth])
+                    if why is not None:
+                        found.add((node.lineno, f"reaches {'.'.join(full[:depth])} by name, {why}"))
+                        break
+
     for stmt_line, strings in every_string(tree):
         for line, value in strings:
             if all(c.isalnum() or c in "._" for c in value):
@@ -200,6 +234,20 @@ REFUSED = {
     "research, by importlib": 'import importlib\nm = importlib.import_module("optionality.research.yahoo")\n',
     "a private module, by __import__": 'm = __import__("optionality._ported")\n',
     "a private module, by a folded string": 'import importlib\nimportlib.import_module("optionality." + "_ported")\n',
+    # a RELATIVE name and its package, which no string alone spells
+    "a private module, relative to the library": (
+        'import importlib\nm = importlib.import_module("._ported", package="optionality")\n'
+    ),
+    "research, relative to the library, positionally": (
+        'from importlib import import_module\nm = import_module(".research", "optionality")\n'
+    ),
+    "a private module two levels down, relatively": (
+        'import importlib\nm = importlib.import_module(".._ported", "optionality.yahoo")\n'
+    ),
+    # an attribute by name, which no attribute node spells
+    "a private module, by getattr": 'import optionality\nstamp = getattr(optionality, "_ported", None)\n',
+    "research, by getattr through an alias": 'import optionality as o\nr = getattr(o, "research")\n',
+    "a private name, by getattr on a public module": 'from optionality import yahoo\nm = getattr(yahoo, "_MISSING")\n',
     # the source tree instead of the package
     "sys.path edited": 'import sys\nsys.path.insert(0, "../python/lib")\n',
     "sys.path edited under an alias": 'import sys as s\ns.path.append("x")\n',
@@ -246,6 +294,11 @@ ALLOWED = {
     "os.path, which is not sys.path": 'import os\nP = os.path.join("a", "b")\n',
     "a dunder, which is not private": "import optionality\nV = optionality.__name__\n",
     "the backend's own name": "import optionality_backend\n",
+    "the backend's own modules, relatively by importlib": (
+        'import importlib\nm = importlib.import_module(".env", package="optionality_backend")\n'
+    ),
+    "a public module, by getattr": 'import optionality\nm = getattr(optionality, "alarm")\n',
+    "getattr on something else": 'x = getattr(settings, "_private")\n',
     "the words, apart": 'LANGS = "python"\nDIRS = "src"\n',
     "the docstring may say it": '"""Never optionality.research, never sys.path."""\n',
 }

@@ -219,7 +219,14 @@ export type Holding = Awaited<ReturnType<typeof fetchHoldings>>[number];
 export const fetchHoldings = () =>
   read<Exclude<Infer<typeof client.positions.values.$get>, { detail: string }>>(
     client.positions.values.$get(), "/positions/values",
-  ).then(withSpx);
+  ).then(withSpx).then((rows) => rows.map(counted));
+
+/** A holding's count as a number: the service serves null only on a holding it cannot read (#422),
+ *  which the page draws from its `unreadable` alone — never from a count — so 0 stands in for it
+ *  and every other reader keeps a number. */
+function counted<T extends { contracts: number | null }>(row: T): T & { contracts: number } {
+  return { ...row, contracts: row.contracts ?? 0 };
+}
 export const fetchHealth = () => read<Health>(client.health.$get(), "/health");
 
 /** A write, whose only interesting answer is whether it was refused. */
@@ -253,7 +260,7 @@ export type Recorded = Awaited<ReturnType<typeof fetchPositions>>[number];
 export const fetchPositions = () =>
   read<Exclude<Infer<typeof client.positions.$get>, { detail: string }>>(
     client.positions.$get(), "/positions",
-  );
+  ).then((rows) => rows.map(counted));
 
 /** What a close answers: the holding as it now stands, and the rules it switched off. */
 export type Closed = Exclude<

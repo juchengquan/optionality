@@ -125,6 +125,13 @@ def _redefined(before: MonitorRow, now: MonitorRow) -> bool:
     return any(before[k] != now[k] for k in _DEFINITION)  # type: ignore[literal-required]
 
 
+def _still_the_rule(db: sqlite3.Connection, before: MonitorRow) -> bool:
+    """Whether a rule read before the fetch is, now, still on and still the rule it was: neither
+    deleted, muted nor redefined while the batch was out. Read inside the caller's transaction."""
+    current = find_monitor(db, before["id"])
+    return current is not None and bool(current["enabled"]) and not _redefined(before, current)
+
+
 def _utc_date(when: datetime) -> str:
     """The date a sweep reckons expiry against: the UTC day, as the Python's `utcnow().date()` gave.
 
@@ -384,6 +391,10 @@ class MonitorSweeper:
 
         def apply() -> None:
             for monitor in rows:
+                # re-read, as the other two quarantines do: the expiry notices were sent after these rows
+                # were read, and a rule muted meanwhile keeps the reason it was muted for
+                if not _still_the_rule(db, monitor):
+                    continue
                 reason: DisabledReason = "unreadable"
                 update_monitor_fields(db, monitor["id"], {"enabled": to_sqlite_bool(False), "disabled_reason": reason})
                 # the words are `optionality.lifecycle.unreadable_notice`'s (ADR 0017); this applies it
@@ -407,6 +418,12 @@ class MonitorSweeper:
                 verdict = unknown_contract_verdict(to_monitor(monitor), bad)
                 if not verdict.quarantine:
                     surviving.append(monitor)
+                    continue
+                # re-read, as `_evaluate` does: this row was read before the fetch, and a rule muted,
+                # deleted or redefined while it was out is not the rule the batch answered about.
+                # Muted, it would come back disabled as "unknown-contract", its own reason overwritten
+                # and a notice sent about a rule nobody is watching; redefined, the next sweep asks anew
+                if not _still_the_rule(db, monitor):
                     continue
                 reason: DisabledReason = "unknown-contract"
                 update_monitor_fields(db, monitor["id"], {"enabled": to_sqlite_bool(False), "disabled_reason": reason})
@@ -462,9 +479,17 @@ class MonitorSweeper:
                         self.silent_sweeps.pop(row["id"], None)
                         continue
                     if value is None:
+                        # a rule muted, deleted or redefined mid-fetch is counted toward nothing: the
+                        # silence was the old rule's, and quarantining it would overwrite the reason it
+                        # was muted for
+                        if not _still_the_rule(db, row):
+                            self.silent_sweeps.pop(row["id"], None)
+                            continue
                         # the decision is `optionality.lifecycle.silence_verdict` (ADR 0017); this
                         # applies it
-                        verdict = silence_verdict(monitor, set(by_code), self.silent_sweeps.get(row["id"], 0), limit)
+                        verdict = silence_verdict(
+                            monitor, set(by_code), self.silent_sweeps.get(row["id"], 0), limit, by_code
+                        )
                         if verdict.count is None:
                             self.silent_sweeps.pop(row["id"], None)
                         else:

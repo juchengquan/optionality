@@ -1,5 +1,5 @@
 {
-  "name": "GET /quotes rings on an infinite reading it cannot serve, and answers every other row",
+  "name": "GET /quotes serves an infinite reading as no figure, and answers every other row",
   "world": {
     "clock": "2026-11-09T15:00:00.000Z",
     "settings": {
@@ -186,7 +186,7 @@
           "threshold": 1000,
           "direction": "above",
           "compare": "abs",
-          "triggered": true,
+          "triggered": false,
           "quote": {
             "code": "US.SPXW261218C7350000",
             "name": "SPXW 261218 7350C",
@@ -212,7 +212,7 @@
           "schedule": null,
           "entry": null,
           "pnl": null,
-          "fill": 100,
+          "fill": null,
           "watched": null,
           "distance": null,
           "spx": null,

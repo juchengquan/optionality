@@ -15,6 +15,40 @@ from optionality.quote import ByCode
 
 COMBO_GREEK_FIELDS = ("option_delta", "option_gamma", "option_theta", "option_vega")
 NON_ADDITIVE_FIELDS = frozenset({"option_implied_volatility"})
+#: every figure a rule may watch: each NUMBER a Quote carries, under the service's field names. A
+#: Quote also carries text and flags, and a rule on one of those read NaN on every sweep — never
+#: silent, so never quarantined, and never alarmed. Mirrors `monitor.ts`.
+WATCHABLE_FIELDS = (
+    "mid_price",
+    "last_price",
+    "bid_price",
+    "ask_price",
+    "open_price",
+    "high_price",
+    "low_price",
+    "prev_close_price",
+    "avg_price",
+    "bid_vol",
+    "ask_vol",
+    "volume",
+    "turnover",
+    "turnover_rate",
+    "amplitude",
+    "bid_ask_ratio",
+    "lot_size",
+    "option_delta",
+    "option_gamma",
+    "option_theta",
+    "option_vega",
+    "option_rho",
+    "option_implied_volatility",
+    "option_premium",
+    "option_open_interest",
+    "option_strike_price",
+    "option_contract_size",
+    "option_contract_multiplier",
+    "option_expiry_date_distance",
+)
 
 type ThresholdFault = Literal["abs-not-positive", "signed-zero"]
 
@@ -68,6 +102,14 @@ def monitor_contracts(monitor: Monitor) -> list[str]:
     return [code for leg, code in zip(monitor.legs, monitor_leg_codes(monitor), strict=True) for _ in range(leg.qty)]
 
 
+def watch_field_error(field: str) -> str | None:
+    """Reason a rule cannot watch this field at all, or None if it can. A combo's own further rule is
+    `combo_field_error`."""
+    if field in WATCHABLE_FIELDS:
+        return None
+    return f"cannot watch {field}: it is not a figure a quote carries"
+
+
 def combo_field_error(field: str) -> str | None:
     if field in NON_ADDITIVE_FIELDS:
         return f"combos cannot watch {field}: it is not additive across legs"
@@ -84,18 +126,27 @@ def combo_field_sum(monitor: Monitor, by_code: ByCode, field: str) -> float | No
     total = 0.0
     for leg, code in zip(legs, codes, strict=True):
         record = by_code.get(code)
-        value = None if record is None else record.get(field)
+        value = _reading(None if record is None else record.get(field))
         if value is None:
             return None
-        total += leg.sign * leg.qty * number(value)
-    return total
+        total += leg.sign * leg.qty * value
+    return total if math.isfinite(total) else None
+
+
+def _reading(value: object) -> float | None:
+    """A quote field as a figure, or None where it is none: text reads NaN, which compares false with
+    everything, so a rule on it was never breached, never silent and never quarantined. Infinity
+    likewise. Mirrors `monitor.ts`."""
+    if value is None or isinstance(value, bool):  # a flag is not a figure, though JavaScript reads it as 1
+        return None
+    n = number(value)
+    return n if math.isfinite(n) else None
 
 
 def monitor_value(monitor: Monitor, by_code: ByCode) -> float | None:
     if not monitor.legs:
         record = by_code.get(monitor.code)
-        value = None if record is None else record.get(monitor.field)
-        return None if value is None else number(value)
+        return _reading(None if record is None else record.get(monitor.field))
     return combo_field_sum(monitor, by_code, monitor.field)
 
 

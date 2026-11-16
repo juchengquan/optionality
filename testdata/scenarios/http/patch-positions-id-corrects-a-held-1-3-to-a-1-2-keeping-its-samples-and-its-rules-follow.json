@@ -182,6 +182,7 @@
         "closed_on": null,
         "exit": null,
         "realized_points": null,
+        "unreadable": null,
         "followed_monitors": [
           {
             "id": "mon-ratio",

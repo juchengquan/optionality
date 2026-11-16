@@ -68,8 +68,9 @@ def link_to_positions(db: sqlite3.Connection, monitor_id: str, contracts: list[s
     nothing: a contract nothing holds, and a contract something holds twice.
     """
     # only what is still held: a rule watching a contract of a closed holding watches an option, not a
-    # holding anyone has any more (ADR 0022)
-    positions = [to_position(r) for r in open_positions(db)]
+    # holding anyone has any more (ADR 0022) — and only what can be read: one holding that cannot failed
+    # every rule's creation (#422's review)
+    positions = readable_open_positions(db)
     holding = positions_holding(positions, contracts)
     if not holding.found:
         return
@@ -148,13 +149,13 @@ async def watchlist_quotes(
         by_code=display_records(batch.records, display_tz, at),
         bad=set(batch.unknown),
         owned=owned,
-        holdings=_readable_open_positions(db),
+        holdings=readable_open_positions(db),
         now=at,
         policy=policy,
     )
 
 
-def _readable_open_positions(db: sqlite3.Connection) -> list[Position]:
+def readable_open_positions(db: sqlite3.Connection) -> list[Position]:
     """Every OPEN holding that can be read, for whether a rule watches anything held.
 
     It joins no batch — holding a Contract needs no quote — but it reads holdings no rule is linked to,
@@ -186,8 +187,9 @@ def adopt_orphan_monitors(db: sqlite3.Connection) -> None:
     if not orphans:
         return
     # never onto a closed holding: closing one is what ORPHANED the rules it took (ADR 0022), and
-    # adopting them straight back would undo the close
-    positions = [to_position(r) for r in open_positions(db)]
+    # adopting them straight back would undo the close — and never onto one that cannot be read, which
+    # failed every close and delete beside it (#422's review)
+    positions = readable_open_positions(db)
     for row in orphans:
         monitor = to_monitor(row)
         holding = positions_holding(positions, monitor_contracts(monitor))

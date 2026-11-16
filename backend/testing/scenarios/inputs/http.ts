@@ -22,6 +22,12 @@ const DOWN = "connect ECONNREFUSED 127.0.0.1:33333";
 
 /** The book as it stands: the condor held, its short call watched on delta, its call spread
  *  watched as a combo, both rules linked to the holding. */
+/** A holding the service cannot read (#422): a side of "sold", which no leg has had since ADR 0013. */
+const BROKEN = position({
+  id: "pos-9", name: "dec-broken",
+  legs: [{ side: "sold", option_type: "CALL", strike: 7500 }, { side: "long", option_type: "CALL", strike: 7550 }],
+});
+
 const held = {
   positions: [position({ id: "pos-1" })],
   monitors: [monitor({ id: "mon-1", scope: "leg" }), combo({ id: "mon-2", scope: "calls" })],
@@ -425,10 +431,10 @@ export const HTTP: readonly HttpInput[] = [
   },
   {
     // a field the quote schema does not type passes through as the Provider sent it, so an
-    // infinite reading reaches the row. JSON cannot write one: it is served as no figure and no
-    // distance, the bar and the bell are decided on it as the sweep decides — full, and ringing —
-    // and every other row is answered as usual
-    name: "GET /quotes rings on an infinite reading it cannot serve, and answers every other row",
+    // infinite reading reaches the row. It is no figure — JSON cannot write one, and no market
+    // quotes one — so it is served as no figure, no distance, no fill and no bell, as the sweep
+    // reads it, and every other row is answered as usual
+    name: "GET /quotes serves an infinite reading as no figure, and answers every other row",
     world: world({
       tables: {
         monitors: [
@@ -635,6 +641,18 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/monitors", { ...comboBody, field: "option_implied_volatility" }),
   },
   {
+    // a quote's text is no figure: watched, it read NaN every sweep — never breached, never silent,
+    // never quarantined — so it is refused, asking the Provider nothing
+    name: "POST /monitors refuses a field that is not a figure a quote carries",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/monitors", { ...single, field: "option_type" }),
+  },
+  {
+    name: "POST /monitors refuses a combo on a field that is not a figure a quote carries",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/monitors", { ...comboBody, field: "name" }),
+  },
+  {
     name: "PATCH /monitors/{id} moves a threshold",
     world: world({ tables: held }),
     request: request("PATCH", "/monitors/mon-1", { threshold: 0.35 }),
@@ -682,6 +700,11 @@ export const HTTP: readonly HttpInput[] = [
     name: "PATCH /monitors/{id} refuses a combo moved onto a figure that does not add up",
     world: world({ tables: held }),
     request: request("PATCH", "/monitors/mon-2", { field: "option_implied_volatility" }),
+  },
+  {
+    name: "PATCH /monitors/{id} refuses a field that is not a figure a quote carries",
+    world: world({ tables: held }),
+    request: request("PATCH", "/monitors/mon-1", { field: "abs" }),
   },
   {
     // the owner's fix for a quarantine: switched back on, its reason cleared, the sweep to judge it
@@ -904,14 +927,102 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/values"),
   },
   {
+    // legs that are not even JSON: listed with the reason, so the page can offer it for deletion
+    name: "GET /positions lists a holding that cannot be read, with why",
+    world: world({
+      tables: {
+        positions: [position({ id: "pos-1" }), position({ id: "pos-2", name: "dec-broken", legs: "not json" })],
+      },
+    }),
+    request: request("GET", "/positions"),
+  },
+  // --- a holding the service cannot read, everywhere it could have failed the book (#422's review)
+  {
+    // the only holdings are unreadable: listed, and no Provider asked — there is nothing to price
+    name: "GET /positions/values lists a holding that cannot be read when it is the only one",
+    world: world({ tables: { positions: [BROKEN] }, provider: { down: "connect ECONNREFUSED 127.0.0.1:33333" } }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // an Entry of "abc" failed the response's own schema, and took the whole listing with it: it is
+    // served as null on the one row that cannot be read
+    name: "GET /positions/values lists a holding whose stored entry is no number",
+    world: world({
+      tables: { positions: [position({ id: "pos-1" }), position({ id: "pos-2", name: "dec-text-entry", entry: "abc" })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    name: "GET /positions lists a holding whose stored count is no number",
+    world: world({
+      tables: { positions: [position({ id: "pos-1" }), position({ id: "pos-2", name: "dec-text-count", contracts: "two" })] },
+    }),
+    request: request("GET", "/positions"),
+  },
+  {
+    // an expiry that is no date was "moomoo call failed: invalid strike_date" for the whole book; it
+    // is the holding's own fault now, read as such, with no DTE to count
+    name: "GET /positions/values lists a holding whose expiry is no date",
+    world: world({
+      tables: { positions: [position({ id: "pos-1" }), position({ id: "pos-2", name: "dec-no-date", strike_date: "garbage" })] },
+      provider: { quotes: BOOK },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    name: "POST /monitors links a new rule beside a holding that cannot be read",
+    world: world({ tables: { positions: [position({ id: "pos-1" }), BROKEN] }, provider: { quotes: BOOK } }),
+    request: request("POST", "/monitors", single),
+  },
+  {
+    name: "POST /spreads records a spread beside a holding that cannot be read",
+    world: world({ tables: { positions: [BROKEN] }, provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", { strike_date: EXPIRY, spreads: [PUT_SPREAD] }),
+  },
+  {
+    name: "POST /positions/{id}/close closes a holding beside one that cannot be read",
+    world: world({ tables: { ...held, positions: [...held.positions, BROKEN] } }),
+    request: request("POST", "/positions/pos-1/close", { exit: 1.25 }),
+  },
+  {
+    name: "DELETE /positions/{id} deletes a holding with linked rules beside one that cannot be read",
+    world: world({ tables: { ...held, positions: [...held.positions, BROKEN] } }),
+    request: request("DELETE", "/positions/pos-1"),
+  },
+  {
+    // every route that works from a holding's legs answers why, rather than a 500
+    name: "PATCH /positions/{id} refuses to correct the legs of a holding that cannot be read",
+    world: world({ tables: { positions: [BROKEN] } }),
+    request: request("PATCH", "/positions/pos-9", {
+      legs: [{ side: "short", option_type: "CALL", strike: 7500 }, { side: "long", option_type: "CALL", strike: 7550 }],
+    }),
+  },
+  {
+    name: "GET /positions/{id}/vol refuses a holding that cannot be read, saying why",
+    world: world({ tables: { positions: [BROKEN] } }),
+    request: request("GET", "/positions/pos-9/vol"),
+  },
+  {
+    name: "GET /positions/{id}/payoff refuses a holding that cannot be read, saying why",
+    world: world({ tables: { positions: [BROKEN] } }),
+    request: request("GET", "/positions/pos-9/payoff"),
+  },
+  {
+    name: "GET /positions/{id}/samples refuses a holding that cannot be read, saying why",
+    world: world({ tables: { positions: [BROKEN] } }),
+    request: request("GET", "/positions/pos-9/samples"),
+  },
+  {
     name: "GET /positions/values answers 502 naming the Provider when it is down",
     world: world({ tables: held, provider: { down: DOWN } }),
     request: request("GET", "/positions/values"),
   },
   {
-    // the refusal's words are the reply, so both backends must say them alike (#266). Under the
-    // Provider's name, as every failure of this route is: the read sits inside its one guard
-    name: "GET /positions/values answers 502 naming a holding that cannot be read",
+    // one holding whose row cannot be read no longer fails the book (#422, the owner's decision of
+    // what #266 answered with a 502): the rest is valued, and it is listed with no legs and no
+    // figures, its reason in the reader's own words — which both backends must say alike
+    name: "GET /positions/values values the book and lists a holding that cannot be read",
     world: world({
       tables: {
         positions: [
@@ -1991,6 +2102,21 @@ export const HTTP: readonly HttpInput[] = [
           direction: "below", compare: "signed",
         }],
       }],
+    }),
+  },
+  {
+    name: "POST /spreads refuses a monitor on a field that is not a figure a quote carries",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY,
+      spreads: [{ ...PUT_SPREAD, monitors: [{ option_type: "PUT", strike: 6400, field: "update_time", threshold: 1 }] }],
+    }),
+  },
+  {
+    name: "POST /spreads refuses a spread's own monitor on a field that is not a figure a quote carries",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/spreads", {
+      strike_date: EXPIRY, spreads: [{ ...PUT_SPREAD, monitors: [{ field: "name", threshold: 1 }] }],
     }),
   },
   {

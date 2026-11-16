@@ -48,6 +48,12 @@ describe("what may import the test harness", () => {
     expect(found()).toEqual([expect.stringContaining("backend/src/a.ts")]);
   });
 
+  it("sees a specifier written as a template literal, which is still one fixed path", () => {
+    write("backend/testing/harness.ts", "export const harness = () => {};\n");
+    write("backend/src/a.ts", "const h = await import(`../testing/harness.ts`);\n");
+    expect(found()).toEqual([expect.stringContaining("backend/src/a.ts")]);
+  });
+
   it("names the importer and what it reached for", () => {
     write("backend/testing/harness.ts", "export const harness = () => {};\n");
     write("backend/src/a.ts", 'import { TOKEN } from "../testing/harness.ts";\n');

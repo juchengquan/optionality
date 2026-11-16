@@ -38,7 +38,7 @@ from typing import Any, Literal, TypeGuard, cast
 
 from optionality.contract import build_spx_code
 from optionality.js import js_string
-from optionality.monitor import combo_field_error, threshold_fault
+from optionality.monitor import combo_field_error, threshold_fault, watch_field_error
 from optionality.position import positions_holding
 
 from .db.open import atomic
@@ -132,10 +132,13 @@ def _plan(strike_date: str, spread: SpreadIn, m: SpreadMonitorIn, index: int) ->
         type_, strike = m.option_type, m.strike
         if not any(leg.option_type == type_ and leg.strike == strike for leg in spread.legs):
             return _refuse(f"{which} watches {type_} {js_string(strike)}, which is not one of its legs")
+        field_ = DEFAULT_SINGLE_FIELD if m.field is None else m.field
+        unwatchable = watch_field_error(field_)
+        if unwatchable:
+            return _refuse(unwatchable)
         if threshold_fault(compare, m.threshold):
             return _refuse(cast(str, threshold_error(compare, m.threshold)))
         code = build_spx_code(strike_date, type_, strike)
-        field_ = DEFAULT_SINGLE_FIELD if m.field is None else m.field
         return _Planned(
             code=code,
             field=field_,
@@ -153,6 +156,9 @@ def _plan(strike_date: str, spread: SpreadIn, m: SpreadMonitorIn, index: int) ->
     if len(spread.legs) < 2:
         return _refuse(f"'{spread.name}' has one leg, so its value is that contract's: watch the leg instead")
     field_ = DEFAULT_COMBO_FIELD if m.field is None else m.field
+    unwatchable = watch_field_error(field_)
+    if unwatchable:
+        return _refuse(unwatchable)
     not_additive = combo_field_error(field_)
     if not_additive:
         return _refuse(not_additive)

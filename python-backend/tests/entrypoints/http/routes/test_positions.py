@@ -1936,6 +1936,7 @@ class TestWhatOnlyThePythonCanGetWrong:
                 "closed_on": None,
                 "exit": None,
                 "realized_points": None,
+                "unreadable": None,
             }
         ]
 
@@ -1956,12 +1957,15 @@ class TestWhatOnlyThePythonCanGetWrong:
             ("legs that are not a list", {"side": "short"}),
         ],
     )
-    async def test_refuses_to_serve_a_stored_holding_its_schema_refuses(self, start, why, legs):
-        # a 500 in the dashboard's shape, as zod's parse failing inside `reply` is in the TypeScript
+    async def test_lists_a_stored_holding_its_reader_refuses_as_unreadable(self, start, why, legs):
+        # once a 500 in the dashboard's shape, as zod's parse failing inside `reply` was in the
+        # TypeScript: since #422 the reader refuses it first, and it is listed with no legs and why
         h = start()
         insert_holding(h, "bad", "2026-12-18", legs)
         resp = await h.call("/positions")
-        assert (resp.status_code, resp.json()) == (500, {"detail": "internal error"}), why
+        assert resp.status_code == 200, why
+        [row] = resp.json()
+        assert (row["legs"], row["unreadable"] is not None) == ([], True), why
 
     async def test_refuses_a_number_that_is_not_finite_rather_than_writing_infinity(self, start):
         # SQLite's REAL holds an infinity, which zod refuses and json.dumps would write as `Infinity`
@@ -1978,13 +1982,16 @@ class TestWhatOnlyThePythonCanGetWrong:
 
     async def test_reads_stored_legs_as_json_parse_does_refusing_nan(self, start):
         # Python's json reads the bare token NaN, which is not JSON; JSON.parse refuses the whole row.
-        # In a key the schema strips, so the model cannot be what refuses it
+        # In a key the schema strips, so the model cannot be what refuses it — and since #422 the row
+        # is listed as unreadable rather than failing the list
         h = start()
         insert_holding(h, "nan", "2026-12-18", [])
         legs = '[{"side":"short","option_type":"CALL","strike":8050,"note":NaN}]'
         h.db.execute("update positions set legs = ? where name = 'nan'", (legs,))
         resp = await h.call("/positions")
-        assert (resp.status_code, resp.json()) == (500, {"detail": "internal error"})
+        assert resp.status_code == 200
+        [row] = resp.json()
+        assert (row["legs"], row["unreadable"] is not None) == ([], True)
 
     async def test_stores_the_legs_as_json_stringify_writes_them(self, start):
         # both backends write one file, and a strike Python wrote as 8050.0 would be a second spelling

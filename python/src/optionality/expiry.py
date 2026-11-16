@@ -1,7 +1,7 @@
 """DTE, counted from New York's calendar day. Mirrors typescript/src/domain/expiry.ts."""
 
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Literal, TypedDict
 from zoneinfo import ZoneInfo
 
@@ -238,12 +238,18 @@ def valued_timing(observed_at: str | None) -> ValuedTiming:
     return "weekend" if when.astimezone(ZoneInfo(MARKET_TZ)).weekday() >= 5 else timing
 
 
-def session_closed_since(day: str, now: datetime) -> bool:
+def session_closed_since(day: str, now: datetime, recorded_at: datetime | None = None) -> bool:
     """Whether a WHOLE session — a weekday's 09:30 to 16:15 New York — has run and closed on or after the
-    market day `day`, by `now`: what bounds the manage-by notice's wait for a Cost to close (#380 review).
-    Holidays are not detected. Mirrors `expiry.ts`."""
+    market day `day`, by `now`, and, given `recorded_at`, opened no earlier than that instant: what bounds
+    the manage-by notice's wait for a Cost to close (#380 review). A session that had opened before the
+    holding was recorded cannot have priced it. Holidays are not detected. Mirrors `expiry.ts`."""
     today = date.fromisoformat(market_date(now))
     d = date.fromisoformat(normalize_strike_date(day))
+    if recorded_at is not None:
+        # the first session that opened at or after it: its own day's, before the open; else the next
+        recorded = date.fromisoformat(market_date(recorded_at))
+        opens = recorded if _since_new_york_midnight(recorded_at) <= _SAMPLE_FROM else recorded + timedelta(days=1)
+        d = max(d, opens)
     while d <= today:
         if d.weekday() < 5 and (d < today or _since_new_york_midnight(now) > _SAMPLE_UNTIL):
             return True

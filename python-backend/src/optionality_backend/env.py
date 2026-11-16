@@ -285,12 +285,15 @@ def parse_env_file(text: str) -> dict[str, str]:
             break
         key = _trim(content[:at])
         content = content[at + 1 :]
+        # an empty key sets nothing, whatever follows — checked FIRST: below, a bare `=` stored "" under
+        # it, and putting that into the environment is an OSError at boot, where node sets nothing
+        if not key:
+            content = _trim(content)  # as node trims the value before it looks at the key
+            continue
         if not content or content[0] == "\n":
             store[key] = ""
             continue
         content = _trim(content)
-        if not key:
-            continue
         if key.startswith("export "):
             key = _trim(key[7:])
         if not content:

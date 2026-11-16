@@ -57,6 +57,21 @@ const WEEKEND_QUOTES = {
   [weekendLeg("PUT", 6350)]: quote("SPXW 261205 6350P", 1.5, -0.09),
 };
 
+/** A condor put on and recorded at 20:00 New York on Monday 9 November, the day it entered its
+ *  manage-by window at 21 DTE: no session has opened since it was recorded. */
+const EVENING_EXPIRY = "2026-11-30";
+const eveningLeg = (type: "CALL" | "PUT", strike: number) => buildSpxCode(EVENING_EXPIRY, type, strike);
+const evening = position({
+  id: "pos-eve", name: "eve-condor", strike_date: EVENING_EXPIRY, opened_at: "2026-11-09",
+  created_at: "2026-11-10 01:00:00.000000",
+});
+const EVENING_QUOTES = {
+  [eveningLeg("CALL", 7300)]: quote("SPXW 261130 7300C", 1.5, 0.13),
+  [eveningLeg("CALL", 7350)]: quote("SPXW 261130 7350C", 0.9, 0.09),
+  [eveningLeg("PUT", 6400)]: quote("SPXW 261130 6400P", 2.25, -0.12),
+  [eveningLeg("PUT", 6350)]: quote("SPXW 261130 6350P", 1.4, -0.09),
+};
+
 /** A contract as moomoo answers it out of hours (#380): bid 0 / ask 0, so its mapping derives NO
  *  mid (`midPrice`); the greeks and the rest of the record as before. */
 const noBook = (q: Row): Row => {
@@ -229,6 +244,23 @@ export const SWEEP: readonly SweepInput[] = [
         })],
       },
       provider: { quotes: { [C7300]: { name: "SPXW 261218 7300C", mid_price: 2.75 } } },
+    }),
+  },
+  {
+    // a rule made before fields were checked, on a quote's TEXT: it read NaN, which is never
+    // breached and never silent, so it sat on the watchlist doing nothing. Read as no figure, it is
+    // silence like any other, and quarantined at the limit
+    name: "a rule on a quote's text is silence, and quarantined at the limit",
+    outcomes: ["quarantined-for-a-figure-that-never-arrives"],
+    world: world({
+      settings: { QUARANTINE_AFTER_SILENT_SWEEPS: "1" },
+      tables: {
+        monitors: [monitor({ id: "mon-1", field: "option_type" })],
+        watch_samples: [watchDay([C7300], {
+          observed_on: "2026-11-09", dte: 39, legs_mid: { [C7300]: 2.75 }, observed_at: stored(at(-15)),
+        })],
+      },
+      provider: { quotes: { [C7300]: { name: "SPXW 261218 7300C", mid_price: 2.75, option_type: "CALL" } } },
     }),
   },
   {
@@ -767,6 +799,18 @@ export const SWEEP: readonly SweepInput[] = [
       clock: SATURDAY_MIDNIGHT,
       tables: { positions: [weekend] },
       provider: { quotes: Object.fromEntries(Object.entries(WEEKEND_QUOTES).map(([c, q]) => [c, noBook(q)])) },
+    }),
+  },
+  {
+    // ...and a session that opened before the holding was RECORDED does not count: this condor was
+    // put on and written down at 20:00 on the day it entered its window, Monday the 9th, so Monday's
+    // session closed four hours before the service knew of it, and it waits like any other
+    name: "a manage-by notice for a holding recorded that evening waits for its first session",
+    outcomes: ["manage-by-notice-held-without-a-cost", "sample-kept-with-an-empty-cost"],
+    world: world({
+      clock: EVENING,
+      tables: { positions: [evening] },
+      provider: { quotes: Object.fromEntries(Object.entries(EVENING_QUOTES).map(([c, q]) => [c, noBook(q)])) },
     }),
   },
   {

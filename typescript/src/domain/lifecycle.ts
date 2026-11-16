@@ -20,9 +20,15 @@ import type { ByCode } from "./quote.ts";
 
 /** Why a figure did not arrive, in the words the notice uses. Sorted, so the sentence a rule
  *  produces does not depend on the order a provider happened to answer in. */
-export function silenceReason(monitor: Monitor, priced: Set<string>): string {
-  const unpriced = monitorLegCodes(monitor).filter((code) => !priced.has(code));
+export function silenceReason(monitor: Monitor, priced: Set<string>, byCode: ByCode = {}): string {
+  const codes = monitorLegCodes(monitor);
+  const unpriced = codes.filter((code) => !priced.has(code));
   if (unpriced.length > 0) return `no quote for ${unpriced.sort().join(", ")}`;
+  // SENT, and still no figure: text or a flag where a number belongs (`monitorValue` reads it as
+  // none). Saying it is missing would send the owner looking for a field the quote carries
+  const sent = codes.some((code) => byCode[code]?.[monitor.field] !== undefined
+    && byCode[code]?.[monitor.field] !== null);
+  if (sent) return `${monitor.field} is not a number in the quote`;
   return `no ${monitor.field} in the quote`;
 }
 
@@ -76,10 +82,10 @@ function named(monitor: Monitor): string {
 }
 
 export function silenceVerdict(
-  monitor: Monitor, priced: Set<string>, sweepsSoFar: number, limit: number,
+  monitor: Monitor, priced: Set<string>, sweepsSoFar: number, limit: number, byCode: ByCode = {},
 ): SilenceVerdict {
   const count = sweepsSoFar + 1;
-  const why = silenceReason(monitor, priced);
+  const why = silenceReason(monitor, priced, byCode);
   if (limit > 0 && count >= limit) {
     return {
       count: null,

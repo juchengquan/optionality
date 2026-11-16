@@ -185,6 +185,7 @@
           "closed_on": null,
           "exit": null,
           "realized_points": null,
+          "unreadable": null,
           "cost_to_close": 0,
           "pnl": 50,
           "captured": 1,

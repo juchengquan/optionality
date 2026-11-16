@@ -1,3 +1,4 @@
+import { unreadableWords } from "./UnreadableHoldings";
 import { trueMinus } from "./shared/numbers";
 import { REASONS } from "./shared/groups";
 import type { Entry, Health, Holding, Monitor } from "./shared/api";
@@ -74,8 +75,14 @@ export function monitorName(monitor: Monitor): string {
 export function needsYou(
   quotes: Entry[], monitors: Monitor[], health: Health | null, holdings: Holding[] | null,
   placedBy: Holding[] | null = holdings, levels = true,
+  /** the holdings the service could not read (#422): each a fault, in plain words — the service's
+   *  own reason is in the list beside the book, behind "details" (`UnreadableHoldings`) */
+  unreadable: Pick<Holding, "id" | "name" | "unreadable">[] = [],
 ): Need[] {
   const out: Need[] = [];
+  for (const h of unreadable) {
+    if (h.unreadable) out.push({ kind: "fault", text: unreadableWords(h.name), ref: h.id });
+  }
   if (health && !health.provider.ok) {
     out.push({ kind: "fault", text: `${health.provider.name} down — the figures are stale` });
   }

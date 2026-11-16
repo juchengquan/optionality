@@ -7,7 +7,9 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { marketDate, sampleTiming, takenInSession, valuedTiming } from "optionality/domain/expiry";
+import {
+  daysToExpiry, marketDate, sampleTiming, takenInSession, valuedTiming,
+} from "optionality/domain/expiry";
 import { dteAtOpen, exitLevels, exitPolicy, onPace } from "optionality/domain/exit";
 import {
   POSITION_GREEK_FIELDS, legReadings, positionGreek, positionLegCodes, realizedPoints,
@@ -16,7 +18,7 @@ import type { Deps } from "../deps.ts";
 import {
   clearPositionLinks, clearPositionSamples, clearScopeOfOrphans, deletePositionRow, findPosition,
   findPositionByName, insertPosition,
-  listPositionSamples, listPositions, monitorsWatching, openPositions, updateMonitorFields,
+  listPositionSamples, listPositions, monitorsWatching, updateMonitorFields,
   updatePositionFields,
 } from "../../../db/queries/index.ts";
 import { monitorLegCodes } from "optionality/domain/monitor";
@@ -32,7 +34,7 @@ import { toSqlDatetime } from "../../../db/time.ts";
 import { httpError, notFound, providerFailed, providerFailedWords } from "../errors.ts";
 import { paceExplained, type PacedSample } from "optionality/domain/vol";
 import { toMonitor, toPosition } from "../../../hydrate.ts";
-import { adoptOrphanMonitors } from "../../../monitors.ts";
+import { adoptOrphanMonitors, readableOpenPositions } from "../../../monitors.ts";
 import { beforeCorrection, correctQuantities, correctedLegs } from "../../../correct-legs.ts";
 import { verifyContracts } from "optionality/quotes";
 import type { DisabledReason } from "../../../schemas/monitor.ts";
@@ -58,7 +60,8 @@ const PositionOut = z.object({
   name: z.string(),
   strategy: z.string().nullable(),
   strike_date: z.string(),
-  contracts: z.number(),
+  /** null only on a holding that cannot be read (`unreadable`), whose stored count is not a number */
+  contracts: z.number().nullable(),
   entry: z.number().nullable(),
   legs: z.array(LegOut),
   created_at: z.string().nullable(),
@@ -72,6 +75,10 @@ const PositionOut = z.object({
    *  contract size only a Quote carries, while a closed holding is no longer quoted. Null while
    *  it is held, and wherever either side is unknown (`realizedPoints`). */
   realized_points: z.number().nullable(),
+  /** why this holding's stored row cannot be read, in the reader's words; null for every one that
+   *  can. An unreadable holding is still LISTED — with no legs and, on `/values`, no figures — so
+   *  it can be fixed or deleted, and it no longer takes the rest of the book down with it (#422) */
+  unreadable: z.string().nullable(),
 });
 
 /** A close, answered: the holding as it now stands, and the rules the close switched off, so the
@@ -301,9 +308,21 @@ function closedOnFault(
   return null;
 }
 
-/** Every contract some OPEN holding holds. */
+/** Days left to a stored expiry, or 0 where it will not read: only an unreadable holding asks, and
+ *  its `unreadable` says the figure means nothing. */
+function dteOrZero(strikeDate: string, now: Date): number {
+  try {
+    const dte = daysToExpiry(strikeDate, now);
+    return Number.isFinite(dte) ? dte : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Every contract some OPEN holding holds — of the holdings that can be read: one that cannot names
+ *  no contract anyone can vouch for, and failed every close beside it (#422's review). */
 function heldCodes(db: Deps["db"]): Set<string> {
-  return new Set(openPositions(db).flatMap((p) => positionLegCodes(toPosition(p))));
+  return new Set(readableOpenPositions(db).flatMap((p) => positionLegCodes(p)));
 }
 
 /** Whether every contract a rule names is still held by something open. A row that cannot be read
@@ -321,25 +340,76 @@ export function positionRoutes(deps: Deps) {
   const { db, settings } = deps;
   const tz = settings.displayTz;
 
-  const out = (row: PositionRow) => ({
-    id: row.id,
-    name: row.name,
-    strategy: row.strategy,
-    strike_date: row.strike_date,
-    contracts: row.contracts,
-    entry: row.entry,
-    legs: JSON.parse(row.legs) as unknown,
-    created_at: displayStored(row.created_at, tz),
-    // a plain date, NOT displayStored: created_at is an instant and converts to DISPLAY_TZ,
-    // while Opened is the calendar day a trade was put on and has no time to convert
-    opened_at: row.opened_at,
-    closed_on: row.closed_on,
-    exit: row.exit,
-    // only for a closed holding: an open one's result is its live P&L, which is /values' to say
-    // The legs play no part in it, so they are not parsed for it — a row this listing could always
-    // serve must not start failing because it was closed.
-    realized_points: row.closed_on === null ? null : realizedPoints({ ...row, legs: [] }, row.exit),
-  });
+  /** Why `row` cannot be read, or null: `toPosition` is the one reader every valuation uses, so a
+   *  row it refuses is the row this route lists as unreadable rather than failing on (#422). */
+  const unreadableReason = (row: PositionRow): string | null => {
+    try {
+      toPosition(row);
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : String(err);
+    }
+  };
+  const out = (row: PositionRow, unreadable: string | null = unreadableReason(row)) => {
+    if (unreadable !== null) return outUnreadable(row, unreadable);
+    return {
+      id: row.id,
+      name: row.name,
+      strategy: row.strategy,
+      strike_date: row.strike_date,
+      contracts: row.contracts as number | null,
+      entry: row.entry,
+      legs: JSON.parse(row.legs) as unknown,
+      created_at: displayStored(row.created_at, tz),
+      // a plain date, NOT displayStored: created_at is an instant and converts to DISPLAY_TZ,
+      // while Opened is the calendar day a trade was put on and has no time to convert
+      opened_at: row.opened_at,
+      closed_on: row.closed_on,
+      exit: row.exit,
+      // only for a closed holding: an open one's result is its live P&L, which is /values' to say
+      // The legs play no part in it, so they are not parsed for it — a row this listing could always
+      // serve must not start failing because it was closed.
+      realized_points: row.closed_on === null ? null : realizedPoints({ ...row, legs: [] }, row.exit),
+      unreadable,
+    };
+  };
+  /** An unreadable holding as it can still be served: every column the schema would refuse — the
+   *  very values that made it unreadable, an Entry of "abc", a count of "two" — as null, its legs as
+   *  none, and nothing computed from them. Served at all, so it can be deleted (#422's review: these
+   *  failed the response's own schema, and took the whole listing with them). */
+  const outUnreadable = (row: PositionRow, unreadable: string) => {
+    const text = (v: unknown) => (typeof v === "string" ? v : null);
+    const finite = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+    let created: string | null = null;
+    try {
+      created = typeof row.created_at === "string" ? displayStored(row.created_at, tz) : null;
+    } catch { /* an instant that will not read is none */ }
+    return {
+      id: String(row.id),
+      name: String(row.name),
+      strategy: text(row.strategy),
+      // always text: the schema's, and the one column a person reads to find the row
+      strike_date: String(row.strike_date ?? ""),
+      contracts: Number.isInteger(row.contracts) ? row.contracts as number : null,
+      entry: finite(row.entry),
+      legs: [] as unknown,
+      created_at: created,
+      opened_at: text(row.opened_at),
+      closed_on: text(row.closed_on),
+      exit: finite(row.exit),
+      realized_points: null,
+      unreadable,
+    };
+  };
+  /** The holding, read, or a 422 naming why it cannot be: every route that works from its legs or
+   *  its expiry answers this rather than a 500 on a row the book lists as unreadable (#422). */
+  const readable = (row: PositionRow) => {
+    try {
+      return toPosition(row);
+    } catch (err) {
+      throw httpError(422, err instanceof Error ? err.message : String(err));
+    }
+  };
 
   /** A stored JSON map, or null — including when it will not parse. Written by the sweeper and
    *  read here, so the two are the only places that know the encoding. */
@@ -370,7 +440,7 @@ export function positionRoutes(deps: Deps) {
   };
 
   return new Hono()
-    .get("/", list, (c) => list.reply(c, 200, listPositions(db).map(out)))
+    .get("/", list, (c) => list.reply(c, 200, listPositions(db).map((row) => out(row))))
 
     /** Live cost to close, exposure and P&L for every position.
      *
@@ -396,8 +466,8 @@ export function positionRoutes(deps: Deps) {
         throw providerFailed(deps.provider.name, err);
       }
       // `values` is the route descriptor; the holdings are `held`
-      const { values: held } = valued;
-      if (held.length === 0) return values.reply(c, 200, []);
+      const { values: held, unreadable } = valued;
+      if (held.length === 0 && unreadable.length === 0) return values.reply(c, 200, []);
       const fetched = displayTime(now, tz);
       return values.reply(c, 200, held.map((v) => {
         // a close's stamp is when that row was observed: the clock the page's chips and its
@@ -430,7 +500,16 @@ export function positionRoutes(deps: Deps) {
           dte: v.dte,
           schedule: v.schedule,
         };
-      }));
+      }).concat(unreadable.map(({ row, reason }) => ({
+        // listed, valued at nothing: the reason is the whole of what can be said about it (#422)
+        ...out(row, reason),
+        cost_to_close: null, pnl: null, captured: null, contract_size: null, spx: null,
+        spx_reason: null, greeks: {}, legs_delta: null, short_strikes: [], fetched_at: null,
+        valued_from: "live" as const, valued_on: null, valued_timing: null, valued_reason: reason,
+        // today's DTE where its expiry reads, else 0: `unreadable` says the row means nothing more
+        dte: dteOrZero(row.strike_date, now),
+        schedule: null,
+      }))));
     })
 
     /** What of this holding's pace gap vol accounts for (ADR 0011).
@@ -449,6 +528,7 @@ export function positionRoutes(deps: Deps) {
       const id = c.req.param("id");
       const row = findPosition(db, id);
       if (!row) throw notFound("position");
+      const position = readable(row);
       const stored = listPositionSamples(db, id);
       const samples: PacedSample[] = stored.map((s) => ({
         observed_on: s.observed_on,
@@ -459,7 +539,7 @@ export function positionRoutes(deps: Deps) {
         legs_iv: parseMap(s.legs_iv),
         legs_vega: parseMap(s.legs_vega),
       }));
-      const explained = paceExplained(samples, toPosition(row), deps.now());
+      const explained = paceExplained(samples, position, deps.now());
       // The vol part is re-measured under the legs as they now are, from per-contract readings, so
       // a correction leaves it true (#359). The gap is not: it is read off the last sample's stored
       // Cost to close, which a sample from before the correction summed under the old quantities.
@@ -488,11 +568,12 @@ export function positionRoutes(deps: Deps) {
       const id = c.req.param("id");
       const row = findPosition(db, id);
       if (!row) throw notFound("position");
+      const position = readable(row);
       const openedDte = row.opened_at === null ? null : dteAtOpen(row.strike_date, row.opened_at);
       const levels = openedDte === null ? null
         : exitLevels(row.entry, openedDte, openedDte, exitPolicy(settings));
       // the held shorts, as the strike strip places them (`/positions/values`)
-      const shorts = toPosition(row).legs.filter((l) => l.side === "short")
+      const shorts = position.legs.filter((l) => l.side === "short")
         .map((l) => buildSpxCode(row.strike_date, l.option_type, l.strike));
       const plan: { dte: number; on_pace: number }[] = [];
       for (let dte = openedDte ?? -1; dte >= 0; dte--) {
@@ -531,11 +612,11 @@ export function positionRoutes(deps: Deps) {
           };
         }),
         qty_corrected_at: displayStored(row.qty_corrected_at, tz),
-        before_entry: beforeEntry(db, row, toPosition(row), tz).map(({ value, ...day }) => ({
+        before_entry: beforeEntry(db, row, position, tz).map(({ value, ...day }) => ({
           ...day, cost_to_close: value, on_pace: null, before_correction: false,
         })),
         entry_close: (() => {
-          const day = entryClose(db, row, toPosition(row), own, tz);
+          const day = entryClose(db, row, position, own, tz);
           return day === null ? null : (({ value, ...rest }) => ({
             ...rest, cost_to_close: value, on_pace: null, before_correction: false,
           }))(day);
@@ -550,12 +631,12 @@ export function positionRoutes(deps: Deps) {
     .get("/:id/payoff", payoff, (c) => {
       const row = findPosition(db, c.req.param("id"));
       if (!row) throw notFound("position");
+      const position = readable(row);
       // a curve is drawn at a credit; without one there is nothing honest to draw, and a holding's
       // live value is not its Entry (a watched spread's is drawn that way, and labelled so)
       if (row.entry === null) {
         throw httpError(422, `position '${row.name}' has no entry: record what was taken in to draw its payoff`);
       }
-      const position = toPosition(row);
       return payoff.reply(c, 200, payoffAtExpiry(position.legs, row.entry, row.contracts));
     })
 
@@ -624,7 +705,7 @@ export function positionRoutes(deps: Deps) {
         throw httpError(422, `position '${row.name}' is closed: a leg's quantity is corrected only while it is held`);
       }
       const correction = given.legs === undefined ? null
-        : correctedLegs(row.name, toPosition(row).legs, given.legs);
+        : correctedLegs(row.name, readable(row).legs, given.legs);
       if (correction !== null && "fault" in correction) throw httpError(422, correction.fault);
       if (row.closed_on !== null) {
         // the close's own bounds, against whatever this request leaves Opened at

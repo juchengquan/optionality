@@ -1472,6 +1472,102 @@
       "expect": false
     },
     {
+      "fn": "sessionClosedSince",
+      "name": "recorded that Monday evening, by Tuesday midnight: no session yet",
+      "args": [
+        "2026-11-16",
+        {
+          "$date": "2026-11-17T05:00:15.000Z"
+        },
+        {
+          "$date": "2026-11-16T23:30:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "recorded that Monday evening, by Tuesday after the close",
+      "args": [
+        "2026-11-16",
+        {
+          "$date": "2026-11-17T21:15:00.001Z"
+        },
+        {
+          "$date": "2026-11-16T23:30:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "recorded that Monday at its open, by its close",
+      "args": [
+        "2026-11-16",
+        {
+          "$date": "2026-11-16T21:15:00.001Z"
+        },
+        {
+          "$date": "2026-11-16T14:30:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "recorded that Monday a minute after its open, by its close",
+      "args": [
+        "2026-11-16",
+        {
+          "$date": "2026-11-16T21:15:00.001Z"
+        },
+        {
+          "$date": "2026-11-16T14:31:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "recorded Friday evening, by Monday noon",
+      "args": [
+        "2026-11-13",
+        {
+          "$date": "2026-11-16T17:00:00.000Z"
+        },
+        {
+          "$date": "2026-11-13T23:00:00.000Z"
+        }
+      ],
+      "expect": false
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "recorded long before the day, which governs",
+      "args": [
+        "2026-11-16",
+        {
+          "$date": "2026-11-16T21:15:00.001Z"
+        },
+        {
+          "$date": "2026-11-02T14:30:00.000Z"
+        }
+      ],
+      "expect": true
+    },
+    {
+      "fn": "sessionClosedSince",
+      "name": "no record of when",
+      "args": [
+        "2026-11-09",
+        {
+          "$date": "2026-11-09T21:15:00.001Z"
+        },
+        null
+      ],
+      "expect": true
+    },
+    {
       "fn": "valuesFromClose",
       "name": "in the session, live whatever is stored",
       "args": [

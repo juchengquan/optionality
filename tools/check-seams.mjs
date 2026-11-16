@@ -53,7 +53,11 @@ export const SKIP_DIRS = new Set([
   ".claude",
 ]);
 const SOURCE = /\.(ts|tsx|mts|js|mjs|jsx)$/;
-const SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']([^"']+)["']/g;
+/** A specifier in double quotes, single quotes or BACKTICKS: a template literal with no `${}` is one
+ *  fixed path, and `import(\`../../x.ts\`)` passed every guard until a review wrote one. A template
+ *  that interpolates is built at runtime, which no lint can read, so `$` ends the match. */
+const SPECIFIER =
+  /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*|\bimport\.meta\.resolve\s*\(\s*)(["'`])([^"'`$]+)\1/g;
 
 /** Each directory whose interior is private, and the files that are not.
  *
@@ -281,7 +285,7 @@ export function breaches(repo = ROOT, seams = SEAMS) {
       if (inside(file, dir)) continue;            // the interior may import itself
       if (insiders.some((d) => inside(file, d))) continue;
       const text = readFileSync(file, "utf8");
-      for (const [, spec] of text.matchAll(SPECIFIER)) {
+      for (const [, , spec] of text.matchAll(SPECIFIER)) {
         // a name is resolved only for a seam that declares its package; for the others a name is
         // check-boundaries' business, as the entrypoints seam says of the frontend's `AppType`
         const target = spec.startsWith(".") ? resolve(dirname(file), spec) : published(spec);

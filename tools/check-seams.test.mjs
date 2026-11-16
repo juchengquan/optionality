@@ -73,6 +73,13 @@ describe("a seam's interior is private", () => {
     expect(found()).toEqual([expect.stringContaining("pkg/src/caller.ts")]);
   });
 
+  it("sees a specifier written as a template literal, which is still one fixed path", () => {
+    write("pkg/src/things/index.ts", "export const open = () => {};\n");
+    write("pkg/src/things/one/client.ts", "export const c = 1;\n");
+    write("pkg/src/caller.ts", "const c = await import(`./things/one/client.ts`);\n");
+    expect(found()).toEqual([expect.stringContaining("pkg/src/caller.ts")]);
+  });
+
   it("refuses a TEST that reaches past the door as well", () => {
     // deliberately NOT exempt, unlike check-test-support's rule: a suite that drives a client
     // directly is how the seam stops being the only way in, and the vendor suites do not need to

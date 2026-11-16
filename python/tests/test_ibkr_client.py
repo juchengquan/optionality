@@ -423,6 +423,136 @@ def test_an_ask_abandoned_mid_handshake_lets_go_of_the_connection() -> None:
     assert against("session-never-starts", abandon) == 0
 
 
+# --- one connection per client id --------------------------------------------------------------
+#
+# IB Gateway allows one connection per client id. The sweep, the dashboard's poll and a creation
+# probe can all arrive while the client is cold, and each used to open a connection of its own with
+# the same id: the gateway refused the second, and that refusal's teardown closed whatever
+# connection the client held and dropped every caller's listeners. `client.test.ts`, ported.
+
+
+def strict(
+    conversation: str, test: Callable[[IbkrClient, FakeGateway], Awaitable[Any]], request_timeout_ms: int = 1000
+) -> Any:
+    """`against`, on a stub that refuses a second session on one client id."""
+
+    async def run() -> Any:
+        gateway = await start_fake_gateway(conversation, one_session_per_client_id=True)
+        client = IbkrClient(
+            port=gateway.port, client_id=31419, connect_timeout_ms=1000, request_timeout_ms=request_timeout_ms
+        )
+        try:
+            return await test(client, gateway)
+        finally:
+            client.close()
+            await gateway.close()
+
+    return asyncio.run(run())
+
+
+async def until(done: Callable[[], bool]) -> None:
+    for _ in range(200):
+        if done():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("timed out waiting for the stub")
+
+
+def test_callers_who_arrive_together_share_one_connect() -> None:
+    async def ask(client: IbkrClient, gateway: FakeGateway) -> Any:
+        asks = await asyncio.gather(
+            client.fetch_quotes([OPTION]),
+            client.fetch_quotes([OPTION]),
+            client.fetch_quotes([OPTION]),
+            client.reachable(),
+            return_exceptions=True,
+        )
+        return asks, gateway.sessions_asked, gateway.connections
+
+    asks, sessions, connections = strict("normal-with-greeks", ask)
+    for batch in asks[:3]:
+        assert not isinstance(batch, BaseException), batch
+        assert [r["code"] for r in batch.records] == [OPTION]
+    assert asks[3] is True
+    assert (sessions, connections) == (1, 1)
+
+
+def test_a_refused_connect_fails_every_caller_and_leaves_no_connection_open() -> None:
+    async def ask(client: IbkrClient, gateway: FakeGateway) -> Any:
+        asks = await asyncio.gather(
+            client.fetch_quotes([OPTION]), client.fetch_quotes([OPTION]), return_exceptions=True
+        )
+        await until(lambda: gateway.connections == 0)
+        return asks, gateway.sessions_asked
+
+    asks, sessions = strict("client-id-in-use", ask)
+    for failure in asks:
+        assert isinstance(failure, ConnectionError)
+        assert "refused the session: 326" in str(failure)
+    assert sessions == 1
+
+
+def test_a_close_made_while_connecting_leaves_no_connection_behind() -> None:
+    async def ask(client: IbkrClient, gateway: FakeGateway) -> Any:
+        pending = asyncio.ensure_future(client.fetch_quotes([OPTION]))
+        await asyncio.sleep(0)  # the ask has started its connect, and nothing has answered yet
+        client.close()
+        with pytest.raises(ConnectionError, match="closed while it was connecting"):
+            await pending
+        await until(lambda: gateway.connections == 0)
+        # and the client still works afterwards
+        return await client.fetch_quotes([OPTION])
+
+    assert [r["code"] for r in strict("normal-with-greeks", ask).records] == [OPTION]
+
+
+def test_a_caller_arriving_as_the_last_one_gives_up_gets_a_connect_of_its_own() -> None:
+    """The last waiter's cancel cancels the shared connect — and a caller arriving in that same tick
+    must start a new one, never be handed the cancelled task and its CancelledError."""
+
+    class Slow(IbkrClient):
+        async def _open(self) -> Any:
+            await asyncio.sleep(0.2)
+            raise ConnectionError("the slow gateway, at last")
+
+    async def run() -> Any:
+        client = Slow(port=1, client_id=31419)
+        a = asyncio.ensure_future(client._connected())
+        await asyncio.sleep(0.01)
+        a.cancel()
+        await asyncio.sleep(0)  # A gives up, and as the last waiter cancels the connect
+        b = asyncio.ensure_future(client._connected())  # B arrives in that tick, cancelled by nobody
+        with pytest.raises(asyncio.CancelledError):
+            await a
+        with pytest.raises(ConnectionError, match="the slow gateway"):
+            await b
+
+    asyncio.run(run())
+
+
+def test_a_failed_ask_tears_down_only_its_own_connection_never_one_opened_since() -> None:
+    """Ask A waits on a lookup the gateway never answers. Its connection dies under it, ask B
+    reconnects and is answered, and only then does A give up. A's teardown used to close whatever
+    connection the client held — B's — so the next ask paid a handshake again."""
+
+    async def ask(client: IbkrClient, gateway: FakeGateway) -> Any:
+        a = asyncio.ensure_future(client.fetch_quotes(["US.SPXW261218C8200000"]))
+        await until(lambda: gateway.lookups == 1)
+        gateway.drop_connections()
+        await until(lambda: gateway.connections == 0)
+        await until(lambda: client._client is None or not client._client.isReady())
+        b = await client.fetch_quotes([OPTION])
+        assert [r["code"] for r in b.records] == [OPTION]
+        assert gateway.sessions_asked == 2
+        with pytest.raises(ConnectionError, match="answered none of them"):
+            await a
+        await until(lambda: gateway.connections == 1)
+        assert len((await client.fetch_quotes([OPTION])).records) == 1
+        return gateway.sessions_asked
+
+    assert against("never-answers", ask, request_timeout_ms=600) == 2
+
+
 def test_reachable_is_true_where_the_handshake_completes() -> None:
     async def probe(client: IbkrClient, _: FakeGateway) -> bool:
         return await client.reachable()

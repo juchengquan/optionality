@@ -1204,6 +1204,64 @@ class TestARuleMutedWhileTheSweepIsOut:
         assert len(t.said("crossed")) == 0, "it alarmed on a muted rule"
         assert t.row(id_)["triggered"] == 0, "and latched the flag on a disabled row"
 
+    # The two quarantines wrote from the rows read BEFORE the fetch too: a rule the owner muted while
+    # the batch was out came back disabled as "unknown-contract" or "no-figure", its own reason
+    # overwritten, with a notice about a rule nobody was watching any more.
+    async def test_is_not_quarantined_as_an_unknown_contract_and_keeps_its_reason(self, t: Sweeps) -> None:
+        id_ = t.monitor()
+
+        def racing(codes: list[str]) -> Batch:
+            t.db.execute("update monitors set enabled = 0, disabled_reason = 'manual' where id = ?", (id_,))
+            return Batch(records=[], unknown=codes)
+
+        await t.sweeper(racing).sweep()
+        assert t.row(id_)["disabled_reason"] == "manual"
+        assert t.sent == [], "a notice about a rule nobody watches"
+
+    async def test_is_not_quarantined_for_a_silent_figure_and_keeps_its_reason(self, t: Sweeps) -> None:
+        id_ = t.monitor()
+
+        def racing(codes: list[str]) -> list[dict[str, Any]]:
+            t.db.execute("update monitors set enabled = 0, disabled_reason = 'manual' where id = ?", (id_,))
+            return [{"code": c, "name": c} for c in codes]  # priced, the figure silent
+
+        await t.sweeper(racing, quarantine_after_silent_sweeps=1).sweep()
+        assert t.row(id_)["disabled_reason"] == "manual"
+        assert t.sent == []
+
+    async def test_is_not_quarantined_when_deleted_nor_when_redefined(self, t: Sweeps) -> None:
+        gone = t.monitor()
+        changed = t.monitor(code="US.SPXW261218C8200000", strike=8200)
+
+        def racing(codes: list[str]) -> Batch:
+            t.db.execute("delete from monitors where id = ?", (gone,))
+            t.db.execute("update monitors set threshold = 0.5 where id = ?", (changed,))
+            return Batch(records=[], unknown=codes)
+
+        await t.sweeper(racing).sweep()
+        assert t.row(changed)["enabled"] == 1, "redefined: the next sweep asks about it as it now is"
+        assert t.sent == []
+
+
+class TestARuleMutedWhileTheExpiryNoticesGoOut:
+    """The expiry lifecycle sends its notices between reading the watchlist and quarantining what it
+    cannot read: a rule muted in that window came back disabled as "unreadable", its reason
+    overwritten, with a notice about a rule nobody watches."""
+
+    async def test_is_not_quarantined_as_unreadable_and_keeps_its_reason(self, t: Sweeps) -> None:
+        t.monitor(strike_date=t.past())
+        bad = t.combo(strike_date="the first of never")
+
+        def muting(text: str) -> None:
+            # the owner mutes it while the expiry notice is out, once
+            if not t.sent:
+                t.db.execute("update monitors set enabled = 0, disabled_reason = 'manual' where id = ?", (bad,))
+            t.sent.append(text)
+
+        await t.sweeper(quoting("option_delta", {}), send=muting).sweep()
+        assert t.row(bad)["disabled_reason"] == "manual"
+        assert [m for m in t.sent if "could not be read" in m] == []
+
 
 class TestARuleRedefinedWhileTheSweepIsOut:
     """A rule REDEFINED while the sweep is out (#359's review): a held 1×3 corrected to a 1×2 takes its value

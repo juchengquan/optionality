@@ -187,7 +187,10 @@ describe("a position", () => {
     ["an entry as text", { entry: "6.4" }, "entry must be a number or null"],
     ["a strategy that is bytes", { strategy: BLOB }, "strategy must be text or null"],
     ["an Opened that is a number", { opened_at: 20261012 }, "opened_at must be text or null"],
-    ["a strike date that is missing", { strike_date: null }, "strike_date must be text"],
+    ["a strike date that is missing", { strike_date: null }, "strike_date must be a date"],
+    // #422's review: an expiry that is no date cannot be valued, and failed the whole book later
+    ["a strike date that is no date", { strike_date: "garbage" }, "strike_date must be a date"],
+    ["a strike date that never was", { strike_date: "2026-02-30" }, "strike_date must be a date"],
   ])("refuses %s, naming the holding and the field", (_, over, why) => {
     expect(() => toPosition(storedPosition(over))).toThrow(
       new Error(`position dec-condor cannot be read: ${why}`),

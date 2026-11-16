@@ -111,6 +111,7 @@
         "closed_on": "2026-11-09",
         "exit": null,
         "realized_points": null,
+        "unreadable": null,
         "disabled_monitors": []
       }
     },

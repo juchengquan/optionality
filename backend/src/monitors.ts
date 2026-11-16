@@ -47,7 +47,8 @@ export function editedMonitor(row: MonitorRow, changes: Partial<MonitorRow>): Pa
 export function linkToPositions(db: DatabaseSync, monitorId: string, contracts: string[]): void {
   // only what is still held: a rule watching a contract of a closed holding watches an option,
   // not a holding anyone has any more (ADR 0022)
-  const positions = openPositions(db).map(toPosition);
+  // ...and only what can be read: one holding that cannot failed every rule's creation (#422's review)
+  const positions = readableOpenPositions(db);
   const { found, scope } = positionsHolding(positions, contracts);
   if (found.size === 0) return;
   updateMonitorFields(db, monitorId, { scope });
@@ -130,8 +131,8 @@ export async function watchlistQuotes(
  *  It joins no batch — holding a Contract needs no quote — but it reads holdings no rule is
  *  linked to, so one that cannot be read costs its own Contracts and nothing else, as it does in
  *  the sweep: a watchlist that failed over a holding it never shows would be the larger harm. */
-function readableOpenPositions(db: DatabaseSync): Position[] {
-  const readable: Position[] = [];
+export function readableOpenPositions(db: DatabaseSync): (Position & { id: string })[] {
+  const readable: (Position & { id: string })[] = [];
   for (const row of openPositions(db)) {
     try {
       readable.push(toPosition(row));
@@ -159,7 +160,8 @@ export function adoptOrphanMonitors(db: DatabaseSync): void {
   if (orphans.length === 0) return;
   // never onto a closed holding: closing one is what ORPHANED the rules it took (ADR 0022), and
   // adopting them straight back would undo the close
-  const positions = openPositions(db).map(toPosition);
+  // ...and never onto one that cannot be read, which failed every close and delete beside it (#422)
+  const positions = readableOpenPositions(db);
   for (const row of orphans) {
     const monitor = toMonitor(row);
     const { found, scope } = positionsHolding(positions, monitorContracts(monitor));

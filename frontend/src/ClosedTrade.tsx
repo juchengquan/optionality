@@ -19,12 +19,15 @@ import { HoldingHistory } from "./History";
 import { madeWords, storedWords, type ClosedTrade } from "./journal";
 import { heldLeg } from "./shared/format";
 import { Legs } from "./shared/Legs";
+import { RawDetails } from "./shared/ErrorWords";
 import { contractsWords } from "./phone/figures";
 import { dateWords } from "./shared/times";
 
 /** `-P6000 +P5950`: the legs as the book writes a holding's, short as minus, each type in its
  *  colour (#391). */
 export function TradeLegs({ trade }: { trade: ClosedTrade }) {
+  // a trade the service cannot read (#422) is served with no legs: said, never left blank
+  if (trade.unreadable) return <span data-unreadable="">cannot be read</span>;
   return <Legs legs={trade.legs.map(heldLeg)} />;
 }
 
@@ -61,6 +64,12 @@ export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, 
         <div><dt>exit</dt><dd data-fig="exit">{storedWords(trade.exit)}</dd></div>
         <div><dt>made</dt><dd data-fig="made"><strong>{madeWords(trade.realized_points, privacy)}</strong></dd></div>
       </dl>
+      {trade.unreadable ? (
+        <div className="nx-meta" data-unreadable="">
+          {"Its stored row is damaged, so nothing is computed from it."}
+          <RawDetails plain="" raw={trade.unreadable} />
+        </div>
+      ) : null}
       <p className="nx-meta">
         {trade.realized_points === null
           ? "What it made is unknown: its Exit or its Entry was not recorded. Correct the Exit below if you know it."
