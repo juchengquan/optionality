@@ -46,7 +46,7 @@ from optionality.quote import ByCode, derived_spx
 
 from ..db.queries import find_position_sample, record_position_sample, stamp_manage_notified
 from ..db.rows import PositionRow, PositionSampleRow
-from ..db.time import to_sql_datetime
+from ..db.time import from_sql_datetime, to_sql_datetime
 from ..db.values import to_sqlite_json
 from ..env import Settings
 from ..holdings import close_candidates
@@ -93,8 +93,8 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
     batch prices it, that close's day said beside the figure
     and its pace at that close's own DTE; out of the session with no row that has a cost, the batch's — and where neither gives a
     cost the notice is not sent and not stamped, and the next sweep asks again. The wait is BOUNDED: once a
-    whole session has closed since the holding entered the window (`session_closed_since`) with still no
-    cost, the notice goes without its "now" line, stamped as usual, rather than never.
+    whole session has closed since the holding entered the window (`session_closed_since`) — one that
+    opened after the holding was recorded — with still no cost, the notice goes without its "now" line, stamped as usual, rather than never.
     """
     settings = deps.settings
     for row in rows:
@@ -114,9 +114,10 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
             # no cost yet: HELD, unsent and unstamped, until a sweep has one to say
             # — but not for ever: once a whole session has closed since the holding entered the window with
             # still no price, it goes without its "now" line, as it did before #380
-            if cost is None and not session_closed_since(
-                _window_entered(row["strike_date"], row["opened_at"], settings.exit_manage_by_dte), at
-            ):
+            # counted only from a session that opened after the holding was RECORDED: one put on in the
+            # evening of the day it entered the window has had no session yet, whatever its Opened says
+            entered = _window_entered(row["strike_date"], row["opened_at"], settings.exit_manage_by_dte)
+            if cost is None and not session_closed_since(entered, at, from_sql_datetime(row["created_at"])):
                 continue
             pace = on_pace(
                 row["entry"], dte_at_open(row["strike_date"], row["opened_at"]), dte if close is None else close["dte"]

@@ -874,15 +874,17 @@ describe("the manage-by notice", () => {
   /** A deadline is a date, and a date is the one thing the service can act on while nobody is
    *  looking (ADR 0011). Pace deliberately does NOT notify: being behind fires on every IV spike.
    *  Monitor thresholds are untouched — this is a notice about a Position, not an Alarm. */
-  const held = (name: string, openedAt: string | null, dteLeft: number) => {
+  const held = (
+    name: string, openedAt: string | null, dteLeft: number, createdAt = "2026-08-01 00:00:00.000000",
+  ) => {
     const id = name.padEnd(32, "0");
     db.prepare(
       `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at,
                               opened_at, manage_notified_at)
-       values (?, ?, null, ?, 1, 6.86, ?, '2026-08-01 00:00:00.000000', ?, null)`,
+       values (?, ?, null, ?, 1, 6.86, ?, ?, ?, null)`,
     ).run(id, name, daysFromNow(dteLeft), toSqliteJson([
       { side: "short", option_type: "CALL", strike: 8050 },
-    ]), openedAt);
+    ]), createdAt, openedAt);
     return id;
   };
   const notices = () => sent.filter((t) => t.includes("manage"));
@@ -1101,6 +1103,24 @@ describe("the manage-by notice", () => {
     const id = held("condor", daysFromNow(-26), 19);
     await sweeper(priceless(19)).sweep();
     expect(notices()).toEqual(["⏰ condor is at 19 DTE — manage by 21\nentry 6.86\non-pace 4.46"]);
+    expect(notifiedAt(id)).toBeTruthy();
+  });
+
+  it("counts no session that opened before the holding was recorded: one put on in the evening waits", async () => {
+    // 18:30 New York on Thursday 1 October, the day it was Opened at 21 DTE — inside its window from
+    // that day — and recorded a minute ago. Thursday's session closed two hours before the service
+    // knew of it, so it has had no session at all, and the notice waits for a cost as any other
+    now = new Date("2026-10-01T22:30:00Z");
+    const id = held("evening", daysFromNow(0), 21, "2026-10-01 22:29:00.000000");
+    await sweeper(priceless(21)).sweep();
+    expect(notices(), "Thursday's session could not have priced it").toEqual([]);
+    expect(notifiedAt(id)).toBeNull();
+
+    // Friday's session runs and closes with still no price: now the wait is over
+    now = new Date("2026-10-02T21:00:00Z"); // 17:00 New York, Friday
+    await sweeper(quoting("option_delta", { [buildSpxCode("2026-10-22", "CALL", 8050)]: 0.2 })).sweep();
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).not.toContain("now");
     expect(notifiedAt(id)).toBeTruthy();
   });
 

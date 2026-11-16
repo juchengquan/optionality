@@ -328,16 +328,30 @@ export function valuedTiming(observedAt: string | null): ValuedTiming {
 }
 
 /** Whether a WHOLE session — a weekday's 09:30 to 16:15 New York — has run and closed on or after
- *  the market day `day` (YYYY-MM-DD), by `now` (#380 review).
+ *  the market day `day` (YYYY-MM-DD), by `now` (#380 review), and, given `recordedAt`, opened no
+ *  earlier than that instant.
  *
  *  What bounds the manage-by notice's wait for a Cost to close: a holding inside its window with no
  *  price at all through a session the market was open for is not going to get one by waiting, and
  *  the notice is sent without its "now" line rather than never. A session still running, or a day
  *  that is a weekend, has not closed. Holidays are not detected, as `inSession` does not detect them.
+ *
+ *  `recordedAt` is when the holding was written down. A session that had opened before it cannot
+ *  have priced a holding the service did not yet know: one recorded at 18:30 on the day it entered
+ *  its window has had no session at all, and counting that day's — closed two hours before it was
+ *  recorded — sent its notice at once, without its "now" line, before a single sweep could price it.
  */
-export function sessionClosedSince(day: string, now: Date): boolean {
+export function sessionClosedSince(day: string, now: Date, recordedAt: Date | null = null): boolean {
   const today = marketDate(now);
-  const from = Date.parse(`${normalizeStrikeDate(day)}T00:00:00Z`);
+  let first = normalizeStrikeDate(day);
+  if (recordedAt !== null) {
+    // the first session that opened at or after it: its own day's, before the open; else the next
+    const recorded = marketDate(recordedAt);
+    const opens = sinceNewYorkMidnight(recordedAt) <= SAMPLE_FROM
+      ? recorded : new Date(Date.parse(`${recorded}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+    if (opens > first) first = opens;
+  }
+  const from = Date.parse(`${first}T00:00:00Z`);
   const until = Date.parse(`${today}T00:00:00Z`);
   for (let t = from; t <= until; t += 86_400_000) {
     const weekday = new Date(t).getUTCDay();
