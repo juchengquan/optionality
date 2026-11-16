@@ -125,10 +125,7 @@ export function pnlWords(pnl: number, unit: PayoffUnit): string {
   return dollars === null ? pointWords(pnl, unit, true) : `${pointWords(pnl, unit, true)} · ${dollars}`;
 }
 
-/** A P&L as a label on the chart has room for: the money where it may be shown, else the points. */
-export function shortWords(pnl: number, unit: PayoffUnit): string {
-  return unit.size !== null && !unit.hidden ? money(pnl * unit.size) : pointWords(pnl, unit, false);
-}
+
 
 /** What the crosshair at `price` reads out: the price, how far it is from SPX's derived price where
  *  there is one (never a Reference's, ADR 0024), and the P&L at expiry there. */

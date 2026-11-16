@@ -16,6 +16,7 @@ import { trueMinus } from "./shared/numbers";
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchPositions, type Recorded } from "./shared/api";
+import { rawError } from "./shared/errors";
 
 /** A holding no longer held: its close day is known. */
 export type ClosedTrade = Recorded & { closed_on: string };
@@ -66,7 +67,7 @@ export function useJournal(on: boolean, ask: number): Journal {
       (rows) => { if (current) setState({ trades: journalOf(rows), error: null }); },
       (e: unknown) => {
         // the rows it had stay: a trade open on them must not close because a re-read failed
-        if (current) setState((was) => ({ trades: was.trades, error: e instanceof Error ? e.message : String(e) }));
+        if (current) setState((was) => ({ trades: was.trades, error: rawError(e) }));
       },
     );
     return () => { current = false; };

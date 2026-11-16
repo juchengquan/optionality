@@ -18,7 +18,7 @@ const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
     fetched_at: "2026-11-10 23:14:05+08:00" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 
 /** Every holding with an exit schedule, so the pace gap's column has something to say. */
@@ -125,9 +125,9 @@ describe("nothing is pushed sideways, from a 900px desk to a 2560px one", () => 
 });
 
 /** A holding's Level chip says, outside the session, when the holding was valued (#354), so it is
- *  longer there: every holding at a Level — the longest, "manage-by · as valued at 00:59", among them —
+ *  longer there: every holding at a Level — the longest, "manage-by · as valued at 00:59 SGT", among them —
  *  and the table still fits, the chip drawn whole inside its cell, and in the inspector too. */
-/** A Sunday, 12:00 New York: outside the session, at an hour that would be in it on a weekday. */
+/** A Sunday, 12:00 ET: outside the session, at an hour that would be in it on a weekday. */
 const SUNDAY = new Date("2026-11-15T17:00:00Z");
 
 describe("a Level's chip outside the session, with its valuation's time, fits", () => {
@@ -157,8 +157,8 @@ describe("a Level's chip outside the session, with its valuation's time, fits", 
         if (outsideIt) vi.setSystemTime(SUNDAY);
         await show(width);
         const chip = (id: string) => rowOf(id).querySelector(".nx-chip")!.textContent;
-        expect(chip("h-calls")).toBe(outsideIt ? "at stop · as valued at 00:59" : "at stop");
-        expect(chip("h-ic")).toBe(outsideIt ? "manage-by · as valued at 00:59" : "manage-by");
+        expect(chip("h-calls")).toBe(outsideIt ? "at stop · as valued at 00:59 SGT" : "at stop");
+        expect(chip("h-ic")).toBe(outsideIt ? "manage-by · as valued at 00:59 SGT" : "manage-by");
         expect(overflowsSideways()).toBe(false);
         expect(table().scrollWidth).toBeLessThanOrEqual(table().clientWidth);
         expect(misfits()).toEqual([]);
@@ -167,7 +167,7 @@ describe("a Level's chip outside the session, with its valuation's time, fits", 
         await inspect("h-ic");
         const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
         expect(insp.querySelector(".nx-chip")!.textContent)
-          .toBe(outsideIt ? "manage-by · as valued at 00:59" : "manage-by");
+          .toBe(outsideIt ? "manage-by · as valued at 00:59 SGT" : "manage-by");
         expect(overflowsSideways()).toBe(false);
         expect(misfits()).toEqual([]);
         expect(cutChips(table())).toEqual([]);
@@ -177,7 +177,7 @@ describe("a Level's chip outside the session, with its valuation's time, fits", 
   }
 });
 
-/** "market closed — valued at 01:00" and its refresh (#371), above the holdings outside the session:
+/** "market closed — valued at 01:00 SGT" and its refresh (#371), above the holdings outside the session:
  *  whole, on one box that nothing pushes sideways, at every desk width, with the inspector shut and
  *  open. */
 describe("the market-closed line fits", () => {
@@ -204,7 +204,7 @@ describe("the market-closed line fits", () => {
       await show(width);
       const line = document.querySelector<HTMLElement>(".nx-mkt-closed")!;
       // the words alone since #410: the header's refresh is the one there is
-      expect(line.textContent).toBe("market closed — valued at 01:00");
+      expect(line.textContent).toBe("market closed — valued at 01:00 SGT");
       expect(within(line).queryByRole("button")).toBeNull();
       expect(clipped(line)).toEqual([]);
       expect(overflowsSideways()).toBe(false);
@@ -356,7 +356,7 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
       await show(width);
       await inspect(id);
       const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
-      const toggle = within(insp).getByRole("button", { name: "history" });
+      const toggle = within(insp).getByRole("button", { name: "History" });
       expect(toggle.getAttribute("aria-expanded")).toBe(when === "in session" ? "false" : "true");
       if (when === "in session") await userEvent.click(toggle);
       await settle();
@@ -393,7 +393,7 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
     expect(mark.getBoundingClientRect().width).toBeGreaterThanOrEqual(6);
     await userEvent.hover(mark);
     const said = document.querySelector(".nxd-inspector .nx-hist-said")!;
-    expect(said.textContent).toMatch(/not the close: observed 20:30 New York, after the 16:15 close/);
+    expect(said.textContent).toMatch(/not the close: observed 20:30 ET, after the 16:15 ET close/);
     // and anywhere on the chart picks the nearest stop: the right-hand end is the last one, which
     // is today's valuation, drawn after the days (#360)
     const svg = document.querySelector<SVGSVGElement>(".nxd-inspector .nx-hist svg")!;
@@ -422,7 +422,7 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
     await inspect("h-calls");
     const insp = document.querySelector<HTMLElement>(".nxd-inspector")!;
     expect(insp.querySelector(".nx-hist")).toBeNull();
-    const toggle = within(insp).getByRole("button", { name: "history" });
+    const toggle = within(insp).getByRole("button", { name: "History" });
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     await userEvent.click(toggle);
     await settle();

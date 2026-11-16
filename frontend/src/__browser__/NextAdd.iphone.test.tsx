@@ -87,7 +87,7 @@ describe("adding a condor on the phone", () => {
     await type("spread 2, leg 1 strike", "7700");
     await type("spread 2, leg 2 strike", "7750");
     await type("spread 2 entry", "1.25");
-    await tap(within(sheet).getByRole("button", { name: "Record 2 holdings + 4 Monitors" }));
+    await tap(within(sheet).getByRole("button", { name: "Record 2 holdings + 4 rules" }));
     await waitFor(() => expect(sent).toHaveLength(1));
 
     expect(n).toEqual({ taps: 3, typed: 7 });
@@ -133,7 +133,7 @@ describe("the Add sheet", () => {
     expect(tooSmall(sheet)).toEqual([]);
     expect(pastTheEdge(sheet)).toEqual([]);
     expect(overflowsSideways()).toBe(false);
-    await userEvent.click(within(sheet).getByRole("button", { name: "Watch it + 2 Monitors" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "Watch it + 2 rules" }));
     await waitFor(() => expect(sent).toHaveLength(1));
     expect((sent[0] as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
       { threshold: 0.4, direction: "below" },
@@ -195,7 +195,7 @@ describe("combos of 3 to 6 legs on the phone (#334)", () => {
       const sheet = await openSheet();
       await enterCombo(sheet, n);
       await waitFor(() => expect(sheet.querySelector('[data-spread="1"] [data-curve]')).not.toBeNull());
-      await userEvent.click(within(sheet).getByRole("button", { name: "Record holding + 3 Monitors" }));
+      await userEvent.click(within(sheet).getByRole("button", { name: "Record holding + 3 rules" }));
       await waitFor(() => expect(sent).toHaveLength(1));
       const legs = (sent[0] as { spreads: { legs: { side: string; option_type: string; strike: number }[] }[] }).spreads[0]!.legs;
       expect(legs.map((l) => `${l.side[0]}${l.option_type[0]}${l.strike}`)).toEqual([

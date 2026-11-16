@@ -171,14 +171,14 @@ describe("when they do nothing", () => {
     const user = userEvent.setup();
     render(<DeskBook {...props()} />);
     fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
-    await user.click(within(inspector()!).getByRole("button", { name: "Close…" }));
+    await user.click(within(inspector()!).getByRole("button", { name: "close…" }));
     screen.getByRole("form", { name: "close 1231_IC" });
     // the focus leaves the form's boxes, and still j does not move the inspector from under it
     (document.activeElement as HTMLElement).blur();
     expect(press("j", document.body)).toBe(true);
     expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1231_IC");
     // Escape inside the form is the form's: it closes the form and leaves the inspector open
-    await user.click(within(inspector()!).getByRole("button", { name: "Close…" }));
+    await user.click(within(inspector()!).getByRole("button", { name: "close…" }));
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("form", { name: "close 1231_IC" })).toBeNull();
     expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1231_IC");

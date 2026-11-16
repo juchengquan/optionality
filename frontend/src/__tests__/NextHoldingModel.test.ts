@@ -226,7 +226,7 @@ describe("what became of a closed holding's Monitors", () => {
     expect(fates(watching, after, [{ id: "m-off", code: "x" }])).toEqual([
       { id: "m-off", name: "18 Dec 7150P Δ", fate: "switched off — holding closed" },
       { id: "m-rolled", name: "18 Dec 7150P value", fate: "handed to 1218_P7150_roll" },
-      { id: "m-muted", name: "value", fate: "linked to nothing; it was already off (Muted by you)" },
+      { id: "m-muted", name: "value", fate: "linked to nothing; it was already off (muted by you)" },
       { id: "m-loose", name: "loose", fate: "kept on, linked to no holding" },
     ]);
   });

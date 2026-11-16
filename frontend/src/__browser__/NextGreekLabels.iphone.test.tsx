@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
-import { greekInCapitals, serveGreeks } from "../testing/greekLabels";
+import { greekInCapitals, headingsInCapitals, serveGreeks } from "../testing/greekLabels";
 import { overflowsSideways, settle } from "./nextBook";
 
 afterEach(cleanup);
@@ -15,7 +15,8 @@ describe("Greek letters as written, on the phone", () => {
     render(<Next />);
     await settle();
     expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("phone");
-    const found = greekInCapitals();
+    // and no heading, label or button in capitals set by CSS (part H)
+    const found = [...greekInCapitals(), ...headingsInCapitals()];
     const opens = [...document.querySelectorAll<HTMLButtonElement>(".nxp-open")].map((b) => b.getAttribute("aria-label")!);
     expect(opens.length).toBeGreaterThan(5);
     let labels = 0;
@@ -23,7 +24,7 @@ describe("Greek letters as written, on the phone", () => {
       fireEvent.click(screen.getByRole("button", { name: label }));
       await settle();
       const sheet = screen.getByRole("dialog");
-      found.push(...greekInCapitals(sheet).map((f) => `${label}: ${f}`));
+      found.push(...[...greekInCapitals(sheet), ...headingsInCapitals(sheet)].map((f) => `${label}: ${f}`));
       expect(sheet.scrollWidth, label).toBeLessThanOrEqual(sheet.clientWidth);
       expect(overflowsSideways(), label).toBe(false);
       for (const dt of sheet.querySelectorAll<HTMLElement>("dt")) {

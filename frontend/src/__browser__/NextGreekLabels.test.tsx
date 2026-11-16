@@ -6,7 +6,7 @@ import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
-import { greekInCapitals, serveGreeks } from "../testing/greekLabels";
+import { greekInCapitals, headingsInCapitals, serveGreeks } from "../testing/greekLabels";
 import { overflowsSideways, settle } from "./nextBook";
 
 afterEach(async () => {
@@ -21,7 +21,8 @@ describe("Greek letters as written, on the desk", () => {
     render(<Next />);
     await settle();
     expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("desk");
-    const found = greekInCapitals();
+    // and no heading, label or button in capitals set by CSS (part H)
+    const found = [...greekInCapitals(), ...headingsInCapitals()];
     const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map((b) => b.textContent!);
     expect(names.length).toBeGreaterThan(8);
     let labels = 0;
@@ -29,7 +30,7 @@ describe("Greek letters as written, on the desk", () => {
       fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === name)!);
       await settle();
       const insp = screen.getByRole("complementary", { name: `inspector: ${name}` });
-      found.push(...greekInCapitals(insp).map((f) => `${name}: ${f}`));
+      found.push(...[...greekInCapitals(insp), ...headingsInCapitals(insp)].map((f) => `${name}: ${f}`));
       // the figures in their new order push nothing sideways
       expect(insp.scrollWidth, name).toBeLessThanOrEqual(insp.clientWidth);
       expect(overflowsSideways(), name).toBe(false);

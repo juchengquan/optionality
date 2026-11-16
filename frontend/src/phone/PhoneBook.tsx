@@ -4,11 +4,11 @@ import "./phone.css";
 import type { BookProps } from "../Book";
 import { Money } from "../Book";
 import { ClosedLine } from "../ClosedLine";
-import { outOfHoursValue } from "../lastknown";
 import { placeBook, type BookModel, type PlacedHolding } from "../placement";
 import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
 import { expiryWords } from "./figures";
+import { ErrorWords } from "../shared/ErrorWords";
 
 /** The phone's book, arrangement B (ADR 0023, #290): cards and the detail sheet — ONE book, the
  *  same cards in session and out of it (#374; ADR 0023 amended 2026-11-13), with no pager: a
@@ -41,7 +41,8 @@ export function PhoneBook({
       {(phase ?? (session ? "regular" : "closed")) !== "regular"
         ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings}
                       phase={phase ?? "closed"} className="nxp-meta" /> : null}
-      {holdingsError !== null ? <p className="nxp-meta">{`the holdings could not be valued — ${holdingsError}`}</p> : null}
+      {holdingsError !== null
+        ? <div className="nxp-meta">{"the holdings could not be valued — "}<ErrorWords raw={holdingsError} again="refresh to try again" /></div> : null}
       {holdings === null && holdingsError === null ? <p className="nxp-meta">valuing…</p> : null}
       {holdings !== null && holdings.length === 0 ? <p className="nxp-meta">nothing held</p> : null}
     </>
@@ -49,7 +50,7 @@ export function PhoneBook({
 
   const unplaced = placed.unplaced.length > 0 ? (
     <section className="nxp-expiry" data-testid="unplaced">
-      <h3>rules on held contracts</h3>
+      <h3>Rules on held contracts</h3>
       <p className="nxp-meta">
         {holdings === null
           ? "the holdings are not valued, so the rules about them are listed on their own"
@@ -101,8 +102,7 @@ export function PhoneBook({
             <ul className="nxp-cards">
               {items.map(({ entry, under, overlap }) => (
                 <li key={entry.id}>
-                  <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)}
-                            value={outOfHoursValue(entry)} />
+                  <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)} />
                 </li>
               ))}
             </ul>

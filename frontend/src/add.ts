@@ -433,8 +433,8 @@ export function spreadsBody(d: AddDraft): { body: SpreadsBody } | { error: strin
       const at = typed(valueShown(d.held, s));
       if (at === null || at <= 0) {
         return { error: d.held && typed(s.entry) === null
-          ? `${which}: type the Entry, or the value its Monitor watches for`
-          : `${which}: type the value its Monitor watches for` };
+          ? `${which}: type the Entry, or the value its rule watches for`
+          : `${which}: type the value its rule watches for` };
       }
       // a held credit's stop is its cost to close at `at` or more: the signed value at or below
       // minus `at`, whatever the pair says. A watched spread's is the size typed, and a debit's,
@@ -444,15 +444,15 @@ export function spreadsBody(d: AddDraft): { body: SpreadsBody } | { error: strin
     }
     if (deltaEnabled(s)) {
       const shorts = legs.filter((l) => l.side === "short");
-      if (shorts.length === 0) return { error: `${which} has no short leg to watch the delta of: switch that Monitor off` };
+      if (shorts.length === 0) return { error: `${which} has no short leg to watch the delta of: switch that rule off` };
       const at = typed(deltaShown(d.held, s));
-      if (at === null || at <= 0) return { error: `${which}: type the delta its Monitor watches for` };
+      if (at === null || at <= 0) return { error: `${which}: type the delta its rule watches for` };
       for (const l of shorts) {
         monitors.push({ option_type: l.option_type, strike: l.strike, threshold: at, ...directed(s.deltaDirection) });
       }
     }
     if (!d.held && monitors.length === 0) {
-      return { error: `${which} is watched and has no Monitor: switch one on` };
+      return { error: `${which} is watched and has no rule: switch one on` };
     }
 
     const name = s.name.trim() || derivedName(d.expiry, s.legs);
@@ -488,14 +488,14 @@ export function previewOf(d: AddDraft, s: SpreadDraft): DraftPayoff | null {
   return { legs, entry: cents(credit) || 0, contracts: 1 };
 }
 
-/** What a save will make, said on its button: holdings and Monitors, never contracts. */
+/** What a save will make, said on its button: holdings and rules (part G), never contracts. */
 export function saveWords(d: AddDraft): string {
   const out = spreadsBody(d);
   const monitors = "error" in out
     ? d.spreads.reduce((n, s) => n + (valueEnabled(d.held, s) ? 1 : 0)
       + (deltaEnabled(s) ? s.legs.filter((l) => l.side === "short").length : 0), 0)
     : out.body.spreads.reduce((n, s) => n + s.monitors.length, 0);
-  const m = `${monitors} Monitor${monitors === 1 ? "" : "s"}`;
+  const m = `${monitors} rule${monitors === 1 ? "" : "s"}`;
   if (!d.held) return `Watch ${d.spreads.length === 1 ? "it" : `${d.spreads.length} spreads`} + ${m}`;
   const h = d.spreads.length === 1 ? "holding" : `${d.spreads.length} holdings`;
   return `Record ${h} + ${m}`;

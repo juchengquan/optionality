@@ -190,12 +190,12 @@ describe("the closed trades on the phone", () => {
   it("asks before deleting a trade, in 44pt targets, and closes its screen once it is gone", async () => {
     const { s, journal } = await review();
     const sheet = await openTrade(journal, "1120_P6000");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Delete…" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "delete…" }));
     const ask = within(sheet).getByRole("group", { name: "delete 1120_P6000?" });
     expect(tooSmall(ask)).toEqual([]);
     expect(pastTheEdge(sheet)).toEqual([]);
-    expect(document.activeElement).toBe(within(ask).getByRole("button", { name: "Keep it" }));
-    await userEvent.click(within(ask).getByRole("button", { name: "Delete for good" }));
+    expect(document.activeElement).toBe(within(ask).getByRole("button", { name: "keep it" }));
+    await userEvent.click(within(ask).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(s.writes().map((w) => `${w.method} ${w.path}`)).toEqual(["DELETE /positions/c-old"]));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() => expect(journal.querySelector('[data-closed="c-old"]')).toBeNull());

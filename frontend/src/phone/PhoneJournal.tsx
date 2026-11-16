@@ -12,6 +12,8 @@ import { readUp, type EntryStyle } from "../shared/prefs";
 import { useDismissOnBack } from "../shared/useDismissOnBack";
 import { ClosedTradeDetail, TradeLegs } from "../ClosedTrade";
 import { madeWords, storedWords, type ClosedTrade, type Journal } from "../journal";
+import { dateWords } from "../shared/times";
+import { ErrorWords } from "../shared/ErrorWords";
 
 export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDeleted }: {
   journal: Journal; privacy: boolean; entryStyle: EntryStyle; onCorrected: () => void;
@@ -29,7 +31,9 @@ export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDele
   return (
     <div className="nxj-phone">
       {/* said BESIDE the rows a re-read failed to replace, which stay, as the open trade does */}
-      {error !== null ? <p className="nx-hold-error" role="alert">{`the closed trades could not be read — ${error}`}</p> : null}
+      {error !== null ? <div className="nx-hold-error" role="alert">
+        {"the closed trades could not be read — "}<ErrorWords raw={error} again="open it again to retry" />
+      </div> : null}
       {trades === null ? (error === null ? <p className="nxp-meta">reading the closed trades…</p> : null)
           : trades.length === 0 ? <p className="nxp-meta">nothing closed yet: a holding closed is kept here, with its samples</p>
             : (
@@ -51,8 +55,8 @@ export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDele
                         <span className="nxp-meta">made</span>
                       </div>
                       <dl className="nxp-facts">
-                        <div><dt>opened</dt><dd data-fig="opened">{t.opened_at ?? "not recorded"}</dd></div>
-                        <div><dt>closed</dt><dd data-fig="closed">{t.closed_on}</dd></div>
+                        <div><dt>opened</dt><dd data-fig="opened">{t.opened_at ? dateWords(t.opened_at) : "not recorded"}</dd></div>
+                        <div><dt>closed</dt><dd data-fig="closed">{dateWords(t.closed_on)}</dd></div>
                         <div><dt>entry</dt><dd data-fig="entry">{storedWords(t.entry)}</dd></div>
                         <div><dt>exit</dt><dd data-fig="exit">{storedWords(t.exit)}</dd></div>
                       </dl>
@@ -94,7 +98,7 @@ function TradeSheet({ trade, privacy, entryStyle, onClose, onCorrected, onDelete
                     initialFocus={title}>
         <SheetHeader>
           <SheetTitle ref={title} tabIndex={-1}>{shown?.name ?? ""}</SheetTitle>
-          <SheetDescription>{shown ? <>{`closed on ${shown.closed_on} · `}<TradeLegs trade={shown} /></> : ""}</SheetDescription>
+          <SheetDescription>{shown ? <>{`closed on ${dateWords(shown.closed_on)} · `}<TradeLegs trade={shown} /></> : ""}</SheetDescription>
         </SheetHeader>
         <div className="nxp-sheet-body">
           {shown ? <ClosedTradeDetail trade={shown} privacy={privacy} onCorrected={onCorrected}

@@ -73,7 +73,7 @@ export function holdOnDesk(desk: Element | null): Hold {
     // the selected rule's controls are the inspector's first; a rule under it has its own
     if (form.matches("form.nx-mon-form") && form.closest(".nx-mon") === inspector.querySelector(".nx-mon")) return "edit";
     const pressed = inspector.querySelector('.nx-hold-actions button[aria-expanded="true"]');
-    if (form.closest(".nx-hold") && pressed?.textContent === "Close…") return "close";
+    if (form.closest(".nx-hold") && pressed?.textContent === "close…") return "close";
   }
   return "other";
 }

@@ -62,7 +62,7 @@ describe("renaming a combo", () => {
 
   it("says that a holding SHARING the name keeps it: the service renames the Monitor alone", () => {
     expect(renameNote(ruleOfEntry(HELD)))
-      .toBe("Renames this Monitor only: the holding 1218_C7300 keeps its name — the service never renames a holding.");
+      .toBe("Renames this rule only: the holding 1218_C7300 keeps its name — the service never renames a holding.");
     // linked to holdings named otherwise: nothing to say about their names
     expect(renameNote(ruleOfEntry(CONDOR))).toBeNull();
     expect(renameNote(ruleOfEntry(SPREAD))).toBeNull();
@@ -305,7 +305,7 @@ describe("Record as held (#408)", () => {
       d = setSpread(d, d.spreads[0]!.key, { entry: "-1.50" });
       const one = d.spreads[0]!;
       expect([valueEnabled(true, one), valueDirectionShown(true, one), valueShown(true, one)]).toEqual([true, "below", ""]);
-      expect(spreadsBody(d)).toEqual({ error: "spread 1: type the value its Monitor watches for" });
+      expect(spreadsBody(d)).toEqual({ error: "spread 1: type the value its rule watches for" });
       // named as replaced, not left to be adopted with its entry signal's threshold
       expect(replaces(d, monitors)[0]).toEqual(["dec-puts |value| ≥ 2.50"]);
       d = setSpread(d, one.key, { valueAt: "0.75" });

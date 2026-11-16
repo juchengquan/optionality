@@ -105,7 +105,7 @@ describe("a save in flight", () => {
     answer = new Promise((r) => { release = r; });
     const { onSaved } = open();
     enterPut();
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 rule" }));
     await waitFor(() => expect(posted()).toHaveLength(1));
     const save = screen.getByRole("button", { name: "saving…" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
@@ -140,7 +140,7 @@ describe("a watched contract", () => {
   it("posts one spread of one leg, watched, with the one Monitor naming it", async () => {
     const { onSaved } = open();
     enterPut();
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 rule" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(writes().map((a) => a.what)).toEqual(["POST /spreads"]);
     expect(SpreadsIn.safeParse(posted()[0]).success).toBe(true);
@@ -165,7 +165,7 @@ describe("a watched contract", () => {
     expect(within(direction).getByRole("button", { name: "≥ at or above" }).getAttribute("aria-pressed")).toBe("false");
     fireEvent.change(screen.getByLabelText("compare"), { target: { value: "signed" } });
     type("threshold", "-0.5");
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 rule" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     const spread = (posted()[0] as { spreads: { legs: unknown[]; monitors: unknown[] }[] }).spreads[0]!;
     expect(spread.legs).toEqual([{ side: "short", option_type: "CALL", strike: 7150 }]);
@@ -181,7 +181,7 @@ describe("a watched contract", () => {
     fireEvent.click(within(screen.getByRole("group", { name: "direction" })).getByRole("button", { name: "≤ at or below" }));
     type("threshold", "0.50");
     expect(screen.getByTestId("contract-draft").textContent).toMatch(/≤ 0\.50$/);
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 rule" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0] as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
       { option_type: "PUT", strike: 7150, field: "mid_price", threshold: 0.5, direction: "below", compare: "abs" },
@@ -192,9 +192,9 @@ describe("a watched contract", () => {
     hold();
     const buttons = () => within(screen.getByRole("group", { name: "direction" })).getAllByRole("button") as HTMLButtonElement[];
     expect(buttons().map((b) => b.disabled)).toEqual([false, false]);
-    fireEvent.click(screen.getByRole("switch", { name: /^Monitor (on|off)$/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /^rule (on|off)$/ }));
     expect(buttons().map((b) => b.disabled)).toEqual([true, true]);
-    fireEvent.click(screen.getByRole("switch", { name: /^Monitor (on|off)$/ }));
+    fireEvent.click(screen.getByRole("switch", { name: /^rule (on|off)$/ }));
     expect(buttons().map((b) => b.disabled)).toEqual([false, false]);
   });
 
@@ -226,13 +226,13 @@ describe("a watched contract", () => {
     expect(box.getAttribute("aria-invalid")).toBe("true");
     const note = document.getElementById(box.getAttribute("aria-describedby")!)!;
     expect(note.textContent).toBe("a signed threshold is never exactly 0: use e.g. ±0.01");
-    fireEvent.click(within(form).getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Watch it + 1 rule" }));
     expect(writes()).toEqual([]);
   });
 
   it("offers no 'no rule': a watched contract with none would record nothing", () => {
     open();
-    expect(screen.queryByRole("switch", { name: /^Monitor (on|off)$/ })).toBeNull();
+    expect(screen.queryByRole("switch", { name: /^rule (on|off)$/ })).toBeNull();
   });
 });
 
@@ -247,7 +247,7 @@ describe("a held contract", () => {
     fireEvent.click(screen.getByRole("button", { name: "long" }));
     type("entry", "5.20");
     type("contracts", "2");
-    fireEvent.click(screen.getByRole("button", { name: "Record holding + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 1 rule" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect(writes().map((a) => a.what)).toEqual(["POST /spreads"]);
     expect(SpreadsIn.safeParse(posted()[0]).success).toBe(true);
@@ -262,7 +262,7 @@ describe("a held contract", () => {
 
   it("records the holding with no rule when its Monitor is switched off", async () => {
     const { onSaved } = hold();
-    const rule = screen.getByRole("switch", { name: /^Monitor (on|off)$/ });
+    const rule = screen.getByRole("switch", { name: /^rule (on|off)$/ });
     expect(rule.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(rule);
     expect(rule.getAttribute("aria-checked")).toBe("false");
@@ -321,7 +321,7 @@ describe("a refusal", () => {
     answer = { status: 422, body: { detail: "contract does not exist: US.SPXW261218P7150000 — check strike and expiry" } };
     const { form, onSaved } = open();
     enterPut();
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 rule" }));
     const alert = await within(form).findByRole("alert");
     expect(alert.textContent).toBe("contract does not exist: US.SPXW261218P7150000 — check strike and expiry");
     expect(onSaved).not.toHaveBeenCalled();
@@ -332,7 +332,7 @@ describe("a refusal", () => {
     answer = { status: 409, body: { detail: "monitor for (US.SPXW261218P7150000, option_delta) already exists" } };
     open();
     enterPut();
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 rule" }));
     const alert = await screen.findByRole("alert");
     expect(screen.getByLabelText("what it watches").getAttribute("aria-describedby")).toBe(alert.id);
   });
@@ -351,7 +351,7 @@ describe("a refusal", () => {
   it("of the draft's own is said before asking the service anything", () => {
     const { form } = open();
     type("strike", "7150");
-    fireEvent.click(within(form).getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(within(form).getByRole("button", { name: "Watch it + 1 rule" }));
     expect(within(form).getByRole("alert").textContent).toBe("type the expiry");
     expect(writes()).toEqual([]);
   });
@@ -360,7 +360,7 @@ describe("a refusal", () => {
     open();
     enterPut();
     type("expiry", "2026-11-09");
-    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Watch it + 1 rule" }));
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toBe("that expiry has passed");
     expect(screen.getByLabelText("expiry").getAttribute("aria-describedby")).toBe(alert.id);
@@ -417,7 +417,7 @@ describe("switching Watch and Hold (#408)", () => {
       expect(value("threshold")).toBe("-0.5");
     }
 
-    fireEvent.click(screen.getByRole("button", { name: "Record holding + 1 Monitor" }));
+    fireEvent.click(screen.getByRole("button", { name: "Record holding + 1 rule" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     const body = posted()[0];
     expect(SpreadsIn.safeParse(body).success).toBe(true);
@@ -452,17 +452,17 @@ describe("nothing said twice (2026-11-16)", () => {
 
   it("says a held contract's rule once: no line beside its switch repeating the sentence", () => {
     const { form } = hold();
-    expect(form.textContent).not.toContain("a Monitor on this contract");
+    expect(form.textContent).not.toContain("a rule on this contract");
     // the switch says what it switches, drawn and to a reader (review of #415), where "on" alone did not
-    const toggle = screen.getByRole("switch", { name: "Monitor on" });
-    expect(toggle.textContent).toBe("Monitor on");
+    const toggle = screen.getByRole("switch", { name: "rule on" });
+    expect(toggle.textContent).toBe("rule on");
     expect(toggle.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(toggle);
-    expect(toggle.textContent).toBe("Monitor off");
-    expect(screen.getByRole("switch", { name: "Monitor off" })).toBe(toggle);
-    expect(screen.getByTestId("contract-draft").textContent).toBe("no Monitor: the holding alone");
-    expect(form.textContent!.split("no Monitor")).toHaveLength(2);
-    expect(form.textContent).not.toContain("no rule:");
+    expect(toggle.textContent).toBe("rule off");
+    expect(screen.getByRole("switch", { name: "rule off" })).toBe(toggle);
+    expect(screen.getByTestId("contract-draft").textContent).toBe("no rule: the holding alone");
+    // said once, in the one line that says it
+    expect(form.textContent!.split("no rule")).toHaveLength(2);
   });
 
   it("writes the side as − and +, named short and long, the word in its tooltip", () => {

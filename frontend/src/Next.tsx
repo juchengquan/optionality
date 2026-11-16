@@ -11,7 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Toaster, toast } from "@/components/ui/toast";
-import { clockTime, marketDay } from "./shared/format";
+import { marketDay } from "./shared/format";
+import { setDisplayZone, viewerClock } from "./shared/times";
 import { everyHoldingValued, valuedAt, valuedStamp } from "./levels";
 import { Freshness } from "./shared/Freshness";
 import {
@@ -49,6 +50,8 @@ import { Settings } from "./Settings";
 import { Still, type StillProps } from "./snapshot/Still";
 import { useSaveImage } from "./snapshot/useSaveImage";
 import { copyView } from "./snapshot/copyText";
+import { plainError, rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 /** The dashboard, at `/opt` (ADR 0023): built at `/opt/next` beside the page before it from #287,
  *  and the only page since the swap (#301).
@@ -158,7 +161,7 @@ export function Next() {
     // what was made, in rows; never a count of contracts, which privacy hides
     const made = [
       added.positions.length ? `${added.positions.length} holding${added.positions.length === 1 ? "" : "s"}` : null,
-      `${added.monitors.length} Monitor${added.monitors.length === 1 ? "" : "s"}`,
+      `${added.monitors.length} rule${added.monitors.length === 1 ? "" : "s"}`,
     ].filter(Boolean).join(" and ");
     const r = added.replaced.length;
     const title = `added ${made}${r ? `, replacing ${r} watch rule${r === 1 ? "" : "s"}` : ""}`;
@@ -290,7 +293,7 @@ export function Next() {
     const land = (id: string, then: "inspect" | "edit" | "close") =>
       setDesk({ id, open: true, request: { n: ++requests.current, then } });
     if ("find" in c) {
-      if (c.find.kind === "muted Monitor" || c.find.kind === "expired Monitor") landOnMuted(c.find.ref);
+      if (c.find.kind === "muted rule" || c.find.kind === "expired rule") landOnMuted(c.find.ref);
       else land(c.find.ref, "inspect");
       return;
     }
@@ -410,7 +413,12 @@ export function Next() {
       </header>
 
       <main className="nx-main">
-        {book.error ? <div className="nx-banner" role="alert">{book.error}</div> : null}
+        {book.error ? (
+          <div className="nx-banner" role="alert">
+            {"the figures could not be refreshed — "}
+            <ErrorWords raw={book.errorRaw ?? ""} again="tried again at the next poll" />
+          </div>
+        ) : null}
         <Freshness fetchedAt={book.health?.monitor.fetched_at ?? null} polledAt={book.polledAt}
                    sweepSeconds={book.health?.settings.sweep_seconds ?? null} />
         <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} onReveal={reveal} />
@@ -622,6 +630,8 @@ function useBook(session: boolean, edge: number, regular: boolean) {
   const [holdingsAt, setHoldingsAt] = useState<string | null>(null);
   const [holdingsServed, setHoldingsServed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // what was thrown, as thrown: the banner's title, beside its plain words (part N)
+  const [errorRaw, setErrorRaw] = useState<string | null>(null);
   const [polledAt, setPolledAt] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(15);
   const [refreshing, setRefreshing] = useState(false);
@@ -655,17 +665,20 @@ function useBook(session: boolean, edge: number, regular: boolean) {
     // the closes at every hour the value cell says them: out of the session, and while /quotes fails
     if (!regularNow.current || q.status === "rejected") void loadCloses();
     if (m.status === "fulfilled") setMonitors(m.value);
-    if (h.status === "fulfilled") setHealth(h.value);
+    // DISPLAY_TZ by name for every clock the page writes (part F), before "screen updated" is said
+    if (h.status === "fulfilled") { setDisplayZone(h.value.settings.display_tz); setHealth(h.value); }
     const failed = [q, m, h].find((r) => r.status === "rejected");
     if (failed) {
       // the page still renders when the service is unhappy; this says the figures are stale and
       // stays up until a poll succeeds
       const why: unknown = failed.reason;
-      setError(why instanceof Error ? why.message : String(why));
+      setError(`the figures could not be refreshed — ${plainError(why, "tried again at the next poll")}`);
+      setErrorRaw(rawError(why));
     } else {
       // only when everything arrived: "screen updated" is a claim about the figures
-      setPolledAt(clockTime(new Date()));
+      setPolledAt(viewerClock(new Date()));
       setError(null);
+      setErrorRaw(null);
     }
   }, [loadCloses]);
 
@@ -700,7 +713,8 @@ function useBook(session: boolean, edge: number, regular: boolean) {
       setHoldings(null);
       setHoldingsAt(null);
       setHoldingsServed(null);
-      setHoldingsError(e instanceof Error ? e.message : String(e));
+      // what was thrown, said plainly where it is drawn, the raw one tap away (part N)
+      setHoldingsError(rawError(e));
     }
   }, []);
 
@@ -772,7 +786,12 @@ function useBook(session: boolean, edge: number, regular: boolean) {
     try {
       await fn();
     } catch (e: unknown) {
-      toast.add({ title: e instanceof Error ? e.message : String(e), type: "error" });
+      {
+        const raw = rawError(e);
+        const title = plainError(e);
+        // the raw text as the toast's detail, where it says more than the words (part N)
+        toast.add({ title, description: raw.trim() !== title ? raw : undefined, type: "error" });
+      }
       return false;
     }
     // asked here rather than by `load`, to know when it lands: a read that STARTS after the write,
@@ -787,7 +806,7 @@ function useBook(session: boolean, edge: number, regular: boolean) {
   const reload = useCallback(() => load(true, true), [load]);
 
   return {
-    quotes, monitors, health, references, holdings, holdingsError, holdingsAt, holdingsServed, error, polledAt,
+    quotes, monitors, health, references, holdings, holdingsError, holdingsAt, holdingsServed, error, errorRaw, polledAt,
     closes, quotesFailed,
     refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
     referencesPending: referencesPending > 0, reload,

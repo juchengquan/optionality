@@ -21,7 +21,7 @@ import {
   entryName, isEntrySignal, monitorName, QUARANTINED, sentence, shapeOf, shortRule, shortSentence, storedRuleWords,
 } from "../needs";
 import { servedDelta } from "../legs";
-import { costAndPace, paceSigned, paceWords } from "../pace";
+import { costAndPace, manageBy, paceSigned, paceWords } from "../pace";
 import { LEVEL_WORDS, levelWords } from "../levels";
 import { outOfHoursValue, priceOf } from "../lastknown";
 import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
@@ -206,6 +206,13 @@ const VALUE: DeskColumn = {
       : "",
 };
 
+/** A rule's value and Δ as its desk row writes them (`VALUE`, `DELTA`): the phone's watch card says
+ *  the same two, the same way (part K). */
+export function ruleCells(entry: Entry, overlap: string | null = null): { value: string; delta: string } {
+  const r: DeskRow = { kind: "rule", entry, nested: false, overlap };
+  return { value: VALUE.text(r, false), delta: DELTA.text(r, false) };
+}
+
 /** A spread rule drawn as something held — under its holding, or on held contracts no holding
  *  owns — whose value cell says its COST TO CLOSE, positive, as the holding's own does (the owner,
  *  2026-11-16), and a dash where the service could not price it: never its signed value in its
@@ -216,9 +223,9 @@ export const heldSpread = (r: Extract<DeskRow, { kind: "rule" }>): boolean =>
 /** The desk's value column (the owner, 2026-11-16): a holding's Cost to close with its pace gap
  *  beside it, "3.05 −1.57", in one field, where the two had a column each. The gap keeps its sign
  *  rule and its colour (#379) and is said in words beside the figure, to a pointer and a reader;
- *  no gap, the cost alone; no cost, a dash. Every other row is `VALUE`'s. The saved picture, Copy
- *  as text and the inspector keep the two apart (`PLAIN_COLUMNS`, `FIGURES`): they are for reading
- *  later, where a column each is what a reader compares. */
+ *  no gap, the cost alone; no cost, a dash. Every other row is `VALUE`'s. The saved picture and Copy
+ *  as text keep the two apart (`PLAIN_COLUMNS`), and the inspector lists both in its exit schedule
+ *  (`DetailSections.tsx`): they are for reading later, where a field each is what a reader compares. */
 const VALUE_AND_PACE: DeskColumn = {
   key: "value", label: "value",
   text: (r, privacy) => r.kind === "holding" ? costAndPace(r.holding).text : VALUE.text(r, privacy),
@@ -272,24 +279,15 @@ const DTE: DeskColumn = {
 
 const MANAGE: DeskColumn = {
   key: "manage", label: "manage-by",
-  text: holdingOnly((h) => {
-    const s = h.schedule;
-    if (!s) return DASH;
-    return s.manage_by_due ? "due" : `in ${h.dte - s.manage_by_dte}d`;
-  }),
-};
-
-/** Not a column (ADR 0023, amended 2026-11-13): the inspector's figure only, listed beside the pace
- *  gap, which already says how far from it the holding is. */
-const ON_PACE: DeskColumn = {
-  key: "on_pace", label: "on pace", text: holdingOnly((h) => h.schedule ? points(h.schedule.on_pace) : DASH),
+  // days left, the threshold as detail (part F): one reader, `pace.manageBy`, for every surface
+  text: holdingOnly((h) => manageBy(h).text),
 };
 
 const PACE_GAP: DeskColumn = {
   // Cost to close less on-pace (CONTEXT.md: Pace gap): BEHIND is costing more than the plan. Not
   // a column of the table since 2026-11-16 — the table draws the gap signed inside the value column
-  // (`VALUE_AND_PACE`) — but the inspector's figure and the saved picture's column, both of which
-  // say it in words (`words`), as ADR 0011 has a gap said wherever it is shown
+  // (`VALUE_AND_PACE`) — but the saved picture's column, which says it in words (`words`), as ADR
+  // 0011 has a gap said wherever it is shown
   key: "pace_gap", label: "pace gap",
   text: holdingOnly((h) => h.schedule ? paceSigned(h.schedule.pace_gap) : DASH),
   words: holdingOnly((h) => h.schedule ? paceWords(h.schedule.pace_gap) : DASH),
@@ -317,10 +315,6 @@ export const COLUMNS: readonly DeskColumn[] = [
 export const PLAIN_COLUMNS: readonly DeskColumn[] = [
   NAME, LEGS, VALUE, PNL, CAPTURED, PACE_GAP, DELTA, STRIP, DTE, MANAGE, ALARM,
 ];
-
-/** What the inspector lists for a row, whether the table drew it or not: every figure apart, and
- *  "on pace" beside the pace gap — neither has a column of its own. */
-export const FIGURES: readonly DeskColumn[] = PLAIN_COLUMNS.flatMap((c) => c === PACE_GAP ? [ON_PACE, c] : [c]);
 
 /** Keys the desk once drew and no longer does: "on pace" and "DTE → manage-by" outside the session
  *  (#372), and "pace gap", in the value column since 2026-11-16. A viewer who hid one keeps it in

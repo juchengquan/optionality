@@ -12,7 +12,7 @@ const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
     fetched_at: "2026-11-10 23:14:05+08:00" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 
 function serve(quotes: object[], monitors: object[] = MONITORS): void {
@@ -49,7 +49,7 @@ describe("the phone's rule line, short (#388)", () => {
 
   it("and out of the session with no figure, saying the last reading and its New York time", async () => {
     // a Sunday: the page draws the dash, and beside it what the sweep last read in the session
-    // (#380) — Friday 16:14 New York — the widest the short form gets
+    // (#380) — Friday 16:14 ET — the widest the short form gets
     vi.setSystemTime(new Date("2026-11-15T17:00:00Z"));
     const quiet = QUOTES.map((q) => ({ ...q, threshold: q.field === "mid_price" ? 15.51 : q.threshold,
       watched: null, distance: null, fill: null }));

@@ -135,13 +135,13 @@ describe("Record as held from the inspector (#408)", () => {
       expect(el.getBoundingClientRect().right, el.outerHTML.slice(0, 80)).toBeLessThanOrEqual(add.getBoundingClientRect().right + 0.5);
     }
     await userEvent.fill(entry, "2.40");
-    await userEvent.click(within(form).getByRole("button", { name: "Record holding + 2 Monitors" }));
+    await userEvent.click(within(form).getByRole("button", { name: "Record holding + 2 rules" }));
     await waitFor(() => expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]));
     expect((writes[0]!.body as { spreads: { name: string; legs: unknown[] }[] }).spreads[0]).toMatchObject({
       name: "1218_P7150", held: true, entry: 2.4,
       legs: [{ side: "short", option_type: "PUT", strike: 7150 }, { side: "long", option_type: "PUT", strike: 7100 }],
     });
-    await screen.findByText("added 1 holding and 2 Monitors, replacing 2 watch rules");
+    await screen.findByText("added 1 holding and 2 rules, replacing 2 watch rules");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
   });
 });

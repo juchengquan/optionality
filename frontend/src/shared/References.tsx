@@ -9,6 +9,8 @@ import { NativeSelect } from "@/components/ui/native-select";
 
 import type { Reference } from "./api";
 import { ConfirmDelete } from "./ConfirmDelete";
+import { RawDetails } from "./ErrorWords";
+import { rawReason } from "./errors";
 import { referenceTitle } from "./readings";
 
 /** Which Securities are kept on the page, and the door for adding one (ADR 0018, 0019).
@@ -37,7 +39,7 @@ export function References({
 
   return (
     <section data-testid="references">
-      <h3 className="text-sm font-semibold mb-1">on the page</h3>
+      <h3 className="text-sm font-semibold mb-1">On the page</h3>
       {pending ? <p className="meta" role="status">refreshing references…</p> : null}
       {references.length === 0 ? (
         <p className="meta">nothing kept — the strip above the tables stays away until there is</p>
@@ -49,7 +51,7 @@ export function References({
               {/* the whole sentence, where the strip shows a dash: a class refusal reads
                   "US stock indices are not supported", which is the one thing that explains why
                   an index cannot be kept directly (ADR 0018) */}
-              {r.error ? ` — ${r.error}` : ""}
+              {r.error ? <>{` — ${r.error}`}<RawDetails plain={r.error} raw={rawReason(r, "error")} /></> : ""}
               {/* its own wording: the default reassures about a threshold and about muting, and a
                   Reference has neither — what it actually costs is nothing, which is worth saying
                   rather than leaving the monitor's sentence to imply otherwise */}
@@ -126,7 +128,8 @@ export function References({
             said" rather than "it is live".
           </FieldDescription>
         </Field>
-        <Button type="submit" size="sm" variant="secondary" disabled={pending}>keep it</Button>
+        {/* "add", as what it does (part H); named in full, since the header's add is beside it */}
+        <Button type="submit" size="sm" variant="secondary" disabled={pending} aria-label="add reference">add</Button>
       </form>
     </section>
   );

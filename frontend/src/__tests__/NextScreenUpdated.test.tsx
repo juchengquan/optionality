@@ -35,25 +35,28 @@ const button = () => document.querySelector<HTMLButtonElement>('[aria-label="ref
 describe.each(arrangements)("on the %s, what the page says about its own freshness", (arrangement) => {
   it("says when it last fetched, beside what the service says", async () => {
     servePage();
-    // 10:00 New York, which the device (TZ=UTC in this suite) reads as 15:00:00
+    // 10:00 New York: 15:00 on the device (TZ=UTC in this suite), and 23:00 in the service's
+    // DISPLAY_TZ, which is the clock "screen updated" is said on, with its zone (part F)
     at(arrangement, "2026-11-10T15:00:00Z");
     render(<Next />);
-    await waitFor(() => expect(line()).toContain("screen updated 15:00:00"));
+    await waitFor(() => expect(line()).toContain("screen updated 23:00:00 SGT"));
     // and the service's own figure stays, worded distinctly: it says how fresh the FIGURES are,
     // where this says only how recently they reached the screen
-    expect(line()).toContain("fetched at 2026-11-10 23:14:05+08:00");
+    // with its zone by name, never the offset it was served with
+    expect(line()).toContain("fetched at 23:14:05 SGT · 10:14:05 ET");
+    expect(line()).not.toContain("+08:00");
   });
 
   it("moves when the refresh button is pressed, which is the whole point", async () => {
     servePage();
     at(arrangement, "2026-11-10T15:00:00Z");
     render(<Next />);
-    await waitFor(() => expect(line()).toContain("screen updated 15:00:00"));
+    await waitFor(() => expect(line()).toContain("screen updated 23:00:00 SGT"));
     await waitFor(() => expect(button().disabled).toBe(false));
 
     vi.setSystemTime(new Date("2026-11-10T15:01:07Z"));
     fireEvent.click(button());
-    await waitFor(() => expect(line()).toContain("screen updated 15:01:07"));
+    await waitFor(() => expect(line()).toContain("screen updated 23:01:07 SGT"));
   });
 
   it("says nothing of the kind before the first fetch lands", () => {
@@ -70,13 +73,13 @@ describe.each(arrangements)("on the %s, what the page says about its own freshne
     const svc = servePage();
     at(arrangement, "2026-11-10T15:00:00Z");
     render(<Next />);
-    await waitFor(() => expect(line()).toContain("screen updated 15:00:00"));
+    await waitFor(() => expect(line()).toContain("screen updated 23:00:00 SGT"));
     await waitFor(() => expect(button().disabled).toBe(false));
 
     svc.refuse.add("/quotes");
     vi.setSystemTime(new Date("2026-11-10T15:01:07Z"));
     fireEvent.click(button());
     await screen.findByRole("alert");
-    expect(line()).toContain("screen updated 15:00:00");
+    expect(line()).toContain("screen updated 23:00:00 SGT");
   });
 });

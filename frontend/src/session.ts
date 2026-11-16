@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 
+import { ET, zoneOfStamp } from "./shared/times";
+
 /** New York's session, which decides what the page fetches and what the needs-you line says (ADR
  *  0023, amended 2026-11-13: one page, by the session; #371).
  *
@@ -147,8 +149,9 @@ const DAY_MS = 86_400_000;
 export function servedWhen(served: string | null | undefined, now: Date = new Date()): string | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.exec(served ?? "");
   if (!m) return null;
-  const clock = `${m[4]}:${m[5]}`;
   const zone = m[7];
+  // every clock carries its zone (part F): the one the stamp was written in, by name — `21:04 SGT`
+  const clock = `${m[4]}:${m[5]} ${zoneOfStamp(served)}`;
   if (zone === undefined) return clock;
   const offset = zone === "Z" ? 0
     : (zone[0] === "-" ? -1 : 1) * (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(-2))) * 60_000;
@@ -187,7 +190,7 @@ export function newYorkWeekdayWhen(served: string | null | undefined, now: Date 
   if (now.getTime() - instant.getTime() > 6 * DAY_MS) return newYorkWhen(served);
   const parts = Object.fromEntries(NEW_YORK_WALL.formatToParts(instant).map((p) => [p.type, p.value]));
   const day = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
-  return `${WEEKDAYS[day.getUTCDay()]} ${parts.hour}:${parts.minute}`;
+  return `${WEEKDAYS[day.getUTCDay()]} ${parts.hour}:${parts.minute} ${ET}`;
 }
 
 /** "Fri 13 Nov 16:14": a stamp the service served (`2026-11-14 05:14:59+08:00`, in DISPLAY_TZ)
@@ -197,7 +200,13 @@ export function newYorkWhen(served: string | null | undefined): string | null {
   const instant = servedInstant(served);
   if (instant === null) return null;
   const parts = Object.fromEntries(NEW_YORK_WALL.formatToParts(instant).map((p) => [p.type, p.value]));
-  return `${marketDayWords(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute}`;
+  return `${marketDayWords(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute} ${ET}`;
+}
+
+/** "16:14 ET": an instant on New York's clock to the minute, marked as the market's. */
+export function newYorkClock(at: Date): string {
+  const parts = Object.fromEntries(NEW_YORK_WALL.formatToParts(at).map((p) => [p.type, p.value]));
+  return `${parts.hour}:${parts.minute} ${ET}`;
 }
 
 /** The instant a stamp the service served names (`2026-11-14 05:14:59+08:00`), or null for one with

@@ -26,12 +26,25 @@ describe("what it finds", () => {
   it("says what each is, so a holding and the rule watching it read apart", () => {
     const kind = (ref: string) => book.find((f) => f.ref === ref)!.kind;
     expect(kind("h-calls")).toBe("holding");
-    expect(kind("r-calls")).toBe("Monitor");
+    expect(kind("r-calls")).toBe("rule");
     expect(kind("w-dec18")).toBe("watched spread");
-    expect(kind("w-dec18-delta")).toBe("Monitor");
-    expect(kind("q-unknown")).toBe("quarantined Monitor");
-    expect(kind("m-muted")).toBe("muted Monitor");
-    expect(kind("m-expired")).toBe("expired Monitor");
+    expect(kind("w-dec18-delta")).toBe("rule");
+    expect(kind("q-unknown")).toBe("quarantined rule");
+    expect(kind("m-muted")).toBe("muted rule");
+    expect(kind("m-expired")).toBe("expired rule");
+  });
+
+  it("calls a rule a rule, and still finds one by the word it was called (part G)", () => {
+    const rules = book.filter((f) => f.kind.endsWith("rule")).map((f) => f.ref);
+    expect(rules.length).toBeGreaterThan(3);
+    // "monitor" finds every rule, and nothing that is not one
+    expect(find("monitor")).toEqual(rules);
+    expect(find("rule")).toEqual(rules);
+    expect(book.map((f) => f.detail).join(" ")).not.toMatch(/monitor/i);
+    // and the action that edits one answers to either word
+    const edit = paletteActions({ choice: "auto", selected: null }).find((a) => a.key === "edit-monitor")!;
+    expect(edit.label).toBe("Edit the selected rule");
+    expect(matching([edit], "monitor")).toEqual([edit]);
   });
 
   it("finds by name, code, strike, expiry and what a rule watches", () => {
@@ -130,7 +143,7 @@ describe("its actions", () => {
 
   it("offers every one, in a stable order", () => {
     expect(paletteActions({ choice: "auto", selected: null }).map((a) => a.label)).toEqual([
-      "Add a spread or contract", "Edit the selected Monitor", "Close the selected holding", "Save the view as an image",
+      "Add a spread or contract", "Edit the selected rule", "Close the selected holding", "Save the view as an image",
       "Copy the view as text", "Arrangement: desk", "Arrangement: phone", "Arrangement: by the screen's width",
     ]);
     // one page, with no switch (#375): nothing offers a mode, at any choice or selection
@@ -146,10 +159,10 @@ describe("its actions", () => {
       "copy-text": null,
     });
     expect(why(row("h-calls"))).toMatchObject({
-      "edit-monitor": "a holding is selected: select one of its Monitors", "close-holding": null,
+      "edit-monitor": "a holding is selected: select one of its rules", "close-holding": null,
     });
     expect(why(row("w-dec18"))).toMatchObject({
-      "edit-monitor": null, "close-holding": "a Monitor is selected, not a holding",
+      "edit-monitor": null, "close-holding": "a rule is selected, not a holding",
     });
     // a quarantined rule is a Monitor too, and its editor is in the inspector
     expect(why(row("q-unknown"))).toMatchObject({ "edit-monitor": null });
@@ -230,8 +243,8 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     expect(kind("w-7700")).toBe("watched spread");
     expect(kind("r-ratio")).toBe("watched spread");
     // the holding's own value rule, and a wing of a held condor, are still its Monitors
-    expect(kind("r-8050")).toBe("Monitor");
-    expect(kind("r-ic-calls")).toBe("Monitor");
+    expect(kind("r-8050")).toBe("rule");
+    expect(kind("r-ic-calls")).toBe("rule");
   });
 });
 

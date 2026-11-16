@@ -16,6 +16,7 @@ import { hc, type InferRequestType } from "hono/client";
 
 import type { AppType } from "backend";
 import type { Source } from "backend/schemas";
+import { plainReason, RAW } from "./errors";
 
 /** Where the API lives, relative to wherever this bundle was deployed.
  *
@@ -87,7 +88,24 @@ async function read<T>(
  *  The service always sends the field (ADR 0024), but a row without it — an older service, a test
  *  service — reached the payoff chart as `undefined`, which drew it with NaN and threw (#337). */
 function withSpx<T extends { spx?: number | null; spx_reason?: string | null }>(rows: T[]): T[] {
-  return rows.map((r) => ({ ...r, spx: r.spx ?? null, spx_reason: r.spx_reason ?? null }));
+  return rows.map((r) => plainReasons({ ...r, spx: r.spx ?? null, spx_reason: r.spx_reason ?? null }));
+}
+
+/** A row's served reasons in plain words (part N, `errors.plainReason`): a socket's error code is
+ *  never the words on screen, from whichever field it was served in, and the vendor that failed is
+ *  named — a Reference's by its `source`. What was served is kept beside each, under `<field>_raw`,
+ *  for the disclosure that shows it (`ErrorWords.tsx`). */
+function plainReasons<T>(row: T): T {
+  const r = row as Record<string, unknown>;
+  const out: Record<string, unknown> = { ...r };
+  const vendor = typeof r.source === "string" ? r.source : null;
+  for (const k of ["error", "spx_reason", "valued_reason"]) {
+    if (typeof r[k] !== "string") continue;
+    const plain = plainReason(r[k] as string, vendor);
+    out[k] = plain;
+    if (plain !== r[k]) out[`${k}${RAW}`] = r[k];
+  }
+  return out as T;
 }
 
 export const fetchQuotes = () => read<Entry[]>(client.quotes.$get(), "/quotes").then(withSpx);
@@ -173,7 +191,7 @@ export async function addSpreads(body: SpreadsRequest): Promise<Added> {
  */
 export type Reference = Exclude<Infer<typeof client.references.$get>, { detail: string }>[number];
 export const fetchReferences = () =>
-  read<Reference[]>(client.references.$get(), "/references");
+  read<Reference[]>(client.references.$get(), "/references").then((rows) => rows.map(plainReasons));
 
 /** Keep a Security on the page. The code is RAW — `US.SPY`, not an expiry and a strike — because a
  *  Reference is a Security rather than a Contract, and the service probes it live before it agrees

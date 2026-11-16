@@ -45,7 +45,7 @@ describe("a single-contract Monitor on the desk", () => {
     for (const [field, words] of FIELDS) {
       await startContract();
       await userEvent.selectOptions(screen.getByLabelText("what it watches"), words);
-      await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 Monitor" }));
+      await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 rule" }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
       expect(writes.at(-1)).toEqual({
         what: "POST /spreads",
@@ -59,7 +59,7 @@ describe("a single-contract Monitor on the desk", () => {
       });
     }
     expect(writes.map((w) => w.what)).toEqual(FIELDS.map(() => "POST /spreads"));
-    expect(await screen.findAllByText("added 1 Monitor")).not.toHaveLength(0);
+    expect(await screen.findAllByText("added 1 rule")).not.toHaveLength(0);
   });
 });
 
@@ -71,7 +71,7 @@ describe("its field and direction on the desk (#405)", () => {
     await userEvent.selectOptions(box(), fieldWords("mid_price"));
     const pair = within(panel()).getByRole("group", { name: "direction" });
     await userEvent.click(within(pair).getByRole("button", { name: "≤ at or below" }));
-    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 Monitor" }));
+    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 rule" }));
     await waitFor(() => expect(writes).toHaveLength(1));
     expect((writes[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
       { option_type: "PUT", strike: 7150, field: "mid_price", threshold: 0.5, direction: "below", compare: "abs" },
@@ -85,10 +85,10 @@ describe("a lone contract held, on the desk", () => {
     await startContract();
     await userEvent.click(within(panel()).getByRole("button", { name: "I hold it" }));
     await userEvent.fill(screen.getByLabelText("entry"), "2.40");
-    await userEvent.click(within(panel()).getByRole("button", { name: "Record holding + 1 Monitor" }));
+    await userEvent.click(within(panel()).getByRole("button", { name: "Record holding + 1 rule" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
     expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]);
-    expect(await screen.findByText("added 1 holding and 1 Monitor")).toBeTruthy();
+    expect(await screen.findByText("added 1 holding and 1 rule")).toBeTruthy();
     // the book read again: the holding is a row of it, by the name the form gave it
     const row = await screen.findByText("1218_P7150");
     expect(row.closest(".nx-main")).not.toBeNull();
@@ -99,7 +99,7 @@ describe("a refused contract", () => {
   it("is said in the form, where it can be read, and the panel stays open", async () => {
     await openDesk(1440, { status: 422, body: { detail: "contract does not exist: US.SPXW261218P7150000 — check strike and expiry" } });
     await startContract();
-    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 Monitor" }));
+    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 rule" }));
     const alert = await within(panel()).findByRole("alert");
     expect(alert.textContent).toMatch(/^contract does not exist/);
     alert.scrollIntoView({ block: "center" });
@@ -116,7 +116,7 @@ describe("a refused contract", () => {
     // beside the box: directly under the Monitor's fields, not at the foot of the form
     const box = screen.getByLabelText("threshold").getBoundingClientRect();
     expect(note.getBoundingClientRect().top - box.bottom).toBeLessThan(40);
-    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 Monitor" }));
+    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 1 rule" }));
     expect(writes).toEqual([]);
   });
 });

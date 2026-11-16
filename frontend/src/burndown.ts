@@ -77,11 +77,11 @@ function whyWords(s: Sample): string {
     return "written before observation times were kept: whether it was the close is not known";
   }
   switch (s.timing) {
-    case "close": return `in hours (observed ${at} New York)`;
+    case "close": return `in hours (observed ${at} ET)`;
     case "after-close":
-      return `not the close: observed ${at} New York, after the 16:15 close — recorded that evening, or a missed session filled later`;
+      return `not the close: observed ${at} ET, after the 16:15 ET close — recorded that evening, or a missed session filled later`;
     case "before-open":
-      return `not the close: observed ${at} New York, before the 09:30 open — an overnight fill no later sweep replaced`;
+      return `not the close: observed ${at} ET, before the 09:30 ET open — an overnight fill no later sweep replaced`;
   }
 }
 
@@ -90,8 +90,8 @@ function whyWords(s: Sample): string {
 export function whyShort(s: Sample): string | null {
   const at = newYorkTime(s.observed_at);
   if (s.timing === "unrecorded" || at === null) return "not timed: whether it was the close is not known";
-  if (s.timing === "after-close") return `not the close: ${at} New York, after the 16:15 close`;
-  if (s.timing === "before-open") return `not the close: ${at} New York, before the 09:30 open`;
+  if (s.timing === "after-close") return `not the close: ${at} ET, after the 16:15 ET close`;
+  if (s.timing === "before-open") return `not the close: ${at} ET, before the 09:30 ET open`;
   return null;
 }
 

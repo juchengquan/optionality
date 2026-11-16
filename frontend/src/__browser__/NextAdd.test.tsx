@@ -57,7 +57,7 @@ describe("adding a condor on the desk", () => {
     await type("spread 2, leg 1 strike", "7700");
     await type("spread 2, leg 2 strike", "7750");
     await type("spread 2 entry", "1.25");
-    await click(within(panel()).getByRole("button", { name: "Record 2 holdings + 4 Monitors" }));
+    await click(within(panel()).getByRole("button", { name: "Record 2 holdings + 4 rules" }));
     await waitFor(() => expect(sent).toHaveLength(1));
 
     expect(n).toEqual({ clicks: 3, typed: 7 });
@@ -68,7 +68,7 @@ describe("adding a condor on the desk", () => {
     expect(body.spreads.map((s) => [s.held, s.monitors.length])).toEqual([[true, 2], [true, 2]]);
     // saved: the panel closes and the page says what it made
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
-    expect(await screen.findByText("added 2 holdings and 4 Monitors")).toBeTruthy();
+    expect(await screen.findByText("added 2 holdings and 4 rules")).toBeTruthy();
   });
 });
 
@@ -80,13 +80,13 @@ describe("the preview beside the form", () => {
     await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7100");
     await userEvent.fill(screen.getByLabelText("spread 1 entry"), "1.50");
     await waitFor(() => expect(curveOf(1)).not.toBeNull());
-    await waitFor(() => expect(maxLoss(1)).toBe("−48.50 pts"));
+    await waitFor(() => expect(maxLoss(1)).toBe("−48.50 pts per contract"));
     const credit = curveOf(1);
 
     // a wider spread moves the curve: it follows the legs as they change
     await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7050");
     await waitFor(() => expect(curveOf(1)).not.toBe(credit));
-    await waitFor(() => expect(maxLoss(1)).toBe("−98.50 pts"));
+    await waitFor(() => expect(maxLoss(1)).toBe("−98.50 pts per contract"));
 
     // the long leg flipped to short: two short puts can lose without a floor, and the curve says so
     const wide = curveOf(1);
@@ -121,7 +121,7 @@ describe("combos of 3 to 6 legs on the desk (#334)", () => {
       await waitFor(() => expect(curveOf(1)).not.toBeNull());
       // a short call with nothing above it: the preview says so, which it can only do over all n
       await waitFor(() => expect(maxLoss(1)).toBe("no floor"));
-      await userEvent.click(within(panel()).getByRole("button", { name: "Record holding + 3 Monitors" }));
+      await userEvent.click(within(panel()).getByRole("button", { name: "Record holding + 3 rules" }));
       await waitFor(() => expect(sent).toHaveLength(1));
       expect(legsSent(sent[0])).toEqual([
         "sP7150", "lP7100", ...["7050", "7000", "6950"].slice(0, n - 3).map((k) => `lP${k}`), "sC7700",
@@ -197,7 +197,7 @@ describe("the panel's fit", () => {
     for (const el of panel().querySelectorAll(".nx-dir button")) {
       expect(el.getBoundingClientRect().right).toBeLessThanOrEqual(box.right + 0.5);
     }
-    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 2 Monitors" }));
+    await userEvent.click(within(panel()).getByRole("button", { name: "Watch it + 2 rules" }));
     await waitFor(() => expect(sent).toHaveLength(1));
     expect((sent[0] as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
       { threshold: 0.4, direction: "below" },

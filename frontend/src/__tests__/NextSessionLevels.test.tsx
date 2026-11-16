@@ -14,7 +14,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Arrangement } from "../arrangement";
 import { charsOf, COLUMNS, type DeskRow } from "../desk/columns";
-import { levelWords, valuedClock } from "../levels";
+import { levelWords } from "../levels";
+import { setDisplayZone } from "../shared/times";
 import { Next } from "../Next";
 import { Still } from "../snapshot/Still";
 import type { Holding } from "../shared/api";
@@ -24,7 +25,7 @@ import { until } from "../testing/until";
 const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 const spread = {
   id: "w1", code: "1218_7150P", strike_date: "2026-12-18", option_type: "CMB",
@@ -118,6 +119,8 @@ const chipIn = (root: ParentNode, ref: string) =>
   root.querySelector(`[data-ref="${ref}"] .nx-chip`)?.textContent ?? null;
 
 beforeEach(serve);
+// DISPLAY_TZ as the service names it, so every valuation's time is said in SGT (part F)
+beforeEach(() => setDisplayZone("Asia/Singapore"));
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -128,19 +131,11 @@ describe("the words", () => {
   // Sunday 23:00 in the service's +08:00: the stamp is today's, so its time alone is right
   beforeEach(() => at(SUNDAY));
 
-  it("reads the clock the service wrote on the valuation, to the minute", () => {
-    expect(valuedClock("2026-11-12 21:04:37+08:00")).toBe("21:04");
-    expect(valuedClock("2026-11-12T09:30:00-05:00")).toBe("09:30");
-    // a stamp that says no time is not given one
-    expect(valuedClock("x")).toBeNull();
-    expect(valuedClock(null)).toBeNull();
-  });
-
   it("adds the valuation's time to a Level outside the session, and nothing in it", () => {
     const h = holding as unknown as Holding;
-    expect(levelWords("stop", h, false)).toBe("at stop · as valued at 23:04");
-    expect(levelWords("target", h, false)).toBe("at target · as valued at 23:04");
-    expect(levelWords("manage", h, false)).toBe("manage-by · as valued at 23:04");
+    expect(levelWords("stop", h, false)).toBe("at stop · as valued at 23:04 SGT");
+    expect(levelWords("target", h, false)).toBe("at target · as valued at 23:04 SGT");
+    expect(levelWords("manage", h, false)).toBe("manage-by · as valued at 23:04 SGT");
     expect(levelWords("stop", h, true)).toBe("at stop");
     // still marked as not live where the service gave no time
     expect(levelWords("stop", { ...h, fetched_at: null }, false)).toBe("at stop · as last valued");
@@ -150,7 +145,7 @@ describe("the words", () => {
     const rows: DeskRow[] = [{ kind: "holding", holding: holding as unknown as Holding, rules: [] }];
     const name = COLUMNS.find((c) => c.key === "name")!;
     expect(charsOf(name, rows, false, false) - charsOf(name, rows, false, true))
-      .toBe(" · as valued at 23:04".length);
+      .toBe(" · as valued at 23:04 SGT".length);
   });
 });
 
@@ -159,8 +154,8 @@ describe("outside the session, a holding's chip and the needs-you line never con
     it(`on the desk ${when}: the row and the inspector say which valuation, and the line says nothing of it`, async () => {
       await open("desk", now, true);
       const t = valuedTime(now);
-      expect(chipIn(document, "p1")).toBe(`at stop · as valued at ${t}`);
-      expect(chipIn(document, "p2")).toBe(`manage-by · as valued at ${t}`);
+      expect(chipIn(document, "p1")).toBe(`at stop · as valued at ${t} SGT`);
+      expect(chipIn(document, "p2")).toBe(`manage-by · as valued at ${t} SGT`);
       // the line names neither holding: it leaves their Levels out outside the session
       expect(line()).not.toContain("1231_7000P");
       expect(line()).not.toContain("1204_6900P");
@@ -168,7 +163,7 @@ describe("outside the session, a holding's chip and the needs-you line never con
       const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!;
       fireEvent.click(within(row).getByRole("button", { name: "1231_7000P" }));
       const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
-      expect(inspector.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t}`);
+      expect(inspector.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t} SGT`);
       expect(inspector.textContent).toContain("as last valued");
     });
   }
@@ -178,11 +173,11 @@ describe("outside the session, a holding's chip and the needs-you line never con
       await open("phone", now);
       const t = valuedTime(now);
       const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
-      expect(card.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t}`);
+      expect(card.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t} SGT`);
       expect(line()).not.toContain("1231_7000P");
       fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P" }));
       const sheet = await screen.findByRole("dialog");
-      await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t}`));
+      await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t} SGT`));
     });
   }
 });
@@ -219,7 +214,7 @@ describe("in session they read the same poll and agree, so the chip carries no t
     expect(chipIn(document, "p1")).toBe("at stop");
     vi.setSystemTime(new Date("2026-11-09T22:01:00Z")); // 17:01, the window focused: nothing trades
     await act(async () => { window.dispatchEvent(new Event("focus")); });
-    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 06:00"));
+    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 06:00 SGT"));
     expect(line()).not.toContain("1231_7000P");
   });
 });
@@ -228,7 +223,7 @@ describe("outside the session a rule linked to a holding does not say the holdin
   it("names no Level the holding's chip already says, and keeps the rule's own alarm", async () => {
     quotes = [spread, linked({ triggered: true })];
     await open("desk", SUNDAY);
-    expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
+    expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04 SGT");
     // the rule rings: that is the rule's, from the poll, and it is said
     await until(() => expect(line()).toContain("1231_7000P ringing"));
     expect(line()).not.toContain("at stop");
@@ -257,7 +252,7 @@ describe("one clock for a valuation", () => {
     // this suite runs at TZ=UTC: 15:00 here is 23:00 in the service's +08:00
     await open("desk", SUNDAY);
     expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("market closed — valued at 23:04");
-    expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04");
+    expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:04 SGT");
   });
 
   it("moves the chip's time on when the holdings are valued again outside the session", async () => {
@@ -265,8 +260,8 @@ describe("one clock for a valuation", () => {
     stamp = "2026-11-08 23:09:30+08:00";
     // Settings, opened outside the session, values the holdings afresh
     fireEvent.click(screen.getByRole("button", { name: "settings" }));
-    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:09"));
-    expect(screen.getByText("holdings valued at 23:09:30")).toBeTruthy();
+    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:09 SGT"));
+    expect(screen.getByText("holdings valued at 23:09:30 SGT")).toBeTruthy();
     expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("valued at 23:09");
   });
 
@@ -274,7 +269,7 @@ describe("one clock for a valuation", () => {
     await open("desk", SUNDAY, true);
     stamp = "2026-11-08 23:11:02+08:00";
     fireEvent.click(screen.getByRole("button", { name: "refresh now" }));
-    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:11"));
+    await until(() => expect(chipIn(document, "p1")).toBe("at stop · as valued at 23:11 SGT"));
     expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("market closed — valued at 23:11");
   });
 });
@@ -284,19 +279,19 @@ describe("a valuation from another day says its date (#371's review)", () => {
     // Sunday 23:00 in +08; valued on Friday's +08 evening, before the session's last edge
     stamp = "2026-11-06 23:04:11+08:00";
     await open("desk", SUNDAY);
-    expect(chipIn(document, "p1")).toBe("at stop · as valued at Fri 23:04");
+    expect(chipIn(document, "p1")).toBe("at stop · as valued at Fri 23:04 SGT");
     expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("market closed — valued at Fri 23:04");
     fireEvent.click(within(document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!)
       .getByRole("button", { name: "1231_7000P" }));
     const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
-    expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at Fri 23:04");
+    expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at Fri 23:04 SGT");
   });
 
   it("on the phone's card", async () => {
     stamp = "2026-10-30 23:04:11+08:00";
     await open("phone", SUNDAY);
     const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
-    expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 30 Oct 23:04");
+    expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at 30 Oct 23:04 SGT");
   });
 });
 
@@ -316,7 +311,7 @@ describe("the saved picture says which valuation, outside the session only", () 
 
   it("from either arrangement, which draw one picture", () => {
     picture(false);
-    expect(levelsLine()).toBe("1231_7000P at stop · as valued at 23:04; 1204_6900P manage-by · as valued at 23:04");
+    expect(levelsLine()).toBe("1231_7000P at stop · as valued at 23:04 SGT; 1204_6900P manage-by · as valued at 23:04 SGT");
     // the session line is the market-closed line's own words, said once
     expect(sessionLine()).toBe("market closed — valued at 23:04");
     expect(document.body.textContent!.split("market closed")).toHaveLength(2);

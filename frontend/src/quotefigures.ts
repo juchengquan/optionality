@@ -17,9 +17,10 @@
  */
 import type { Entry } from "./shared/api";
 import { DASH, shortStamp } from "./shared/format";
+import { newYorkWhen } from "./session";
 import { figureOf, iv, points } from "./shared/numbers";
 import { fieldWords } from "./needs";
-import { priceOf } from "./lastknown";
+import { outOfHoursValue, priceOf } from "./lastknown";
 
 interface RuleFigure {
   /** stable, for React and for a test that wants one figure */
@@ -82,8 +83,14 @@ export function wholeMissing(entry: Entry): string | null {
  *  `held` is where the row is drawn: a rule under a holding, or one on held contracts no holding
  *  owns — never a spread drawn in the watchlist because it only partly overlaps one (#346). */
 export function ruleFigures(entry: Entry, held = entry.held): RuleFigure[] {
-  if (wholeMissing(entry) !== null) return [];
-  return entry.legs ? comboFigures(entry, held) : contractFigures(entry);
+  // out of the session a watchlist row's value is its last in-session price and when, as its table
+  // row and its card say it (#400; review of #420): the detail says the same, quote or none
+  const last = held ? undefined : outOfHoursValue(entry);
+  const lastValue: RuleFigure | null = last === undefined ? null
+    : { key: entry.legs ? "combo_value" : "mid_price", label: fieldWords("mid_price"), text: last, why: null };
+  if (wholeMissing(entry) !== null) return lastValue ? [lastValue] : [];
+  const figures = entry.legs ? comboFigures(entry, held) : contractFigures(entry);
+  return lastValue ? figures.map((f) => (f.key === lastValue.key ? lastValue : f)) : figures;
 }
 
 function contractFigures(entry: Entry): RuleFigure[] {
@@ -113,8 +120,9 @@ function contractFigures(entry: Entry): RuleFigure[] {
     detail(one("ask_price", "ask", points)),
     detail(lastFigure),
     // the last TRADE, which is not the quote's freshness (`fetched_at`): a far strike can go days
-    // without a print, so the date stays (format.shortStamp)
-    detail(stamp !== null ? { key: "update_time", label: "last trade", text: shortStamp(stamp), why: null }
+    // without a print, so the date stays — on New York's clock, a trade being the market's (part F),
+    // "Mon 16 Nov 00:22 ET"; a stamp with no zone, which names no instant, as written
+    detail(stamp !== null ? { key: "update_time", label: "last trade", text: newYorkWhen(stamp) ?? shortStamp(stamp), why: null }
       : { key: "update_time", label: "last trade", text: DASH, why: untraded ? NO_TRADE : NO_STAMP }),
   ];
 }

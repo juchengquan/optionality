@@ -50,7 +50,7 @@ describe("a single contract's figures", () => {
       ["ask", "0.55", null, true],
       ["last", "0.60", null, true],
       // the time of the last TRADE, not the quote's freshness: a far strike can go days unprinted
-      ["last trade", "2026-11-11 23:58:12", null, true],
+      ["last trade", "Wed 11 Nov 10:58 ET", null, true],
     ]);
   });
 
@@ -251,7 +251,8 @@ describe.each([["the desk's inspector", openDesk], ["the phone's sheet", openPho
     expect(drawn(at, "bid")).toBe("0.45");
     expect(drawn(at, "ask")).toBe("0.55");
     expect(drawn(at, "last")).toBe("0.60");
-    expect(drawn(at, "last trade")).toBe("2026-11-11 23:58:12");
+    // a trade is the market's: on New York's clock, marked ET, never ISO (part F)
+    expect(drawn(at, "last trade")).toBe("Wed 11 Nov 10:58 ET");
     // in that order: value, the greeks, IV, then the quote's detail
     expect([...within(at).getByRole("group", { name: "figures" }).querySelectorAll("dt")].map((d) => d.textContent))
       .toEqual(["value", "Δ", "Γ", "Θ", "ν", "IV", "bid", "ask", "last", "last trade"]);

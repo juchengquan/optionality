@@ -235,8 +235,9 @@ describe("how a rule looks in each state", () => {
     expect(group.open).toBe(false);
     const names = [...group.querySelectorAll("li")].map((li) => li.textContent);
     expect(names).toHaveLength(2);
-    expect(names.join(" ")).toContain("Muted by you");
-    expect(names.join(" ")).toContain("Expired");
+    // the page's one set of words for why a rule is off (part I)
+    expect(names.join(" ")).toContain("muted by you");
+    expect(names.join(" ")).toContain("expired");
     expect(group.textContent).not.toContain("261211");
   });
 
@@ -312,7 +313,8 @@ describe("the inspector", () => {
     expect(cell("h-calls", "pnl")).toBeNull();
     fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
     const insp = screen.getByRole("complementary", { name: /inspector/ });
-    expect(within(insp).getByText("P&L").nextElementSibling!.textContent).toBe("−$240");
+    // its P&L leads the inspector, as it leads the phone's sheet (part J)
+    expect(insp.querySelector("[data-section='level'] [data-money]")!.textContent).toBe("−$240");
   });
 
   it("closes when its row leaves the book", () => {
@@ -410,7 +412,7 @@ describe("with the inspector open, the table stays live", () => {
     const health = {
       db: true, provider: { name: "moomoo", ok: true },
       monitor: { last_sweep_at: "x", alarms: { label: "active", bad: false }, fetched_at: "x" },
-      settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+      settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
     };
     window.fetch = ((url: string) => {
       const path = String(url).replace(/^.*\/api/, "");
@@ -501,7 +503,7 @@ describe("one column set, in session and out of it (#372)", () => {
     const insp = screen.getByRole("complementary", { name: /inspector/ });
     const dd = within(insp).getByText("pace gap").nextElementSibling!;
     expect(dd.textContent).toBe("behind by 0.47");
-    expect(dd.querySelector("[data-outcome]")?.getAttribute("data-outcome")).toBe("loss");
+    expect(dd.getAttribute("data-outcome")).toBe("loss");
   });
 
   for (const session of [true, false]) {
@@ -516,12 +518,15 @@ describe("one column set, in session and out of it (#372)", () => {
       // beside the pace gap it is the plan of, and its two parts each said once
       expect(terms().indexOf("pace gap") - terms().indexOf("on pace")).toBe(1);
       expect(terms()).not.toContain("DTE → manage-by");
-      expect(terms().filter((t) => t === "DTE")).toHaveLength(1);
-      expect(within(insp).getByText("manage-by").nextElementSibling!.textContent).toBe("in 17d");
-      // a holding with no schedule says so with a dash, as the table did
+      // the DTE said once, in the line under its name (part K's rule, on the desk too)
+      expect(terms()).not.toContain("DTE");
+      expect(insp.textContent!.match(/\b\d+ DTE\b/g)!.filter((t) => !t.startsWith("21 ")).length).toBe(1);
+      // manage-by as days left, its threshold as detail (part F)
+      expect(within(insp).getByText("manage-by").nextElementSibling!.textContent).toBe("in 17d at 21 DTE");
+      // a holding with no schedule says so, in its exit schedule
       fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
       insp = screen.getByRole("complementary", { name: /inspector/ });
-      expect(within(insp).getByText("on pace").nextElementSibling!.textContent).toBe("—");
+      expect(insp.querySelector("[data-section='schedule']")!.textContent).toContain("no schedule — Opened not recorded");
     });
   }
 
@@ -637,7 +642,10 @@ describe("the column choice is shared with /opt, and only the desk's part of it 
 describe("what the holdings section says when there are no figures", () => {
   it("says the valuation failed instead of figures, and keeps the rules on held contracts", () => {
     render(<DeskBook {...props({ holdings: null, holdingsError: "/positions/values → 502" })} />);
-    expect(screen.getByText("the holdings could not be valued — /positions/values → 502")).toBeTruthy();
+    // in plain words, what was thrown one tap away (part N)
+    const note = screen.getByText(/^the holdings could not be valued — /);
+    expect(note.textContent).toBe("the holdings could not be valued — the service failed (502); refresh to try againdetails/positions/values → 502");
+    expect(note.querySelector("details[data-raw] summary")!.textContent).toBe("details");
     const unplaced = screen.getByTestId("unplaced");
     expect(unplaced.querySelector('[data-ref="r-calls"]')).toBeTruthy();
     expect(unplaced.querySelector('[data-ref="r-ic"]')).toBeTruthy();
@@ -708,11 +716,11 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     expect(insp.querySelector("[data-overlap]")!.textContent).toBe("shares C8100 with 1231_8050");
   });
 
-  it("is no longer among the holding's Monitors in its inspector", () => {
+  it("is no longer among the holding's rules in its inspector", () => {
     render(<DeskBook {...overlap()} />);
     fireEvent.click(within(row("h-8050")).getByRole("button", { name: "1231_8050" }));
     const insp = screen.getByRole("complementary", { name: "inspector: 1231_8050" });
-    const monitors = within(insp).getByRole("heading", { name: "Monitors" }).parentElement!;
+    const monitors = within(insp).getByRole("heading", { name: "Rules" }).parentElement!;
     expect(monitors.querySelectorAll(".nxd-monitor")).toHaveLength(2);
     expect(monitors.textContent).not.toContain("now −0.60");
   });

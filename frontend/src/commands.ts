@@ -16,7 +16,11 @@ import { fieldWords, monitorName } from "./needs";
 import type { BookModel } from "./placement";
 
 type FindKind =
-  | "holding" | "watched spread" | "Monitor" | "quarantined Monitor" | "muted Monitor" | "expired Monitor";
+  | "holding" | "watched spread" | "rule" | "quarantined rule" | "muted rule" | "expired rule";
+
+/** A rule is a "rule" on screen (part G), and was a "Monitor" — the API's and CONTEXT.md's word,
+ *  which the owner still types: either finds one. */
+const RULE_SYNONYMS = ["rule", "monitor"];
 
 export interface Findable {
   /** the row's id: a holding's, or a rule's */
@@ -83,7 +87,7 @@ function findable(
   const before = [kind, shortDate(date)].filter(Boolean).join(" · ");
   const parts = { before: legs.length > 0 ? `${before} · ` : before, legs, after: field ? ` · ${field}` : "" };
   const detail = `${parts.before}${legWords(legs)}${parts.after}`;
-  const words = [name, ...tokens(name), ...tokens(kind), ...dateWords(date), ...strikeWords(legs),
+  const words = [name, ...tokens(name), ...tokens(kind), ...(kind.endsWith("rule") ? RULE_SYNONYMS : []), ...dateWords(date), ...strikeWords(legs),
     ...tokens(storedField === null ? "" : SPOKEN[storedField] ?? storedField),
     ...(storedField !== null && combo ? ["spread"] : [])]
     .map((w) => w.toLowerCase()).filter(Boolean);
@@ -102,10 +106,10 @@ function ofRow(row: DeskRow): Findable {
       ? e.legs.map(signedLeg)
       : single(e.option_type, strikeOf(e.code));
     // a spread in the watchlist, the one that only partly overlaps a holding included (#346)
-    const kind: FindKind = e.legs && (!e.held || Boolean(row.overlap)) ? "watched spread" : "Monitor";
+    const kind: FindKind = e.legs && (!e.held || Boolean(row.overlap)) ? "watched spread" : "rule";
     return findable(e.id, kind, rowName(row), e.strike_date, legs, e.field, Boolean(e.legs));
   }
-  return ofMonitor(row.monitor, "quarantined Monitor");
+  return ofMonitor(row.monitor, "quarantined rule");
 }
 
 function ofMonitor(m: Monitor, kind: FindKind): Findable {
@@ -120,10 +124,13 @@ const single = (type: string, strike: number | null): Leg[] => (strike === null 
 
 /** Everything the palette can find, in the order the desk draws it. */
 export function findables(placed: BookModel): Findable[] {
-  return [
+  const all = [
     ...tableRows(placed).map(ofRow),
-    ...placed.muted.map((m) => ofMonitor(m, m.disabled_reason === "expired" ? "expired Monitor" : "muted Monitor")),
+    ...placed.muted.map((m) => ofMonitor(m, m.disabled_reason === "expired" ? "expired rule" : "muted rule")),
   ];
+  // once each: a rule on a condor held as two spreads is drawn under both, and is one rule to find
+  // (found by the page walk's palette, review of #420)
+  return all.filter((f, i) => all.findIndex((g) => g.ref === f.ref) === i);
 }
 
 /** What `query` finds among `all`, in their order: every word typed must START one of an item's
@@ -160,7 +167,7 @@ const ARRANGEMENTS: [ActionKey, ArrangementChoice, string][] = [
 ];
 
 /** The palette's actions. Two act on the selected row and are closed, with the reason, when the
- *  selection is not what they act on: a holding is not a Monitor, nor a Monitor a holding. */
+ *  selection is not what they act on: a holding is not a rule, nor a rule a holding. */
 export function paletteActions(s: {
   choice: ArrangementChoice; selected: DeskRow | null;
   /** what holds the desk (`holdOnDesk`): a form whose draft a jump or another form would discard */
@@ -177,14 +184,14 @@ export function paletteActions(s: {
   const out: Omit<PaletteAction, "words">[] = [
     { key: "add", label: "Add a spread or contract", detail: "", why: null },
     {
-      key: "edit-monitor", label: "Edit the selected Monitor", detail: isMonitor ? name : "",
+      key: "edit-monitor", label: "Edit the selected rule", detail: isMonitor ? name : "",
       why: kind === null ? "nothing is selected"
-        : kind === "holding" ? "a holding is selected: select one of its Monitors" : held("edit"),
+        : kind === "holding" ? "a holding is selected: select one of its rules" : held("edit"),
     },
     {
       key: "close-holding", label: "Close the selected holding", detail: kind === "holding" ? name : "",
       why: kind === null ? "nothing is selected"
-        : kind === "holding" ? held("close") : "a Monitor is selected, not a holding",
+        : kind === "holding" ? held("close") : "a rule is selected, not a holding",
     },
     // the header's "save as image" (#300): a picture of the view, which changes nothing in it; and
     // beside it the same table as Markdown on the clipboard (#394)
@@ -196,7 +203,9 @@ export function paletteActions(s: {
       why: hold !== null && (choice === "phone" || (choice === "auto" && s.autoIsPhone)) ? HOLD_WHY : null,
     })),
   ];
-  return out.map((a) => ({ ...a, words: tokens(`${a.label} ${a.detail}`) }));
+  return out.map((a) => ({
+    ...a, words: [...tokens(`${a.label} ${a.detail}`), ...(a.key === "edit-monitor" ? ["monitor"] : [])],
+  }));
 }
 
 /** Whether the page is on a Mac, where the palette's chord is ⌘K rather than Ctrl+K. */

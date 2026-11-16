@@ -73,7 +73,7 @@ describe("a single-contract Monitor on the phone", () => {
     for (const [field, words] of FIELDS) {
       await startContract();
       await userEvent.selectOptions(screen.getByLabelText("what it watches"), words);
-      await userEvent.click(within(sheet()).getByRole("button", { name: "Watch it + 1 Monitor" }));
+      await userEvent.click(within(sheet()).getByRole("button", { name: "Watch it + 1 rule" }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
       expect(writes.at(-1)).toEqual({
         what: "POST /spreads",
@@ -108,7 +108,7 @@ describe("its direction on the phone (#405)", () => {
     await userEvent.click(within(pair).getByRole("button", { name: "≤ at or below" }));
     expect(pastTheEdge(sheet())).toEqual([]);
     expect(overflowsSideways()).toBe(false);
-    await userEvent.click(within(sheet()).getByRole("button", { name: "Watch it + 1 Monitor" }));
+    await userEvent.click(within(sheet()).getByRole("button", { name: "Watch it + 1 rule" }));
     await waitFor(() => expect(writes).toHaveLength(1));
     expect((writes[0]!.body as { spreads: { monitors: unknown[] }[] }).spreads[0]!.monitors).toEqual([
       { option_type: "PUT", strike: 7150, field: "mid_price", threshold: 0.5, direction: "below", compare: "abs" },
@@ -123,7 +123,7 @@ describe("a lone contract held, on the phone", () => {
     await userEvent.click(within(sheet()).getByRole("button", { name: "I hold it" }));
     await userEvent.click(within(sheet()).getByRole("button", { name: "long" }));
     await userEvent.fill(screen.getByLabelText("entry"), "5.20");
-    await userEvent.click(within(sheet()).getByRole("button", { name: "Record holding + 1 Monitor" }));
+    await userEvent.click(within(sheet()).getByRole("button", { name: "Record holding + 1 rule" }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
     expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]);
     expect((writes[0]!.body as { spreads: object[] }).spreads[0])
@@ -138,7 +138,7 @@ describe("the one-contract sheet", () => {
   it("says a refusal inside the sheet, where it can be read", async () => {
     await openPhone({ status: 422, body: { detail: "contract does not exist: US.SPXW261218P7150000 — check strike and expiry" } });
     await startContract();
-    await userEvent.click(within(sheet()).getByRole("button", { name: "Watch it + 1 Monitor" }));
+    await userEvent.click(within(sheet()).getByRole("button", { name: "Watch it + 1 rule" }));
     const alert = await within(sheet()).findByRole("alert");
     expect(alert.textContent).toMatch(/^contract does not exist/);
     alert.scrollIntoView({ block: "center" });

@@ -28,7 +28,11 @@ arrangements, and on the phone carries Add and Settings, whose tab bar is retire
 Settings is a bottom sheet over the book like Add's (last section). **Amended 2026-11-16: one
 format and one vocabulary, first half** — every figure written by one formatter, each row kind's
 figures in one order, Δ said three ways, Greek labels never in capitals, and the saved view's tables
-per section (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+per section (its section). **Amended 2026-11-16: one vocabulary, second half** — every clock with its
+zone and every date in prose or compact, "rule" for "Monitor", sentence case and one order of
+actions, one set of words for why a rule is off, ONE section order for the inspector and the sheet,
+the phone's cards saying what the desk's rows say, the payoff's maximums said once, and errors in
+plain words (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -811,7 +815,7 @@ strip, ν drawn as "N" by an upper-case label, "short leg Δ" on the desk and "s
 The owner set one standard (2026-11-16) in fourteen parts; this half builds five of them (A–E) and
 the picture's (M). The rest — clocks and zones, "rule" for "Monitor", sentence case and the actions'
 words, the muted reasons, one section order for the inspector and the sheet, the phone's cards, the
-payoff's maximums and the errors' words — is the second half, and amends this section when it lands.
+payoff's maximums and the errors' words — is the second half, built and recorded in the next section.
 
 - **One number formatter** (`frontend/src/shared/numbers.ts`). Every figure on the page goes
   through it: points and prices to 2 places, Δ to 3, Γ to 4, Θ and ν to 2, IV to 2 and a `%`,
@@ -876,4 +880,115 @@ payoff's maximums and the errors' words — is the second half, and amends this 
   comparison drawn) and close form, a rule's total Entry split, every payoff's crosshair readout and
   tooltip as the keys move it, and the saved picture. Not Copy as text (above). A held spread's value
   cell is read to a screen reader as "cost to close", as it is drawn.
+
+## Amended 2026-11-16: one vocabulary across the page — times, words, order (second half)
+
+The rest of the owner's standard of 2026-11-16: parts F–L and N. Frontend only; the bot's wording
+is out of scope, and where a line here says "the bot's words" it now differs from the bot by the
+zone mark.
+
+- **F. Every clock carries its zone** (`frontend/src/shared/times.ts`). Two clocks, by what a time
+  is about. The MARKET's — a close, a last trade, a Level reached live in the Curb or GTH, the
+  session's own edges ("after the 16:15 ET close") — on New York's clock, marked `ET` all year
+  (`newYorkWhen`, `marketClock`; never EST/EDT, which named one clock two ways). The VIEWER's — when
+  the service fetched, when the screen updated, when a holding was valued or a Reference read, the
+  picture's "taken" — on DISPLAY_TZ's clock, marked with that zone's short name, `SGT` for
+  Asia/Singapore, and never the `+08:00` it was served with. "Screen updated" is said on DISPLAY_TZ's
+  clock too, where it was the device's: one viewer's clock on the page, not two.
+  - The short name is the tz database's, asked of a few English locales in turn, since each names
+    only its own region's zones (en-US says `GMT+8` for Singapore, en-SG says `SGT`); where none has
+    one, the offset's name, `GMT+5:45`. A stamp is never said in a zone it was not written in: one
+    whose offset is not DISPLAY_TZ's is named by its offset.
+  - DISPLAY_TZ is `/health`'s `settings.display_tz`, set as page state when health arrives
+    (`setDisplayZone`), so every pure reader of a served stamp — the Levels, the References, the
+    closed line, the picture — names one zone without each being handed it. Before it is known, the
+    device's zone stands in where its offset agrees with the stamp's. The suites clear it after every
+    test (`testing/zone.setup.ts`).
+  - **The last trade** is the market's: `Mon 16 Nov 00:22 ET`, where it was `2026-11-16 13:22:02`.
+  - **Dates are never ISO on screen.** An expiry is compact, `261231`, where the page is dense — the
+    table's groups, the picture, the palette — and prose, `Thu 31 Dec`, in a sentence: the meta line
+    under a holding's or a rule's name, the phone's expiry headings, the closed trades, the expired
+    rule's note and the day it is deleted on. An opened or closed day is prose too. No year: every
+    date on the page is the weekday, the day and the month, as `marketDayWords` and the bot write a
+    market day. A service's own refusal ("closed on 2026-10-30, before it was opened on …") is its
+    words and is shown as they are.
+  - **Manage-by is days left**, `in 24d` or `due`, on the desk's column, its inspector and the phone's
+    sheet alike, the threshold as its detail, `at 21 DTE` (`pace.manageBy`).
+- **G. "rule", never "Monitor", on screen.** The save button says `Record holding + 2 rules`, the
+  sections are `Rules`, a holding with none says `no rule on it`, the toasts say `added 1 holding
+  and 2 rules`, and every refusal, note and label that said Monitor says rule. The API and CONTEXT.md
+  keep the word: the palette still FINDS a rule by "monitor" (`commands.ts`'s `RULE_SYNONYMS`), and
+  calls each kind `rule`, `quarantined rule`, `muted rule`, `expired rule`.
+- **H. Sentence case, and one order of actions.** No stylesheet sets capitals: the desk's section
+  titles and table header, the payoff's and the history's headings, the history's toggle and the
+  palette's groups are written as read — `Holdings`, `Payoff at expiry`, `History`, `Go to` — and set
+  apart by weight and size. Headings take their capital (`Rules on held contracts`, `Quarantined —
+  switched off by the service`, `Needs you`); a figure's label stays as it is written, lower case
+  (`cost to close`, `short Δ`), as the first half wrote them.
+  - The actions are lower-case verbs in one order: a rule's `edit · mute · record as held · delete…`,
+    with `split entry` and `switch back on` before the delete where they are offered; a holding's
+    `edit · close… · delete…`. An ellipsis only where a question follows, which a rule's delete has as
+    a holding's does. Every question ends `… / keep it`: a rule's and a holding's delete
+    (`delete it / keep it`), a holding's close (`close it / keep it`), switching a quarantine back on
+    (`switch it on / keep it`), and Settings' removal of a Reference. An edit form's are `save /
+    cancel`. Settings' References submit is `add` (named "add reference" to a reader, beside the
+    header's add), where it was "keep it" — the words of a refusal. The sheet's own close button is an
+    icon named `close sheet`, where "Close" sat beside a holding's `close…`.
+- **I. One set of words for why a rule is off** (`shared/groups.ts`'s `REASONS`): a LABEL for a list
+  — `unknown contract`, `figure never arrived`, `could not be read`, `expired`, `holding closed`,
+  `muted by you`, `reason not recorded` — and a CLAUSE for a sentence, the quarantines' being the
+  needs-you line's (`the provider does not know its contract`). The desk's fold and quarantined rows,
+  the phone's switched-off cards, the needs-you line, a closed holding's account of its rules and the
+  picture's headings all read them; the phone's "muted by hand" and "its holding closed" are gone. A
+  quarantine said in full before switching it back on starts with its clause.
+- **J. ONE section order for the inspector and the sheet** (`sections.ts`, drawn by
+  `DetailSections.tsx` on both). A holding: its P&L and Level, legs (in words, short first), strike
+  strip, payoff, figures (cost to close, entry, contracts, short Δ, position Δ Γ Θ ν), `Exit schedule`
+  (target, stop, on pace, pace gap, manage-by), the pace explained, `Rules`, its actions, its history.
+  A rule: the same shape — its state, legs, strip, payoff, figures opening with what it `watches` and
+  how it compares, `Rules` (itself and the rules on its legs, each with its controls), history. Under
+  the name, on both, one line: `Thu 31 Dec · 45 DTE · opened Wed 11 Nov`. The desk's inspector no
+  longer lists every column's figure (#372's "every figure, the hidden ones included"): its figures
+  are the list above, and the P&L and the captured share lead it, as on the phone. A rule's own
+  progress is its line's in `Rules`. Each section is marked `data-section`, and `NextDetailOrder`
+  holds both surfaces to the list and to each other, for every holding and watched row of the
+  owner's book. A rule's chip and its fault are its level section's, said once: its own line in
+  `Rules` draws neither (review of #420). A holding's chip is the same on both — its Level or its
+  Manage-by, in the row's words (`AttentionChip`). Out of the session a watched row's value figure is
+  its last in-session price and when, as its row and card say it; a short leg's Δ is read from the
+  one source the table reads, a delta rule's watched figure included.
+- **K. The phone's cards say what the desk's rows say.** A watch card gives its value and Δ as its
+  desk row writes them (`columns.ruleCells`) — the live price in session and the last in-session one
+  out of it, a held spread's cost to close — where it had a value only out of session. Every rule
+  line on a holding's card draws its progress toward its threshold, as a watch card draws its own.
+  A holding's DTE is its expiry heading's alone: the card's pill repeated it.
+- **L. The payoff's maximums said once**: in the list under the chart, `+4.72 pts per contract ·
+  +$472`. The chart keeps a dashed rule at each and writes no figure beside it. A watched spread's
+  figures are `pts per contract` as a holding's are: it is one contract, and "pts" beside a holding's
+  "pts per contract" read as two units.
+- **N. Errors in plain words** (`shared/errors.ts`): what failed and that it can be tried again —
+  `the figures could not be refreshed — the service did not answer; tried again at the next poll`,
+  `the holdings could not be valued — the service failed (502); refresh to try again`. A browser's
+  "Failed to fetch" (and Safari's and Firefox's spellings), a socket's `ECONNREFUSED` and the page's
+  own `/quotes → 502` are never the WORDS on screen. What was thrown or served stays one tap away: a
+  "details" disclosure beside the words (`ErrorWords.tsx`) — on the banner, the holdings' note, every
+  form's refusal, the payoff's, the history's, the pace split's and the closed trades' failures, a
+  rule's fault in its detail and a Reference's in Settings — which a finger and a screen reader
+  reach, where a `title` reached a pointer alone (review of #420); a toast carries it as its detail.
+  A failure names its VENDOR: `moomoo could not be reached`, a Reference's by its source — never
+  "the provider" where the vendor is known, since the References exist to tell vendors apart. A
+  reason the service SERVES for a dash (`error`, `spx_reason`, `valued_reason`, a Reference's error)
+  is made plain at the API boundary (`api.ts`), its served text kept beside it (`<field>_raw`). A refusal is the
+  service's words, said as they are, with no retry promised. **Settings' privacy note** says what it
+  keeps: `%, Δ, DTE and points`, and that figures in points per contract — cost to close, entry, the
+  pace gap, the payoff — stay.
+- **Held by** `WordsPage.test.tsx`, over the page walk the hyphen guard uses (`testing/pageWalk.tsx`,
+  now with Settings, the Add sheet, a rule's editor and delete question, and the desk's palette), on
+  the desk and the phone, in session and out: no clock without its zone (ET or the viewer's, SGT —
+  no other mark passes), no
+  offset for a zone, no ISO date, no "Monitor", no raw error — each check held to a planted fault.
+  `NoCapitals.test.ts` holds every stylesheet and component to no capitals set by CSS, and the
+  browser's `NextGreekLabels` to what it computes on every heading, label and button. `NextReasons`
+  holds the reason words across five surfaces, `NextDetailOrder` the section order, `NextPhone` the
+  cards against the desk's rows, `PlainErrors` the errors, `Times` the clocks.
 

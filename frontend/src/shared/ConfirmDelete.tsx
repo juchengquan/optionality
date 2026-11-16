@@ -49,8 +49,9 @@ export function ConfirmDelete({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>Delete</AlertDialogAction>
+          {/* the action, then the safe answer: every confirm on the page ends "… / keep it" (part H) */}
+          <AlertDialogAction onClick={onConfirm}>delete it</AlertDialogAction>
+          <AlertDialogCancel>keep it</AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

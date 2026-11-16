@@ -11,6 +11,7 @@ import type { Entry, Holding, Monitor } from "../shared/api";
 import type { BookProps } from "../Book";
 import { placeBook } from "../placement";
 import { PhoneBook } from "../phone/PhoneBook";
+import { DeskBook } from "../desk/DeskBook";
 import { Still } from "../snapshot/Still";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
@@ -60,7 +61,8 @@ describe("the cards, on the owner's book", () => {
       .map((g) => g.dataset.expiry);
     expect(headings("Holdings")).toEqual(book.holdings.map((g) => g.expiry));
     expect(headings("Watchlist")).toEqual(book.watchlist.map((g) => g.expiry));
-    expect(within(region("Holdings")).getByRole("heading", { name: /18 Dec 2026/ })).toBeTruthy();
+    // the expiry in prose, never ISO, and its DTE said once, here (parts F and K)
+    expect(within(region("Holdings")).getByRole("heading", { name: /Fri 18 Dec/ })).toBeTruthy();
   });
 
   it("sit a condor's two cards together, the calls first", () => {
@@ -70,7 +72,7 @@ describe("the cards, on the owner's book", () => {
       .toEqual(["h-calls", "h-puts"]);
   });
 
-  it("give a held spread a large P&L, its Cost to close, short-leg Δ, DTE and the Level reached", () => {
+  it("give a held spread a large P&L, its Cost to close, short-leg Δ and the Level reached, its DTE once, on its expiry", () => {
     // the deltas withheld, so the short call's is its rule's (the fallback, #318)
     const stopped: Holding[] = HOLDINGS.map((h) => ({ ...h, legs_delta: null })).map((h) => h.id === "h-calls"
       ? { ...h, schedule: { ...SCHEDULE, reached: "stop" } } as Holding : h);
@@ -79,7 +81,9 @@ describe("the cards, on the owner's book", () => {
     expect(c.querySelector(".nxp-hero [data-money]")!.textContent).toBe("−$240");
     expect(within(c).getByText("4.40")).toBeTruthy();         // cost to close
     expect(within(c).getByText("0.231")).toBeTruthy();        // the short call's Δ, from its rule
-    expect(within(c).getByText("38 DTE")).toBeTruthy();
+    // the DTE is its expiry's heading's, and not said again on the card (part K)
+    expect(c.textContent).not.toContain("DTE");
+    expect(c.closest("[data-expiry]")!.querySelector("h3")!.textContent).toMatch(/38 DTE/);
     expect(within(c).getByText("at stop")).toBeTruthy();
     // no served delta and no rule on its short leg: no figure to show, and it says so with a dash
     expect(within(card("h-puts")).getByText("short Δ").nextSibling!.textContent).toBe("—");
@@ -101,10 +105,10 @@ describe("the cards, on the owner's book", () => {
     expect(short("h-ic")).toBe("C7400 0.120 · P6300 −0.250");
   });
 
-  it("show a candidate's progress toward its threshold and each Monitor's sentence", () => {
+  it("show a candidate's progress toward its threshold and each rule's sentence", () => {
     draw();
     const c = card("w-dec18");
-    expect(within(c).getByRole("progressbar").getAttribute("aria-valuenow")).toBe("40");
+    expect(c.querySelector(":scope > [role=progressbar]")!.getAttribute("aria-valuenow")).toBe("40");
     expect(within(c).getByText(/\|value\| ≥ 6\.00 — now 2\.40, 3\.60 away/)).toBeTruthy();
   });
 
@@ -116,7 +120,7 @@ describe("the cards, on the owner's book", () => {
     expect(within(card("r-calls")).getByText("ringing")).toBeTruthy();
   });
 
-  it("list the quarantined Monitors as faults and the muted ones as muted", () => {
+  it("list the quarantined rules as faults and the muted ones as muted", () => {
     draw();
     const off = region("Switched off");
     const row = (id: string) => off.querySelector<HTMLElement>(`[data-monitor="${id}"]`)!;
@@ -124,7 +128,8 @@ describe("the cards, on the owner's book", () => {
     expect(within(row("q-unknown")).getByText("quarantined")).toBeTruthy();
     expect(within(row("q-unknown")).getByText(/the provider does not know its contract/)).toBeTruthy();
     expect(row("m-muted").dataset.state).toBe("muted");
-    expect(within(row("m-muted")).getByText(/muted by hand/)).toBeTruthy();
+    // the page's one set of words for why a rule is off (part I)
+    expect(within(row("m-muted")).getByText(/muted by you/)).toBeTruthy();
     expect(within(row("m-expired")).getByText(/expired/)).toBeTruthy();
   });
 
@@ -137,7 +142,7 @@ describe("the cards, on the owner's book", () => {
   it("hide $ amounts under privacy and keep the rest", () => {
     draw({ privacy: true });
     expect(card("h-calls").querySelector(".nxp-hero [data-money]")!.textContent).toBe("$•••");
-    expect(within(card("h-calls")).getByText("38 DTE")).toBeTruthy();
+    expect(within(card("h-calls")).getByText(/^captured \d+%$/)).toBeTruthy();
   });
 
   it("hide a condor's summed P&L under privacy, and show it otherwise", () => {
@@ -153,9 +158,66 @@ describe("the cards, on the owner's book", () => {
   it("draw no progress bar for a rule with no figure, where 0% would read as far from it", () => {
     const blind = QUOTES.map((q) => q.id === "w-dec18" ? { ...q, fill: null, watched: null } as Entry : q);
     draw({ quotes: blind });
-    expect(within(card("w-dec18")).queryByRole("progressbar")).toBeNull();
-    expect(within(card("w-dec18")).getByText(/no figure/)).toBeTruthy();
-    expect(within(card("w-dec31")).getByRole("progressbar")).toBeTruthy();
+    expect(card("w-dec18").querySelector(":scope > [role=progressbar]")).toBeNull();
+    expect(within(card("w-dec18")).getAllByText(/no figure/).length).toBeGreaterThan(0);
+    expect(card("w-dec31").querySelector(":scope > [role=progressbar]")).toBeTruthy();
+  });
+});
+
+describe("the cards say what the desk's rows say (part K)", () => {
+  it("gives every watch card its value and Δ, as its desk row writes them", () => {
+    render(<DeskBook quotes={QUOTES} monitors={MONITORS} holdings={HOLDINGS} holdingsError={null} holdingsAt={null}
+                     session privacy={false} entryStyle="opportunity" />);
+    const desk = new Map([...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].map((r) => [r.dataset.ref!, {
+      value: r.querySelector('[data-col="value"] .nxd-v')?.textContent ?? null,
+      delta: r.querySelector('[data-col="delta"] .nxd-v')?.textContent ?? null,
+    }]));
+    cleanup();
+    draw();
+    const cards = [...region("Watchlist").querySelectorAll<HTMLElement>("article[data-ref]")];
+    expect(cards.length).toBeGreaterThan(3);
+    for (const c of cards) {
+      const row = desk.get(c.dataset.ref!)!;
+      expect(c.querySelector("[data-value] dd")!.textContent, c.dataset.ref).toBe(row.value);
+      expect(c.querySelector("[data-delta] dd")!.textContent, c.dataset.ref).toBe(row.delta);
+    }
+  });
+
+  it("draws each rule on a holding's card with its progress, as a watch card draws its own", () => {
+    draw();
+    const lines = [...card("h-calls").querySelectorAll<HTMLElement>(".nxp-rule")];
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      const entry = QUOTES.find((q) => q.id === line.dataset.ref)!;
+      expect(line.querySelector("[role=progressbar]") !== null, line.dataset.ref).toBe(entry.fill !== null);
+    }
+  });
+
+  it("says a short leg's Δ from the one source the desk's table reads, a delta rule's figure included (review of #420)", async () => {
+    // no served leg delta, and a quote that carries none: the rule's watched figure is the Δ
+    const bare = HOLDINGS.map((h) => ({ ...h, legs_delta: null }));
+    const leg = { ...SHORT_LEG, field: "option_delta", quote: { name: "SPXW 261218 7300.00C" } } as Entry;
+    const book = { holdings: bare, quotes: [...QUOTES, leg], monitors: [...MONITORS, SHORT_LEG_RULE] };
+    render(<DeskBook {...book} holdingsError={null} holdingsAt={null} session privacy={false} entryStyle="opportunity" />);
+    const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="h-calls"]')!;
+    const table = row.querySelector('[data-col="delta"] .nxd-v')!.textContent;
+    fireEvent.click(within(row).getByRole("button", { name: "1218_C7300" }));
+    const insp = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
+    const inspector = within(insp).getByText("short Δ").nextElementSibling!.textContent;
+    cleanup();
+    draw(book);
+    const onCard = within(card("h-calls")).getByText("short Δ").nextSibling!.textContent;
+    expect(table).toBe("0.231");
+    expect(inspector).toBe(table);
+    expect(onCard).toBe(table);
+  });
+
+  it("says a holding's DTE once, on its expiry's heading and not on its card", () => {
+    draw();
+    for (const c of region("Holdings").querySelectorAll<HTMLElement>("article[data-ref]")) {
+      expect(c.textContent, c.dataset.ref).not.toMatch(/\bDTE\b/);
+      expect(c.closest("[data-expiry]")!.querySelector("h3")!.textContent).toMatch(/\d+ DTE$/);
+    }
   });
 });
 
@@ -174,14 +236,16 @@ describe("the legs, each type marked for its colour and a short leg for its weig
   it("in the detail sheet of each", async () => {
     draw();
     fireEvent.click(within(card("h-ic")).getByRole("button", { name: /details of/ }));
-    const line = () => screen.getByRole("dialog").querySelector("[data-slot='sheet-description']")!;
+    // the legs are a section of their own, as the desk's inspector draws them (part J)
+    const line = () => screen.getByRole("dialog").querySelector("[data-section='legs']")!;
     await screen.findByRole("dialog");
-    expect(legMarks(line())).toEqual(IC);
+    // in words, short first, as the inspector lists them
+    expect(legMarks(line())).toEqual(IC.map((m) => m.replace(/^[−+]([CP])(\d+) (\w+) (\w+)$/, "$3 $4 $2 $3 $4")));
     act(() => { window.history.back(); });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     fireEvent.click(within(card("w-dec31")).getByRole("button", { name: /details of/ }));
     await screen.findByRole("dialog");
-    expect(legMarks(line())).toEqual(["−C7600 short CALL", "+C7650 long CALL"]);
+    expect(legMarks(line())).toEqual(["short CALL 7600 short CALL", "long CALL 7650 long CALL"]);
   });
 
   it("in the saved picture, as words only: the letters and signs, never a colour (#394)", () => {
@@ -265,7 +329,8 @@ describe("the detail sheet, beyond opening and closing", () => {
     draw({ quotes: blind });
     fireEvent.click(within(card("w-dec18")).getByRole("button", { name: /details of/ }));
     const sheet = await screen.findByRole("dialog");
-    expect(within(sheet).queryByRole("progressbar")).toBeNull();
+    // its own line in Rules carries its bar, and has none without a figure
+    expect(sheet.querySelector("[data-section='rules'] li")!.querySelector("[role=progressbar]")).toBeNull();
   });
 
   it("stays closed when what it showed goes away and comes back, and pushes no second entry", async () => {

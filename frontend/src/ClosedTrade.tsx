@@ -20,6 +20,7 @@ import { madeWords, storedWords, type ClosedTrade } from "./journal";
 import { heldLeg } from "./shared/format";
 import { Legs } from "./shared/Legs";
 import { contractsWords } from "./phone/figures";
+import { dateWords } from "./shared/times";
 
 /** `-P6000 +P5950`: the legs as the book writes a holding's, short as minus, each type in its
  *  colour (#391). */
@@ -51,11 +52,11 @@ export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, 
       {heading ? <h3 ref={title} tabIndex={-1} className="nx-trade-h">{trade.name}</h3> : null}
       <dl className="nx-trade-facts">
         <div><dt>legs</dt><dd><TradeLegs trade={trade} /></dd></div>
-        <div><dt>expiry</dt><dd>{trade.strike_date}</dd></div>
+        <div><dt>expiry</dt><dd>{dateWords(trade.strike_date)}</dd></div>
         {/* the count goes under privacy: contracts × points × 100 is the dollars it hides */}
         <div><dt>contracts</dt><dd data-fig="contracts">{contractsWords(trade.contracts, privacy)}</dd></div>
-        <div><dt>opened</dt><dd data-fig="opened">{trade.opened_at ?? "not recorded"}</dd></div>
-        <div><dt>closed on</dt><dd data-fig="closed">{trade.closed_on}</dd></div>
+        <div><dt>opened</dt><dd data-fig="opened">{trade.opened_at ? dateWords(trade.opened_at) : "not recorded"}</dd></div>
+        <div><dt>closed on</dt><dd data-fig="closed">{dateWords(trade.closed_on)}</dd></div>
         <div><dt>entry</dt><dd data-fig="entry">{storedWords(trade.entry)}</dd></div>
         <div><dt>exit</dt><dd data-fig="exit">{storedWords(trade.exit)}</dd></div>
         <div><dt>made</dt><dd data-fig="made"><strong>{madeWords(trade.realized_points, privacy)}</strong></dd></div>
@@ -90,7 +91,7 @@ function DeleteTrade({ trade, onDeleted }: { trade: ClosedTrade; onDeleted: () =
     }}>
       <div className="nx-hold-actions">
         <button ref={button} type="button" className="nx-hold-danger" aria-expanded={asking}
-                aria-controls={asking ? id : undefined} onClick={() => setAsking((a) => !a)}>Delete…</button>
+                aria-controls={asking ? id : undefined} onClick={() => setAsking((a) => !a)}>delete…</button>
       </div>
       {asking ? <DeleteAsk id={id} holding={trade} watching={0} onCancel={cancel} onDeleted={onDeleted} /> : null}
     </div>

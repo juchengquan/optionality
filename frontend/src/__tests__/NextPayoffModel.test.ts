@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Payoff } from "../shared/api";
 import {
-  labelRows, level, payoffWindow, pnlAt, pnlWords, priceStops, readout, shortWords, snapPrice, stepPrice,
+  labelRows, level, payoffWindow, pnlAt, pnlWords, priceStops, readout, snapPrice, stepPrice,
   type PayoffUnit,
 } from "../payoffChart";
 
@@ -123,19 +123,16 @@ describe("how a P&L is said", () => {
     expect(pnlWords(10, held)).toBe("+5.00 pts per contract · +$1,000");
     expect(pnlWords(-90, held)).toBe("−45.00 pts per contract · −$9,000");
     expect(pnlWords(0, held)).toBe("0.00 pts per contract · $0");
-    expect(shortWords(10, held)).toBe("+$1,000");
   });
 
   it("hides the money under privacy, and keeps the points, which say no count", () => {
     const priv = { ...held, hidden: true };
     expect(pnlWords(10, priv)).toBe("+5.00 pts per contract · $•••");
     expect(pnlWords(10, priv)).not.toMatch(/\$\d/);
-    expect(shortWords(-90, priv)).toBe("−45.00 pts");
   });
 
-  it("in points alone for one spread nobody holds", () => {
+  it("in points alone for a unit not said per contract", () => {
     expect(pnlWords(2.4, one)).toBe("+2.40 pts");
-    expect(shortWords(-47.6, one)).toBe("−47.60 pts");
   });
 
   it("reads out the price, its distance from SPX and the P&L there", () => {

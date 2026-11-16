@@ -358,7 +358,7 @@ describe("while a write is in flight, and after it", () => {
     fireEvent.click(screen.getByRole("button", { name: "switch 261211 8000C Δ back on" }));
     fireEvent.click(screen.getByRole("button", { name: "switch it on" }));
     expect(screen.getByRole("button", { name: "switch it on" }).hasAttribute("disabled")).toBe(true);
-    expect(screen.getByRole("button", { name: "keep it off" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "keep it" }).hasAttribute("disabled")).toBe(true);
     expect(screen.getByRole("button", { name: "switch 261211 8000C Δ back on" }).hasAttribute("disabled")).toBe(true);
   });
 
@@ -464,7 +464,7 @@ describe("a rule the service switched off", () => {
     fireEvent.click(screen.getByRole("button", { name: `switch ${label} back on` }));
     expect(sent).toEqual([]);
     const ask = screen.getByRole("group", { name: `switch ${label} back on?` });
-    expect(ask.textContent).toContain("the provider does not know its contract US.SPXW261211C8300000");
+    expect(ask.textContent).toContain("the provider does not know its contract — US.SPXW261211C8300000");
     expect(ask.textContent).toMatch(/switches it off again/);
     fireEvent.click(within(ask).getByRole("button", { name: "switch it on" }));
     await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: "q-unknown", body: { enabled: true } }]));
@@ -496,7 +496,7 @@ describe("a rule the service switched off", () => {
 
   it("says when an expired rule is deleted, from the service's retention, and offers no unmute", () => {
     controls({ monitor: monitor("m-expired") }, { retentionDays: 7 });
-    expect(screen.getByText("expired 2026-11-06 — the service deletes it on 2026-11-14")).toBeTruthy();
+    expect(screen.getByText("expired Fri 6 Nov — the service deletes it on Sat 14 Nov")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^unmute/ })).toBeNull();
     expect(screen.getByRole("button", { name: /^delete/ })).toBeTruthy();
   });
@@ -504,14 +504,14 @@ describe("a rule the service switched off", () => {
   it("is expired by its date, whatever its reason: a quarantine past expiry is not switched back on", () => {
     // the sweep deletes ANY rule past its expiry and retention, on or off (`expiryVerdict`)
     controls({ monitor: { ...monitor("q-unknown"), strike_date: "2026-11-06" } });
-    expect(screen.getByText("expired 2026-11-06 — the service deletes it on 2026-11-14")).toBeTruthy();
+    expect(screen.getByText("expired Fri 6 Nov — the service deletes it on Sat 14 Nov")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /back on$/ })).toBeNull();
   });
 
   it("offers no unmute to a rule past its expiry that was switched off with its holding", () => {
     controls({ monitor: { ...monitor("m-muted"), disabled_reason: "holding-closed", strike_date: "2026-11-10" } });
     // the 10th is before the 11th, the sweep's day (UTC), though it is still the 10th in New York
-    expect(screen.getByText("expired 2026-11-10 — the service deletes it on 2026-11-18")).toBeTruthy();
+    expect(screen.getByText("expired Tue 10 Nov — the service deletes it on Wed 18 Nov")).toBeTruthy();
     expect(screen.queryByRole("button", { name: /^unmute/ })).toBeNull();
     expect(screen.getByRole("button", { name: /^delete/ })).toBeTruthy();
   });
@@ -524,7 +524,7 @@ describe("a rule the service switched off", () => {
 
   it("says the expiry alone while the service has not said its retention", () => {
     controls({ monitor: monitor("m-expired") }, { retentionDays: null });
-    expect(screen.getByText("expired 2026-11-06 — the service deletes it after its retention window")).toBeTruthy();
+    expect(screen.getByText("expired Fri 6 Nov — the service deletes it after its retention window")).toBeTruthy();
   });
 });
 

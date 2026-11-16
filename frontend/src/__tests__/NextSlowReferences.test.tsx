@@ -262,11 +262,11 @@ describe.each(arrangements)("on the %s, keeping a Reference while they are slow"
     // the page's first read is still out when the owner keeps one
     expect(held).toHaveLength(1);
     fireEvent.change(within(refs).getByLabelText("code"), { target: { value: "US.QQQ" } });
-    fireEvent.click(within(refs).getByRole("button", { name: "keep it" }));
+    fireEvent.click(within(refs).getByRole("button", { name: "add reference" }));
     await waitFor(() => expect(log).toContain("POST /references"));
     // pending, said where it was asked, and not to be asked twice meanwhile
     await within(refs).findByText("refreshing references…");
-    expect(within(refs).getByRole("button", { name: "keep it" }).hasAttribute("disabled")).toBe(true);
+    expect(within(refs).getByRole("button", { name: "add reference" }).hasAttribute("disabled")).toBe(true);
     // the boxes clear as soon as the service said yes, as they always have
     await waitFor(() => expect((within(refs).getByLabelText("code") as HTMLInputElement).value).toBe(""));
 
@@ -283,7 +283,7 @@ describe.each(arrangements)("on the %s, keeping a Reference while they are slow"
     held[1]!.answer([SPX, { ...SPX, id: "r2", code: "US.QQQ", label: null, figure: 512.3 }]);
     await waitFor(() => expect(within(refs).queryByText("refreshing references…")).toBeNull());
     expect(within(refs).getAllByRole("button", { name: "remove" })).toHaveLength(2);
-    expect(within(refs).getByRole("button", { name: "keep it" }).hasAttribute("disabled")).toBe(false);
+    expect(within(refs).getByRole("button", { name: "add reference" }).hasAttribute("disabled")).toBe(false);
     for (const b of within(refs).getAllByRole("button", { name: "remove" })) {
       expect(b.hasAttribute("disabled")).toBe(false);
     }

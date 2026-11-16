@@ -87,10 +87,10 @@ async function closeHeld(arrangement: "desk" | "phone", exit?: string): Promise<
   }
   const d = arrangement === "desk"
     ? screen.getByRole("complementary", { name: /^inspector:/ }) : await screen.findByRole("dialog");
-  fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
+  fireEvent.click(within(d).getByRole("button", { name: "close…" }));
   const form = within(d).getByRole("form", { name: "close 1231_IC" });
   if (exit !== undefined) fireEvent.change(within(form).getByLabelText("exit, per contract"), { target: { value: exit } });
-  fireEvent.click(within(form).getByRole("button", { name: "Close holding" }));
+  fireEvent.click(within(form).getByRole("button", { name: "close it" }));
   const account = await screen.findByRole("region", { name: "closed 1231_IC" });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   // listed at once where the fold is open; shut, it lists nothing and reads nothing (#373)
@@ -109,8 +109,8 @@ for (const arrangement of ["desk", "phone"] as const) {
       const rows = await entries();
       expect(rows.map((r) => r.dataset.closed)).toEqual(["c-blank", "c-tie", "c-old"]);
       const [blank, tie, old] = rows as [HTMLElement, HTMLElement, HTMLElement];
-      expect(fig(old, "opened")).toBe("2026-11-01");
-      expect(fig(old, "closed")).toBe("2026-11-06");
+      expect(fig(old, "opened")).toBe("Sun 1 Nov");
+      expect(fig(old, "closed")).toBe("Fri 6 Nov");
       expect(fig(old, "entry")).toBe("2");
       expect(fig(old, "exit")).toBe("0.5");
       // (2 − 0.5) × 3, as the service answered it
@@ -166,7 +166,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       expect(legMarks(facts)).toEqual(["−P6000 short PUT", "+P5950 long PUT"]);
       if (arrangement === "phone") {
         const line = (await screen.findByRole("dialog")).querySelector("[data-slot='sheet-description']")!;
-        expect(line.textContent).toBe("closed on 2026-11-06 · −P6000 +P5950");
+        expect(line.textContent).toBe("closed on Fri 6 Nov · −P6000 +P5950");
         expect(legMarks(line)).toEqual(["−P6000 short PUT", "+P5950 long PUT"]);
       }
     });
@@ -203,11 +203,11 @@ for (const arrangement of ["desk", "phone"] as const) {
       // the journal as the service now has it: (2 − 0.7) × 3
       await waitFor(() => expect(fig(trade, "made")).toBe("3.9 pts"));
       expect(fig(trade, "exit")).toBe("0.7");
-      expect(fig(trade, "closed")).toBe("2026-11-04");
+      expect(fig(trade, "closed")).toBe("Wed 4 Nov");
       // the journal's own row too — read past the phone's sheet, which hides the page beneath it
       const row = document.querySelector<HTMLElement>('[aria-label="closed trades"] [data-closed="c-old"]')!;
       await waitFor(() => expect(fig(row, "made")).toBe("3.9 pts"));
-      expect(fig(row, "closed")).toBe("2026-11-04");
+      expect(fig(row, "closed")).toBe("Wed 4 Nov");
       // and the charts end at the corrected day, read again because the day moved
       await waitFor(() => {
         const now = within(trade).getByRole("group", { name: "burndown" });
@@ -227,7 +227,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       typeIn(within(fix).getByLabelText("closed on"), "2026-10-30");
       fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
       expect((await within(fix).findByRole("alert")).textContent).toBe("closed on 2026-10-30, before it was opened on 2026-11-01");
-      expect(fig(trade, "closed")).toBe("2026-11-06");
+      expect(fig(trade, "closed")).toBe("Fri 6 Nov");
       expect(asked(s, "/positions")).toBe(1);
     });
 
@@ -244,11 +244,11 @@ for (const arrangement of ["desk", "phone"] as const) {
       }
       const d = arrangement === "desk"
         ? screen.getByRole("complementary", { name: /^inspector:/ }) : await screen.findByRole("dialog");
-      fireEvent.click(within(d).getByRole("button", { name: "Close…" }));
-      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "Close holding" }));
+      fireEvent.click(within(d).getByRole("button", { name: "close…" }));
+      fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "close it" }));
       await screen.findByRole("region", { name: "closed 1231_IC" });
       await waitFor(async () => expect((await entries()).map((r) => r.dataset.closed)[0]).toBe("h-ic"));
-      expect(fig((await entries())[0]!, "closed")).toBe("2026-11-12");
+      expect(fig((await entries())[0]!, "closed")).toBe("Thu 12 Nov");
     });
 
     it("reads the journal again after a correction made from the close's account", async () => {
@@ -272,7 +272,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
       await waitFor(() => expect(asked(s, "/positions")).toBe(2));
       const j = document.querySelector<HTMLElement>('[aria-label="closed trades"]')!;
-      await waitFor(() => expect(j.textContent).toMatch(/could not be read — \/positions → 500/));
+      await waitFor(() => expect(j.textContent).toMatch(/could not be read — the service failed \(500\); open it again to retry/));
       // the rows it had stay, and so does the trade that is open
       expect(rowOf("c-old")).not.toBeNull();
       expect(screen.getByRole("region", { name: "closed trade 1120_P6000", hidden: true })).toBe(trade);
@@ -348,21 +348,21 @@ for (const arrangement of ["desk", "phone"] as const) {
       const s = service();
       await open(arrangement, s);
       const trade = await openTrade("1120_P6000");
-      fireEvent.click(within(trade).getByRole("button", { name: "Delete…" }));
+      fireEvent.click(within(trade).getByRole("button", { name: "delete…" }));
       const ask = within(trade).getByRole("group", { name: "delete 1120_P6000?" });
       expect(ask.textContent).toMatch(/daily samples are deleted with it/);
       expect(ask.textContent).toMatch(/cannot be re-entered/);
       // a closed trade cannot be closed instead
-      expect(within(ask).queryByRole("button", { name: "Close it instead" })).toBeNull();
+      expect(within(ask).queryByRole("button", { name: "close it instead" })).toBeNull();
       // the safe answer takes the focus, so Enter on arrival deletes nothing
-      expect(document.activeElement).toBe(within(ask).getByRole("button", { name: "Keep it" }));
-      fireEvent.click(within(ask).getByRole("button", { name: "Keep it" }));
+      expect(document.activeElement).toBe(within(ask).getByRole("button", { name: "keep it" }));
+      fireEvent.click(within(ask).getByRole("button", { name: "keep it" }));
       expect(within(trade).queryByRole("group", { name: "delete 1120_P6000?" })).toBeNull();
       expect(s.writes()).toEqual([]);
 
-      fireEvent.click(within(trade).getByRole("button", { name: "Delete…" }));
+      fireEvent.click(within(trade).getByRole("button", { name: "delete…" }));
       fireEvent.click(within(within(trade).getByRole("group", { name: "delete 1120_P6000?" }))
-        .getByRole("button", { name: "Delete for good" }));
+        .getByRole("button", { name: "delete it" }));
       await waitFor(() => expect(s.writes().map((w) => `${w.method} ${w.path}`)).toEqual(["DELETE /positions/c-old"]));
       await waitFor(() => expect(rowOf("c-old")).toBeNull());
       // and the section read again, once
@@ -377,7 +377,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       s.refuse.set("GET /positions", { status: 500, detail: "database is locked" });
       await open(arrangement, s);
       const j = await journal();
-      await waitFor(() => expect(j.textContent).toMatch(/closed trades could not be read — \/positions → 500/));
+      await waitFor(() => expect(j.textContent).toMatch(/closed trades could not be read — the service failed \(500\); open it again to retry/));
       expect(j.textContent).not.toMatch(/nothing closed/);
     });
 
@@ -410,10 +410,10 @@ describe("the desk's journal", () => {
     await waitFor(() => expect(s.writes().at(-1)).toEqual(
       { method: "PATCH", path: "/positions/h-ic", body: { closed_on: "2026-11-11" } }));
     expect(s.stored.get("h-ic")!.exit).toBe(0.7);
-    await waitFor(() => expect(fig(trade, "closed")).toBe("2026-11-11"));
+    await waitFor(() => expect(fig(trade, "closed")).toBe("Wed 11 Nov"));
     expect(fig(trade, "exit")).toBe("0.7");
     // and the close's account says the close as the service now has it
-    await waitFor(() => expect(account.textContent).toMatch(/closed on 2026-11-11/));
+    await waitFor(() => expect(account.textContent).toMatch(/closed on Wed 11 Nov/));
     expect(account.textContent).toMatch(/exit 0\.7 ·/);
   });
 
@@ -496,7 +496,7 @@ describe("folded at the bottom of the book (#373)", () => {
       await open(arrangement, s);
       const account = await closeHeld(arrangement, "1");
       // drawn from the close's answer: the journal was never read
-      expect(account.textContent).toMatch(/closed on 2026-11-12/);
+      expect(account.textContent).toMatch(/closed on Thu 12 Nov/);
       const fix = within(account).getByRole("form", { name: "correct the close of 1231_IC" });
       typeIn(within(fix).getByLabelText("exit, per contract"), "1.3");
       fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));

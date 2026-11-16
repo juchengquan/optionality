@@ -4,19 +4,11 @@ import type { Entry, Holding, Monitor } from "../shared/api";
 import { DASH } from "../shared/format";
 import { servedDelta } from "../legs";
 import { delta } from "../shared/numbers";
+import { dateWords } from "../shared/times";
+import { reasonLabel } from "../shared/groups";
 
-/** "Fri 18 Dec 2026": an expiry as a date to read, not a key. Read as a calendar date in UTC, so
- *  the device's zone can never move it a day. */
-const EXPIRY = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "UTC", weekday: "short", day: "numeric", month: "short", year: "numeric",
-});
-
-export function expiryWords(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) return iso;
-  return EXPIRY.format(new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])))).replace(",", "");
-}
-
+/** "Fri 18 Dec": an expiry as prose names it (part F, `times.dateWords`), never ISO. */
+export const expiryWords = (iso: string): string => dateWords(iso);
 
 /** "×2", or "×•••" under privacy: contracts × points × 100 is the dollar amount privacy hides, so
  *  the count beside a figure in points goes with it (owner's decision, #314). */
@@ -40,8 +32,11 @@ export function shortDeltas(holding: Holding, quotes: Entry[], monitors: Monitor
     const leg = { option_type: l.option_type, strike: l.strike };
     if (served !== null) return { leg, delta: served };
     const rule = monitors.find((m) => m.legs === null && m.strike_date === holding.strike_date
-      && m.option_type === l.option_type && m.strike === l.strike && byId.get(m.id)?.quote);
-    const figure = rule ? byId.get(rule.id)?.quote?.option_delta : undefined;
+      && m.option_type === l.option_type && m.strike === l.strike && byId.get(m.id));
+    const ruled = rule ? byId.get(rule.id) : undefined;
+    // the quote's own delta, or — where the quote carried none — the figure a delta rule watches, as
+    // the desk's table reads it (`columns.shortLegDelta`, review of #420): one source for the three
+    const figure = ruled?.quote?.option_delta ?? (ruled?.field === "option_delta" ? ruled.watched : undefined);
     return { leg, delta: typeof figure === "number" ? figure : null };
   });
 }
@@ -54,13 +49,5 @@ export function shortDeltaWords(deltas: ShortDelta[]): string | { leg: ShortDelt
   return deltas.map((d) => ({ leg: d.leg, words: ` ${delta(d.delta)}` }));
 }
 
-/** Why a rule that is off is off, when it is not a quarantine: somebody's choice or the calendar. */
-const MUTED: Record<string, string> = {
-  manual: "muted by hand",
-  expired: "expired",
-  "holding-closed": "its holding closed",
-};
-
-export function mutedWords(reason: string | null): string {
-  return reason === null ? "muted" : MUTED[reason] ?? reason;
-}
+/** Why a rule that is off is off, in the page's one set of words (`shared/groups.ts`, part I). */
+export const mutedWords = (reason: string | null): string => reasonLabel(reason);

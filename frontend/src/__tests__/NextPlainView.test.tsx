@@ -4,7 +4,7 @@
  *  desk and the phone — is the browser suite's (`__browser__/NextSnapshot*.test.tsx`).
  */
 import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Entry, Health, Holding, Reference } from "../shared/api";
 import { Still } from "../snapshot/Still";
@@ -12,6 +12,10 @@ import { plainView, takenWords, toMarkdown, type PlainInput } from "../snapshot/
 import { needsYou, type Need } from "../needs";
 import { entry, holding, HOLDINGS, monitor, MONITORS, QUOTES, served, side } from "../testing/ownerBook";
 import { readMarkdown, readPicture, signless } from "../testing/plainRead";
+import { setDisplayZone } from "../shared/times";
+
+// DISPLAY_TZ as the page reads it from /health, so every viewer's time is said in SGT (part F)
+beforeEach(() => setDisplayZone("Asia/Singapore"));
 
 afterEach(cleanup);
 
@@ -40,7 +44,7 @@ function input(over: Partial<PlainInput> = {}): PlainInput {
   return {
     quotes, monitors, holdings, holdingsError: null, holdingsAt: "23:00:05", holdingsServed: null,
     session: true, privacy: false, needs: needsYou(quotes, monitors, HEALTH, holdings), health: HEALTH,
-    polledAt: "23:00:09", error: null, references: [SPX_REF], hidden: new Set(), takenAt: MONDAY, ...over,
+    polledAt: "23:00:09 SGT", error: null, references: [SPX_REF], hidden: new Set(), takenAt: MONDAY, ...over,
   };
 }
 
@@ -108,7 +112,7 @@ describe("the table", () => {
     expect(view.sections.map((s) => s.title)).toEqual(["Holdings", "Watchlist", "Muted and expired"]);
     expect(view.sections[0]!.groups.map((g) => g.heading)).toEqual(["261218 · 38 DTE", "261231 · 38 DTE"]);
     expect(view.sections[1]!.groups.map((g) => g.heading)).toEqual([
-      "261204 · 38 DTE", "261218 · 38 DTE", "261231 · 38 DTE", "quarantined — switched off by the service",
+      "261204 · 38 DTE", "261218 · 38 DTE", "261231 · 38 DTE", "Quarantined — switched off by the service",
     ]);
     // each row by its name alone, in the book's order
     expect(rowsOf(view, "Holdings").map((r) => r[0])).toEqual([
@@ -196,11 +200,11 @@ describe("every state the status column carried is still named, in the header or
     const view = plainView(input({ holdings, quotes: [], monitors: [], needs, session: false, takenAt: SUNDAY }));
     expect(line(view, "needs you")).toBeUndefined();
     expect(line(view, "Levels")).toBe([
-      "at-stop at stop · as valued at Sun 23:04", "at-target at target · as valued at Sun 23:04",
-      "due manage-by · as valued at Sun 23:04", "closed-close at stop · as of the close",
+      "at-stop at stop · as valued at Sun 23:04 SGT", "at-target at target · as valued at Sun 23:04 SGT",
+      "due manage-by · as valued at Sun 23:04 SGT", "closed-close at stop · as of the close",
     ].join("; "));
     // and the Markdown carries it
-    expect(toMarkdown(view)).toContain("- Levels: at-stop at stop · as valued at Sun 23:04; ");
+    expect(toMarkdown(view)).toContain("- Levels: at-stop at stop · as valued at Sun 23:04 SGT; ");
   });
 
   it("a rule ringing, an entry signal, and a fault with its words: the needs-you line", () => {
@@ -237,11 +241,11 @@ describe("every state the status column carried is still named, in the header or
       off("m666666", "sunset"),
     ] }));
     const muted = view.sections.find((s) => s.title === "Muted and expired")!;
-    // the desk's fold's order, in the phone's words
+    // the desk's fold's order, in the page's one set of words (part I), each a heading (part H)
     expect(muted.groups.map((g) => [g.heading, g.rows.map((r) => r[0])])).toEqual([
-      ["expired", ["261218 8003C"]], ["its holding closed", ["261218 8004C"]],
-      ["muted by hand", ["261218 8002C", "261218 8006C"]], ["reason not recorded", ["261218 8005C"]],
-      ["sunset", ["261218 8007C"]],
+      ["Expired", ["261218 8003C"]], ["Holding closed", ["261218 8004C"]],
+      ["Muted by you", ["261218 8002C", "261218 8006C"]], ["Reason not recorded", ["261218 8005C"]],
+      ["Sunset", ["261218 8007C"]],
     ]);
     // the rule in words, with no figure: nothing watches it
     expect(muted.groups[0]!.rows[0]![muted.columns.indexOf("rule")]).toBe("|Δ| ≥ 0.10");
@@ -250,10 +254,11 @@ describe("every state the status column carried is still named, in the header or
 
 describe("the header block", () => {
   it("says when it was taken, in New York and in DISPLAY_TZ", () => {
-    expect(takenWords(MONDAY, "Asia/Singapore")).toBe("Mon 16 Nov 2026 10:00 EST (New York) · Mon 16 Nov 2026 23:00 GMT+8 (Asia/Singapore)");
+    // each clock marked with its zone by name (part F): New York's as ET, DISPLAY_TZ's by its own
+    expect(takenWords(MONDAY, "Asia/Singapore")).toBe("Mon 16 Nov 2026 10:00 ET · Mon 16 Nov 2026 23:00 SGT");
     // a service that has not said its zone, or says New York's, gives New York's alone
-    expect(takenWords(MONDAY, null)).toBe("Mon 16 Nov 2026 10:00 EST (New York)");
-    expect(takenWords(MONDAY, "America/New_York")).toBe("Mon 16 Nov 2026 10:00 EST (New York)");
+    expect(takenWords(MONDAY, null)).toBe("Mon 16 Nov 2026 10:00 ET");
+    expect(takenWords(MONDAY, "America/New_York")).toBe("Mon 16 Nov 2026 10:00 ET");
   });
 
   it("in session: the session, the figures' freshness, the References without a time, every need named", () => {
@@ -264,9 +269,9 @@ describe("the header block", () => {
     ] as Need[];
     const view = plainView(input({ needs }));
     expect(view.lines.slice(0, 4)).toEqual([
-      { label: "taken", text: "Mon 16 Nov 2026 10:00 EST (New York) · Mon 16 Nov 2026 23:00 GMT+8 (Asia/Singapore)" },
+      { label: "taken", text: "Mon 16 Nov 2026 10:00 ET · Mon 16 Nov 2026 23:00 SGT" },
       { label: "session", text: "in session" },
-      { label: "figures", text: "fetched at 2026-11-16 23:00:05+08:00 · 10:00:05 EST · screen updated 23:00:09 · service sweeps every 15s" },
+      { label: "figures", text: "fetched at 23:00:05 SGT · 10:00:05 ET · screen updated 23:00:09 SGT · service sweeps every 15s" },
       { label: "References", text: "", items: ["S&P 500 (moomoo) 7612.25 +0.42%"] },
     ]);
     // every item named, in the line's order: a picture cannot be opened to read "+N more"
@@ -278,8 +283,8 @@ describe("the header block", () => {
 
   it("outside the session: the market-closed line's words, and each Reference with when it was read", () => {
     const view = plainView(input({ session: false, takenAt: SUNDAY, holdingsServed: "2026-11-15 23:00:05+08:00" }));
-    expect(view.lines.find((l) => l.label === "session")!.text).toBe("market closed — valued at Sun 23:00");
-    expect(view.lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7612.25 +0.42% read at 00:59"]);
+    expect(view.lines.find((l) => l.label === "session")!.text).toBe("market closed — valued at Sun 23:00 SGT");
+    expect(view.lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7612.25 +0.42% read at 00:59 SGT"]);
   });
 
   it("says nothing of needs when nothing needs you, as the page — and a warning when the figures may be stale", () => {
@@ -349,7 +354,7 @@ describe("the picture and the text, one builder", () => {
 
   it("writes the header block as lines above a Markdown table per section", () => {
     const md = toMarkdown(plainView(input()));
-    expect(md.split("\n").slice(0, 3)).toEqual(["# optionality", "", "- taken: Mon 16 Nov 2026 10:00 EST (New York) · Mon 16 Nov 2026 23:00 GMT+8 (Asia/Singapore)"]);
+    expect(md.split("\n").slice(0, 3)).toEqual(["# optionality", "", "- taken: Mon 16 Nov 2026 10:00 ET · Mon 16 Nov 2026 23:00 SGT"]);
     expect(md).toContain("\n## Holdings\n\n| name | legs | value |");
     expect(md).toContain("\n| 261218 · 38 DTE |  |  |");
     // the References a nested list, one a line (#400)

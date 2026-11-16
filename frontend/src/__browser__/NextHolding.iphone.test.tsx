@@ -84,7 +84,7 @@ describe("changing a holding from the phone's sheet", () => {
   it("gives every form 44pt targets and 16px boxes, and pushes nothing past the edge", async () => {
     await openPhone();
     const sheet = await sheetOf("h-ic");
-    for (const name of ["Edit", "Close…", "Delete…"]) {
+    for (const name of ["edit", "close…", "delete…"]) {
       await userEvent.click(within(sheet).getByRole("button", { name }));
       await settle();
       const form = sheet.querySelector(".nx-hold")!;
@@ -98,7 +98,7 @@ describe("changing a holding from the phone's sheet", () => {
   it("corrects a leg's quantity with 44pt boxes, its preview inside the screen (#359)", async () => {
     const s = await openPhone();
     const sheet = await sheetOf("h-ic");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Edit" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "edit" }));
     const qty = within(sheet).getByRole("group", { name: "quantity of each leg" });
     await userEvent.fill(within(qty).getByLabelText("quantity, short PUT 6300"), "2");
     const change = await within(qty).findByRole("group", { name: "what the correction changes" });
@@ -109,7 +109,7 @@ describe("changing a holding from the phone's sheet", () => {
     expect(smallText(form)).toEqual([]);
     expect(pastTheEdge(sheet)).toEqual([]);
     expect(overflowsSideways()).toBe(false);
-    await userEvent.click(within(sheet).getByRole("button", { name: "Save" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes(s)).toHaveLength(1));
     expect((writes(s)[0]![1] as { legs: { qty?: number }[] }).legs.map((l) => l.qty ?? 1)).toEqual([1, 1, 2, 1]);
   });
@@ -117,9 +117,9 @@ describe("changing a holding from the phone's sheet", () => {
   it("offers the rename of the rule that followed with 44pt targets, inside the screen (#359's review)", async () => {
     const s = await openPhone(withValueRule());
     const sheet = await sheetOf("h-ic");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Edit" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "edit" }));
     await userEvent.fill(within(sheet).getByLabelText("quantity, short PUT 6300"), "2");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Save" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes(s)).toHaveLength(1));
     const renames = await within(sheet).findByRole("group", { name: "rename the rules that followed" });
     await settle();
@@ -139,7 +139,7 @@ describe("changing a holding from the phone's sheet", () => {
   it("cancels the close form with Escape and keeps the sheet open, the focus back on Close…", async () => {
     const s = await openPhone();
     const sheet = await sheetOf("h-ic");
-    const button = within(sheet).getByRole("button", { name: "Close…" });
+    const button = within(sheet).getByRole("button", { name: "close…" });
     await userEvent.click(button);
     expect(document.activeElement).toBe(within(sheet).getByLabelText("exit, per contract"));
     await userEvent.keyboard("{Escape}");
@@ -153,18 +153,18 @@ describe("changing a holding from the phone's sheet", () => {
   it("edits a holding", async () => {
     const s = await openPhone();
     const sheet = await sheetOf("h-ic");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Edit" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "edit" }));
     await userEvent.fill(within(sheet).getByLabelText("opened"), "2026-11-04");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Save" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes(s)).toEqual([["PATCH /positions/h-ic", { opened_at: "2026-11-04" }]]));
   });
 
   it("closes one, says where its Monitors went in view, and corrects the close there", async () => {
     const s = await openPhone();
     const sheet = await sheetOf("h-ic");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Close…" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "close…" }));
     expect(Number((within(sheet).getByLabelText("exit, per contract") as HTMLInputElement).value)).toBe(1.225);
-    await userEvent.click(within(sheet).getByRole("button", { name: "Close holding" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "close it" }));
     const result = await screen.findByRole("region", { name: "closed 1231_IC" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "1231_IC" })).toBeNull());
     await animationsDone();
@@ -186,17 +186,17 @@ describe("changing a holding from the phone's sheet", () => {
     await userEvent.fill(within(fix).getByLabelText("closed on"), "2026-11-11");
     await userEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
     await waitFor(() => expect(writes(s)[1]).toEqual(["PATCH /positions/h-ic", { closed_on: "2026-11-11" }]));
-    await waitFor(() => expect(within(result).getByText(/closed on 2026-11-11/)).toBeTruthy());
+    await waitFor(() => expect(within(result).getByText(/closed on Wed 11 Nov/)).toBeTruthy());
   });
 
   it("deletes one only after asking, saying the samples go with it", async () => {
     const s = await openPhone();
     const sheet = await sheetOf("h-puts");
-    await userEvent.click(within(sheet).getByRole("button", { name: "Delete…" }));
+    await userEvent.click(within(sheet).getByRole("button", { name: "delete…" }));
     const ask = within(sheet).getByRole("group", { name: "delete 1218_P6400?" });
     expect(ask.textContent).toMatch(/daily samples are deleted with it/);
     expect(writes(s)).toEqual([]);
-    await userEvent.click(within(ask).getByRole("button", { name: "Delete for good" }));
+    await userEvent.click(within(ask).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes(s)).toEqual([["DELETE /positions/h-puts", null]]));
     await waitFor(() => expect(document.querySelector('article[data-ref="h-puts"]')).toBeNull());
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "1218_P6400" })).toBeNull());

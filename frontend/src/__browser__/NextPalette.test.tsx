@@ -188,7 +188,7 @@ describe("j and k", () => {
     await openDesk();
     await userEvent.keyboard("j");
     await userEvent.click(row("h-calls").querySelector<HTMLElement>(".nxd-name")!);
-    await userEvent.click(within(inspector()!).getByRole("button", { name: "Close…" }));
+    await userEvent.click(within(inspector()!).getByRole("button", { name: "close…" }));
     const form = screen.getByRole("form", { name: "close 1218_C7300" });
     const exit = within(form).getAllByRole("textbox")[0]!;
     await userEvent.click(exit);

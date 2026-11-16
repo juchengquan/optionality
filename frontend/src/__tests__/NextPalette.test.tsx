@@ -261,12 +261,12 @@ describe("its actions", () => {
     expect(screen.queryByRole("form")).toBeNull();
   });
 
-  it("explains closing when the selection is a Monitor, not a holding", async () => {
+  it("explains closing when the selection is a rule, not a holding", async () => {
     const { user } = await open();
     await run(user, "1218_P7150");
     await chord(user);
     await user.type(box(), "close the selected");
-    expect(options()[0]!.textContent).toMatch(/a Monitor is selected, not a holding/);
+    expect(options()[0]!.textContent).toMatch(/a rule is selected, not a holding/);
     expect(options()[0]!.getAttribute("aria-disabled")).toBe("true");
   });
 
@@ -426,7 +426,7 @@ describe("after review (#329)", () => {
   it("will not open another form over the one being typed into", async () => {
     const { user } = await open();
     await run(user, "1218_C7300 holding");
-    await user.click(within(inspector()!).getByRole("button", { name: "Edit" }));
+    await user.click(within(inspector()!).getByRole("button", { name: "edit" }));
     await chord(user);
     await user.type(box(), "close the selected");
     expect(options()[0]!.textContent).toMatch(/finish or cancel the open form first/);

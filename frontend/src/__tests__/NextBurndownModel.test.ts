@@ -168,7 +168,7 @@ describe("what a day says", () => {
     expect(lines.pace).toBe("on pace $404");
     // the gap in points, as every Pace gap on the page is said: 2.30 against 2.02
     expect(lines.gap).toEqual({ words: "behind by 0.28", outcome: "loss" });
-    expect(lines.why).toBe("not the close: 20:30 New York, after the 16:15 close");
+    expect(lines.why).toBe("not the close: 20:30 ET, after the 16:15 ET close");
   });
 
   it("in points per contract without a contract size, and nothing about the close for a close", () => {
@@ -187,7 +187,7 @@ describe("what a day says", () => {
     expect(lines.gap?.words).toBe("behind by 0.28");
     expect(sampleWords(day(), hidden))
       .toBe("3 Nov · 45 DTE · to close, per contract: 2.30 pts · on pace 2.02 pts · behind by 0.28"
-        + " — in hours (observed 16:00 New York)");
+        + " — in hours (observed 16:00 ET)");
   });
 
   it("no pace and no gap for a day with no plan", () => {
@@ -198,7 +198,7 @@ describe("what a day says", () => {
 
   it("before the open, and before times were kept", () => {
     expect(tipLines(day({ timing: "before-open", observed_at: "2026-11-04 13:05:00+08:00" }), money).why)
-      .toBe("not the close: 00:05 New York, before the 09:30 open");
+      .toBe("not the close: 00:05 ET, before the 09:30 ET open");
     expect(tipLines(day({ timing: "unrecorded", observed_at: null }), money).why)
       .toBe("not timed: whether it was the close is not known");
   });
@@ -206,7 +206,7 @@ describe("what a day says", () => {
   it("in the status line, everything the tooltip says and the whole reason", () => {
     expect(sampleWords(day(), money))
       .toBe("3 Nov · 45 DTE · to close, 2 contracts: $460 · on pace $404 · behind by 0.28"
-        + " — in hours (observed 16:00 New York)");
+        + " — in hours (observed 16:00 ET)");
   });
 });
 
@@ -232,7 +232,7 @@ describe("a day summed before a leg's quantity was corrected (#359)", () => {
   it("says so in the status line", () => {
     expect(sampleWords(before, money))
       .toBe("3 Nov · 45 DTE · to close, 2 contracts: $460 · on pace $404"
-        + " — in hours (observed 16:00 New York) — summed before a leg's quantity was corrected");
+        + " — in hours (observed 16:00 ET) — summed before a leg's quantity was corrected");
   });
 
   it("is the New York market day of the correction, as a DTE on the days' own reckoning", () => {

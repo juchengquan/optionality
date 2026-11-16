@@ -37,7 +37,10 @@ import {
 import { fieldWords } from "./needs";
 import { RuleWords, ShortWords } from "./RuleWords";
 import { DirectionPair } from "./DirectionPair";
+import { dateWords } from "./shared/times";
 import "./monitor-edit.css";
+import { rawError } from "./shared/errors";
+import { ErrorWords } from "./shared/ErrorWords";
 
 export interface MonitorActions {
   /** a change, then the page as the service now tells it; throws the service's refusal */
@@ -114,7 +117,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
         after();
       }
     } catch (e: unknown) {
-      const text = e instanceof Error ? e.message : String(e);
+      const text = rawError(e);
       setError({ text, at: spot(text) });
     } finally {
       setBusy(false);
@@ -143,8 +146,8 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
     <div className="nx-mon" ref={root}>
       {state === "expired" ? (
         <p className="nx-meta nx-mon-note">
-          {`expired ${rule.strike_date} — the service deletes it ${actions.retentionDays === null
-            ? "after its retention window" : `on ${deletesOn(rule.strike_date, actions.retentionDays)}`}`}
+          {`expired ${dateWords(rule.strike_date)} — the service deletes it ${actions.retentionDays === null
+            ? "after its retention window" : `on ${dateWords(deletesOn(rule.strike_date, actions.retentionDays))}`}`}
         </p>
       ) : null}
       {why !== null && doing !== "enabling" ? <p className="nx-mon-note">{`Switched off by the service: ${why}.`}</p> : null}
@@ -161,18 +164,18 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
             {toggle.words}
           </button>
         ) : null}
+        {records ? (
+          <button type="button" className="nx-mon-button" aria-label={`record ${label} as held`} disabled={busy}
+                  onClick={(e) => actions.recordAsHeld!(rule, served, e.currentTarget)}>
+            record as held
+          </button>
+        ) : null}
         {splits ? (
           <button ref={splitButton} type="button" className="nx-mon-button"
                   aria-label={`split a total entry across ${label}`} disabled={busy}
                   aria-expanded={doing === "splitting"}
                   onClick={() => (doing === "splitting" ? back(splitButton) : to("splitting"))}>
             split entry
-          </button>
-        ) : null}
-        {records ? (
-          <button type="button" className="nx-mon-button" aria-label={`record ${label} as held`} disabled={busy}
-                  onClick={(e) => actions.recordAsHeld!(rule, served, e.currentTarget)}>
-            Record as held
           </button>
         ) : null}
         {state === "quarantined" ? (
@@ -183,7 +186,8 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
         ) : null}
         <button type="button" className="nx-mon-button" data-destructive="" aria-label={`delete ${label}`}
                 disabled={busy} aria-expanded={doing === "deleting"} onClick={() => to("deleting")}>
-          delete
+          {/* an ellipsis, as a holding's delete…: a question follows it (part H) */}
+          delete…
         </button>
       </div>
       {error && !["editing", "splitting"].includes(doing) ? <Refusal text={error.text} /> : null}
@@ -193,11 +197,11 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
       {doing === "deleting" ? (
         <Ask label={`delete ${label}?`} yes="delete it" no="keep it" busy={busy} destructive
              onYes={() => void run(() => actions.remove(rule.id), () => to("idle"), true)} onNo={close}>
-          Delete this Monitor for good? The service forgets it; a holding it watched is kept.
+          Delete this rule for good? The service forgets it; a holding it watched is kept.
         </Ask>
       ) : null}
       {doing === "enabling" && why !== null ? (
-        <Ask label={`switch ${label} back on?`} yes="switch it on" no="keep it off" busy={busy}
+        <Ask label={`switch ${label} back on?`} yes="switch it on" no="keep it" busy={busy}
              onYes={() => void run(() => actions.patch(rule.id, { enabled: true }), () => to("idle"), true)}
              onNo={close}>
           {`Switched off by the service: ${why}. Switch it back on once that is fixed: the next sweep `
@@ -247,7 +251,8 @@ function settleFocus(root: HTMLElement | null, edit: HTMLButtonElement | null, h
 }
 
 function Refusal({ text, id }: { text: string; id?: string }) {
-  return <p id={id} className="nx-mon-error" role="alert">{text}</p>;
+  // what was thrown kept one tap away, the words plain (part N)
+  return <div id={id} className="nx-mon-error" role="alert"><ErrorWords raw={text} /></div>;
 }
 
 /** A question asked in place, its safe answer focused so an Enter pressed by habit keeps things as

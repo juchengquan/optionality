@@ -17,7 +17,7 @@ import {
   closePosition, deletePosition, editPosition, fetchDraftPayoff, fetchMonitors, type Closed, type Corrected,
   type DraftPayoff, type Entry, type Holding, type Monitor, type Payoff,
 } from "./shared/api";
-import { marketDay } from "./shared/format";
+import { fetchedWords, marketDay } from "./shared/format";
 import {
   aboutQuantities, closeBody, closeDay, correctedLegs, correctionWords, editBody, editDraft, exitPrefill,
   fates, followersOf, legWords, type CloseDraft, type EditDraft, type Fate, type Watching,
@@ -26,6 +26,9 @@ import { MonitorControls } from "./MonitorEdit";
 import { ruleOfMonitor } from "./edit";
 import { fieldWords, monitorName } from "./needs";
 import "./holding.css";
+import { rawError } from "./shared/errors";
+import { dateWords } from "./shared/times";
+import { ErrorWords } from "./shared/ErrorWords";
 
 /** What a close answered, for the page to say. */
 export interface ClosedOutcome {
@@ -47,7 +50,8 @@ export interface HoldingWrites {
 
 type Open = "edit" | "close" | "delete" | null;
 
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** What was thrown, as it was: each place draws it in plain words, the raw one tap away (part N). */
+const message = (e: unknown) => rawError(e);
 
 /** The rules the page knows watch this holding: every `/monitors` row linked to it, and every
  *  enabled rule `placeBook` sat under it. */
@@ -100,14 +104,14 @@ export function HoldingActions({ holding, monitors, rules, privacy, writes, now 
     <div className="nx-hold" data-holding={holding.id} onKeyDown={onKeyDown}>
       <div className="nx-hold-actions" role="group" aria-label={`change ${holding.name}`}>
         <button ref={(el) => { buttons.current.edit = el; }} type="button" aria-expanded={open === "edit"}
-                aria-controls={open === "edit" ? `${id}-form` : undefined} onClick={() => toggle("edit")}>Edit</button>
+                aria-controls={open === "edit" ? `${id}-form` : undefined} onClick={() => toggle("edit")}>edit</button>
         {/* closing comes before deleting: it is how a trade ends, and it keeps what deleting
             throws away (ADR 0022) */}
         <button ref={(el) => { buttons.current.close = el; }} type="button" aria-expanded={open === "close"}
-                aria-controls={open === "close" ? `${id}-form` : undefined} onClick={() => toggle("close")}>Close…</button>
+                aria-controls={open === "close" ? `${id}-form` : undefined} onClick={() => toggle("close")}>close…</button>
         <button ref={(el) => { buttons.current.delete = el; }} type="button" className="nx-hold-danger"
                 aria-expanded={open === "delete"} aria-controls={open === "delete" ? `${id}-form` : undefined}
-                onClick={() => toggle("delete")}>Delete…</button>
+                onClick={() => toggle("delete")}>delete…</button>
       </div>
       {/* mounted empty and filled, so a screen reader announces it */}
       <p className="nx-meta nx-hold-status" role="status">
@@ -214,7 +218,7 @@ function EditForm({ id, holding, watching, privacy, now, monitors, onCancel, onS
           <small className="nx-meta">
             {"the New York trading day · "}
             <button type="button" className="nx-hold-link" onClick={() => change({ opened: trading })}>
-              {`today's: ${trading}`}
+              {`today's: ${dateWords(trading)}`}
             </button>
           </small>
         </label>
@@ -229,13 +233,13 @@ function EditForm({ id, holding, watching, privacy, now, monitors, onCancel, onS
         {"A wrong strike or side is a different holding: delete it and add it again — which deletes its daily samples "}
         {"for good"}
         {watching > 0
-          ? `; its ${watching} Monitor${watching === 1 ? " is" : "s are"} kept, and a holding added with the same contracts takes ${watching === 1 ? "it" : "them"} back.`
+          ? `; its ${watching} rule${watching === 1 ? " is" : "s are"} kept, and a holding added with the same contracts takes ${watching === 1 ? "it" : "them"} back.`
           : "."}
       </p>
-      {error && error.at === null ? <p className="nx-hold-error" role="alert">{error.text}</p> : null}
+      {error && error.at === null ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error.text} /></div> : null}
       <div className="nx-hold-row">
-        <button type="submit" className="nx-hold-primary" disabled={saving}>{saving ? "saving…" : "Save"}</button>
-        <button type="button" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="nx-hold-primary" disabled={saving}>{saving ? "saving…" : "save"}</button>
+        <button type="button" onClick={onCancel}>cancel</button>
       </div>
     </form>
   );
@@ -266,7 +270,7 @@ function QuantityFields({ holding, draft, error, followers, onChange }: {
           </label>
         ))}
       </div>
-      {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
+      {error ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error} /></div> : null}
       {legs ? (
         <>
           <QuantityChange holding={holding} corrected={legs} />
@@ -318,7 +322,7 @@ function QuantityChange({ holding, corrected }: { holding: Holding; corrected: H
   const [lo, hi] = [Math.min(...strikes), Math.max(...strikes)];
   const body = entry === null ? <p className="nx-meta">no Entry recorded, so there is no payoff to compare</p>
     : shown === null ? <p className="nx-meta">comparing…</p>
-      : "error" in shown ? <p className="nx-meta">{`the payoff could not be compared — ${shown.error}`}</p>
+      : "error" in shown ? <div className="nx-meta">{"the payoff could not be compared — "}<ErrorWords raw={shown.error} /></div>
         : (
           <dl className="nx-payoff-kv" data-updating={shown.key !== key ? "" : undefined}>
             {([
@@ -379,7 +383,7 @@ function CloseForm({ id, holding, now, onCancel, onClosed }: {
     <form id={id} className="nx-hold-form" aria-label={`close ${holding.name}`} data-poll="hold" noValidate
           onSubmit={(e) => void save(e)}>
       <p className="nx-meta">
-        It leaves the live book and is kept, with its legs, Entry, Opened and daily samples. Each Monitor
+        It leaves the live book and is kept, with its legs, Entry, Opened and daily samples. Each rule
         watching it is handed to an open holding that still holds its contracts, or switched off — the
         service decides which, and says so once it is closed.
       </p>
@@ -390,10 +394,10 @@ function CloseForm({ id, holding, now, onCancel, onClosed }: {
                    expired={expired} />
         <DayField value={draft.closedOn} onChange={(closedOn) => change({ closedOn })} />
       </div>
-      {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
+      {error ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error} /></div> : null}
       <div className="nx-hold-row">
-        <button type="submit" className="nx-hold-primary" disabled={saving}>{saving ? "closing…" : "Close holding"}</button>
-        <button type="button" onClick={onCancel}>Cancel</button>
+        <button type="submit" className="nx-hold-primary" disabled={saving}>{saving ? "closing…" : "close it"}</button>
+        <button type="button" onClick={onCancel}>keep it</button>
       </div>
     </form>
   );
@@ -422,7 +426,7 @@ export function ExitField({ value, onChange, served, valuedAt, expired = false, 
         {"signed like the Cost to close: positive when closing cost you, negative when it paid you (a long sold). "}
         {served === undefined ? "" : served === null
           ? "No Cost to close was served, so it starts blank. "
-          : `Starts at the Cost to close as last valued${valuedAt ? `, at ${valuedAt}` : ""}. `}
+          : `Starts at the Cost to close as last valued${valuedAt ? `, at ${fetchedWords(valuedAt)}` : ""}. `}
         {expired ? "Expired worthless? type 0. " : ""}
         Blank if you do not know it.
       </small>
@@ -470,21 +474,21 @@ export function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onD
         <strong>{`Delete ${holding.name} for good?`}</strong>
         {" It is for a holding recorded by mistake. Its daily samples are deleted with it — each day's Cost "}
         {"to close, IV, vega and delta — and cannot be re-entered: no later sweep can rebuild them."}
-        {watching > 0 ? " Its Monitors are kept: deleting a holding never deletes a rule." : ""}
+        {watching > 0 ? " Its rules are kept: deleting a holding never deletes a rule." : ""}
       </p>
       <p>
         {onCloseInstead
           ? "If this was a real trade, close it instead: closing keeps all of it."
           : "If this was a real trade, keep it: its record is what the closed trades show, and a mistyped close is corrected above."}
       </p>
-      {error ? <p className="nx-hold-error" role="alert">{error}</p> : null}
+      {error ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error} /></div> : null}
       <div className="nx-hold-row">
         <button type="button" className="nx-hold-danger" disabled={saving} onClick={() => void remove()}>
-          {saving ? "deleting…" : "Delete for good"}
+          {saving ? "deleting…" : "delete it"}
         </button>
         {onCloseInstead
-          ? <button type="button" className="nx-hold-primary" onClick={onCloseInstead}>Close it instead</button> : null}
-        <button ref={keep} type="button" onClick={onCancel}>Keep it</button>
+          ? <button type="button" className="nx-hold-primary" onClick={onCloseInstead}>close it instead</button> : null}
+        <button ref={keep} type="button" onClick={onCancel}>keep it</button>
       </div>
     </div>
   );

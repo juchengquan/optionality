@@ -1,10 +1,10 @@
 /** The watchlist's value cell (#400): always the spread's PRICE — a delta rule's figure is the Δ
  *  column's and its sentence's, never this one's — and out of New York's session the last price read
- *  IN it, with its time on New York's clock: "−4.12 (Fri 16:14)", or a dash where there is none.
+ *  IN it, with its time on New York's clock: "−4.12 (Fri 16:14 ET)", or a dash where there is none.
  *  On the desk, the phone, the picture and its Markdown alike, so the screen and the picture agree.
  *  In the session nothing changes but that a delta rule's figure is no longer called a value.
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BookProps } from "../Book";
@@ -86,17 +86,17 @@ const HOLDING: Holding = holding("h-6500", { name: "1231_P6500", strike_date: "2
 
 /** What each row's value cell says, out of the session and in it. */
 const EXPECT: Record<string, [string, string]> = {
-  "w-delta-quiet": ["−4.12 (Fri 16:14)", "−2.40"],
-  "w-price": ["−4.12 (Fri 16:14)", "−2.40"],
-  "w-delta": ["−4.12 (Fri 16:14)", "−2.40"],
+  "w-delta-quiet": ["−4.12 (Fri 16:14 ET)", "−2.40"],
+  "w-price": ["−4.12 (Fri 16:14 ET)", "−2.40"],
+  "w-delta": ["−4.12 (Fri 16:14 ET)", "−2.40"],
   "w-delta-only": ["—", "—"],
   "w-zero": ["—", "−1.10"],
-  "w-old": ["−0.85 (Fri 6 Nov 16:14)", "−0.90"],
+  "w-old": ["−0.85 (Fri 6 Nov 16:14 ET)", "−0.90"],
   "w-key": ["—", "—"],
-  "w-ratio": ["1.30 (Fri 16:14)", "1.20"],
-  "w-flip": ["3.10 (Fri 16:14)", "3.00"],
-  "w-later": ["−2.80 (Fri 16:14)", "−2.90"],
-  "w-over": ["−3.30 (Fri 16:14)", "−1.50"],
+  "w-ratio": ["1.30 (Fri 16:14 ET)", "1.20"],
+  "w-flip": ["3.10 (Fri 16:14 ET)", "3.00"],
+  "w-later": ["−2.80 (Fri 16:14 ET)", "−2.90"],
+  "w-over": ["−3.30 (Fri 16:14 ET)", "−1.50"],
 };
 const IDS = ROWS.map((r) => r.id);
 const expected = (session: boolean) => IDS.map((id) => EXPECT[id]![session ? 1 : 0]);
@@ -130,7 +130,7 @@ function props(session: boolean): BookProps {
 }
 
 const deskValue = (id: string) => document.querySelector(`.nxd-row[data-ref="${id}"] [data-col="value"] .nxd-v`)?.textContent;
-const phoneValue = (id: string) => document.querySelector(`article[data-ref="${id}"] [data-value]`)?.textContent ?? null;
+const phoneValue = (id: string) => document.querySelector(`article[data-ref="${id}"] [data-value] dd`)?.textContent ?? null;
 
 it("draws the partly overlapping combo in the watchlist, so the cases below reach it there", () => {
   render(<DeskBook {...props(false)} />);
@@ -153,14 +153,44 @@ describe("on the desk", () => {
 });
 
 describe("on the phone", () => {
-  it("out of the session, adds a value line to each watched card", () => {
+  // each watched card says its value as its desk row does, at every hour (part K)
+  it("out of the session, says each watched card's last price, as the desk's row does", () => {
     render(<div className="nx"><PhoneBook {...props(false)} /></div>);
-    expect(IDS.map(phoneValue)).toEqual(expected(false).map((v) => `value ${v}`));
+    expect(IDS.map(phoneValue)).toEqual(expected(false));
   });
 
-  it("in the session, adds none: nothing changes there", () => {
+  it("in the session, its live price, as the desk's row does", () => {
     render(<div className="nx"><PhoneBook {...props(true)} /></div>);
-    expect(IDS.map(phoneValue)).toEqual(IDS.map(() => null));
+    expect(IDS.map(phoneValue)).toEqual(expected(true));
+  });
+});
+
+describe("in the detail, as in the row (review of #420)", () => {
+  /** The value a detail's figures say, by their first figure: the value of a watched row. */
+  const detailValue = (root: Element) => root.querySelector(".nx-figures div:first-child dd")?.textContent ?? null;
+
+  it("out of the session, says each watched row's last price in the inspector and the sheet, as its row and card do", async () => {
+    render(<DeskBook {...props(false)} />);
+    const rows = IDS.filter((id) => document.querySelector(`.nxd-row[data-ref="${id}"] .nxd-name`));
+    const inspector: (string | null)[] = [];
+    for (const id of rows) {
+      const name = document.querySelector<HTMLButtonElement>(`.nxd-row[data-ref="${id}"] .nxd-name`)!;
+      fireEvent.click(name);
+      inspector.push(detailValue(screen.getByRole("complementary", { name: `inspector: ${name.textContent}` })));
+    }
+    expect(inspector).toEqual(rows.map((id) => EXPECT[id]![0]));
+    cleanup();
+    render(<div className="nx"><PhoneBook {...props(false)} /></div>);
+    const sheet: (string | null)[] = [];
+    const cards = rows.filter((id) => document.querySelector(`article[data-ref="${id}"]`));
+    expect(cards.length).toBeGreaterThan(2);
+    for (const id of cards) {
+      fireEvent.click(within(document.querySelector<HTMLElement>(`article[data-ref="${id}"]`)!).getByRole("button", { name: /^details of / }));
+      sheet.push(detailValue(await screen.findByRole("dialog")));
+      act(() => { window.history.back(); });
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    }
+    expect(sheet).toEqual(cards.map((id) => EXPECT[id]![0]));
   });
 });
 
@@ -185,8 +215,8 @@ describe("in the picture and its Markdown", () => {
 
 describe("a last price's time", () => {
   it("is a weekday within six days, and a date before that, on New York's clock", () => {
-    expect(lastPriceWords({ value: -4.12, at: FRIDAY_CLOSE })).toBe("−4.12 (Fri 16:14)");
-    expect(lastPriceWords({ value: -0.85, at: LAST_WEEK })).toBe("−0.85 (Fri 6 Nov 16:14)");
+    expect(lastPriceWords({ value: -4.12, at: FRIDAY_CLOSE })).toBe("−4.12 (Fri 16:14 ET)");
+    expect(lastPriceWords({ value: -0.85, at: LAST_WEEK })).toBe("−0.85 (Fri 6 Nov 16:14 ET)");
     expect(lastPriceWords(null)).toBe("—");
   });
 });
@@ -201,12 +231,12 @@ describe("the last close the service stored (#402)", () => {
   it("is what the value cell says out of the session, before the sweep's last reading", () => {
     const m = monitor("w-p", { last_value: -2.5, last_checked_at: FRIDAY_CLOSE });
     const [p] = withLastKnown([priceRule], [m], "close");
-    expect(lastPriceWords(p!.last_price!)).toBe("−3.85 (Fri 16:14)");
+    expect(lastPriceWords(p!.last_price!)).toBe("−3.85 (Fri 16:14 ET)");
   });
 
   it("gives a spread watched only on its delta a price out of the session", () => {
     const [d] = withLastKnown([deltaRule], [], "close");
-    expect(lastPriceWords(d!.last_price!)).toBe("−3.85 (Fri 16:14)");
+    expect(lastPriceWords(d!.last_price!)).toBe("−3.85 (Fri 16:14 ET)");
   });
 
   it("changes nothing in the session", () => {
@@ -220,6 +250,6 @@ describe("the last close the service stored (#402)", () => {
     expect(p!.last_price).toBeUndefined();
     const [q] = withLastKnown([priceRule], [], "live-or-close");
     expect(q!.price).toBeNull();
-    expect(lastPriceWords(q!.last_price!)).toBe("−3.85 (Fri 16:14)");
+    expect(lastPriceWords(q!.last_price!)).toBe("−3.85 (Fri 16:14 ET)");
   });
 });

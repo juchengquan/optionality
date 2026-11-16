@@ -65,7 +65,7 @@
   font-size: 0.75rem;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.nx-palette-group { text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.625rem; }
+.nx-palette-group { font-size: 0.6875rem; font-weight: 600; }
 
 /* the header's way in, for a pointer, saying the chord it stands for */
 .nx-palette-open kbd {

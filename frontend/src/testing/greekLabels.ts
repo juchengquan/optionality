@@ -20,11 +20,26 @@ export function greekInCapitals(root: ParentNode = document): string[] {
   return out;
 }
 
+/** Every heading, label, header cell and button the page draws in capitals set by CSS (part H of the
+ *  standard): sentence case is written, and set apart by weight and size, never by a stylesheet.
+ *  Measured, as the browser computes it, beside `NoCapitals.test.ts`' read of the source. */
+export function headingsInCapitals(root: ParentNode = document): string[] {
+  const out: string[] = [];
+  const said = "h1, h2, h3, h4, h5, h6, dt, th, summary, label, legend, button, .nxd-head span, .nx-palette-group";
+  for (const el of root.querySelectorAll<HTMLElement>(said)) {
+    const t = getComputedStyle(el).textTransform;
+    if ((t === "uppercase" || t === "capitalize") && el.textContent!.trim() !== "") {
+      out.push(`${el.tagName.toLowerCase()}.${el.className}: "${el.textContent!.trim().slice(0, 30)}" (${t})`);
+    }
+  }
+  return out;
+}
+
 const health = {
   db: true, provider: { name: "moomoo", ok: true },
   monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
     fetched_at: "2026-11-10 23:14:05+08:00" },
-  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21 },
+  settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" },
 };
 
 const HELD: Holding[] = HOLDINGS.map((h) => ({

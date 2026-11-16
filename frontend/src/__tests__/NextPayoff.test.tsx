@@ -98,7 +98,6 @@ describe("a holding's payoff, in the desk's inspector", () => {
     expect(text).not.toMatch(/\b10\.00 pts|-90\.00 pts/);
     expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · $•••");
     expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("−45.00 pts per contract · $•••");
-    expect(payoff.querySelector("[data-max='profit']")?.textContent).toBe("max profit +5.00 pts");
     expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295.00 · 7405.00");
     expect(payoff.querySelector("[data-marker='spx']")?.textContent).toBe("SPX 6900.50");
   });
@@ -142,7 +141,7 @@ describe("a watched spread's payoff", () => {
     ]);
     expect(within(payoff).getByText("no Entry: drawn at its current value, 2.40, as the credit")).toBeTruthy();
     // one spread nobody holds, so points rather than money
-    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+2.40 pts");
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+2.40 pts per contract");
     expect(payoff.querySelector("[data-marker='spx']")?.textContent).toBe("SPX 6900.50");
   });
 
@@ -250,7 +249,7 @@ describe("a combo drawn in the Watchlist because it names a contract its holding
     expect(within(payoff).getByText("no Entry: drawn at its current value, 0.60, as the credit")).toBeTruthy();
     expect(insp.textContent).not.toContain("on something held");
     // neither held nor watch only: the note under it says what it shares, and with whom
-    expect(within(insp).getByText("2026-12-31 · 38 DTE")).toBeTruthy();
+    expect(within(insp).getByText("Thu 31 Dec · 38 DTE")).toBeTruthy();
     expect(insp.querySelector("[data-overlap]")!.textContent).toBe("shares C8100 with 1231_8050");
   });
 
@@ -438,10 +437,15 @@ describe("the crosshair readout (#396)", () => {
     });
   });
 
-  it("states the maximum profit and loss on the chart where they are finite", async () => {
+  it("states the maximum profit and loss once, in the list, with a rule on the chart where each is finite (part L)", async () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
-    expect(payoff.querySelector("[data-max='profit']")?.textContent).toBe("max profit +$1,000");
-    expect(payoff.querySelector("[data-max='loss']")?.textContent).toBe("max loss −$9,000");
+    // the rules drawn, and no figure written beside them: the list says each, once
+    expect(payoff.querySelector(".nx-payoff-max[data-kind='profit'] line")).toBeTruthy();
+    expect(payoff.querySelector(".nx-payoff-max[data-kind='loss'] line")).toBeTruthy();
+    expect(payoff.querySelector(".nx-payoff-max text")).toBeNull();
+    expect(payoff.textContent!.match(/\+\$1,000/g)).toHaveLength(1);
+    expect(payoff.textContent!.match(/−\$9,000/g)).toHaveLength(1);
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · +$1,000");
   });
 
   it("names each strike's legs, coloured by type", async () => {
@@ -472,7 +476,7 @@ describe("the crosshair readout (#396)", () => {
     expect(price).toBeLessThan(7100);
     // short one 7150 put, long THREE 7100 puts, sold for 2.40
     const pnl = 2.4 - (7150 - price) + 3 * (7100 - price);
-    expect(said(payoff)).toBe(`at expiry with SPX at ${price.toFixed(2)}, ${(6900.5 - price).toFixed(2)} below SPX now: +${pnl.toFixed(2)} pts`);
+    expect(said(payoff)).toBe(`at expiry with SPX at ${price.toFixed(2)}, ${(6900.5 - price).toFixed(2)} below SPX now: +${pnl.toFixed(2)} pts per contract`);
     expect([...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ")).toBe("+3P7100 −P7150");
   });
 });

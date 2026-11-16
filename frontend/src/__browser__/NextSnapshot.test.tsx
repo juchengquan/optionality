@@ -88,7 +88,7 @@ async function show(width = 1280, quotes?: () => unknown): Promise<string[]> {
   await settle();
   return asked;
 }
-/** A Sunday, 12:00 New York: outside the session. */
+/** A Sunday, 12:00 ET: outside the session. */
 const SUNDAY = new Date("2026-11-15T17:00:00Z");
 
 const press = () => fireEvent.click(screen.getByRole("button", { name: "save as image" }));
@@ -263,7 +263,7 @@ describe("saving the desk as an image", () => {
     expect(lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7612.25 +0.42%"]);
     expect(lines.find((l) => l.label === "session")!.text).toBe("in session");
     // when it was taken, in New York and in the service's own zone
-    expect(lines.find((l) => l.label === "taken")!.text).toMatch(/ \(New York\) · .* \(Asia\/Singapore\)$/);
+    expect(lines.find((l) => l.label === "taken")!.text).toMatch(/ ET · .* SGT$/);
     release();
   });
 
@@ -272,7 +272,7 @@ describe("saving the desk as an image", () => {
     await show();
     const { root, release } = await take();
     const lines = readPicture(root).lines;
-    expect(lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7612.25 +0.42% read at 00:59"]);
+    expect(lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7612.25 +0.42% read at 00:59 SGT"]);
     // the market-closed line's words (the owner's book here carries no stamp, so no time), once
     expect(lines.find((l) => l.label === "session")!.text).toBe("market closed");
     expect(captured[0]!.text.split("market closed")).toHaveLength(2);

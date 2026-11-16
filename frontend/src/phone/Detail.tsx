@@ -1,33 +1,21 @@
 /** The phone's detail sheet (ADR 0023): a bottom sheet over the cards, with a card's detail and
- *  its Monitors. Back closes it — a history entry, never a route (ADR 0005) — through the same
- *  `useDismissOnBack` the old page's sheet used. */
+ *  its rules, in the one order the desk's inspector draws (part J, `DetailSections.tsx`). Back
+ *  closes it — a history entry, never a route (ADR 0005) — through the same `useDismissOnBack` the
+ *  old page's sheet used. */
 import { useEffect, useRef } from "react";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { DASH, heldLeg, signedLeg } from "../shared/format";
-import { Legs } from "../shared/Legs";
 import { readUp, type EntryStyle } from "../shared/prefs";
 import { useDismissOnBack } from "../shared/useDismissOnBack";
-import { Chip, Money } from "../Book";
-import { HoldingActions, type HoldingWrites } from "../HoldingActions";
+import type { HoldingWrites } from "../HoldingActions";
 import { DetailBoundary } from "../DetailBoundary";
-import { HoldingPayoff, WatchedPayoff } from "../Payoff";
-import { PaceExplained } from "../PaceExplained";
-import { paceOutcome, paceWords } from "../pace";
-import { entryName, fieldWords } from "../needs";
-import { RuleWords } from "../RuleWords";
-import { LevelChip, Progress, RuleLine, ShortDeltaWords } from "./Cards";
-import { contractsWords, expiryWords } from "./figures";
-import { figureOf, percent, points } from "../shared/numbers";
-import { POSITION_GREEKS, SHORT_DELTA } from "../shared/words";
-import { ruleState } from "./state";
-import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
-import { stripOfEntry } from "../strip";
+import { entryName } from "../needs";
+import { HoldingSections, holdingMeta, RuleSections, ruleMeta } from "../DetailSections";
+import { RuleLine } from "./Cards";
+import { HoldingStrip } from "../StrikeStrip";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry } from "../edit";
-import { RuleFigures } from "../RuleFigures";
-import { HistoryOnDemand } from "../HistoryOnDemand";
 
 export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
@@ -74,15 +62,9 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
           <DetailBoundary key={shown.kind === "holding" ? shown.holding.id : shown.entry.id} what={shown.kind}>
             {shown.kind === "holding" ? (
               <HoldingDetail holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
-                             privacy={privacy} session={session} />
+                             privacy={privacy} session={session} writes={writes} />
             ) : <RuleDetail entry={shown.entry} under={shown.under} overlap={shown.overlap ?? null}
                             session={session} privacy={privacy} />}
-            {shown.kind === "holding" && writes ? (
-              <div className="nxp-sheet-body">
-                <HoldingActions key={shown.holding.id} holding={shown.holding} monitors={monitors} rules={shown.rules}
-                                privacy={privacy} writes={writes} />
-              </div>
-            ) : null}
           </DetailBoundary>
         ) : null}
       </SheetContent>
@@ -90,56 +72,22 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   );
 }
 
-function HoldingDetail({ holding, rules, quotes, monitors, privacy, session }: {
+function HoldingDetail({ holding, rules, quotes, monitors, privacy, session, writes }: {
   holding: Holding; rules: Entry[]; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
+  writes?: HoldingWrites;
 }) {
-  const s = holding.schedule;
-  const g = holding.greeks;
   return (
     <>
       <SheetHeader>
         <SheetTitle>{holding.name}</SheetTitle>
-        <SheetDescription>
-          <Legs legs={holding.legs.map(heldLeg)} />
-          {` · ${contractsWords(holding.contracts, privacy)} · ${expiryWords(holding.strike_date)} · ${holding.dte} DTE`}
-        </SheetDescription>
+        <SheetDescription>{holdingMeta(holding)}</SheetDescription>
       </SheetHeader>
       <div className="nxp-sheet-body">
-        <div className="nxp-hero">
-          <Money value={holding.pnl} privacy={privacy} />
-          <span className="nxp-hero-sub">{`captured ${percent(holding.captured)}`}</span>
-          <LevelChip holding={holding} session={session} />
-        </div>
-        <HoldingStrip holding={holding} />
-        <HoldingPayoff holding={holding} privacy={privacy} />
-        {/* open from the start outside the session, as the pager's pages were, and shut in it
-            (#374): the burndown is what an evening's look is for, and a poll's figures are what a
-            session's is for. Read when the sheet opens, so a change of session with it open
-            neither folds nor unfolds it; the next sheet opened takes the new default */}
-        <HistoryOnDemand holding={holding} privacy={privacy} defaultOpen={!session} />
-        <dl className="nxp-facts">
-          <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
-          <div><dt>entry</dt><dd>{points(holding.entry)}</dd></div>
-          <div><dt>{SHORT_DELTA}</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
-          <div><dt>opened</dt><dd>{holding.opened_at ?? DASH}</dd></div>
-          {/* the net greeks, as the desk's inspector lists them */}
-          {POSITION_GREEKS.map(([k, label]) => <div key={k}><dt>{label}</dt><dd>{figureOf(k, g[k])}</dd></div>)}
-        </dl>
-        <h3 className="nxp-h">Exit schedule</h3>
-        {s ? (
-          <dl className="nxp-facts">
-            <div><dt>target</dt><dd>{points(s.target)}</dd></div>
-            <div><dt>stop</dt><dd>{points(s.stop)}</dd></div>
-            <div><dt>on pace</dt><dd>{points(s.on_pace)}</dd></div>
-            <div><dt>pace gap</dt><dd data-outcome={paceOutcome(s.pace_gap)}>{paceWords(s.pace_gap)}</dd></div>
-            <div><dt>manage-by</dt><dd>{`${s.manage_by_dte} DTE`}</dd></div>
-          </dl>
-        ) : <p className="nxp-meta">no schedule — Opened not recorded</p>}
-        <PaceExplained holding={holding} />
-        <h3 className="nxp-h">Monitors</h3>
-        {rules.length > 0
-          ? <ul className="nxp-rules">{rules.map((r) => <EditableLine key={r.id} entry={r} />)}</ul>
-          : <p className="nxp-meta">no Monitor is linked to this holding</p>}
+        {/* the one order the desk's inspector draws too (part J, `sections.ts`) */}
+        <HoldingSections surface="phone" holding={holding} rules={rules} quotes={quotes} monitors={monitors}
+                         privacy={privacy} session={session} writes={writes}
+                         strip={<HoldingStrip holding={holding} />}
+                         ruleLine={(r, own) => <EditableLine key={r.id} entry={r} own={own} />} />
       </div>
     </>
   );
@@ -148,50 +96,24 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session }: {
 function RuleDetail({ entry, under, overlap = null, session, privacy }: {
   entry: Entry; under: Entry[]; overlap?: string | null; session: boolean; privacy: boolean;
 }) {
-  const state = ruleState(entry);
   return (
     <>
       <SheetHeader>
         <SheetTitle>{entryName(entry)}</SheetTitle>
-        <SheetDescription>
-          {entry.legs ? <><Legs legs={entry.legs.map(signedLeg)} />{" · "}</> : null}
-          {`${expiryWords(entry.strike_date)} · ${entry.dte} DTE`}
-        </SheetDescription>
+        <SheetDescription>{ruleMeta(entry)}</SheetDescription>
       </SheetHeader>
       <div className="nxp-sheet-body">
-        {state ? <p><Chip state={state} /></p> : null}
-        {overlap ? <p className="nxp-meta nxp-overlap" data-overlap="">{overlap}</p> : null}
-        <Progress entry={entry} />
-        <p className="nxp-sentence"><RuleWords entry={entry} /></p>
-        {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
-        <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
-        {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
-        {/* a combo drawn in the watchlist apart from its holding is a watched spread here too (#346) */}
-        {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} session={session} /> : null}
-        <dl className="nxp-facts">
-          <div><dt>watches</dt><dd>{fieldWords(entry.field)}</dd></div>
-          <div><dt>compare</dt><dd>{entry.compare === "abs" ? "its size" : "signed"}</dd></div>
-          <div><dt>expiry</dt><dd>{entry.strike_date}</dd></div>
-        </dl>
-        {/* every figure of its contract or combo, the reason beside each dash (#332) */}
-        <RuleFigures entry={entry} held={entry.held && !overlap} className="nxp-facts" />
-        {under.length > 0 ? (
-          <>
-            <h3 className="nxp-h">Monitors on its legs</h3>
-            <ul className="nxp-rules">{under.map((r) => <EditableLine key={r.id} entry={r} />)}</ul>
-          </>
-        ) : null}
-        {/* a watched row's daily closes (#402), opened as a holding's history is (#374) */}
-        {!entry.held || overlap ? <HistoryOnDemand watched={entry} privacy={privacy} defaultOpen={!session} /> : null}
+        <RuleSections surface="phone" entry={entry} under={under} overlap={overlap} privacy={privacy} session={session}
+                      ruleLine={(r, own) => <EditableLine key={r.id} entry={r} own={own} />} />
       </div>
     </>
   );
 }
 
 /** A rule in the sheet with its controls under it (#292). */
-function EditableLine({ entry }: { entry: Entry }) {
+function EditableLine({ entry, own = false }: { entry: Entry; own?: boolean }) {
   return (
-    <RuleLine entry={entry} marked={false}>
+    <RuleLine entry={entry} marked={false} own={own}>
       <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
     </RuleLine>
   );

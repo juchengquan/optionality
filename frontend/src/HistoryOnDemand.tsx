@@ -41,7 +41,7 @@ export function HistoryOnDemand({ holding, watched, privacy, defaultOpen = false
       <button type="button" className="nx-hist-od-toggle" aria-expanded={open} aria-controls={body}
               onClick={() => { setOpen(!open); setOpened(true); }}>
         <ChevronRight aria-hidden="true" className="nx-hist-od-mark" />
-        history
+        History
       </button>
       <div id={body} className="nx-hist-od-body" hidden={!open}>
         {!opened ? null : holding ? <HoldingHistory holding={holding} privacy={privacy} />

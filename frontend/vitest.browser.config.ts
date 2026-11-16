@@ -46,7 +46,7 @@ export default defineConfig({
     // the session pinned for every test, so a page that follows New York's clock measures the same
     // whenever the suite runs (#371); a test outside the session pins its own. And the jsdom suite's
     // duplicate-key guard (#368): the same page, drawn from this suite's own books.
-    setupFiles: ["src/__browser__/session.setup.ts", "src/testing/keys.setup.ts"],
+    setupFiles: ["src/__browser__/session.setup.ts", "src/testing/keys.setup.ts", "src/testing/zone.setup.ts"],
     browser: {
       enabled: true,
       provider: "playwright",

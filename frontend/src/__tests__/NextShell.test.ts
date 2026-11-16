@@ -5,10 +5,11 @@
  *  session is the clock's alone. Each is a pure function of what was measured or chosen, tested
  *  here without a page.
  */
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { arrangementFor, DESK_FROM } from "../arrangement";
 import { inSession, marketPhase, servedWhen, sessionEdge } from "../session";
+import { setDisplayZone } from "../shared/times";
 
 describe("the measured width chooses the arrangement", () => {
   it("puts the cards on anything narrower than the desk and the terminal on the rest", () => {
@@ -146,31 +147,35 @@ describe("the last edge of the session", () => {
 describe("a served time, dated when it is not this session's", () => {
   // Tuesday 2026-11-10 07:00 in the service's +08:00, Monday 18:00 in New York, after the close
   const now = new Date("2026-11-09T23:00:00Z");
+  // with its zone by name (part F): DISPLAY_TZ's, as the page reads it from /health
+  beforeEach(() => setDisplayZone("Asia/Singapore"));
 
   it("is the time alone when it is today's and after the last edge", () => {
-    expect(servedWhen("2026-11-10 06:59:11+08:00", now)).toBe("06:59");
+    expect(servedWhen("2026-11-10 06:59:11+08:00", now)).toBe("06:59 SGT");
     // Monday 16:20 New York, after the close at 16:15:01, written in +08 on Tuesday
-    expect(servedWhen("2026-11-10 05:20:00+08:00", now)).toBe("05:20");
+    expect(servedWhen("2026-11-10 05:20:00+08:00", now)).toBe("05:20 SGT");
   });
 
   it("carries its weekday from earlier in the week, and its date from before that", () => {
-    expect(servedWhen("2026-11-09 21:04:11+08:00", now)).toBe("Mon 21:04");
-    expect(servedWhen("2026-11-07 05:15:00+08:00", now)).toBe("Sat 05:15");
-    expect(servedWhen("2026-11-03 21:04:00+08:00", now)).toBe("3 Nov 21:04");
+    expect(servedWhen("2026-11-09 21:04:11+08:00", now)).toBe("Mon 21:04 SGT");
+    expect(servedWhen("2026-11-07 05:15:00+08:00", now)).toBe("Sat 05:15 SGT");
+    expect(servedWhen("2026-11-03 21:04:00+08:00", now)).toBe("3 Nov 21:04 SGT");
   });
 
   it("carries its weekday when it is today's but from before the last edge", () => {
     // Tuesday 04:00 in +08 is Monday 15:00 in New York: inside the session that has since closed
-    expect(servedWhen("2026-11-10 04:00:00+08:00", now)).toBe("Tue 04:00");
+    expect(servedWhen("2026-11-10 04:00:00+08:00", now)).toBe("Tue 04:00 SGT");
   });
 
   it("reads the day in the stamp's own zone, never the device's", () => {
     // the same instant written in New York's zone: Monday's evening there, and today there
-    expect(servedWhen("2026-11-09 17:59:00-05:00", now)).toBe("17:59");
+    // and named by its own offset, since it is not DISPLAY_TZ's: never said in a zone it was not written in
+    expect(servedWhen("2026-11-09 17:59:00-05:00", now)).toBe("17:59 GMT-5");
   });
 
   it("is the time alone where the stamp gives no zone to judge it by, and nothing without a time", () => {
-    expect(servedWhen("2026-11-03 21:04:00", now)).toBe("21:04");
+    // written in DISPLAY_TZ, as everything the service serves is, and said so
+    expect(servedWhen("2026-11-03 21:04:00", now)).toBe("21:04 SGT");
     expect(servedWhen("x", now)).toBeNull();
     expect(servedWhen(null, now)).toBeNull();
     expect(servedWhen(undefined, now)).toBeNull();
