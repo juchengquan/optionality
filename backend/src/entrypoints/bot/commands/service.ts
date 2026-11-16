@@ -10,7 +10,7 @@ import { displayTimeShort } from "optionality/domain/timefmt";
 import { holdingValues } from "../../../holdings.ts";
 import type { QuoteRecord } from "optionality/quotes";
 import { marketPhase } from "optionality/domain/expiry";
-import { HELP_TEXT, closedLine, fmtValue, standingNote, table } from "../format.ts";
+import { HELP_TEXT, closedLine, escapeHtml, fmtValue, standingNote, table } from "../format.ts";
 
 /** Where each Position stands: what it costs to buy back, what that is worth, and the one thing
  *  worth saying about it. Four columns, inside forty characters, as every table reply here is —
@@ -28,10 +28,16 @@ export const holdings: Command = async (ctx) => {
   } catch (err) {
     return failed("Holdings", err);
   }
+  // a holding whose row cannot be read is named, with why, under whatever else is said: it is the
+  // owner's to fix or delete, and it no longer takes the whole reply down with it (#422)
+  const unread = (html: boolean) => valued.unreadable.map(({ row, reason }) =>
+    html ? `⚠️ ${escapeHtml(reason)} — id ${escapeHtml(row.id)}` : `⚠️ ${reason} — id ${row.id}`);
   if (valued.values.length === 0) {
+    // no table, so a plain reply, and the words go as they are
+    if (valued.unreadable.length > 0) return unread(false).join("\n");
     return "No holdings recorded. Record one on the dashboard, beside the rule that watches it.";
   }
-  const reply = table(["holding", "cost", "P&L", "note"], valued.values.map((v) => [
+  const table_ = table(["holding", "cost", "P&L", "note"], valued.values.map((v) => [
     v.row.name,
     v.cost === null ? "—" : v.cost.toFixed(2),
     v.pnl === null ? "—" : String(Math.round(v.pnl)),
@@ -41,7 +47,9 @@ export const holdings: Command = async (ctx) => {
   // line under it says which close (#380) — or, in the Curb and overnight, that they are live and
   // thin, and which were valued from a close (#416)
   const phase = marketPhase(now);
-  return phase === "regular" ? reply : `${reply}\n${closedLine(valued.values, phase)}`;
+  const reply = phase === "regular" ? table_ : `${table_}\n${closedLine(valued.values, phase)}`;
+  // escaped: the table makes this an HTML reply, and a row's words are the row's own
+  return valued.unreadable.length === 0 ? reply : `${reply}\n${unread(true).join("\n")}`;
 };
 
 /** One contract's live figures, for a strike nothing watches. The reason `/spx/quote` could be

@@ -248,3 +248,13 @@ describe("the line's tone is its worst item's", () => {
     expect(toneOf([n("entry")], true)).toBe("bad");
   });
 });
+
+describe("a holding the service cannot read (#422)", () => {
+  it("is a fault, in plain words, leading to its row", () => {
+    const items = needsYou([], [], null, [], [], true, [
+      { id: "p9", name: "x", unreadable: "position x cannot be read: legs must be a list" },
+      { id: "p1", name: "y", unreadable: null },
+    ]);
+    expect(items).toEqual([{ kind: "fault", text: "x cannot be read — fix it or delete it", ref: "p9" }]);
+  });
+});

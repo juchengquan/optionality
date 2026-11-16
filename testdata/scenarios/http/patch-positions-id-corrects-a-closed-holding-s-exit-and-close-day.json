@@ -127,6 +127,7 @@
         "closed_on": "2026-11-05",
         "exit": 1.5,
         "realized_points": 4.9,
+        "unreadable": null,
         "followed_monitors": [],
         "rescoped_monitors": []
       }

@@ -43,6 +43,7 @@ import { marketPhase, servedWhen, sessionEdge, useSessionClock } from "./session
 import { withCloses, withLastKnown } from "./lastknown";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
+import { UnreadableHoldings } from "./UnreadableHoldings";
 import { Palette, paletteShortcut, type Chosen } from "./Palette";
 import { findables, HOLD_WHY, paletteActions } from "./commands";
 import { placeBook } from "./placement";
@@ -122,7 +123,8 @@ export function Next() {
   // a closed trade deleted from the journal leaves it at once, and the re-read says the rest
   const { drop: dropTrade } = journal;
   const tradeDeleted = useCallback((id: string) => { dropTrade(id); rereadJournal(); }, [dropTrade, rereadJournal]);
-  const { holdings, holdingsKept, writes, outcomes, dismissOutcome } = useHoldingWrites(book.holdings, book.holdingsKept, book.reload, rereadJournal);
+  const { holdings, holdingsKept, unreadable, writes, outcomes, dismissOutcome } =
+    useHoldingWrites(book.holdings, book.holdingsKept, book.reload, rereadJournal);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   // Settings' Back entry is the PAGE's, held for as long as Settings is open, whichever sheet draws
@@ -331,12 +333,12 @@ export function Next() {
   // chip says them, "as valued at", and the market-closed line says when. The book is still DRAWN
   // with them outside the session, so they still say which combos are drawn apart (#346)
   const items = useMemo(
-    () => needsYou(quotes, book.monitors, book.health, session ? holdings : null, holdings, session),
-    [quotes, book.monitors, book.health, holdings, session],
+    () => needsYou(quotes, book.monitors, book.health, session ? holdings : null, holdings, session, unreadable),
+    [quotes, book.monitors, book.health, holdings, session, unreadable],
   );
   const everything = useMemo(
-    () => needsYou(quotes, book.monitors, book.health, holdings),
-    [quotes, book.monitors, book.health, holdings],
+    () => needsYou(quotes, book.monitors, book.health, holdings, holdings, true, unreadable),
+    [quotes, book.monitors, book.health, holdings, unreadable],
   );
 
   // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
@@ -445,6 +447,7 @@ export function Next() {
                         onCorrected={() => { rereadJournal(); void book.reload(); }}
                         served={journal.trades?.find((t) => t.id === o.closed.id) ?? null} />
         ))}
+        <UnreadableHoldings rows={unreadable} />
         {phone ? <PhoneBook {...bookProps} /> : <DeskBook {...bookProps} selection={deskSelection} />}
       </main>
 
@@ -586,13 +589,19 @@ function useHoldingWrites(
 ) {
   const [departed, setDeparted] = useState<ReadonlySet<string>>(new Set());
   const [outcomes, setOutcomes] = useState<ClosedOutcome[]>([]);
+  // a holding the service could not read (#422) is no row of the book: it has no legs and no figures.
+  // It is listed apart, and named in the needs-you line
   const holdings = useMemo(
-    () => (valued === null || departed.size === 0 ? valued : valued.filter((h) => !departed.has(h.id))),
+    () => (valued === null ? null : valued.filter((h) => !h.unreadable && !departed.has(h.id))),
+    [valued, departed],
+  );
+  const unreadable = useMemo(
+    () => (valued ?? []).filter((h) => h.unreadable && !departed.has(h.id)),
     [valued, departed],
   );
   // ...and the last valuation kept through a failure: never one closed or deleted here
   const holdingsKept = useMemo(
-    () => (keptValued === null || departed.size === 0 ? keptValued : keptValued.filter((h) => !departed.has(h.id))),
+    () => (keptValued === null ? null : keptValued.filter((h) => !h.unreadable && !departed.has(h.id))),
     [keptValued, departed],
   );
   const writes = useMemo<HoldingWrites>(() => {
@@ -617,7 +626,7 @@ function useHoldingWrites(
   const dismissOutcome = useCallback(
     (id: string) => setOutcomes((all) => all.filter((o) => o.closed.id !== id)), [],
   );
-  return { holdings, holdingsKept, writes, outcomes, dismissOutcome };
+  return { holdings, holdingsKept, unreadable, writes, outcomes, dismissOutcome };
 }
 
 /** What the page reads, and when: by New York's session, and by nothing else on screen (#371; ADR

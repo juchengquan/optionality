@@ -78,6 +78,8 @@ const said = () => `asked since the reset: ${JSON.stringify(calls)}\nall, in ms:
 /** paths the fake service refuses, with a 502 as a Provider outage gives */
 let refusing = new Set<string>();
 let quotes: object[] = [spread, shortLeg];
+/** holdings `/positions/values` lists beside `holding`: an unreadable one, where a test says (#422) */
+let alsoValued: object[] = [];
 /** when set, every valuation waits for the test to settle it, in the order asked */
 let held: { settle: (ok: boolean, body?: unknown) => void }[] | null = null;
 
@@ -92,6 +94,7 @@ function serve() {
   unanswered = 0;
   refusing = new Set();
   quotes = [spread, shortLeg];
+  alsoValued = [];
   held = null;
   references = [reference, unread];
   closes = [];
@@ -118,7 +121,7 @@ function serve() {
       : path === "/monitors" ? [quarantined]
         : path === "/health" ? health
           : path === "/references" ? references.map((r) => ({ fetched_at: referenceStamp, ...r }))
-            : path === "/positions/values" ? [{ ...holding, fetched_at: holdingStamp }]
+            : path === "/positions/values" ? [{ ...holding, fetched_at: holdingStamp }, ...alsoValued]
               // every holding on record, as stored: the closed trades' fold reads it (#296, #373)
               : path === "/positions" ? [holding]
                 // its days, an empty week: the shape the service answers, so the history drawn
@@ -1128,4 +1131,36 @@ describe("settings", () => {
     expect(screen.getByRole("dialog", { name: "Settings" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "add", hidden: true })).toBeTruthy();
   });
+});
+
+describe("a holding the service cannot read (#422)", () => {
+  /** as `/positions/values` lists it since #422: no legs, no figures, and why */
+  const broken = {
+    ...holding, id: "p9", name: "1231_broken", legs: [], cost_to_close: null, pnl: null, captured: null,
+    contract_size: null, fetched_at: null, schedule: null,
+    unreadable: 'position 1231_broken cannot be read: legs[0].side must be "short" or "long"',
+  };
+
+  for (const where of ["desk", "phone"] as const) {
+    it(`is listed with its id and why, named in the needs-you line, and the rest of the book drawn (${where})`, async () => {
+      document.cookie = `ui_arrangement=${where};path=/`;
+      alsoValued = [broken];
+      at(SESSION);
+      await open();
+      await quiet();
+      const listed = await screen.findByRole("status", { name: "holdings that cannot be read" });
+      expect(within(listed).getByText("1231_broken")).toBeTruthy();
+      expect(listed.textContent).toContain("cannot be read — fix it or delete it");
+      // the service's reason and the id, one tap away (#420's standard)
+      const details = listed.querySelector("details[data-raw] code");
+      expect(details?.textContent).toContain("legs[0].side must be");
+      expect(details?.textContent).toContain("(id p9)");
+      // a fault in the line, in the same plain words
+      expect(document.body.textContent).toContain("1231_broken cannot be read — fix it or delete it");
+      // and the readable holding is drawn as ever, while the broken one is no row of the book
+      expect(screen.getAllByText("1231_7000P").length).toBeGreaterThan(0);
+      expect(document.querySelectorAll("[data-unreadable]").length).toBe(1);
+      expect(screen.getAllByText("1231_broken"), "drawn once, in its list, and in no row of the book").toHaveLength(1);
+    });
+  }
 });

@@ -175,6 +175,7 @@
         "closed_on": null,
         "exit": null,
         "realized_points": null,
+        "unreadable": null,
         "followed_monitors": [],
         "rescoped_monitors": []
       }

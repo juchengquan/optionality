@@ -921,14 +921,25 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/values"),
   },
   {
+    // legs that are not even JSON: listed with the reason, so the page can offer it for deletion
+    name: "GET /positions lists a holding that cannot be read, with why",
+    world: world({
+      tables: {
+        positions: [position({ id: "pos-1" }), position({ id: "pos-2", name: "dec-broken", legs: "not json" })],
+      },
+    }),
+    request: request("GET", "/positions"),
+  },
+  {
     name: "GET /positions/values answers 502 naming the Provider when it is down",
     world: world({ tables: held, provider: { down: DOWN } }),
     request: request("GET", "/positions/values"),
   },
   {
-    // the refusal's words are the reply, so both backends must say them alike (#266). Under the
-    // Provider's name, as every failure of this route is: the read sits inside its one guard
-    name: "GET /positions/values answers 502 naming a holding that cannot be read",
+    // one holding whose row cannot be read no longer fails the book (#422, the owner's decision of
+    // what #266 answered with a 502): the rest is valued, and it is listed with no legs and no
+    // figures, its reason in the reader's own words — which both backends must say alike
+    name: "GET /positions/values values the book and lists a holding that cannot be read",
     world: world({
       tables: {
         positions: [

@@ -35,6 +35,7 @@ dashes with the failure's message (`unpriced`), and the rest are served from the
 the failure is still the caller's.
 """
 
+import dataclasses
 import math
 import sqlite3
 from dataclasses import dataclass
@@ -106,9 +107,19 @@ class HoldingValue:
 
 @dataclass(frozen=True)
 class Valued:
-    """Every holding's value."""
+    """Every holding's value, and the holdings whose rows could not be read (#422)."""
 
     values: list[HoldingValue]
+    unreadable: list["UnreadableHolding"] = dataclasses.field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class UnreadableHolding:
+    """A held position whose stored row cannot be read (`to_position`), with why: valued at nothing,
+    and named so the owner can fix or delete it."""
+
+    row: PositionRow
+    reason: str
 
 
 #: why a close valuation has no SPX
@@ -273,11 +284,23 @@ async def holding_values(
     """
     # what is HELD: a closed holding is kept with its history but valued no longer, and must not widen
     # the batch for contracts nobody holds (ADR 0022)
-    rows = open_positions(db)
+    #
+    # Read PER ROW, as the sweep reads them: one holding whose row will not read used to fail the whole
+    # book. It is set aside, named with its reason, so it can be fixed or deleted, and every other
+    # holding is valued (#422, the owner's decision)
+    unreadable: list[UnreadableHolding] = []
+    rows: list[PositionRow] = []
+    positions = []
+    for row in open_positions(db):
+        try:
+            positions.append(to_position(row))
+        except Exception as err:  # noqa: BLE001 — whatever the reader refuses with is the reason
+            unreadable.append(UnreadableHolding(row=row, reason=str(err)))
+            continue
+        rows.append(row)
     if not rows:
-        return Valued(values=[])
+        return Valued(values=[], unreadable=unreadable)
 
-    positions = [to_position(r) for r in rows]
     candidates = [close_candidates(db, row) for row in rows]
     asked = [_asks(now, c) for c in candidates]
     live = [p for p, a in zip(positions, asked, strict=True) if a]
@@ -318,4 +341,4 @@ async def holding_values(
             if close is None
             else _from_close(row, position, close, dte, settings, unpriced if was_asked else None)
         )
-    return Valued(values=values)
+    return Valued(values=values, unreadable=unreadable)

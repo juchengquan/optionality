@@ -30,7 +30,7 @@ from optionality.js import js_string, math_round, truthy
 from optionality.timefmt import display_time_short
 
 from ....holdings import holding_values
-from ..format import HELP_TEXT, closed_line, fixed, fmt_value, js_text, standing_note, table
+from ..format import HELP_TEXT, closed_line, escape_html, fixed, fmt_value, js_text, standing_note, table
 from .context import BotContext, failed, require_number
 
 
@@ -46,7 +46,19 @@ async def holdings(ctx: BotContext, args: list[str]) -> str:
         valued = await holding_values(ctx.db, ctx.fetch_quotes, now, ctx.settings, ctx.settings.display_tz)
     except Exception as err:  # noqa: BLE001 — a Provider that is down is a sentence in the chat, never a silence
         return failed("Holdings", err)
+
+    # a holding whose row cannot be read is named, with why, under whatever else is said: it is the
+    # owner's to fix or delete, and it no longer takes the whole reply down with it (#422)
+    def unread(html: bool) -> list[str]:
+        return [
+            f"⚠️ {escape_html(u.reason)} — id {escape_html(u.row['id'])}" if html else f"⚠️ {u.reason} — id {u.row['id']}"
+            for u in valued.unreadable
+        ]
+
     if not valued.values:
+        # no table, so a plain reply, and the words go as they are
+        if valued.unreadable:
+            return "\n".join(unread(False))
         return "No holdings recorded. Record one on the dashboard, beside the rule that watches it."
     reply = table(
         ["holding", "cost", "P&L", "note"],
@@ -64,7 +76,9 @@ async def holdings(ctx: BotContext, args: list[str]) -> str:
     # under it says which close (#380) — or, in the Curb and overnight, that they are live and thin, and
     # which were valued from a close (#416)
     phase = market_phase(now)
-    return reply if phase == "regular" else f"{reply}\n{closed_line(valued.values, phase)}"
+    reply = reply if phase == "regular" else f"{reply}\n{closed_line(valued.values, phase)}"
+    # escaped: the table makes this an HTML reply, and a row's words are the row's own
+    return reply if not valued.unreadable else reply + "\n" + "\n".join(unread(True))
 
 
 async def snapshot(ctx: BotContext, args: list[str]) -> str:

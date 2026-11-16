@@ -55,6 +55,37 @@ export const BOT: readonly BotInput[] = [
     update: message("/holdings"),
   },
   {
+    // one holding whose row cannot be read is named with why, under the table of the rest (#422)
+    name: "/holdings values the rest and names a holding that cannot be read",
+    world: world({
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({
+            id: "pos-2", name: "dec-call-spread",
+            legs: [{ side: "sold", option_type: "CALL", strike: 7500 }, { side: "long", option_type: "CALL", strike: 7550 }],
+          }),
+        ],
+      },
+      provider: { quotes: BOOK },
+    }),
+    update: message("/holdings"),
+  },
+  {
+    // ...and with nothing else to value, the line alone, in plain text
+    name: "/holdings names a holding that cannot be read when it is the only one",
+    world: world({
+      tables: {
+        positions: [position({
+          id: "pos-2", name: "dec-call-spread",
+          legs: [{ side: "sold", option_type: "CALL", strike: 7500 }, { side: "long", option_type: "CALL", strike: 7550 }],
+        })],
+      },
+      provider: { quotes: BOOK },
+    }),
+    update: message("/holdings"),
+  },
+  {
     // #380: out of session the table is Friday's close, its four columns kept, and one line under
     // it says which close — with the Provider down, since nothing is asked of it
     name: "/holdings outside the session values each holding from its last close and says which",

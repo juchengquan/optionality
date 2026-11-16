@@ -43,6 +43,13 @@ import { toPosition } from "./hydrate.ts";
 import { beforeCorrection } from "./correct-legs.ts";
 import { displayRecords, type QuoteFetcher, type QuoteRecord } from "optionality/quotes";
 
+/** A held position whose stored row cannot be read (`toPosition`), with why: valued at nothing,
+ *  and named so the owner can fix or delete it. */
+export interface UnreadableHolding {
+  row: PositionRow;
+  reason: string;
+}
+
 export interface HoldingValue {
   row: PositionRow;
   position: Position;
@@ -168,13 +175,27 @@ function scheduleOf(
  */
 export async function holdingValues(
   db: DatabaseSync, fetchQuotes: QuoteFetcher, now: Date, settings: Settings, tz: string,
-): Promise<{ values: HoldingValue[] }> {
+): Promise<{ values: HoldingValue[]; unreadable: UnreadableHolding[] }> {
   // what is HELD: a closed holding is kept with its history but valued no longer, and must not
   // widen the batch for contracts nobody holds (ADR 0022)
-  const rows = openPositions(db);
-  if (rows.length === 0) return { values: [] };
+  //
+  // Read PER ROW, as the sweep reads them: one holding whose row will not read used to fail the
+  // whole book — every route and reply that values it answered with that one row's fault, and the
+  // holdings beside it went unseen. It is set aside, named with its reason, so it can be fixed or
+  // deleted, and every other holding is valued (#422, the owner's decision)
+  const unreadable: UnreadableHolding[] = [];
+  const rows: PositionRow[] = [];
+  const positions: (Position & { id: string })[] = [];
+  for (const row of openPositions(db)) {
+    try {
+      positions.push(toPosition(row));
+      rows.push(row);
+    } catch (err) {
+      unreadable.push({ row, reason: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  if (rows.length === 0) return { values: [], unreadable };
 
-  const positions = rows.map(toPosition);
   const candidates = rows.map((row) => closeCandidates(db, row));
   const asked = candidates.map((c) => asks(now, c));
   const live = positions.filter((_, i) => asked[i]);
@@ -231,5 +252,6 @@ export async function holdingValues(
         contractSize: close.contract_size, figuresDte: close.dte,
       };
     }),
+    unreadable,
   };
 }

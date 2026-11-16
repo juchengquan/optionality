@@ -1957,6 +1957,12 @@
                                 "number",
                                 "null"
                               ]
+                            },
+                            "unreadable": {
+                              "type": [
+                                "string",
+                                "null"
+                              ]
                             }
                           },
                           "required": [
@@ -1971,7 +1977,8 @@
                             "opened_at",
                             "closed_on",
                             "exit",
-                            "realized_points"
+                            "realized_points",
+                            "unreadable"
                           ]
                         }
                       }
@@ -2076,6 +2083,12 @@
                               "number",
                               "null"
                             ]
+                          },
+                          "unreadable": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
@@ -2090,7 +2103,8 @@
                           "opened_at",
                           "closed_on",
                           "exit",
-                          "realized_points"
+                          "realized_points",
+                          "unreadable"
                         ]
                       }
                     }
@@ -2316,6 +2330,12 @@
                             "realized_points": {
                               "type": [
                                 "number",
+                                "null"
+                              ]
+                            },
+                            "unreadable": {
+                              "type": [
+                                "string",
                                 "null"
                               ]
                             },
@@ -2572,6 +2592,7 @@
                             "closed_on",
                             "exit",
                             "realized_points",
+                            "unreadable",
                             "cost_to_close",
                             "pnl",
                             "captured",
@@ -3769,6 +3790,12 @@
                               "null"
                             ]
                           },
+                          "unreadable": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "followed_monitors": {
                             "type": "array",
                             "items": {
@@ -3834,6 +3861,7 @@
                           "closed_on",
                           "exit",
                           "realized_points",
+                          "unreadable",
                           "followed_monitors",
                           "rescoped_monitors"
                         ]
@@ -4101,6 +4129,12 @@
                               "null"
                             ]
                           },
+                          "unreadable": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "disabled_monitors": {
                             "type": "array",
                             "items": {
@@ -4133,6 +4167,7 @@
                           "closed_on",
                           "exit",
                           "realized_points",
+                          "unreadable",
                           "disabled_monitors"
                         ]
                       }

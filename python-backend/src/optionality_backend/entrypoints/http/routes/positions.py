@@ -36,12 +36,13 @@ and not on a Monitor.
 
 import math
 import sqlite3
+from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.contract import build_spx_code
 from optionality.exit import dte_at_open, exit_levels, on_pace
-from optionality.expiry import market_date, sample_timing, taken_in_session, valued_timing
+from optionality.expiry import days_to_expiry, market_date, sample_timing, taken_in_session, valued_timing
 from optionality.monitor import monitor_leg_codes
 from optionality.payoff import payoff_at_expiry
 from optionality.position import (
@@ -78,7 +79,7 @@ from ....db.queries import (
 from ....db.rows import MonitorRow, PositionRow
 from ....db.time import display_stored, to_sql_datetime
 from ....db.values import from_sqlite_json, new_id, to_sqlite_bool, to_sqlite_json
-from ....holdings import HoldingValue, _exit_policy, holding_values
+from ....holdings import HoldingValue, UnreadableHolding, _exit_policy, holding_values
 from ....hydrate import to_monitor, to_position
 from ....monitors import adopt_orphan_monitors
 from ....ports import verify_contracts
@@ -136,6 +137,10 @@ class PositionOut(BaseModel):
     #: size only a Quote carries, while a closed holding is no longer quoted. None while it is held, and
     #: wherever either side is unknown (`realized_points`).
     realized_points: float | None
+    #: why this holding's stored row cannot be read, in the reader's words; None for every one that can.
+    #: An unreadable holding is still LISTED — with no legs and, on `/values`, no figures — so it can be
+    #: fixed or deleted, and it no longer takes the rest of the book down with it (#422)
+    unreadable: str | None
 
 
 class DisabledMonitor(BaseModel):
@@ -443,11 +448,30 @@ def _still_held(monitor: MonitorRow, held: set[str]) -> bool:
         return False
 
 
+def _dte_or_zero(strike_date: str, now: datetime) -> int:
+    """Days left to a stored expiry, or 0 where it will not read: only an unreadable holding asks, and
+    its `unreadable` says the figure means nothing."""
+    try:
+        return days_to_expiry(strike_date, now)
+    except Exception:  # noqa: BLE001 — the TypeScript's bare `catch`
+        return 0
+
+
 def position_routes(deps: Deps) -> APIRouter:
     db, settings = deps.db, deps.settings
     tz = settings.display_tz
 
-    def out(row: PositionRow) -> dict[str, Any]:
+    def unreadable_reason(row: PositionRow) -> str | None:
+        """Why `row` cannot be read, or None: `to_position` is the one reader every valuation uses, so a
+        row it refuses is the row this route lists as unreadable rather than failing on (#422)."""
+        try:
+            to_position(row)
+        except Exception as err:  # noqa: BLE001 — whatever the reader refuses with is the reason
+            return str(err)
+        return None
+
+    def out(row: PositionRow, unreadable: str | None | Literal[False] = False) -> dict[str, Any]:
+        reason = unreadable_reason(row) if unreadable is False else unreadable
         return {
             "id": row["id"],
             "name": row["name"],
@@ -455,7 +479,8 @@ def position_routes(deps: Deps) -> APIRouter:
             "strike_date": row["strike_date"],
             "contracts": row["contracts"],
             "entry": row["entry"],
-            "legs": from_sqlite_json(row["legs"]),
+            # an unreadable row's legs are not served: they are what could not be read
+            "legs": from_sqlite_json(row["legs"]) if reason is None else [],
             "created_at": display_stored(row["created_at"], tz),
             # a plain date, NOT display_stored: created_at is an instant and converts to DISPLAY_TZ,
             # while Opened is the calendar day a trade was put on and has no time to convert
@@ -464,6 +489,7 @@ def position_routes(deps: Deps) -> APIRouter:
             "exit": row["exit"],
             # only for a closed holding: an open one's result is its live P&L, which is /values' to say
             "realized_points": None if row["closed_on"] is None else _realized(row),
+            "unreadable": reason,
         }
 
     router = APIRouter()
@@ -497,7 +523,7 @@ def position_routes(deps: Deps) -> APIRouter:
         except Exception as err:
             raise provider_failed(deps.provider.name, err) from err
         held = valued.values
-        if not held:
+        if not held and not valued.unreadable:
             return []
         fetched = display_time(now, tz)
 
@@ -545,7 +571,30 @@ def position_routes(deps: Deps) -> APIRouter:
                 "schedule": v.schedule,
             }
 
-        return [one(v) for v in held]
+        def unread(u: UnreadableHolding) -> dict[str, Any]:
+            # listed, valued at nothing: the reason is the whole of what can be said about it (#422)
+            return {
+                **out(u.row, u.reason),
+                "cost_to_close": None,
+                "pnl": None,
+                "captured": None,
+                "contract_size": None,
+                "spx": None,
+                "spx_reason": None,
+                "greeks": {},
+                "legs_delta": None,
+                "short_strikes": [],
+                "fetched_at": None,
+                "valued_from": "live",
+                "valued_on": None,
+                "valued_timing": None,
+                "valued_reason": u.reason,
+                # today's DTE where its expiry reads, else 0: `unreadable` says the row means nothing more
+                "dte": _dte_or_zero(u.row["strike_date"], now),
+                "schedule": None,
+            }
+
+        return [one(v) for v in held] + [unread(u) for u in valued.unreadable]
 
     @router.get("/{id}/vol", summary="How much of the pace gap vol accounts for", response_model=VolOut)
     async def vol(id_: Annotated[str, Path(alias="id")]) -> dict[str, Any]:

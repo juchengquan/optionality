@@ -168,10 +168,16 @@ class ClosedPosition(Position):
 
 def _split(body: Any, *, closed: bool) -> Any:
     """The rows on one side of the close. Anything but a list of objects is passed through untouched, so
-    `_rows` refuses it in its own words."""
+    `_rows` refuses it in its own words. A row the service says it cannot read (`unreadable`, #422) is
+    left out: it is served with no legs so the dashboard can offer it for repair, and a notebook would
+    otherwise value an empty structure as though it were the holding."""
     if not isinstance(body, list):
         return body
-    return [r for r in body if not isinstance(r, dict) or (r.get("closed_on") is not None) == closed]
+    return [
+        r
+        for r in body
+        if not isinstance(r, dict) or ((r.get("closed_on") is not None) == closed and r.get("unreadable") is None)
+    ]
 
 
 def positions(base_url: str | None = None, token: str | None = None) -> list[Position]:
