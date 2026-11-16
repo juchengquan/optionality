@@ -15,6 +15,7 @@
  *    be two signs for one fact, so a minus is refused rather than guessed at.
  *  - Opened starts as the New York trading day, never the local one (ADR 0011), as #293's does.
  */
+import { readNumber } from "./shared/numbers";
 import type { DraftPayoff, Monitor } from "./shared/api";
 import {
   contractCode, derivedName, replacedBy, ruleWords as replacedWords, takesOver, type HeldLegs, type OptionType, type Side,
@@ -111,15 +112,8 @@ export function contractFromWatch(
   };
 }
 
-/** A plain decimal only, as the Monitor editor reads one (`edit.ts`): Number() also reads "0x10" as
- *  16 and "1e-2" as 0.01, none of which is a figure anybody typed on purpose. */
-const PLAIN = /^[+-]?(\d+\.?\d*|\.\d+)$/;
-
-/** A number as typed, or null for blank or not a plain number. */
-function typed(text: string): number | null {
-  const t = text.trim();
-  return PLAIN.test(t) ? Number(t) : null;
-}
+/** A number as typed or pasted, or null for blank or not a plain number (`readNumber`). */
+const typed = readNumber;
 
 /** The threshold the route would refuse (`thresholdFault` in the domain), in the form's words, or
  *  null — said beside the box as it is typed, before anything is sent. */

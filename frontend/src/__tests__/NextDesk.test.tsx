@@ -112,6 +112,9 @@ describe("what each row says", () => {
     const held = (cost: number | null) => QUOTES.map((q) => q.id === "r-calls" ? { ...q, combo_value: -4.4, cost_to_close: cost } : q);
     render(<DeskBook {...props({ quotes: held(4.4) })} />);
     expect(cellText("r-calls", "value")).toBe("4.40");
+    // and is read as what it says, to a reader that does not see the header
+    expect(cell("r-calls", "value")!.querySelector(".sr-only")!.textContent).toBe("cost to close ");
+    expect(cell("w-dec18", "value")!.querySelector(".sr-only")!.textContent).toBe("value ");
     cleanup();
     // not priced as a holding's: a dash, never the signed value in its place
     render(<DeskBook {...props({ quotes: held(null) })} />);

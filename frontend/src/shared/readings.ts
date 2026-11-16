@@ -63,7 +63,11 @@ export const FIGURE = { format: (n: number): string => spx(n) };
 export function changeText(change: number | null): string | null {
   if (change === null) return null;
   const pc = change * 100;
-  return `${pc >= 0 ? "+" : ""}${fixed(pc, 2)}%`;
+  const text = fixed(pc, 2);
+  // a move too small for two places is the formatter's bound with its sign inside it: "<+0.01%",
+  // as a fall is ">−0.01%"
+  if (text.startsWith("<")) return `<+${text.slice(1)}%`;
+  return `${pc > 0 || text === "0.00" ? "+" : ""}${text}%`;
 }
 
 /** One reading in words, as the strip draws it, for the saved picture and its text (#394): "S&P 500

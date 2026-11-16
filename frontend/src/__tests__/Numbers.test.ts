@@ -2,8 +2,9 @@
  *  owner's standard of 2026-11-16). */
 import { describe, expect, it } from "vitest";
 
+import { changeText } from "../shared/readings";
 import {
-  delta, figureOf, fixed, gamma, iv, money, moneyPlain, percent, points, signedPoints, spx, theta, trueMinus, vega,
+  delta, figureOf, fixed, gamma, iv, money, moneyPlain, percent, points, signedPoints, spx, theta, tick, trueMinus, vega,
 } from "../shared/numbers";
 
 describe("the true minus", () => {
@@ -62,5 +63,23 @@ describe("fixed places", () => {
 
   it("writes SPX with no thousands separator, as a strike and a breakeven beside it are", () => {
     expect(spx(7561.7)).toBe("7561.70");
+  });
+});
+
+describe("a Reference's day move", () => {
+  it("is signed both ways, and a move too small for its places is the bound with its sign inside", () => {
+    expect(changeText(0.0042)).toBe("+0.42%");
+    expect(changeText(-0.0123)).toBe("−1.23%");
+    expect(changeText(0)).toBe("+0.00%");
+    expect(changeText(0.000001)).toBe("<+0.01%");
+    expect(changeText(-0.000001)).toBe(">−0.01%");
+  });
+});
+
+describe("an axis tick", () => {
+  it("is written to the places it needs, with the true minus: it names a gridline, it is no figure", () => {
+    expect(tick(20)).toBe("20");
+    expect(tick(22.5)).toBe("22.5");
+    expect(tick(-400)).toBe("−400");
   });
 });

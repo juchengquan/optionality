@@ -249,7 +249,8 @@ describe("the burndown, in the desk's inspector outside the session", () => {
       fireEvent.keyDown(keys, { key });
       const said = carried();
       expect(said).not.toMatch(/\$/);
-      for (const n of across) expect(said.split(/[^\d.,]/)).not.toContain(n);
+      // a percentage (an IV, or its axis) is no figure across the contracts
+      for (const n of across) expect(said.replace(/[\d.,]+%/g, "").split(/[^\d.,]/)).not.toContain(n);
     }
     // and it does say the per-contract figures: the valuation now, the Target and the Stop
     expect(carried()).toContain(`to close, per contract: ${perContract.at(-1)!.toFixed(2)} pts`);

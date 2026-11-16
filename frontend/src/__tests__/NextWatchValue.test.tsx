@@ -173,7 +173,8 @@ describe("in the picture and its Markdown", () => {
     });
     const rows = readMarkdown(toMarkdown(view)).sections.find((s) => s.title === "Watchlist")!.rows;
     const at = rows[0]!.indexOf("value");
-    return IDS.map((id) => rows.find((r) => r[0] === ROWS.find((x) => x.id === id)!.code)?.[at]);
+    // the text writes a figure's minus as the hyphen (MARKDOWN_FIGURE_MINUS); the page, the true one
+    return IDS.map((id) => rows.find((r) => r[0] === ROWS.find((x) => x.id === id)!.code)?.[at]?.replace(/^-/, "\u2212"));
   };
 
   it("says what the page says, out of the session and in it", () => {

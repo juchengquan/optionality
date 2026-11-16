@@ -447,8 +447,8 @@ describe("the crosshair readout (#396)", () => {
   it("names each strike's legs, coloured by type", async () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
     const names = [...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent);
-    // a label that joins two strikes' legs writes them short first (2026-11-16)
-    expect(names.join(" ")).toBe("−P6300 +P6250 −C7400 +C7450");
+    // in strike order, left to right as the axis runs, a label joining two strikes' legs included
+    expect(names.join(" ")).toBe("+P6250 −P6300 −C7400 +C7450");
     expect([...payoff.querySelectorAll("[data-strikes] .nx-leg-t")].map((t) => (t as HTMLElement).dataset.type))
       .toEqual(["PUT", "PUT", "CALL", "CALL"]);
   });
@@ -473,6 +473,6 @@ describe("the crosshair readout (#396)", () => {
     // short one 7150 put, long THREE 7100 puts, sold for 2.40
     const pnl = 2.4 - (7150 - price) + 3 * (7100 - price);
     expect(said(payoff)).toBe(`at expiry with SPX at ${price.toFixed(2)}, ${(6900.5 - price).toFixed(2)} below SPX now: +${pnl.toFixed(2)} pts`);
-    expect([...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ")).toBe("−P7150 +3P7100");
+    expect([...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ")).toBe("+3P7100 −P7150");
   });
 });

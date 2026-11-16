@@ -99,15 +99,15 @@ describe("in the Add sheet's preview", () => {
     const spread = sheet.querySelector<HTMLElement>('[data-spread="1"]')!;
     const payoff = await payoffIn(spread);
     const strikes = () => [...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ");
-    // a label joining two strikes' legs writes them short first (2026-11-16)
-    await expect.poll(strikes).toBe("−P7150 +P6950 +P7000 +P7050 +P7100 +P7700");
+    // in strike order, as the axis runs, a label joining several strikes' legs included
+    await expect.poll(strikes).toBe("+P6950 +P7000 +P7050 +P7100 −P7150 +P7700");
     expect(payoff.querySelector("svg")!.getBoundingClientRect().width).toBeGreaterThan(300);
     expect(chartFaults(payoff).join(" | ")).toBe("");
     await tapAt(payoff, payoff.querySelector("[data-strike='7150']")!);
     expect(shown(payoff)).toMatch(/^SPX 7150\.00 \| /);
     expect(tipFaults(payoff, spread)).toEqual([]);
     await userEvent.fill(screen.getByLabelText("spread 1, leg 6 strike"), "7750");
-    await expect.poll(strikes).toBe("−P7150 +P6950 +P7000 +P7050 +P7100 +P7750");
+    await expect.poll(strikes).toBe("+P6950 +P7000 +P7050 +P7100 −P7150 +P7750");
     expect(chartFaults(payoff).join(" | ")).toBe("");
     expect(overflowsSideways()).toBe(false);
   });

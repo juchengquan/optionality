@@ -3,7 +3,7 @@
  *  it does not reach — where the crosshair's tooltip goes, and what it and the status line say.
  *
  *  Pure, so each is tested without a chart; the chart only draws what these decide. */
-import { fixed, moneyPlain, trueMinus } from "./shared/numbers";
+import { fixed, moneyPlain, tick } from "./shared/numbers";
 import { scaleLinear } from "@visx/scale";
 
 import type { Sample, Samples } from "./shared/api";
@@ -42,7 +42,7 @@ export function say(points: number, unit: Unit): string {
  *  the tick needs. */
 function tickWords(points: number, unit: Unit): string {
   if (inMoney(unit)) return moneyPlain(points * unit.contracts * unit.size);
-  return trueMinus(String(Number(points.toFixed(2))));
+  return tick(points);
 }
 
 /** What the chart's money is: across the contracts at the contract size, or per contract in points

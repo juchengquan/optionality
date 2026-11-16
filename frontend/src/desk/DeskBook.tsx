@@ -25,7 +25,7 @@ import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, FIGURES, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
+  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, FIGURES, heldSpread, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
   type DeskColumn, type DeskRow,
 } from "./columns";
 import { StrikeStrip } from "../StrikeStrip";
@@ -444,7 +444,8 @@ function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; priv
       </>
     );
   }
-  const label = column.key === "value" && row.kind === "holding" ? "cost to close"
+  // a held spread's rule says its cost to close in this column too (2026-11-16), and is read so
+  const label = column.key === "value" && (row.kind === "holding" || (row.kind === "rule" && heldSpread(row))) ? "cost to close"
     : column.key === "delta" && row.kind === "holding" ? SHORT_DELTA : column.label;
   if (column.key === "legs") {
     return <><span className="sr-only">{`${label} `}</span><span className="nxd-v"><Legs legs={rowLegs(row)} /></span></>;

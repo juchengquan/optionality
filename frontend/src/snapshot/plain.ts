@@ -342,6 +342,16 @@ const noteText = (s: string) => inline(s).replace(/^([#>|+-])/, "\\$1");
 
 const tableRow = (cells: string[]) => `| ${cells.map(cellText).join(" | ")} |`;
 
+/** The minus Copy as text writes at the start of a FIGURE's cell (a right-aligned column): the
+ *  hyphen-minus, so `-2.95` and `-$4,528` paste into a spreadsheet as numbers — a cell starting with
+ *  U+2212 is read there as text (the owner, 2026-11-16). The page and the saved picture keep the true
+ *  minus; the words around a figure — a rule's sentence, the pace gap, a leg — keep it here too. The
+ *  one place this is decided: set it to "\u2212" and the text writes what the picture draws. */
+export const MARKDOWN_FIGURE_MINUS = "-";
+
+/** A figure's cell as the text writes it: its leading true minus as `MARKDOWN_FIGURE_MINUS`. */
+const figureCell = (cell: string) => cell.replace(/^\u2212(?=[\d$.])/, MARKDOWN_FIGURE_MINUS);
+
 /** The view as Markdown: the header block as lines above a table per section, an expiry's heading
  *  as a row of its own with the heading in its first cell. */
 export function toMarkdown(view: PlainView): string {
@@ -359,7 +369,7 @@ export function toMarkdown(view: PlainView): string {
     out.push("", tableRow(s.columns), `|${s.align.map((a) => a === "right" ? " ---: |" : " --- |").join("")}`);
     for (const g of s.groups) {
       if (g.heading !== null) out.push(tableRow([g.heading, ...s.columns.slice(1).map(() => "")]));
-      for (const r of g.rows) out.push(tableRow(r));
+      for (const r of g.rows) out.push(tableRow(r.map((c, i) => (s.align[i] === "right" ? figureCell(c) : c))));
     }
   }
   return `${out.join("\n")}\n`;

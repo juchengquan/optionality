@@ -178,6 +178,20 @@ describe("saving the desk as an image", () => {
     release();
   });
 
+  it("sets a figure's column to the right, as the browser draws it, and words to the left (2026-11-16)", async () => {
+    await show();
+    const { root, release } = await take();
+    const table = root.querySelector("table")!;
+    const head = [...table.querySelector("thead tr")!.children].map((c) => c.textContent);
+    const row = [...table.querySelectorAll("tbody tr:not([data-group])")][0]!;
+    const align = (col: string) => getComputedStyle(row.children[head.indexOf(col)]!).textAlign;
+    for (const col of ["value", "P&L", "captured", "Δ", "DTE"]) expect(align(col), col).toBe("right");
+    for (const col of ["name", "legs", "rule"]) expect(align(col), col).toBe("left");
+    // and the header over a figure with it
+    expect(getComputedStyle(table.querySelector("thead tr")!.children[head.indexOf("P&L")]!).textAlign).toBe("right");
+    release();
+  });
+
   it("leaves out a column the viewer unticked", async () => {
     document.cookie = "ui_cols_combo=captured;path=/";
     await show();

@@ -12,15 +12,14 @@
  *  - the same PATCH takes `exit` and `closed_on` on a CLOSED holding, which is how a mistyped close
  *    is corrected without losing the samples a delete would take.
  */
+import { readNumber } from "./shared/numbers";
 import type { Holding, Monitor } from "./shared/api";
 import { GROUPS } from "./shared/groups";
 
 /** A number as typed: null for blank, NaN for something that is not one. */
 function typed(text: string): number | null {
-  const t = text.trim().replace(/^−/, "-");
-  if (t === "") return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : Number.NaN;
+  if (text.trim() === "") return null;
+  return readNumber(text) ?? Number.NaN;
 }
 
 /** The Exit a close starts with: the served Cost to close, signed as served.

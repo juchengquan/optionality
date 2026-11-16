@@ -30,6 +30,7 @@
  *  margins they share (`Gutters`) and the one mapping they all use (`dayScale`), DTE from `span` at
  *  the left margin to 0 at the right.
  */
+import { tick } from "./shared/numbers";
 import { useEffect, useRef, useState } from "react";
 import { scaleLinear } from "@visx/scale";
 import { LinePath } from "@visx/shape";
@@ -250,7 +251,9 @@ function ivAxis(served: Samples, holding: Charted) {
   const scale = scaleLinear<number>({ domain: [lo - pad, hi + pad], nice: 3 });
   const [bottom, top] = scale.domain() as [number, number];
   const ticks = scale.ticks(3);
-  const label = (v: number) => `${Number(v.toFixed(2))}%`;
+  // an axis tick, to the places it needs, as the burndown's are (`shared/numbers.ts`: `tick`); the
+  // readouts say each IV to two places
+  const label = (v: number) => `${tick(v)}%`;
   const L = Math.ceil(Math.max(...ticks.map((v) => textWidth(label(v))))) + 10;
   // the leg names sit at the right end of each line, so the plot stops short of them
   const RL = Math.ceil(Math.max(...legs.map((l) => textWidth(l.name)))) + 8;

@@ -5,6 +5,7 @@
  *  all — a draft that is not one has nothing to send — and the refusals the service words (a signed
  *  0, a combo on IV, a duplicate) are its own, filed beside the field they are about.
  */
+import { readNumber } from "./shared/numbers";
 import type { Added, Entry, Holding, Monitor } from "./shared/api";
 import { ruleWords as monitorWords } from "./add";
 import { contractOfCode } from "./contract";
@@ -95,7 +96,6 @@ export interface PatchBody {
 /** Where a refusal is said: beside the field it is about, or by the save button. */
 export type Spot = "name" | "field" | "compare" | "threshold" | "form";
 
-const PLAIN = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 
 /** The change a draft makes — only the keys that changed, or null for none — or why it cannot be
  *  sent. An absent key is "leave it" to the route, so an unchanged field is never re-sent. */
@@ -106,10 +106,9 @@ export function patchOf(r: Rule, d: Draft): { body: PatchBody | null } | { error
   if (r.combo && name === "") return { error: "type a name", at: "name" };
   const typed = d.threshold.trim();
   if (typed === "") return { error: "type a threshold", at: "threshold" };
-  // a plain decimal only — a sign, digits, a fraction: Number() also reads "0x10" as 16, "1e-2" as
-  // 0.01 and "Infinity", none of which is a threshold anybody typed on purpose
-  if (!PLAIN.test(typed)) return { error: "the threshold is not a number", at: "threshold" };
-  const threshold = Number(typed);
+  // a plain decimal only, a pasted true minus included (`readNumber`)
+  const threshold = readNumber(typed);
+  if (threshold === null) return { error: "the threshold is not a number", at: "threshold" };
   const body: PatchBody = {};
   if (r.combo && name !== r.code) body.name = name;
   if (d.field !== r.field) body.field = d.field;
@@ -200,10 +199,9 @@ export const splitOffered = (r: Rule) => r.scope === "all" && r.holdings.length 
 
 /** A total as typed: a plain decimal, signed as an Entry is — received positive, paid negative. */
 export function totalOf(text: string): { entry: number } | { error: string } {
-  const t = text.trim().replace(/^\u2212/, "-");
-  if (t === "") return { error: "type the total entry" };
-  if (!PLAIN.test(t)) return { error: "the total entry is not a number" };
-  return { entry: Number(t) };
+  if (text.trim() === "") return { error: "type the total entry" };
+  const entry = readNumber(text);
+  return entry === null ? { error: "the total entry is not a number" } : { entry };
 }
 
 interface SplitRow {

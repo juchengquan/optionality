@@ -11,7 +11,7 @@ import { Still } from "../snapshot/Still";
 import { plainView, takenWords, toMarkdown, type PlainInput } from "../snapshot/plain";
 import { needsYou, type Need } from "../needs";
 import { entry, holding, HOLDINGS, monitor, MONITORS, QUOTES, served, side } from "../testing/ownerBook";
-import { readMarkdown, readPicture } from "../testing/plainRead";
+import { readMarkdown, readPicture, signless } from "../testing/plainRead";
 
 afterEach(cleanup);
 
@@ -289,6 +289,28 @@ describe("the header block", () => {
   });
 });
 
+describe("the minus, in the picture and in the text (the owner, 2026-11-16)", () => {
+  it("is the true minus in the picture, and the hyphen in the text's figure cells, so a spreadsheet reads a number", () => {
+    const given = input();
+    render(<Still {...given} />);
+    const picture = readPicture(document.querySelector(".nx-still")!);
+    const text = readMarkdown(toMarkdown(plainView(given)));
+    const holdings = sectionOf(plainView(given), "Holdings");
+    const [pnl, delta, legs] = ["P&L", "Δ", "legs"].map((c) => holdings.columns.indexOf(c));
+    const rowIn = (v: typeof text) => v.sections[0]!.rows.find((r) => r[0] === "1218_C7300")!;
+    // a figure: −$240 and −0.330 drawn, -$240 and -0.330 written
+    expect([rowIn(picture)[pnl!], rowIn(picture)[delta!]]).toEqual(["\u2212$240", "0.330"]);
+    expect(rowIn(text)[pnl!]).toBe("-$240");
+    const short = sectionOf(plainView(given), "Watchlist");
+    const lone = readMarkdown(toMarkdown(plainView(given))).sections[1]!.rows.find((r) => r[0] === "261218 7150P")!;
+    expect(lone[short.columns.indexOf("Δ")]).toBe("-0.170");
+    // words keep the true minus in both: a leg, and a rule's sentence
+    expect(rowIn(text)[legs!]).toBe("\u2212C7300 +C7350");
+    expect(lone[short.columns.indexOf("rule")]).toContain("now \u22120.170");
+    expect(toMarkdown(plainView(given))).not.toMatch(/\| \u2212[\d$]/);
+  });
+});
+
 describe("the picture and the text, one builder", () => {
   for (const [name, over] of [
     ["in session", {}],
@@ -312,7 +334,8 @@ describe("the picture and the text, one builder", () => {
       const picture = readPicture(document.querySelector(".nx-still")!);
       const text = readMarkdown(toMarkdown(plainView(given)));
       expect(picture.sections.length, "nothing drawn — nothing compared").toBeGreaterThan(0);
-      expect(text).toEqual(picture);
+      // the sign set aside: the text writes a figure's minus as the hyphen (MARKDOWN_FIGURE_MINUS)
+      expect(signless(text)).toEqual(signless(picture));
     });
   }
 

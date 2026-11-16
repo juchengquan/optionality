@@ -44,7 +44,7 @@ import { LinePath } from "@visx/shape";
 import { Threshold } from "@visx/threshold";
 
 import { fetchDraftPayoff, fetchPayoff, type DraftPayoff, type Entry, type Holding, type Payoff } from "./shared/api";
-import { heldLeg, legText, shortFirst, signedLeg, type WrittenLeg } from "./shared/format";
+import { heldLeg, legText, signedLeg, type WrittenLeg } from "./shared/format";
 import { SvgLegSpan } from "./shared/Legs";
 import { fieldWords } from "./needs";
 import { textWidth, tipPlace } from "./burndown";
@@ -417,8 +417,9 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
           ))}
           {legLabels.map((c) => (
             <text key={`${c.row}:${c.items.map((i) => legText(i.leg, "signs")).join()}`} data-strikes="" {...anchored(c)} y={rowY(c.row)}>
-              {/* the legs one label joins, short first as everywhere they are written (2026-11-16) */}
-              {shortFirst(c.items.map((i) => i.leg)).map((leg, n) => (
+              {/* the legs one label joins in STRIKE order, left to right as the axis runs: short first is
+                  for a list of legs, and this is a label on an axis (review of #418) */}
+              {c.items.map((i) => i.leg).map((leg, n) => (
                 <Fragment key={n}>{n > 0 ? " " : null}<SvgLegSpan leg={leg} /></Fragment>
               ))}
             </text>

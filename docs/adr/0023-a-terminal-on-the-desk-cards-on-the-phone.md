@@ -819,16 +819,22 @@ payoff's maximums and the errors' words — is the second half, and amends this 
   negative carries the true minus, U+2212 — money (`−$4,528`), points, greeks, percentages, the
   burndown's axis, a long's stored Exit — where the table, the payoff and the inspector had the
   hyphen-minus and only the rule's sentence and the pace gap had the true one. A served non-zero that
-  rounds away is a bound, `<0.0001` or `>−0.0001`, never `0.0000` or `-0.0000`. A typed input keeps
-  what was typed: the formatter writes figures, never the text of a box.
+  rounds away is a bound, `<0.0001` or `>−0.0001`, never `0.0000` or `-0.0000`; a Reference's day
+  move too small for its places is `<+0.01%`. A chart's axis TICK is no figure: it names a gridline and is written to the places it needs (`tick`: `20%`, `−$400`), as the burndown's always were — two idle zeros on the IV axis widened the margin the three history panels share and put a readout on its point at 272px. A typed input keeps what was typed: the formatter writes
+  figures, never the text of a box. **Every box that reads a figure reads one pasted from the page**
+  (`readNumber`, review of #418): the rule editor's threshold and total Entry, the add forms' strikes,
+  Entry and thresholds, and the holding forms' Entry and Exit take a leading U+2212 as the minus a
+  keyboard types, and nothing that is not a plain decimal.
 - **SPX one way, with no thousands separator**: `7561.67` on the References strip, as on the strike
   strip, the price map, the payoff and the SPX chart — read against strikes (`C8050`) and breakevens
   (`8054.72`), which carry none. The strip's `7,561.67` was the only separated figure on the page.
 - **Legs with the true minus, short first** (`format.shortFirst`): `−C8050 +C8100`, a condor's two
-  short legs before its wings, in the legs column, the cards, the sheet's heading, the inspector's
-  list, the palette, the picture, and inside a payoff label that joins two strikes' legs. The legs
-  form "minus" is gone: there is one signed form. The palette still finds a leg typed with a
-  hyphen-minus.
+  short legs before its wings, in every LIST of legs: the legs column, the cards, the sheet's heading,
+  the inspector's list, the palette, the picture. A label on the payoff's axis keeps STRIKE order, left
+  to right as the axis runs, one that joins several strikes' legs included (review of #418): short
+  first is for a list, not for an axis. The legs form "minus" is gone: there is one signed form. The
+  palette still finds a leg typed with a hyphen-minus. A name the add form derived and stored
+  (`1231_-C8050+C8100`) is data, written as stored.
 - **A row's figures in one order, by what the row is** (`quotefigures.ts`, drawn alike by the
   inspector and the sheet):
   - a single contract: its **value** (the mid — called what a rule on it calls it) first, then
@@ -856,8 +862,18 @@ payoff's maximums and the errors' words — is the second half, and amends this 
   manage-by); a figure's column is set to the right, in the picture and as `---:` in the Markdown;
   and a unit sits in a header only where the cells do not say it — `P&L` above `+$177`, `captured`
   above `38%`, `pace gap (pts)` above "ahead by 1.53". The two stay held to each other
-  (`NextPlainView`, `NextSaveImage`).
-- **Held by** `NumberFormat.test.tsx`: no rendered text — the desk's table and every inspector, the
-  phone's cards and every sheet, in session and out (histories and payoffs drawn), and the saved
-  view's text — has a hyphen-minus used as a sign.
+  (`NextPlainView`, `NextSaveImage`), the sign set aside.
+- **Copy as text writes a figure's minus as the hyphen-minus** (the owner, 2026-11-16): `-2.95` and
+  `-$4,528` in a right-aligned cell, so the text pastes into a spreadsheet as numbers — a cell that
+  starts with U+2212 is read there as text. The page and the saved picture keep the true minus, and
+  the text keeps it in words (a rule's sentence, a leg, the pace gap). One constant decides it
+  (`MARKDOWN_FIGURE_MINUS`, `snapshot/plain.ts`), and Copy as text is therefore the one view the
+  hyphen-minus guard does not walk.
+- **Held by** `NumberFormat.test.tsx` and `NumberFormatPage.test.tsx`: nothing the page says — its
+  text and every title and aria-label — uses a hyphen-minus as a sign, in the desk's table and every
+  inspector, the phone's cards and every sheet, in session and out (histories and payoffs drawn), the
+  References strip, the price map, the closed trades, a holding's edit form (its quantity's payoff
+  comparison drawn) and close form, a rule's total Entry split, every payoff's crosshair readout and
+  tooltip as the keys move it, and the saved picture. Not Copy as text (above). A held spread's value
+  cell is read to a screen reader as "cost to close", as it is drawn.
 

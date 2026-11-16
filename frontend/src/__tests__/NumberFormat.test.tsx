@@ -14,25 +14,17 @@ import type { Holding } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
 import { PhoneBook } from "../phone/PhoneBook";
-import { plainView, toMarkdown } from "../snapshot/plain";
+import { Still } from "../snapshot/Still";
+import { hyphenSigns, saidBy } from "../testing/hyphens";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer, watchSamplesAnswer } from "../testing/ownerBook";
-
-/** A hyphen-minus used as a sign: with no letter, digit or point before it. */
-export const HYPHEN_SIGN = /(?<![\w.])-(?=[\d$.]|[CP]\d)/;
-
-/** Every place a hyphen-minus is used as a sign in `text`, with what is around it. */
-export function hyphenSigns(text: string): string[] {
-  const out: string[] = [];
-  const all = new RegExp(HYPHEN_SIGN.source, "g");
-  for (const m of text.matchAll(all)) out.push(text.slice(Math.max(0, m.index - 24), m.index + 12));
-  return out;
-}
 
 /** The owner's book with a negative in every figure a holding has: its greeks, its pace gap (ahead,
  *  so negative) and a gamma too small for its places. */
 const BOOK: Holding[] = HOLDINGS.map((h) => ({
   ...h,
   greeks: { option_delta: -0.0204, option_gamma: -0.00004, option_theta: -0.11, option_vega: -0.79 },
+  // a share captured below nothing: a loss bigger than the credit's decay
+  captured: -0.12,
   schedule: { dte_at_open: 45, on_pace: 4.48, pace_gap: -1.53, target: 2.36, stop: 9.44, target_dte: 11,
     manage_by_dte: 21, reached: null, manage_by_due: false },
 }));
@@ -69,11 +61,13 @@ describe("no figure signed with a hyphen-minus (the owner, 2026-11-16)", () => {
     expect(hyphenSigns("max loss -$4,528 · -45.28 · -C8050 · 1218-6800 · 2026-12-31 · −2.95")).toEqual([
       "max loss -$4,528 · -4", "max loss -$4,528 · -45.28 · -C8", "loss -$4,528 · -45.28 · -C8050 · 121",
     ]);
+    // a stored name the add form derived is data, written as stored (add.ts \`derivedName\`)
+    expect(hyphenSigns("1231_-C8050+C8100 · Δ-0.020 · (-0.5)")).toEqual(["1231_-C8050+C8100 · Δ-0.020 · (-0", "8050+C8100 · Δ-0.020 · (-0.5)"]);
   });
 
   it.each([true, false])("on the desk: the table and every inspector, in session %s (its history open outside it)", async (session) => {
     render(<DeskBook {...props({ session })} />);
-    const said: string[] = [hyphenSigns(document.body.textContent ?? "")].flat();
+    const said: string[] = hyphenSigns(saidBy(document.body));
     const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map((b) => b.textContent!);
     let charts = 0;
     for (const name of names) {
@@ -81,7 +75,7 @@ describe("no figure signed with a hyphen-minus (the owner, 2026-11-16)", () => {
       await settle();
       const insp = screen.getByRole("complementary", { name: `inspector: ${name}` });
       charts += insp.querySelectorAll(".nx-hist-chart, .nx-payoff svg").length;
-      said.push(...hyphenSigns(insp.textContent ?? "").map((s) => `${name}: ${s}`));
+      said.push(...hyphenSigns(saidBy(insp)).map((s) => `${name}: ${s}`));
     }
     expect(names.length).toBeGreaterThan(8);
     // worth nothing unless the payoffs, and outside the session the histories, were drawn and read
@@ -91,13 +85,13 @@ describe("no figure signed with a hyphen-minus (the owner, 2026-11-16)", () => {
 
   it.each([true, false])("on the phone: the cards and every sheet, in session %s", async (session) => {
     render(<div className="nx"><PhoneBook {...props({ session })} /></div>);
-    const said: string[] = [hyphenSigns(document.body.textContent ?? "")].flat();
+    const said: string[] = hyphenSigns(saidBy(document.body));
     const opens = [...document.querySelectorAll<HTMLButtonElement>(".nxp-open")].map((b) => b.getAttribute("aria-label")!);
     for (const label of opens) {
       fireEvent.click(screen.getByRole("button", { name: label }));
       await settle();
       const sheet = screen.getByRole("dialog");
-      said.push(...hyphenSigns(sheet.textContent ?? "").map((s) => `${label}: ${s}`));
+      said.push(...hyphenSigns(saidBy(sheet)).map((s) => `${label}: ${s}`));
       fireEvent.click(within(sheet).getAllByRole("button").find((b) => /close/i.test(b.getAttribute("aria-label") ?? b.textContent ?? ""))!);
       await settle();
     }
@@ -105,11 +99,13 @@ describe("no figure signed with a hyphen-minus (the owner, 2026-11-16)", () => {
     expect(said).toEqual([]);
   });
 
-  it("in the saved view's text", () => {
-    const text = toMarkdown(plainView({
-      ...props(), needs: [], health: null, polledAt: null, error: null, references: [], hidden: new Set(),
-      takenAt: new Date("2026-11-16T15:00:00Z"),
-    }));
+  // NOT Copy as text: it writes a figure's minus as the hyphen on purpose, so a spreadsheet reads
+  // the cell as a number (the owner, 2026-11-16; MARKDOWN_FIGURE_MINUS and NextPlainView's test)
+  it("in the saved picture", () => {
+    render(<Still {...props()} needs={[]} health={null} polledAt={null} error={null} references={[]}
+                  hidden={new Set()} takenAt={new Date("2026-11-16T15:00:00Z")} />);
+    const text = document.querySelector(".nx-still")!.textContent!;
+    expect(text).toMatch(/\u2212/);
     expect(hyphenSigns(text)).toEqual([]);
   });
 });

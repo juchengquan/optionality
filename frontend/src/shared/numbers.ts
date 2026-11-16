@@ -60,6 +60,12 @@ export const vega = orDash((n) => fixed(n, 2));
 /** IV as served, in percent: `27.17%`. */
 export const iv = orDash((n) => `${fixed(n, 2)}%`);
 
+/** An axis TICK, not a figure: to as few places as it needs, at most `places`, with the true minus —
+ *  `20%`, `22.5%`, `−$400` — as the burndown's ticks are written. A tick names a gridline, and two
+ *  idle zeros on every one widen the axis the three history panels share (review of #418: at 272px
+ *  `20.00%` pushed the IV panel's readout onto its point). */
+export const tick = (n: number, places = 2): string => trueMinus(String(Number(n.toFixed(places))));
+
 /** A field's figure to its places — a price for a field this does not know. */
 export function figureOf(field: string, n: number | null | undefined): string {
   if (field === "option_implied_volatility") return iv(n);
@@ -83,3 +89,16 @@ const MONEY_PLAIN = new Intl.NumberFormat("en-US", {
 export const money = orDash((n) => trueMinus(MONEY.format(n)));
 /** Dollars with a sign only where negative: `$472`, `−$4,528` (a chart's axis). */
 export const moneyPlain = orDash((n) => trueMinus(MONEY_PLAIN.format(n)));
+
+/** A plain decimal as typed — a sign, digits, a fraction — and nothing else: `Number()` also reads
+ *  "0x10" as 16, "1e-2" as 0.01 and "Infinity", none of which is a figure anybody typed on purpose. */
+const PLAIN = /^[+-]?(\d+\.?\d*|\.\d+)$/;
+
+/** A number as a person types or PASTES it into a box, or null for blank or not a number: the one
+ *  reader of every figure box (the rule editor's threshold and total, the add forms' strikes, Entry
+ *  and thresholds, the holding forms' Entry and Exit). The page writes a negative with the true
+ *  minus, so a figure copied from it starts with U+2212, read as the hyphen-minus a keyboard types. */
+export function readNumber(text: string): number | null {
+  const t = text.trim().replace(/^−/, "-");
+  return PLAIN.test(t) ? Number(t) : null;
+}
