@@ -49,11 +49,21 @@ export function createDatabase(path: string): DatabaseSync {
  *  depend on: clearing `monitor_positions` and removing the row it pointed at have to happen
  *  together or not at all. `exec` is used instead of `prepare` so that BEGIN cannot be left
  *  dangling by a statement cache.
+ *
+ *  SYNCHRONOUS, and a body that answers a promise is refused. One connection serves every request,
+ *  the sweep and the bot, so a transaction open across an `await` is open for all of them: it
+ *  awaited the body until 2026-11-16 — every caller's body was synchronous, and awaiting one still
+ *  yielded — and a second transaction begun in that turn met "cannot start a transaction within a
+ *  transaction", while any other statement run then was committed or rolled back with this one's.
  */
-export async function atomic<T>(db: DatabaseSync, fn: () => T | Promise<T>): Promise<T> {
+export function atomic<T>(db: DatabaseSync, fn: () => T): T {
   db.exec("BEGIN");
   try {
-    const out = await fn();
+    const out = fn();
+    if (out instanceof Promise || typeof (out as { then?: unknown })?.then === "function") {
+      throw new Error("a transaction's body must not await: it would hold the transaction open "
+        + "for every other request while it waits");
+    }
     db.exec("COMMIT");
     return out;
   } catch (err) {
