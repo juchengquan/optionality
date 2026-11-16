@@ -203,6 +203,12 @@ ENV_FILES = {
     ),
     "quotes-that-do-not-close": 'M="unclosed\nN=after\nO="multi\nline"\nU=\'open\nV=`also open',
     "an-empty-key-then-a-pair": "=a=b\nW=1",
+    # a bare `=` is an empty key with an empty value: node sets nothing, where storing it put "" into
+    # the environment and the boot died on the OSError
+    "a-bare-equals-between-pairs": "A=1\n=\nB=2",
+    "a-spaced-bare-equals": " =\nB=2\n= \nC=3",
+    "a-bare-equals-at-the-end": "D=4\n=",
+    "an-empty-key-whose-rest-is-a-comment": "== #x=1\nE=5",
     "a-blank-value-then-a-line": "X= \nY=2\nZ=\t\n",
     "crlf": 'A=1\r\nB="two\r\nlines"\r\nC=3\r\n',
     "only-comments": "# nothing\n\n   \n",
