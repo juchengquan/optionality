@@ -1237,6 +1237,44 @@ describe("a rule muted while the sweep is out", () => {
     expect(sent.filter((t) => t.includes("crossed")), "it alarmed on a muted rule").toHaveLength(0);
     expect(row(id)!.triggered, "and latched the flag on a disabled row").toBe(0);
   });
+
+  // The two quarantines wrote from the rows read BEFORE the fetch too: a rule the owner muted while
+  // the batch was out came back disabled as "unknown-contract" or "no-figure", its own reason
+  // overwritten, with a notice about a rule nobody was watching any more.
+  it("is not quarantined as an unknown contract, and keeps the reason it was muted for", async () => {
+    const id = monitor();
+    const racing: FakeProvider = (codes) => {
+      db.prepare("update monitors set enabled = 0, disabled_reason = 'manual' where id = ?").run(id);
+      return Promise.resolve({ records: [], unknown: codes });
+    };
+    await sweeper(racing).sweep();
+    expect(row(id)!.disabled_reason).toBe("manual");
+    expect(sent, "a notice about a rule nobody watches").toEqual([]);
+  });
+
+  it("is not quarantined for a silent figure, and keeps the reason it was muted for", async () => {
+    const id = monitor();
+    const racing: FakeProvider = (codes) => {
+      db.prepare("update monitors set enabled = 0, disabled_reason = 'manual' where id = ?").run(id);
+      return Promise.resolve(codes.map((c) => ({ code: c, name: c })));   // priced, the figure silent
+    };
+    await sweeper(racing, { quarantineAfterSilentSweeps: 1 }).sweep();
+    expect(row(id)!.disabled_reason).toBe("manual");
+    expect(sent).toEqual([]);
+  });
+
+  it("is not quarantined when it was deleted, nor when it was redefined", async () => {
+    const gone = monitor();
+    const changed = monitor({ code: "US.SPXW261218C8200000", strike: 8200 });
+    const racing: FakeProvider = (codes) => {
+      db.prepare("delete from monitors where id = ?").run(gone);
+      db.prepare("update monitors set threshold = 0.5 where id = ?").run(changed);
+      return Promise.resolve({ records: [], unknown: codes });
+    };
+    await sweeper(racing).sweep();
+    expect(row(changed)!.enabled, "redefined: the next sweep asks about it as it now is").toBe(1);
+    expect(sent).toEqual([]);
+  });
 });
 
 /** A rule REDEFINED while the sweep is out (#359's review): a held 1×3 corrected to a 1×2 takes its

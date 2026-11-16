@@ -78,6 +78,13 @@ function redefined(before: MonitorRow, now: MonitorRow): boolean {
   return DEFINITION.some((k) => before[k] !== now[k]);
 }
 
+/** Whether a rule read before the fetch is, now, still on and still the rule it was: neither
+ *  deleted, muted nor redefined while the batch was out. Read inside the caller's transaction. */
+function stillTheRule(db: DatabaseSync, before: MonitorRow): boolean {
+  const current = findMonitor(db, before.id);
+  return current !== undefined && current.enabled !== 0 && !redefined(before, current);
+}
+
 /** The date a sweep reckons expiry against: the UTC day, as the Python's `utcnow().date()` gives.
  *
  *  Deliberately NOT the market date, even though `dte` on the dashboard is. The two genuinely differ
@@ -359,6 +366,11 @@ export class MonitorSweeper {
           surviving.push(monitor);
           continue;
         }
+        // re-read, as `evaluate` does: this row was read before the fetch, and a rule muted,
+        // deleted or redefined while it was out is not the rule the batch answered about. Muted,
+        // it would come back disabled as "unknown-contract", its own reason overwritten and a
+        // notice sent about a rule nobody is watching; redefined, the next sweep asks anew.
+        if (!stillTheRule(db, monitor)) continue;
         const reason: DisabledReason = "unknown-contract";
         updateMonitorFields(db, monitor.id, {
           enabled: toSqliteBool(false), disabled_reason: reason,
@@ -416,6 +428,12 @@ export class MonitorSweeper {
             continue;
           }
           if (value === null) {
+            // a rule muted, deleted or redefined mid-fetch is counted toward nothing: the silence
+            // was the old rule's, and quarantining it would overwrite the reason it was muted for
+            if (!stillTheRule(db, row)) {
+              this.silentSweeps.delete(row.id);
+              continue;
+            }
             // the decision is `domain/lifecycle.silenceVerdict` (ADR 0017); this applies it
             const verdict = silenceVerdict(
               monitor, new Set(Object.keys(byCode)), this.silentSweeps.get(row.id) ?? 0, limit,
