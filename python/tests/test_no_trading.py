@@ -350,6 +350,17 @@ REFUSED = {
     "an order id sent as text": "client.send('3', 1, contract)\n",
     "a whole order message as one string": "client.sendMsg('3\\x0045\\x001')\n",
     "a whole order message built from pieces": "client.sendMsg('58' + '\\0' + '1')\n",
+    # #422's review: what the first resolver still let through
+    "an order id as arithmetic": "client.send(1 + 2, 1, contract)\n",
+    "an order id unpacked from a tuple": "A, B = 3, 4\nclient.send(A, 1)\n",
+    "an order message in an f-string": "client.sendMsg(f'3\\x00{fields}')\n",
+    "the send method by getattr": "getattr(client, 'send')(3, 1)\n",
+    "an order id first in a list sent starred": "fields = [3, 1]\nclient.send(*fields)\n",
+    "an order id through a walrus": "client.send((x := 3), 1)\n",
+    "an order id through int()": "client.send(int('3'), 1)\n",
+    "an order id through a class alias": "P = 3\nclass M:\n    G = P\nclient.send(M.G)\n",
+    "an order id bound inside the function": "def f():\n    X = 3\n    client.send(X)\n",
+    "an order id on a client built here": "c = Client(reader)\nWHICH = 4\nc.send(WHICH, 1)\n",
 }
 
 
@@ -369,6 +380,10 @@ ALLOWED = {
     "a read message under a name": "REQ_MKT_DATA = 1\nclient.send(REQ_MKT_DATA, 11, 7)\n",
     "a read message as one string": "client.sendMsg('1\\x0011\\x007')\n",
     "a message id that merely starts with an order's": "client.sendMsg('31\\x001')\n",
+    "a socket sending a number under a name": "n = 3\nsock.send(n)\n",
+    "a parameter shadowing a module's 3": "X = 3\ndef g(X):\n    client.send(X)\n",
+    "an f-string whose first field is not known": "client.sendMsg(f'{which}\\x003')\n",
+    "arithmetic that lands on a read message": "client.send(3 - 2, 11)\n",
     "the docstring may say it": '"""Never calls placeOrder or builds a LimitOrder."""\n',
     "prose that contains a word": "log.info('Order of work: placing nothing')\n",
     "a comment may say it": "x = 1  # ib.placeOrder is refused here\n",
