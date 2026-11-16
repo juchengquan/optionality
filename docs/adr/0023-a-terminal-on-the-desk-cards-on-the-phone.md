@@ -763,7 +763,11 @@ The owner decided, from the live page:
   and titled with the word.
 - **Buttons are drawn smaller**: 26px on the desk, where they were 28 to 32. On the phone a button
   is drawn 32px and keeps its 44pt target through an invisible area above and below it (its
-  `::after`), so the target is measured where a tap LANDS (`__browser__/targets.ts`), not off its
-  box, and rows of buttons sit 12px apart so no area lies over a neighbour's. "I hold it" and "Watch
-  it" are a control's height, each consequence drawn under its button rather than inside it (#408's
-  description, unchanged).
+  `::after`, raised over positioned content drawn after it — the strike strip under a watched
+  spread's Monitor buttons had covered its bottom 6px). What is guaranteed is measured, not
+  assumed: every phone suite asks where a tap LANDS (`__browser__/targets.ts`), and each control's
+  44pt must be its own — no other control's area and nothing else of its layer over it. Rows of
+  buttons that wrap or stack sit 12px apart for that reason. "I hold it" and "Watch it" are a
+  control's height, each consequence drawn under its button rather than inside it (#408's
+  description, unchanged). The held contract's Monitor switch says "Monitor on" / "Monitor off".
+- **A gap of nothing to two places is "on pace"**, drawn 0.00 in no colour — never "ahead by 0.00".

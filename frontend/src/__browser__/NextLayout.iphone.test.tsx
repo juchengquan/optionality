@@ -28,7 +28,20 @@ function targets(): HTMLElement[] {
 
 /** A dialog opens with a zoom from 95%, and a box measured mid-animation is 95% of its size. */
 async function animationsDone(): Promise<void> {
-  await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)));
+  // until the page is still: no animation running and no dialog still in its starting style. One
+  // snapshot of the animations missed a transition that had not begun yet, and a sheet measured
+  // mid-rise read 669.5 for a bottom edge of 664 (review of #415)
+  for (let i = 0; i < 60; i++) {
+    const running = document.getAnimations();
+    const starting = document.querySelector("[data-starting-style], [data-ending-style]");
+    if (running.length === 0 && starting === null) {
+      await new Promise((r) => setTimeout(r, 50));
+      if (document.getAnimations().length === 0) return;
+      continue;
+    }
+    await Promise.all(running.map((a) => a.finished.catch(() => undefined)));
+    await new Promise((r) => setTimeout(r, 25));
+  }
 }
 
 function tooSmall(): string[] {

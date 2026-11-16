@@ -8,8 +8,13 @@
 import type { Holding } from "./shared/api";
 import { DASH } from "./shared/format";
 
+/** A gap that is nothing to the two places it is written in: said "on pace", in no colour — never
+ *  "ahead by 0.00", which named a side the figure did not show (review of #415). */
+const none = (gap: number) => Math.abs(gap).toFixed(2) === "0.00";
+
 export function paceWords(gap: number | null | undefined): string {
   if (gap === null || gap === undefined) return DASH;
+  if (none(gap)) return "on pace";
   return `${gap > 0 ? "behind" : "ahead"} by ${Math.abs(gap).toFixed(2)}`;
 }
 
@@ -20,13 +25,14 @@ export function paceWords(gap: number | null | undefined): string {
 export function paceSigned(gap: number | null | undefined): string {
   if (gap === null || gap === undefined) return DASH;
   const figure = Math.abs(gap).toFixed(2);
-  return gap > 0 ? `+${figure}` : gap < 0 ? `\u2212${figure}` : figure;
+  if (none(gap)) return figure;
+  return gap > 0 ? `+${figure}` : `\u2212${figure}`;
 }
 
 /** The outcome colour a gap is drawn in: behind is a loss, ahead a gain, and none for no gap or a
  *  gap of exactly zero — the colour the desk's column already gave the signed figure. */
 export function paceOutcome(gap: number | null | undefined): "loss" | "gain" | undefined {
-  return gap ? (gap > 0 ? "loss" : "gain") : undefined;
+  return gap && !none(gap) ? (gap > 0 ? "loss" : "gain") : undefined;
 }
 
 /** A holding's Cost to close with its pace gap beside it, as the desk's value column and the
@@ -41,5 +47,6 @@ export function costAndPace(h: Pick<Holding, "cost_to_close" | "schedule">): {
   const cost = h.cost_to_close.toFixed(2);
   const g = h.schedule?.pace_gap;
   if (g === null || g === undefined) return { cost, gap: null, text: cost, words: cost };
-  return { cost, gap: paceSigned(g), text: `${cost} ${paceSigned(g)}`, words: `${cost}, pace gap ${paceWords(g)}` };
+  const said = none(g) ? "on pace" : `pace gap ${paceWords(g)}`;
+  return { cost, gap: paceSigned(g), text: `${cost} ${paceSigned(g)}`, words: `${cost}, ${said}` };
 }

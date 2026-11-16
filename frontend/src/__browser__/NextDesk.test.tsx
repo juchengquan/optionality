@@ -457,9 +457,12 @@ describe("columns are dropped as measured (ADR 0008)", () => {
       shut: ["name", "legs", "value", "pnl", "captured", "delta", "strip", "dte", "manage"],
       open: ["name", "value", "pnl", "delta", "strip", "dte", "manage"],
     },
+    // the owner's desk (review of #415)
+    1440: { shut: ["name", "legs", "value", "pnl", "captured", "delta", "strip", "dte", "manage"],
+      open: ["name", "value", "pnl", "captured", "delta", "strip", "dte", "manage"] },
     2560: { shut: ONE_SET, open: ONE_SET },
   };
-  for (const width of [900, 1280, 2560]) {
+  for (const width of [900, 1280, 1440, 2560]) {
     it(`at ${width}px, drops in the survival order, with the inspector shut and open`, async () => {
       await show(width);
       for (const state of ["shut", "open"] as const) {

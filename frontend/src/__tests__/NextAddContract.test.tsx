@@ -192,9 +192,9 @@ describe("a watched contract", () => {
     hold();
     const buttons = () => within(screen.getByRole("group", { name: "direction" })).getAllByRole("button") as HTMLButtonElement[];
     expect(buttons().map((b) => b.disabled)).toEqual([false, false]);
-    fireEvent.click(screen.getByRole("switch", { name: "its Monitor" }));
+    fireEvent.click(screen.getByRole("switch", { name: /^Monitor (on|off)$/ }));
     expect(buttons().map((b) => b.disabled)).toEqual([true, true]);
-    fireEvent.click(screen.getByRole("switch", { name: "its Monitor" }));
+    fireEvent.click(screen.getByRole("switch", { name: /^Monitor (on|off)$/ }));
     expect(buttons().map((b) => b.disabled)).toEqual([false, false]);
   });
 
@@ -232,7 +232,7 @@ describe("a watched contract", () => {
 
   it("offers no 'no rule': a watched contract with none would record nothing", () => {
     open();
-    expect(screen.queryByRole("switch", { name: "its Monitor" })).toBeNull();
+    expect(screen.queryByRole("switch", { name: /^Monitor (on|off)$/ })).toBeNull();
   });
 });
 
@@ -262,7 +262,7 @@ describe("a held contract", () => {
 
   it("records the holding with no rule when its Monitor is switched off", async () => {
     const { onSaved } = hold();
-    const rule = screen.getByRole("switch", { name: "its Monitor" });
+    const rule = screen.getByRole("switch", { name: /^Monitor (on|off)$/ });
     expect(rule.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(rule);
     expect(rule.getAttribute("aria-checked")).toBe("false");
@@ -453,7 +453,13 @@ describe("nothing said twice (2026-11-16)", () => {
   it("says a held contract's rule once: no line beside its switch repeating the sentence", () => {
     const { form } = hold();
     expect(form.textContent).not.toContain("a Monitor on this contract");
-    fireEvent.click(screen.getByRole("switch", { name: "its Monitor" }));
+    // the switch says what it switches, drawn and to a reader (review of #415), where "on" alone did not
+    const toggle = screen.getByRole("switch", { name: "Monitor on" });
+    expect(toggle.textContent).toBe("Monitor on");
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.textContent).toBe("Monitor off");
+    expect(screen.getByRole("switch", { name: "Monitor off" })).toBe(toggle);
     expect(screen.getByTestId("contract-draft").textContent).toBe("no Monitor: the holding alone");
     expect(form.textContent!.split("no Monitor")).toHaveLength(2);
     expect(form.textContent).not.toContain("no rule:");

@@ -99,6 +99,30 @@ describe("the gap beside the cost in the desk's value column: signed, its words 
   });
 });
 
+describe("a gap of nothing, to two places (review of #415)", () => {
+  it("is on pace in words, drawn 0.00 in no colour, and never ahead or behind by 0.00", async () => {
+    const { costAndPace, paceOutcome, paceSigned, paceWords } = await import("../pace");
+    for (const g of [0, 0.001, -0.004]) {
+      expect(paceWords(g)).toBe("on pace");
+      expect(paceSigned(g)).toBe("0.00");
+      expect(paceOutcome(g)).toBeUndefined();
+      expect(costAndPace({ cost_to_close: 3.05, schedule: { pace_gap: g } as never }))
+        .toEqual({ cost: "3.05", gap: "0.00", text: "3.05 0.00", words: "3.05, on pace" });
+    }
+    // the first gap that rounds away from nothing is said and coloured as it is
+    expect(paceWords(0.005)).toBe("behind by 0.01");
+    expect(paceOutcome(0.005)).toBe("loss");
+    expect(paceSigned(-0.005)).toBe("\u22120.01");
+  });
+
+  it("is drawn in the desk's value column with no colour and titled on pace", () => {
+    render(<DeskBook {...props({ holdings: scheduled.map((h) => h.id === "h-calls" ? { ...h, schedule: schedule(0) } : h) })} />);
+    expect(valueCell("h-calls")?.textContent).toBe("4.40 0.00");
+    expect(valueCell("h-calls")?.title).toBe("cost to close 4.40, on pace");
+    expect(valueCell("h-calls")?.querySelector("[data-outcome]")?.getAttribute("data-outcome") ?? null).toBeNull();
+  });
+});
+
 describe("the pace explained, in the desk's inspector", () => {
   it("says the DTE at open, the √T working and the target on decay alone, and the live gap once", async () => {
     render(<DeskBook {...props()} />);

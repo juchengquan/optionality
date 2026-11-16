@@ -204,6 +204,9 @@ html[data-nx-arrangement="phone"] button { min-height: 2rem; min-width: 44px; }
 html[data-nx-arrangement="phone"] button::after {
   content: ""; position: absolute; left: 0; right: 0;
   top: min(0px, calc((100% - 44px) / 2)); bottom: min(0px, calc((100% - 44px) / 2));
+  /* over anything positioned that is drawn after the button: the strike strip under a watched
+     spread's Monitor buttons lay over the bottom 6px of their area (review of #415) */
+  z-index: 1;
 }
 /* the area is placed against its button, which takes a position for it — in a layer, so a button
    placed by a utility (a sheet's close, `absolute`) or by the page's own rules keeps its own */
@@ -211,7 +214,9 @@ html[data-nx-arrangement="phone"] button::after {
   html[data-nx-arrangement="phone"] button { position: relative; }
 }
 /* the area reaches 6px above and below a button, so a row of buttons wrapped or stacked under
-   another sits 12px from it at least, or each would lie over the other's */
+   another sits 12px from it at least, or each would lie over the other's. What is guaranteed, and
+   measured by every phone suite (`__browser__/targets.ts`): each control's 44pt is its own — no
+   other control's area, and nothing else of its layer, lies over it */
 html[data-nx-arrangement="phone"] :is(.nx-add-row, [data-slot="alert-dialog-footer"]) { row-gap: 0.75rem; }
 html[data-nx-arrangement="phone"] :is(select, input, textarea) { font-size: 16px; }
 /* A rule's short form (#388): its spaces separate the rule, the figure and the distance, so they are

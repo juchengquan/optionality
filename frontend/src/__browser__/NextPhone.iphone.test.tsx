@@ -197,6 +197,25 @@ describe("the detail sheet", () => {
     expect(tooSmall()).toEqual([]);
   });
 
+  it("takes a tap 5px under a watched spread's Monitor buttons as the button's, the strike strip drawn under them (review of #415)", async () => {
+    const sheet = await openSheet("w-dec18");
+    // the strip is drawn right under the rule's controls, and positioned: drawn after the buttons, it
+    // lay over the bottom of their invisible area and took a finger's tap there
+    expect(sheet.querySelector(".nxs-scale")).toBeTruthy();
+    const buttons = [...sheet.querySelectorAll<HTMLElement>(".nx-mon-actions button")];
+    expect(buttons.length).toBeGreaterThanOrEqual(3);
+    for (const b of buttons) {
+      b.scrollIntoView({ block: "center" });
+      const r = b.getBoundingClientRect();
+      // drawn about 32px: 6px of its 44pt lie above and below what is drawn
+      expect(r.height).toBeLessThan(40);
+      for (const y of [r.top - 5, r.bottom + 5]) {
+        const at = document.elementFromPoint(r.left + r.width / 2, y);
+        expect(at === b || b.contains(at), `${b.getAttribute("aria-label")} at ${Math.round(y - r.top)}px: ${at?.className}`).toBe(true);
+      }
+    }
+  });
+
   it("closes on the browser's Back without leaving the page, where it was", async () => {
     await openSheet("h-calls");
     const href = location.href;

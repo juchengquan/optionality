@@ -182,9 +182,11 @@ export function AddContract({
             <div className="nx-add-rule" role="group" aria-label="its rule" data-on={ruleOn ? "" : undefined}>
               {held ? (
                 <div className="nx-add-monitor">
-                  <button type="button" role="switch" aria-checked={draft.rule} aria-label="its Monitor"
+                  {/* says what it switches, its words its name (review of #415): with the line beside
+                      it gone, "on" alone said nothing of what was on */}
+                  <button type="button" role="switch" aria-checked={draft.rule}
                           className="nx-add-switch" onClick={() => set({ rule: !draft.rule })}>
-                    {draft.rule ? "on" : "off"}
+                    {draft.rule ? "Monitor on" : "Monitor off"}
                   </button>
                 </div>
               ) : null}

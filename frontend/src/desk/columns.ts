@@ -8,7 +8,8 @@
  *  for is blank, not a dash, because a dash reads as "the figure has not arrived".
  *
  *  Every figure is one the service served. Nothing here models a price: a pace is the schedule's
- *  `on_pace` and `pace_gap` — the gap signed in the table and in words everywhere else (#379) —
+ *  `on_pace` and `pace_gap` — the gap signed beside the cost in the table's value column, and in
+ *  words everywhere else (#379, 2026-11-16) —
  *  never a curve drawn on screen (ADR 0023: "never draw what the system does not know"). The two pieces of arithmetic are a subtraction of two served day counts (days
  *  left before the Manage-by) and a share as a percentage.
  */
@@ -278,17 +279,17 @@ const MANAGE: DeskColumn = {
   }),
 };
 
-/** Not a column (ADR 0023, amended 2026-11-13): the inspector's figure only, beside the pace gap
- *  the table draws, which already says how far from it the holding is. */
+/** Not a column (ADR 0023, amended 2026-11-13): the inspector's figure only, listed beside the pace
+ *  gap, which already says how far from it the holding is. */
 const ON_PACE: DeskColumn = {
   key: "on_pace", label: "on pace", text: holdingOnly((h) => h.schedule ? points(h.schedule.on_pace) : DASH),
 };
 
 const PACE_GAP: DeskColumn = {
-  // Cost to close less on-pace (CONTEXT.md: Pace gap): BEHIND is costing more than the plan. The
-  // table writes it signed, + behind, to leave room for the market's columns (the owner, #379);
-  // the sign is never alone — the outcome colour, and the words to a pointer and a reader, go
-  // with it, because a bare sign beside a P&L invites reading it the wrong way round (ADR 0011)
+  // Cost to close less on-pace (CONTEXT.md: Pace gap): BEHIND is costing more than the plan. Not
+  // a column of the table since 2026-11-16 — the table draws the gap signed inside the value column
+  // (`VALUE_AND_PACE`) — but the inspector's figure and the saved picture's column, both of which
+  // say it in words (`words`), as ADR 0011 has a gap said wherever it is shown
   key: "pace_gap", label: "pace gap",
   text: holdingOnly((h) => h.schedule ? paceSigned(h.schedule.pace_gap) : DASH),
   words: holdingOnly((h) => h.schedule ? paceWords(h.schedule.pace_gap) : DASH),
