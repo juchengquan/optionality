@@ -454,11 +454,14 @@ export function DayField({ value, onChange }: { value: string; onChange: (v: str
 /** The question a delete asks first, of a held holding here and of a closed one in the closed trades
  *  (#296, ADR 0022: the closed list carries both remedies). A closed one has no "close it instead":
  *  it is closed, and what keeps its record is not deleting it. */
-export function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onDeleted }: {
+export function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onDeleted, damaged = false }: {
   id: string; holding: Pick<Holding, "id" | "name">; watching: number; onCancel: () => void;
   /** absent for a closed holding */
   onCloseInstead?: () => void;
   onDeleted: () => void;
+  /** a holding the service cannot read (#422): its record is damaged rather than mistaken, and the
+   *  words say what deleting it does instead of weighing it against a close */
+  damaged?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -477,17 +480,27 @@ export function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onD
   };
   return (
     <div id={id} className="nx-hold-form nx-hold-ask" role="group" aria-label={`delete ${holding.name}?`} data-poll="hold">
-      <p>
+      {damaged ? (
+        // what DELETE /positions/{id} does, in both backends: the links cleared, the samples deleted,
+        // the row deleted — and the rules it leaves unlinked offered to any open holding that holds
+        // their contracts (`adoptOrphanMonitors`)
+        <p data-damaged="">
+          <strong>{`Delete ${holding.name} for good?`}</strong>
+          {" Its stored record is damaged and cannot be read. Deleting removes it and its daily samples, which "}
+          {"cannot be re-entered. The rules on its contracts stay, unlinked — each joins another holding that "}
+          {"holds its contracts, if one does."}
+        </p>
+      ) : <p>
         <strong>{`Delete ${holding.name} for good?`}</strong>
         {" It is for a holding recorded by mistake. Its daily samples are deleted with it — each day's Cost "}
         {"to close, IV, vega and delta — and cannot be re-entered: no later sweep can rebuild them."}
         {watching > 0 ? " Its rules are kept: deleting a holding never deletes a rule." : ""}
-      </p>
-      <p>
+      </p>}
+      {damaged ? null : <p>
         {onCloseInstead
           ? "If this was a real trade, close it instead: closing keeps all of it."
           : "If this was a real trade, keep it: its record is what the closed trades show, and a mistyped close is corrected above."}
-      </p>
+      </p>}
       {error ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error} /></div> : null}
       <div className="nx-hold-row">
         <button type="button" className="nx-hold-danger" disabled={saving} onClick={() => void remove()}>

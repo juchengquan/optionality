@@ -55,7 +55,7 @@ function Remove({ holding, onDeleted }: { holding: Pick<Holding, "id" | "name">;
         <button ref={button} type="button" className="nx-hold-danger" aria-expanded={asking}
                 aria-controls={asking ? id : undefined} onClick={() => setAsking((a) => !a)}>delete…</button>
       </div>
-      {asking ? <DeleteAsk id={id} holding={holding} watching={0} onCancel={cancel} onDeleted={onDeleted} /> : null}
+      {asking ? <DeleteAsk id={id} holding={holding} watching={0} onCancel={cancel} onDeleted={onDeleted} damaged /> : null}
     </div>
   );
 }

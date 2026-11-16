@@ -1176,6 +1176,13 @@ describe("a holding the service cannot read (#422)", () => {
     expect(item.hasAttribute("data-unreadable"), "the banner leads to the unreadable holding's own item").toBe(true);
     await waitFor(() => expect(item.hasAttribute("data-revealed")).toBe(true));
     fireEvent.click(within(item).getByRole("button", { name: "delete…" }));
+    // what deleting a DAMAGED record does, never a mistaken one's words about keeping a real trade
+    const ask = await within(item).findByRole("group", { name: "delete 1231_broken?" });
+    expect(ask.textContent).toContain(
+      "Its stored record is damaged and cannot be read. Deleting removes it and its daily samples, which "
+      + "cannot be re-entered. The rules on its contracts stay, unlinked — each joins another holding that "
+      + "holds its contracts, if one does.");
+    expect(ask.textContent).not.toContain("If this was a real trade");
     fireEvent.click(await within(item).findByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes).toContain("DELETE /positions/p9"));
     await waitFor(() => expect(document.querySelector('[data-unreadable="p9"]')).toBeNull());
