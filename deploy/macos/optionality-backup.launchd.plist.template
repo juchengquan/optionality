@@ -3,17 +3,23 @@
 <plist version="1.0">
 <dict>
     <!-- The nightly backup (backend/tools/backup/nightly.ts): a checked, gzipped online copy of the
-         live database into __BACKUP_DIR__, pruned to 14 nights and 12 monthly. Not a service: it
-         runs once a night and exits. Installed by `make launchd-backup-install`, which is also how
+         live database into __BACKUP_DIR__, pruned to 14 nights and 12 monthly, and then the logs'
+         rotation. Not a service: it runs once a night and exits. Installed by `make launchd-backup-install`, which is also how
          the destination changes — re-run it with BACKUP_DIR=... -->
     <key>Label</key>
     <string>com.optionality.backup</string>
+    <!-- Then the agents' logs are rotated (tools/rotate-logs.mjs, `make rotate-logs`), whether or
+         not the backup succeeded, and the job exits with the BACKUP's status. Through sh so one
+         agent does both; the paths arrive as arguments ($0, $1, $2), never spliced into the script,
+         because BACKUP_DIR is in iCloud Drive and "Mobile Documents" has a space in it. -->
     <key>ProgramArguments</key>
     <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>"$0" backend/tools/backup/nightly.ts data/optionality-ts.db "$1"; status=$?; "$0" tools/rotate-logs.mjs "$2"; exit $status</string>
         <string>__NODE__</string>
-        <string>backend/tools/backup/nightly.ts</string>
-        <string>data/optionality-ts.db</string>
         <string>__BACKUP_DIR__</string>
+        <string>__HOME__/Library/Logs</string>
     </array>
     <key>WorkingDirectory</key>
     <string>__REPO__</string>

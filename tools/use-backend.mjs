@@ -8,6 +8,8 @@
  *    make use BACKEND=ts|python   check, back up (the Makefile's `deploy-backup`), then switch
  *    make deploy                  `installed`: which backend the plist runs, so it restarts that one
  *    make launchd-api-install     `render`: a first install, the TypeScript unless BACKEND says
+ *    make launchd-api-restart     `restart`: kickstart the agent and wait for a NEW process's 200
+ *                                 from /health (`make deploy` restarts through it)
  *
  *  **The guard.** The Python may not become the live one while the port is unfinished: switching the
  *  live service to a backend that answers half the doors must be impossible by accident, so every
@@ -55,7 +57,7 @@ const MAIN = "python-backend/src/optionality_backend/__main__.py";
 const INTERPRETER = ".venv/bin/python";
 
 const USAGE = "usage: make use BACKEND=ts|python";
-const LOG = "~/Library/Logs/optionality-api.log";
+export const LOG = "~/Library/Logs/optionality-api.log";
 
 // --- the plist ------------------------------------------------------------------------------------
 
@@ -233,6 +235,16 @@ function realSystem() {
         return null;
       }
     },
+    /** The pid listening on `port`, or null: who would answer a request there. */
+    async listener(port) {
+      const r = spawnSync("lsof", ["-nP", "-t", `-iTCP:${port}`, "-sTCP:LISTEN"], { encoding: "utf8" });
+      const pid = (r.stdout ?? "").split("\n").find(Boolean);
+      return pid ? Number(pid) : null;
+    },
+    /** Run a command to completion, its output on ours; its exit status. */
+    run(cmd, args) {
+      return spawnSync(cmd, args, { stdio: "inherit" }).status ?? 1;
+    },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   };
 }
@@ -249,6 +261,8 @@ export function drySystem(say) {
     write(path, text) { say(`would write ${path} (${text.length} bytes)`); },
     async portHeld(port) { say(`would check that nothing holds port ${port}`); return false; },
     async health(url) { say(`would wait for 200 from ${url}`); return 200; },
+    async listener() { return null; },
+    run(cmd, args) { say(`would run: ${[cmd, ...args].join(" ")}`); return 0; },
     async sleep() {},
   };
 }
@@ -257,7 +271,27 @@ export function systemFor(env, say = console.log) {
   return env.DRY_RUN && env.DRY_RUN !== "0" ? drySystem(say) : realSystem();
 }
 
-const plistPath = (home) => join(home, "Library", "LaunchAgents", `${LABEL}.plist`);
+export const plistPath = (home) => join(home, "Library", "LaunchAgents", `${LABEL}.plist`);
+
+/** Where /health is asked: the live port unless `API_HEALTH_URL` says otherwise (the deploy and
+ *  restore suites point it at a server of their own). */
+export const healthUrl = (env = process.env) => env.API_HEALTH_URL || `http://127.0.0.1:${PORT}/health`;
+
+/** Wait up to `seconds` for 200 from `url`, polling once a second; throws when none comes. With
+ *  `replacing`, the pid that listened BEFORE a restart: a 200 counts only once someone else is
+ *  listening, because `launchctl kickstart -k` may return while the old process still answers. */
+export async function waitForHealth(sys, { url, seconds, replacing = null }) {
+  const port = Number(new URL(url).port) || 80;
+  for (let i = 0; ; i++) {
+    if ((await sys.health(url)) === 200 && (replacing === null || (await sys.listener(port)) !== replacing)) return;
+    if (i >= seconds) {
+      throw new Error(replacing === null
+        ? `no 200 from ${url} after ${seconds}s`
+        : `no 200 from ${url} after ${seconds}s from anything but the process it replaced (pid ${replacing})`);
+    }
+    await sys.sleep(1000);
+  }
+}
 
 /** Stop whatever `com.optionality.api` runs, install `backend`'s plist under the same label, start
  *  it, and wait for `/health` to answer 200. Each failure after the stop says that NOTHING is
@@ -296,14 +330,31 @@ export async function switchTo(backend, {
   if (boot.status !== 0) throw new Error(`launchctl bootstrap refused ${target}: ${boot.output.trim()}. ${down}`);
 
   const url = `http://127.0.0.1:${PORT}/health`;
-  for (let i = 0; (await sys.health(url)) !== 200; i++) {
-    if (i >= waits.health) {
-      throw new Error(`no 200 from /health after ${waits.health}s: ${LABEL} is loaded with ${NAMES[backend]} `
-        + `but not serving. Read ${LOG} (\`make api-logs\`); \`make use BACKEND=ts\` puts the TypeScript back.`);
-    }
-    await sys.sleep(1000);
+  try {
+    await waitForHealth(sys, { url, seconds: waits.health });
+  } catch {
+    throw new Error(`no 200 from /health after ${waits.health}s: ${LABEL} is loaded with ${NAMES[backend]} `
+      + `but not serving. Read ${LOG} (\`make api-logs\`); \`make use BACKEND=ts\` puts the TypeScript back.`);
   }
   say(sys.dry ? "dry run: nothing was done" : `${LABEL} runs ${NAMES[backend]}, and /health answers 200`);
+}
+
+/** Restart whichever backend `com.optionality.api` runs, in place, and wait until a NEW process
+ *  answers /health with 200 — `make deploy`'s restart, and `make launchd-api-restart`'s. Before
+ *  this, deploy kickstarted the agent and printed "both services restarted" whether or not anything
+ *  came back up. `kickstart -k` may return while the old process still answers, so a 200 counts
+ *  only from a listener other than the one there before (when there was one). */
+export async function restartLive({ uid, sys, say = console.log, url = healthUrl(), waits = { health: 60 } }) {
+  const service = `gui/${uid}/${LABEL}`;
+  const before = await sys.listener(Number(new URL(url).port) || 80);
+  const r = sys.launchctl(["kickstart", "-k", service]);
+  if (r.status !== 0) throw new Error(`launchctl kickstart refused ${service}: ${r.output.trim()}`);
+  try {
+    await waitForHealth(sys, { url, seconds: waits.health, replacing: before });
+  } catch (err) {
+    throw new Error(`${LABEL} was restarted, but ${err.message}. Read ${LOG} (\`make api-logs\`).`);
+  }
+  say(sys.dry ? "dry run: nothing was done" : `${LABEL} restarted, and /health answers 200`);
 }
 
 // --- the command line -----------------------------------------------------------------------------
@@ -320,6 +371,11 @@ function onPath(name) {
 
 async function main([command, backend, path]) {
   const home = process.env.HOME || homedir();
+  if (command === "restart") {
+    const seconds = Number(process.env.API_HEALTH_WAIT) || 60;
+    await restartLive({ uid: process.getuid(), sys: systemFor(process.env), waits: { health: seconds } });
+    return;
+  }
   if (command === "installed") {
     const plist = plistPath(home);
     if (!existsSync(plist)) {
@@ -337,7 +393,7 @@ async function main([command, backend, path]) {
   }
   if (!["check", "render", "switch"].includes(command) || !BACKENDS.includes(backend)
     || (command === "render" && !path)) {
-    console.error(`${USAGE}\n  (node tools/use-backend.mjs check|switch <backend> | render <backend> <path> | installed)`);
+    console.error(`${USAGE}\n  (node tools/use-backend.mjs check|switch <backend> | render <backend> <path> | installed | restart)`);
     process.exitCode = 2;
     return;
   }
