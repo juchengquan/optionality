@@ -3,7 +3,9 @@ import { X } from "lucide-react";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { ColumnPicker } from "../shared/ColumnPickers";
-import { heldLeg, shortDate, signedLeg, type WrittenLeg } from "../shared/format";
+import { heldLeg, shortDate, shortFirst, signedLeg, type WrittenLeg } from "../shared/format";
+import { figureOf, points } from "../shared/numbers";
+import { POSITION_GREEKS, SHORT_DELTA } from "../shared/words";
 import { Leg, Legs } from "../shared/Legs";
 
 import { GROUPS } from "../shared/groups";
@@ -179,7 +181,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
       <div className="nxd-table" ref={fit.ref} style={{ "--nxd-cols": fit.template } as React.CSSProperties}>
         <div className="nxd-head nxd-grid">
           {fit.columns.map((c) => (
-            <span key={c.key} data-col={c.key} data-align={c.align}>{c.label}</span>
+            <span key={c.key} data-col={c.key} data-align={c.align} data-greek={GREEK.test(c.label) ? "" : undefined}>{c.label}</span>
           ))}
         </div>
 
@@ -227,6 +229,9 @@ interface Ctx {
 /** Every key the desk draws, and the ones it drew before #372: all it may change in the column
  *  cookie (`readHidden`). A retired key hides nothing, since no column has it, and reset clears it. */
 const DESK_KEYS = new Set([...COLUMNS.map((c) => c.key), ...RETIRED_KEYS]);
+
+/** A Greek letter, which a label carrying one is never set in capitals for (desk.css). */
+const GREEK = /[\u0370-\u03ff]/;
 
 /** The rule's sentence, as its column says it. */
 const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
@@ -439,7 +444,8 @@ function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; priv
       </>
     );
   }
-  const label = column.key === "value" && row.kind === "holding" ? "cost to close" : column.label;
+  const label = column.key === "value" && row.kind === "holding" ? "cost to close"
+    : column.key === "delta" && row.kind === "holding" ? SHORT_DELTA : column.label;
   if (column.key === "legs") {
     return <><span className="sr-only">{`${label} `}</span><span className="nxd-v"><Legs legs={rowLegs(row)} /></span></>;
   }
@@ -550,7 +556,7 @@ function Figures({ row, privacy, extra = [] }: { row: DeskRow; privacy: boolean;
     if (text === "") continue;
     const outcome = outcomeOf(row, c);
     const label = c.key === "value" && row.kind === "holding" ? "cost to close"
-      : c.key === "delta" && row.kind === "holding" ? "short leg Δ" : c.label;
+      : c.key === "delta" && row.kind === "holding" ? SHORT_DELTA : c.label;
     items.push([label, c.key === "pnl" && row.kind === "holding"
       ? <Money value={row.holding.pnl} privacy={privacy} />
       : outcome ? <span data-outcome={outcome}>{text}</span> : text]);
@@ -570,19 +576,16 @@ function HoldingDetail({ row, session, privacy, partners, onSelect }: {
   const h: Holding = row.holding;
   const s = h.schedule;
   const g = h.greeks;
-  const greek = (k: string, places: number) => (g[k] === null || g[k] === undefined ? "—" : g[k]!.toFixed(places));
   const extra: [string, React.ReactNode][] = [
-    ["entry", h.entry === null ? "—" : h.entry.toFixed(2)],
+    ["entry", points(h.entry)],
     // privacy hides the count too: contracts × points × the contract size is the money it hides
     ["contracts", privacy ? "×•••" : `×${h.contracts}`],
-    ["position Δ", greek("option_delta", 3)],
-    ["position γ", greek("option_gamma", 4)],
-    ["position θ", greek("option_theta", 2)],
-    ["position vega", greek("option_vega", 2)],
+    // the net greeks, each its field's symbol and places, as the phone's sheet lists them
+    ...POSITION_GREEKS.map(([k, label]): [string, React.ReactNode] => [label, figureOf(k, g[k])]),
   ];
   if (s) {
-    extra.push(["target", s.target === null ? "—" : s.target.toFixed(2)]);
-    extra.push(["stop", s.stop === null ? "—" : s.stop.toFixed(2)]);
+    extra.push(["target", points(s.target)]);
+    extra.push(["stop", points(s.stop)]);
   }
   // the condor's other spread, when placement bracketed the two
   const partner = partners.get(h.id) ?? null;
@@ -642,7 +645,7 @@ function RuleDetail({ entry, rows, overlap, session, privacy }: {
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
       {entry.legs && (!entry.held || overlap) ? <WatchedPayoff entry={entry} session={session} /> : null}
       {/* every figure of its contract or combo, the reason beside each dash (#332) */}
-      <RuleFigures entry={entry} className="nxd-kv" />
+      <RuleFigures entry={entry} held={entry.held && !overlap} className="nxd-kv" />
       {entry.error ? <p className="nxd-why">{entry.error}</p> : null}
       <Monitors entries={[entry, ...under.map((r) => r.entry)]} />
       {/* a watched row's daily closes (#402), opened as a holding's history is: open outside the
@@ -674,7 +677,7 @@ function QuarantinedDetail({ row }: { row: Extract<DeskRow, { kind: "quarantined
 function LegList({ legs }: { legs: WrittenLeg[] }) {
   return (
     <ul className="nxd-legs" aria-label="legs">
-      {legs.map((l, i) => <li key={`${i}:${l.option_type}${l.strike}`}><Leg leg={l} form="words" /></li>)}
+      {shortFirst(legs).map((l, i) => <li key={`${i}:${l.option_type}${l.strike}`}><Leg leg={l} form="words" /></li>)}
     </ul>
   );
 }

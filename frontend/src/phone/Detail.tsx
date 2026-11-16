@@ -18,7 +18,9 @@ import { paceOutcome, paceWords } from "../pace";
 import { entryName, fieldWords } from "../needs";
 import { RuleWords } from "../RuleWords";
 import { LevelChip, Progress, RuleLine, ShortDeltaWords } from "./Cards";
-import { contractsWords, delta, expiryWords, percent, points } from "./figures";
+import { contractsWords, expiryWords } from "./figures";
+import { figureOf, percent, points } from "../shared/numbers";
+import { POSITION_GREEKS, SHORT_DELTA } from "../shared/words";
 import { ruleState } from "./state";
 import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { stripOfEntry } from "../strip";
@@ -88,9 +90,6 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   );
 }
 
-const greek = (n: number | null | undefined, places: number) =>
-  n === null || n === undefined ? DASH : n.toFixed(places);
-
 function HoldingDetail({ holding, rules, quotes, monitors, privacy, session }: {
   holding: Holding; rules: Entry[]; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
 }) {
@@ -121,12 +120,10 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session }: {
         <dl className="nxp-facts">
           <div><dt>cost to close</dt><dd>{points(holding.cost_to_close)}</dd></div>
           <div><dt>entry</dt><dd>{points(holding.entry)}</dd></div>
-          <div><dt>short Δ</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
+          <div><dt>{SHORT_DELTA}</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
           <div><dt>opened</dt><dd>{holding.opened_at ?? DASH}</dd></div>
-          <div><dt>Δ</dt><dd>{delta(g.option_delta)}</dd></div>
-          <div><dt>γ</dt><dd>{greek(g.option_gamma, 4)}</dd></div>
-          <div><dt>θ</dt><dd>{greek(g.option_theta, 2)}</dd></div>
-          <div><dt>vega</dt><dd>{greek(g.option_vega, 2)}</dd></div>
+          {/* the net greeks, as the desk's inspector lists them */}
+          {POSITION_GREEKS.map(([k, label]) => <div key={k}><dt>{label}</dt><dd>{figureOf(k, g[k])}</dd></div>)}
         </dl>
         <h3 className="nxp-h">Exit schedule</h3>
         {s ? (
@@ -177,7 +174,7 @@ function RuleDetail({ entry, under, overlap = null, session, privacy }: {
           <div><dt>expiry</dt><dd>{entry.strike_date}</dd></div>
         </dl>
         {/* every figure of its contract or combo, the reason beside each dash (#332) */}
-        <RuleFigures entry={entry} className="nxp-facts" />
+        <RuleFigures entry={entry} held={entry.held && !overlap} className="nxp-facts" />
         {under.length > 0 ? (
           <>
             <h3 className="nxp-h">Monitors on its legs</h3>

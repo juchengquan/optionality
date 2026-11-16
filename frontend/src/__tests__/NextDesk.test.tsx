@@ -70,16 +70,17 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
     // the 4-leg condor is bracketed with nothing, and is one row carrying all four legs
     expect(row("h-ic").closest("[data-bracket]")).toBeNull();
     expect(document.querySelectorAll('.nxd-row[data-ref="h-ic"]')).toHaveLength(1);
-    expect(cellText("h-ic", "legs")).toBe("-C7400 +C7450 -P6300 +P6250");
+    // short first, as every place writes a structure's legs (2026-11-16)
+    expect(cellText("h-ic", "legs")).toBe("−C7400 −P6300 +C7450 +P6250");
     expect(document.querySelectorAll("[data-bracket]")).toHaveLength(1);
   });
 
   it("writes each leg with its type marked for its colour and a short leg for its weight (#391)", () => {
     render(<DeskBook {...props()} />);
     expect(legMarks(cell("h-ic", "legs")!))
-      .toEqual(["-C7400 short CALL", "+C7450 long CALL", "-P6300 short PUT", "+P6250 long PUT"]);
+      .toEqual(["−C7400 short CALL", "−P6300 short PUT", "+C7450 long CALL", "+P6250 long PUT"]);
     // a watched spread's, and a rule's on a held spread
-    expect(legMarks(cell("w-dec31", "legs")!)).toEqual(["-C7600 short CALL", "+C7650 long CALL"]);
+    expect(legMarks(cell("w-dec31", "legs")!)).toEqual(["−C7600 short CALL", "+C7650 long CALL"]);
     expect(legMarks(cell("r-ic", "legs")!)).toHaveLength(4);
   });
 
@@ -107,6 +108,18 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
 });
 
 describe("what each row says", () => {
+  it("gives a held spread's rule its cost to close, positive as its holding's, and never its signed value (2026-11-16)", () => {
+    const held = (cost: number | null) => QUOTES.map((q) => q.id === "r-calls" ? { ...q, combo_value: -4.4, cost_to_close: cost } : q);
+    render(<DeskBook {...props({ quotes: held(4.4) })} />);
+    expect(cellText("r-calls", "value")).toBe("4.40");
+    cleanup();
+    // not priced as a holding's: a dash, never the signed value in its place
+    render(<DeskBook {...props({ quotes: held(null) })} />);
+    expect(cellText("r-calls", "value")).toBe("—");
+    // a watched spread keeps its signed value
+    expect(cellText("w-dec18", "value")).toBe("\u22122.40");
+  });
+
   it("gives a holding its Cost to close, P&L in the outcome colour, DTE and Manage-by", () => {
     const holdings: Holding[] = HOLDINGS.map((h) => h.id === "h-puts"
       ? { ...h, schedule: { dte_at_open: 45, on_pace: 1.5, pace_gap: -0.5, target: 1, stop: 4,
@@ -115,7 +128,7 @@ describe("what each row says", () => {
     render(<DeskBook {...props({ holdings })} />);
     expect(cellText("h-calls", "value")).toBe("4.40");
     expect(cell("h-calls", "pnl")!.querySelector("[data-money]")!.getAttribute("data-outcome")).toBe("loss");
-    expect(cellText("h-calls", "pnl")).toBe("-$240");
+    expect(cellText("h-calls", "pnl")).toBe("−$240");
     expect(cellText("h-puts", "pnl")).toBe("+$100");
     expect(cell("h-puts", "pnl")!.querySelector("[data-money]")!.getAttribute("data-outcome")).toBe("gain");
     expect(cellText("h-puts", "dte")).toBe("38");
@@ -128,9 +141,9 @@ describe("what each row says", () => {
     // #318: each leg's own delta comes with the holding; the fixture has no rule on any held leg
     render(<DeskBook {...props()} />);
     expect(cellText("h-calls", "delta")).toBe("0.330");
-    expect(cellText("h-puts", "delta")).toBe("-0.210");
+    expect(cellText("h-puts", "delta")).toBe("−0.210");
     // a 4-leg holding: the larger of its two short legs, in size
-    expect(cellText("h-ic", "delta")).toBe("-0.250");
+    expect(cellText("h-ic", "delta")).toBe("−0.250");
   });
 
   it("prefers the served delta to a rule's on the same leg", () => {
@@ -170,7 +183,7 @@ describe("what each row says", () => {
     const unserved = HOLDINGS.map((h) => ({ ...h, legs_delta: null }));
     render(<DeskBook {...props({ holdings: unserved, quotes: [...QUOTES,
       leg("r-c", "US.SPXW261231C7400000", "CALL", 0.12), leg("r-p", "US.SPXW261231P6300000", "PUT", -0.25)] })} />);
-    expect(cellText("h-ic", "delta")).toBe("-0.250");
+    expect(cellText("h-ic", "delta")).toBe("−0.250");
   });
 
   it("says a Level reached with a chip in the name cell, which never drops", () => {
@@ -296,7 +309,7 @@ describe("the inspector", () => {
     expect(cell("h-calls", "pnl")).toBeNull();
     fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
     const insp = screen.getByRole("complementary", { name: /inspector/ });
-    expect(within(insp).getByText("P&L").nextElementSibling!.textContent).toBe("-$240");
+    expect(within(insp).getByText("P&L").nextElementSibling!.textContent).toBe("−$240");
   });
 
   it("closes when its row leaves the book", () => {
@@ -383,7 +396,7 @@ describe("with the inspector open, the table stays live", () => {
     rerender(<DeskBook {...props({ holdings: moved })} />);
     expect(screen.getByRole("complementary", { name: "inspector: 1231_IC" })).toBeTruthy();
     expect(cellText("h-calls", "value")).toBe("5.10");
-    expect(cellText("h-calls", "pnl")).toBe("-$310");
+    expect(cellText("h-calls", "pnl")).toBe("−$310");
   });
 
   it("on the page's own poll, in session", async () => {
@@ -665,15 +678,23 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("gives its own value, as every watched spread's, not the cost to close of the shared leg", () => {
     render(<DeskBook {...overlap()} />);
-    expect(cellText("r-8100", "value")).toBe("-0.60");
-    expect(cellText("w-7700", "value")).toBe("-1.50");
+    expect(cellText("r-8100", "value")).toBe("−0.60");
+    expect(cellText("w-7700", "value")).toBe("−1.50");
     // a ratio IS served a cost to close (its contracts counted once each): drawn as a watched
     // spread, it shows its own value instead
-    expect(cellText("r-ratio", "value")).toBe("-0.40");
+    expect(cellText("r-ratio", "value")).toBe("−0.40");
     // the holding's own value rule still reads its holding's cost to close, and a wing of a held
     // condor its own two contracts' cost to close, not its signed value
     expect(cellText("r-8050", "value")).toBe("1.20");
     expect(cellText("r-ic-calls", "value")).toBe("1.30");
+  });
+
+  it("lists no cost to close in its inspector: it is watched, and its note says what it shares (2026-11-16)", () => {
+    render(<DeskBook {...overlap()} />);
+    fireEvent.click(within(row("r-8100")).getByRole("button", { name: "1231_8100" }));
+    const insp = screen.getByRole("complementary", { name: "inspector: 1231_8100" });
+    const labels = [...within(insp).getByRole("group", { name: "figures" }).querySelectorAll("dt")].map((d) => d.textContent);
+    expect(labels).toEqual(["value", "Δ", "Γ", "Θ", "ν"]);
   });
 
   it("says it in the inspector too, and the note survives privacy, having no $ and no count in it", () => {
@@ -690,6 +711,6 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     const insp = screen.getByRole("complementary", { name: "inspector: 1231_8050" });
     const monitors = within(insp).getByRole("heading", { name: "Monitors" }).parentElement!;
     expect(monitors.querySelectorAll(".nxd-monitor")).toHaveLength(2);
-    expect(monitors.textContent).not.toContain("now -0.60");
+    expect(monitors.textContent).not.toContain("now −0.60");
   });
 });

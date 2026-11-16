@@ -3,6 +3,7 @@
  *  it does not reach — where the crosshair's tooltip goes, and what it and the status line say.
  *
  *  Pure, so each is tested without a chart; the chart only draws what these decide. */
+import { fixed, moneyPlain, trueMinus } from "./shared/numbers";
 import { scaleLinear } from "@visx/scale";
 
 import type { Sample, Samples } from "./shared/api";
@@ -22,7 +23,6 @@ export interface Unit {
   what?: string;
 }
 
-const MONEY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
 /** A day with a Cost to close. A day may have none (#380): out of hours a leg has no two-sided
  *  quote — moomoo quotes 0/0 — and the sweep keeps the day for its vol readings with the cost left
@@ -34,15 +34,15 @@ export const hasCost = (s: Sample): s is PricedSample => s.cost_to_close !== nul
 const inMoney = (unit: Unit) => unit.money && !unit.hidden;
 
 export function say(points: number, unit: Unit): string {
-  if (inMoney(unit)) return MONEY.format(points * unit.contracts * unit.size);
-  return `${points.toFixed(2)} pts`;
+  if (inMoney(unit)) return moneyPlain(points * unit.contracts * unit.size);
+  return `${fixed(points, 2)} pts`;
 }
 
 /** An axis label: as `say`, without the "pts" a tick has no room for, and to no more places than
  *  the tick needs. */
 function tickWords(points: number, unit: Unit): string {
-  if (inMoney(unit)) return MONEY.format(points * unit.contracts * unit.size);
-  return String(Number(points.toFixed(2)));
+  if (inMoney(unit)) return moneyPlain(points * unit.contracts * unit.size);
+  return trueMinus(String(Number(points.toFixed(2))));
 }
 
 /** What the chart's money is: across the contracts at the contract size, or per contract in points

@@ -71,8 +71,8 @@ describe("a holding's payoff, in the desk's inspector", () => {
     expect(payoff.querySelector("[data-curve]")?.getAttribute("d")).toMatch(/^M/);
     // points per contract, and money across its two contracts at the contract size served (100)
     expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · +$1,000");
-    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("-45.00 pts per contract · -$9,000");
-    expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295 · 7405");
+    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("−45.00 pts per contract · −$9,000");
+    expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295.00 · 7405.00");
     expect(payoff.querySelectorAll("[data-breakeven]")).toHaveLength(2);
   });
 
@@ -97,9 +97,9 @@ describe("a holding's payoff, in the desk's inspector", () => {
     // points PER CONTRACT say no count; across the contracts held, times 100 they would be the money
     expect(text).not.toMatch(/\b10\.00 pts|-90\.00 pts/);
     expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · $•••");
-    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("-45.00 pts per contract · $•••");
+    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("−45.00 pts per contract · $•••");
     expect(payoff.querySelector("[data-max='profit']")?.textContent).toBe("max profit +5.00 pts");
-    expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295 · 7405");
+    expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295.00 · 7405.00");
     expect(payoff.querySelector("[data-marker='spx']")?.textContent).toBe("SPX 6900.50");
   });
 
@@ -230,7 +230,7 @@ describe("in the phone's detail sheet", () => {
     const payoff = await payoffOf(await screen.findByRole("dialog"));
     expect(asked).toEqual(["GET /positions/h-calls/payoff"]);
     expect(payoff.textContent).not.toMatch(/\$\d/);
-    expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("7302");
+    expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("7302.00");
   });
 
   it("draws a watched spread's at its current value, labelled so", async () => {
@@ -324,7 +324,7 @@ describe("the crosshair readout (#396)", () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
     const be = payoff.querySelector<SVGCircleElement>("[data-breakeven='6295'] circle")!;
     fireEvent.pointerMove(svg(payoff), { clientX: Number(be.getAttribute("cx")), clientY: 60, pointerType: "mouse" });
-    expect(tip(payoff)).toBe("SPX 6295605.50 below SPX now0.00 pts per contract · $0");
+    expect(tip(payoff)).toBe("SPX 6295.00605.50 below SPX now0.00 pts per contract · $0");
     // a mouse passing over is shown, never announced: the live line speaks for a choice only
     expect(said(payoff)).toBe(HINT);
     expect(payoff.querySelector("[data-crosshair]")).toBeTruthy();
@@ -337,11 +337,11 @@ describe("the crosshair readout (#396)", () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
     const k = payoff.querySelector<SVGLineElement>("[data-strike='7400']")!;
     fireEvent.pointerMove(svg(payoff), { clientX: Number(k.getAttribute("x1")), clientY: 60, pointerType: "mouse" });
-    expect(tip(payoff)).toBe("SPX 7400499.50 above SPX now+5.00 pts per contract · +$1,000");
+    expect(tip(payoff)).toBe("SPX 7400.00499.50 above SPX now+5.00 pts per contract · +$1,000");
     expect(said(payoff)).toBe(HINT);
     // a key chooses, and then it is announced; a mouse passing again goes back to the hint
     fireEvent.keyDown(chart(payoff), { key: "ArrowRight" });
-    expect(said(payoff)).toMatch(/^at expiry with SPX at 7405, /);
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 7405.00, /);
     fireEvent.pointerMove(svg(payoff), { clientX: Number(k.getAttribute("x1")), clientY: 60, pointerType: "mouse" });
     expect(said(payoff)).toBe(HINT);
   });
@@ -354,12 +354,12 @@ describe("the crosshair readout (#396)", () => {
     expect(said(payoff)).toBe("at expiry with SPX at 6900.50, at SPX now: +5.00 pts per contract · +$1,000");
     fireEvent.keyDown(keys, { key: "End" });
     // past the call wing every point SPX rises costs nothing more: the maximum loss
-    expect(said(payoff)).toMatch(/: -45\.00 pts per contract · -\$9,000$/);
+    expect(said(payoff)).toMatch(/: \u221245\.00 pts per contract · \u2212\$9,000$/);
     fireEvent.keyDown(keys, { key: "Home" });
-    expect(said(payoff)).toMatch(/below SPX now: -45\.00 pts per contract · -\$9,000$/);
+    expect(said(payoff)).toMatch(/below SPX now: \u221245\.00 pts per contract · \u2212\$9,000$/);
     // the arrows stop on a breakeven on the way, so it can be landed on exactly
     let seen = "";
-    for (let i = 0; i < 200 && !seen.includes("SPX at 6295,"); i++) {
+    for (let i = 0; i < 200 && !seen.includes("SPX at 6295.00,"); i++) {
       fireEvent.keyDown(keys, { key: "ArrowRight" });
       seen = said(payoff) ?? "";
     }
@@ -384,7 +384,7 @@ describe("the crosshair readout (#396)", () => {
     // touching down alone chooses nothing: it may be the start of a scroll
     expect(payoff.querySelector("[data-crosshair]")).toBeNull();
     fireEvent.click(svg(payoff), { clientX: k, clientY: 60 });
-    expect(said(payoff)).toMatch(/^at expiry with SPX at 6300,/);
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 6300.00,/);
     fireEvent.pointerDown(svg(payoff), { clientX: k, clientY: 60, pointerType: "touch" });
     fireEvent.click(svg(payoff), { clientX: k, clientY: 60 });
     expect(payoff.querySelector("[data-crosshair]")).toBeNull();
@@ -417,20 +417,20 @@ describe("the crosshair readout (#396)", () => {
     fireEvent.pointerMove(svg(payoff), { clientX: k0 + 4, clientY: 60, pointerType: "touch" });
     expect(payoff.querySelector("[data-crosshair]")).toBeNull();
     fireEvent.pointerMove(svg(payoff), { clientX: (k0 + k1) / 2, clientY: 62, pointerType: "touch" });
-    expect(said(payoff)).toMatch(/^at expiry with SPX at \d+, .*: \+5\.00 pts per contract · \+\$1,000$/);
+    expect(said(payoff)).toMatch(/^at expiry with SPX at \d+\.\d{2}, .*: \+5\.00 pts per contract · \+\$1,000$/);
     fireEvent.pointerMove(svg(payoff), { clientX: k1, clientY: 62, pointerType: "touch" });
-    expect(said(payoff)).toMatch(/^at expiry with SPX at 7400, /);
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 7400.00, /);
     // lifting the finger keeps the price it reached
     fireEvent.pointerUp(svg(payoff), { pointerType: "touch" });
     fireEvent.click(svg(payoff), { clientX: k1, clientY: 62 });
-    expect(said(payoff)).toMatch(/^at expiry with SPX at 7400, /);
+    expect(said(payoff)).toMatch(/^at expiry with SPX at 7400.00, /);
   });
 
   it("labels each breakeven with the domain's figure, drawn where the curve crosses zero", async () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
     const marks = [...payoff.querySelectorAll<SVGGElement>("[data-breakeven]")];
     expect(marks.map((m) => Number(m.dataset.breakeven))).toEqual([6295, 7405]);
-    expect([...payoff.querySelectorAll("[data-breakeven-label]")].map((t) => t.textContent)).toEqual(["BE 6295", "BE 7405"]);
+    expect([...payoff.querySelectorAll("[data-breakeven-label]")].map((t) => t.textContent)).toEqual(["BE 6295.00", "BE 7405.00"]);
     const crossings = zeroCrossings(payoff);
     expect(crossings).toHaveLength(2);
     marks.forEach((m, i) => {
@@ -441,13 +441,14 @@ describe("the crosshair readout (#396)", () => {
   it("states the maximum profit and loss on the chart where they are finite", async () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
     expect(payoff.querySelector("[data-max='profit']")?.textContent).toBe("max profit +$1,000");
-    expect(payoff.querySelector("[data-max='loss']")?.textContent).toBe("max loss -$9,000");
+    expect(payoff.querySelector("[data-max='loss']")?.textContent).toBe("max loss −$9,000");
   });
 
   it("names each strike's legs, coloured by type", async () => {
     const payoff = await payoffOf(await inspect("h-ic", "1231_IC"));
     const names = [...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent);
-    expect(names.join(" ")).toBe("+P6250 −P6300 −C7400 +C7450");
+    // a label that joins two strikes' legs writes them short first (2026-11-16)
+    expect(names.join(" ")).toBe("−P6300 +P6250 −C7400 +C7450");
     expect([...payoff.querySelectorAll("[data-strikes] .nx-leg-t")].map((t) => (t as HTMLElement).dataset.type))
       .toEqual(["PUT", "PUT", "CALL", "CALL"]);
   });
@@ -471,7 +472,7 @@ describe("the crosshair readout (#396)", () => {
     expect(price).toBeLessThan(7100);
     // short one 7150 put, long THREE 7100 puts, sold for 2.40
     const pnl = 2.4 - (7150 - price) + 3 * (7100 - price);
-    expect(said(payoff)).toBe(`at expiry with SPX at ${price}, ${(6900.5 - price).toFixed(2)} below SPX now: +${pnl.toFixed(2)} pts`);
-    expect([...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ")).toBe("+3P7100 −P7150");
+    expect(said(payoff)).toBe(`at expiry with SPX at ${price.toFixed(2)}, ${(6900.5 - price).toFixed(2)} below SPX now: +${pnl.toFixed(2)} pts`);
+    expect([...payoff.querySelectorAll("[data-strikes]")].map((t) => t.textContent).join(" ")).toBe("−P7150 +3P7100");
   });
 });

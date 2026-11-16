@@ -158,7 +158,7 @@ for (const scheme of ["light", "dark"] as const) {
       const tspan = root().querySelector<SVGElement>("svg .nx-leg-t")!;
       expect(getComputedStyle(tspan).fill).toBe(put);
       expect(Number(getComputedStyle(root().querySelector("svg .nx-leg")!).fontWeight)).toBeGreaterThanOrEqual(600);
-      expect(within(root()).getByText("C").closest(".nx-leg")!.textContent).toBe("-C7400");
+      expect(within(root()).getByText("C").closest(".nx-leg")!.textContent).toBe("−C7400");
     });
   });
 }

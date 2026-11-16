@@ -171,7 +171,7 @@ describe("saving the desk as an image", () => {
     const { root, release } = await take();
     const head = [...root.querySelector("thead tr")!.children].map((c) => c.textContent);
     expect(head).toEqual([
-      "name", "legs", "value", "P&L ($)", "captured (%)", "pace gap (pts)", "Δ", "SPX→short", "DTE", "manage-by", "rule",
+      "name", "legs", "value", "P&L", "captured", "pace gap (pts)", "Δ", "SPX→short", "DTE", "manage-by", "rule",
     ]);
     // nothing cut short: a still image cannot be widened to read the rest
     expect(measurePlain(root).clipped).toEqual([]);
@@ -183,8 +183,8 @@ describe("saving the desk as an image", () => {
     await show();
     const { root, release } = await take();
     const head = [...root.querySelector("thead tr")!.children].map((c) => c.textContent);
-    expect(head).not.toContain("captured (%)");
-    expect(head).toContain("P&L ($)");
+    expect(head).not.toContain("captured");
+    expect(head).toContain("P&L");
     release();
   });
 
@@ -232,8 +232,10 @@ describe("saving the desk as an image", () => {
     // the screen's short form
     expect(rowOnScreen("w-dec18-delta").querySelector('[data-col="alarm"]')!.textContent).toContain("|Δ| ≥ 0.20");
     const { root, release } = await take();
-    const rule = [...root.querySelector("thead tr")!.children].findIndex((c) => c.textContent === "rule");
-    expect(rowNamed(root, "261218 7150P").children[rule]!.textContent).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
+    // the watchlist's own header: its table carries no holding-only column (2026-11-16)
+    const row = rowNamed(root, "261218 7150P");
+    const rule = [...row.closest("table")!.querySelector("thead tr")!.children].findIndex((c) => c.textContent === "rule");
+    expect(row.children[rule]!.textContent).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
     // the Δ column's header is the one Δ (#400): no rule is said in symbols
     expect(root.querySelector("tbody")!.textContent).not.toMatch(/[↑↓▲▼Δ]/);
     release();
@@ -244,7 +246,7 @@ describe("saving the desk as an image", () => {
     await show();
     const { root, release } = await take();
     const lines = readPicture(root).lines;
-    expect(lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7,612.25 +0.42%"]);
+    expect(lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7612.25 +0.42%"]);
     expect(lines.find((l) => l.label === "session")!.text).toBe("in session");
     // when it was taken, in New York and in the service's own zone
     expect(lines.find((l) => l.label === "taken")!.text).toMatch(/ \(New York\) · .* \(Asia\/Singapore\)$/);
@@ -256,7 +258,7 @@ describe("saving the desk as an image", () => {
     await show();
     const { root, release } = await take();
     const lines = readPicture(root).lines;
-    expect(lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7,612.25 +0.42% read at 00:59"]);
+    expect(lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7612.25 +0.42% read at 00:59"]);
     // the market-closed line's words (the owner's book here carries no stamp, so no time), once
     expect(lines.find((l) => l.label === "session")!.text).toBe("market closed");
     expect(captured[0]!.text.split("market closed")).toHaveLength(2);

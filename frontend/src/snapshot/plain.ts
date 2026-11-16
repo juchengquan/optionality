@@ -68,14 +68,17 @@ export interface PlainSection {
   title: string;
   /** what the section says before its rows: why there are none, or why they are listed apart */
   notes: string[];
+  /** the section's table header: the holdings' every column the viewer ticked, and the watchlist's
+   *  and the muted rules' without the columns only a holding fills (2026-11-16) */
+  columns: string[];
+  /** each column's alignment, as `columns`: a figure to the right, words to the left */
+  align: ("left" | "right")[];
   groups: PlainGroup[];
 }
 
 export interface PlainView {
   title: string;
   lines: PlainLine[];
-  /** the table's header, the same for every section */
-  columns: string[];
   sections: PlainSection[];
 }
 
@@ -83,12 +86,20 @@ export const TITLE = "optionality";
 
 // ---- the columns
 
-/** What a plain column is called: short (#400), a unit only where the figure's own form does not
- *  say it. */
+/** What a plain column is called: short (#400), and a unit only where the figure's own form does not
+ *  say it — the P&L's cells say "$" and the share's "%", so their headers do not (2026-11-16). */
 const LABELS: Record<string, string> = {
-  name: "name", legs: "legs", value: "value", pnl: "P&L ($)", captured: "captured (%)",
+  name: "name", legs: "legs", value: "value", pnl: "P&L", captured: "captured",
   pace_gap: "pace gap (pts)", delta: "Δ", strip: "SPX→short", dte: "DTE", manage: "manage-by", alarm: "rule",
 };
+
+/** The columns whose cells are figures, set to the right so their places line up (2026-11-16); the
+ *  rest are words, set to the left. */
+const FIGURE_COLUMNS = new Set(["value", "pnl", "captured", "delta", "dte", "manage"]);
+
+/** The columns only a holding fills: a watchlist row and a muted rule leave them blank, so their
+ *  tables carry none of them (2026-11-16). */
+const HOLDING_ONLY = new Set(["pnl", "captured", "pace_gap", "manage"]);
 
 /** The nearest short strike, named, and how far SPX is from it: "C8050 488 · 1.64σ" (`compactWords`,
  *  #400), where the screen draws a scale beside the distance. */
@@ -133,11 +144,18 @@ function byReason(muted: readonly Monitor[]): [string | null, Monitor[]][] {
 export function plainView(input: PlainInput): PlainView {
   const { privacy } = input;
   const columns = shownColumns(input.hidden);
+  const watched = columns.filter((c) => !HOLDING_ONLY.has(c.key));
   const placed = placeBook(input.quotes, input.holdings, input.monitors);
 
   // a name with no note beside it (#400): the page keeps its overlap note, the table does not
-  const row = (r: DeskRow) =>
-    columns.map((c) => c.key === PINNED ? rowName(r) : cellOf(c, r, privacy));
+  const rowIn = (cols: readonly DeskColumn[]) => (r: DeskRow) =>
+    cols.map((c) => c.key === PINNED ? rowName(r) : cellOf(c, r, privacy));
+  const row = rowIn(columns);
+  const watchRow = rowIn(watched);
+  const header = (cols: readonly DeskColumn[]) => ({
+    columns: cols.map((c) => LABELS[c.key] ?? c.label),
+    align: cols.map((c): "left" | "right" => FIGURE_COLUMNS.has(c.key) ? "right" : "left"),
+  });
 
   // ---- Holdings
   const holdingNotes: string[] = [];
@@ -164,22 +182,23 @@ export function plainView(input: PlainInput): PlainView {
   const watchGroups: PlainGroup[] = placed.watchlist.map(({ expiry, items }) => ({
     heading: `${shortDate(expiry)} · ${items[0]!.entry.dte} DTE`,
     rows: items.flatMap(({ entry, under, overlap }) => [
-      row({ kind: "rule", entry, nested: false, overlap }),
-      ...under.map((e) => row({ kind: "rule", entry: e, nested: true })),
+      watchRow({ kind: "rule", entry, nested: false, overlap }),
+      ...under.map((e) => watchRow({ kind: "rule", entry: e, nested: true })),
     ]),
   }));
   if (placed.quarantined.length > 0) {
     watchGroups.push({
       heading: "quarantined — switched off by the service",
-      rows: placed.quarantined.map((m) => row({ kind: "quarantined", monitor: m })),
+      rows: placed.quarantined.map((m) => watchRow({ kind: "quarantined", monitor: m })),
     });
   }
 
   const sections: PlainSection[] = [
-    { title: "Holdings", notes: holdingNotes, groups: holdingGroups },
+    { title: "Holdings", notes: holdingNotes, ...header(columns), groups: holdingGroups },
     {
       title: "Watchlist",
       notes: placed.watchlist.length === 0 && placed.quarantined.length === 0 ? ["nothing watched"] : [],
+      ...header(watched),
       groups: watchGroups,
     },
   ];
@@ -191,20 +210,16 @@ export function plainView(input: PlainInput): PlainView {
     sections.push({
       title: "Muted and expired",
       notes: [],
+      ...header(watched),
       groups: byReason(placed.muted).map(([reason, ms]) => ({
         heading: reasonWords(reason),
-        rows: ms.map((m) => columns.map((c) => c.key === PINNED ? monitorName(m)
+        rows: ms.map((m) => watched.map((c) => c.key === PINNED ? monitorName(m)
           : c.key === "alarm" ? storedRuleWords(m.field, Boolean(m.legs), m.compare, m.direction, m.threshold) : "")),
       })),
     });
   }
 
-  return tidy({
-    title: TITLE,
-    lines: headerLines(input),
-    columns: columns.map((c) => LABELS[c.key] ?? c.label),
-    sections,
-  });
+  return tidy({ title: TITLE, lines: headerLines(input), sections });
 }
 
 /** Every word of the view on one line, one space between words and none at either end: a name or an
@@ -219,10 +234,11 @@ function tidy(view: PlainView): PlainView {
     lines: view.lines.map((l) => ({
       label: oneLine(l.label), text: oneLine(l.text), ...(l.items ? { items: l.items.map(oneLine) } : {}),
     })),
-    columns: view.columns.map(oneLine),
     sections: view.sections.map((s) => ({
       title: oneLine(s.title),
       notes: s.notes.map(oneLine),
+      columns: s.columns.map(oneLine),
+      align: s.align,
       groups: s.groups.map((g) => ({
         heading: g.heading === null ? null : oneLine(g.heading), rows: g.rows.map((r) => r.map(oneLine)),
       })),
@@ -339,9 +355,10 @@ export function toMarkdown(view: PlainView): string {
     out.push("", `## ${s.title}`);
     for (const n of s.notes) out.push("", noteText(n));
     if (s.groups.length === 0) continue;
-    out.push("", tableRow(view.columns), `|${view.columns.map(() => " --- |").join("")}`);
+    // a figure's column aligned right, as the picture sets it
+    out.push("", tableRow(s.columns), `|${s.align.map((a) => a === "right" ? " ---: |" : " --- |").join("")}`);
     for (const g of s.groups) {
-      if (g.heading !== null) out.push(tableRow([g.heading, ...view.columns.slice(1).map(() => "")]));
+      if (g.heading !== null) out.push(tableRow([g.heading, ...s.columns.slice(1).map(() => "")]));
       for (const r of g.rows) out.push(tableRow(r));
     }
   }

@@ -121,7 +121,7 @@ describe("how a P&L is said", () => {
 
   it("in points per contract, and in money across the contracts held", () => {
     expect(pnlWords(10, held)).toBe("+5.00 pts per contract · +$1,000");
-    expect(pnlWords(-90, held)).toBe("-45.00 pts per contract · -$9,000");
+    expect(pnlWords(-90, held)).toBe("−45.00 pts per contract · −$9,000");
     expect(pnlWords(0, held)).toBe("0.00 pts per contract · $0");
     expect(shortWords(10, held)).toBe("+$1,000");
   });
@@ -130,28 +130,28 @@ describe("how a P&L is said", () => {
     const priv = { ...held, hidden: true };
     expect(pnlWords(10, priv)).toBe("+5.00 pts per contract · $•••");
     expect(pnlWords(10, priv)).not.toMatch(/\$\d/);
-    expect(shortWords(-90, priv)).toBe("-45.00 pts");
+    expect(shortWords(-90, priv)).toBe("−45.00 pts");
   });
 
   it("in points alone for one spread nobody holds", () => {
     expect(pnlWords(2.4, one)).toBe("+2.40 pts");
-    expect(shortWords(-47.6, one)).toBe("-47.60 pts");
+    expect(shortWords(-47.6, one)).toBe("−47.60 pts");
   });
 
   it("reads out the price, its distance from SPX and the P&L there", () => {
     const p = cases.find((c) => c.name === "a short call spread, two contracts")!.expect;
     const r = readout(7125, p, held, 7000.25);
-    expect(r.price).toBe("SPX 7125");
+    expect(r.price).toBe("SPX 7125.00");
     expect(r.away).toBe("124.75 above SPX now");
-    expect(r.pnl).toBe("-23.60 pts per contract · -$4,720");
-    expect(r.words).toBe("at expiry with SPX at 7125, 124.75 above SPX now: -23.60 pts per contract · -$4,720");
+    expect(r.pnl).toBe("−23.60 pts per contract · −$4,720");
+    expect(r.words).toBe("at expiry with SPX at 7125.00, 124.75 above SPX now: −23.60 pts per contract · −$4,720");
     expect(readout(6900, p, held, 7000).away).toBe("100.00 below SPX now");
     expect(readout(7000, p, held, 7000).away).toBe("at SPX now");
     expect(readout(7000, p, held, null).away).toBeNull();
   });
 
-  it("writes a level whole where it is whole, else to the cent", () => {
-    expect(level(6295)).toBe("6295");
+  it("writes a level to the cent, whole or not, as SPX and a breakeven are written everywhere (2026-11-16)", () => {
+    expect(level(6295)).toBe("6295.00");
     expect(level(7001.25)).toBe("7001.25");
   });
 });

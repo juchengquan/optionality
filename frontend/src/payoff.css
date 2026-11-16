@@ -51,9 +51,8 @@
 .nx-payoff-said { font-size: 0.75rem; color: var(--muted-foreground); min-height: 2.5em; overflow-wrap: anywhere; }
 .nx-payoff-kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr)); gap: 0.25rem 1rem; }
 .nx-payoff-kv div { min-width: 0; }
-.nx-payoff-kv dt {
-  color: var(--muted-foreground); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em;
-}
+/* as the inspector's figures are labelled: as written, never in capitals (2026-11-16) */
+.nx-payoff-kv dt { color: var(--muted-foreground); font-size: 0.75rem; }
 .nx-payoff-kv dd { font-variant-numeric: tabular-nums; font-size: 0.875rem; overflow-wrap: anywhere; }
 /* a moved value is being asked for: the last curve stays, a shade quieter, rather than blanking */
 .nx-payoff[data-updating] .nx-payoff-chart { opacity: 0.6; transition: opacity 150ms; }

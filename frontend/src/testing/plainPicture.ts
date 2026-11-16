@@ -86,8 +86,8 @@ export function bookTable(): ReadView["sections"] {
   });
   return view.sections.map((s) => ({
     title: s.title, notes: s.notes,
-    rows: s.groups.length === 0 ? [] : [view.columns, ...s.groups.flatMap((g) => [
-      ...(g.heading === null ? [] : [[g.heading, ...view.columns.slice(1).map(() => "")]]), ...g.rows,
+    rows: s.groups.length === 0 ? [] : [s.columns, ...s.groups.flatMap((g) => [
+      ...(g.heading === null ? [] : [[g.heading, ...s.columns.slice(1).map(() => "")]]), ...g.rows,
     ])],
   }));
 }

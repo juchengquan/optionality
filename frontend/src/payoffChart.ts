@@ -9,6 +9,7 @@
  *  between them is the curve rather than an approximation of it. Held to the domain's golden cases
  *  (`NextPayoffModel.test.ts`).
  */
+import { money, points, signedPoints, spx } from "./shared/numbers";
 import type { Payoff } from "./shared/api";
 
 /** The P&L at expiry with SPX at `s`, joining the served corners: straight between strikes, and on
@@ -24,8 +25,9 @@ export function pnlAt(p: Payoff, s: number): number {
   return a.pnl + ((b.pnl - a.pnl) * (s - a.spx)) / (b.spx - a.spx);
 }
 
-/** An SPX level: whole where it is whole, else to the cent. */
-export const level = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(2));
+/** An SPX level — a breakeven, the crosshair's price — to the cent, as SPX is written everywhere
+ *  (`shared/numbers.ts`: `spx`). */
+export const level = (x: number) => spx(x);
 
 /** The SPX window drawn, and the step the crosshair moves by. */
 export interface PriceWindow {
@@ -105,31 +107,27 @@ export interface PayoffUnit {
   perContract: boolean;
 }
 
-const MONEY = new Intl.NumberFormat("en-US", {
-  style: "currency", currency: "USD", maximumFractionDigits: 0, signDisplay: "exceptZero",
-});
-
 function pointWords(pnl: number, unit: PayoffUnit, per: boolean): string {
   const pts = pnl / unit.contracts;
-  const words = Math.abs(pts) < 0.005 ? "0.00" : `${pts > 0 ? "+" : ""}${pts.toFixed(2)}`;
+  const words = Math.abs(pts) < 0.005 ? "0.00" : signedPoints(pts);
   return `${words} pts${per && unit.perContract ? " per contract" : ""}`;
 }
 
 function moneyWords(pnl: number, unit: PayoffUnit): string | null {
   if (unit.size === null) return null;
-  return unit.hidden ? "$•••" : MONEY.format(pnl * unit.size);
+  return unit.hidden ? "$•••" : money(pnl * unit.size);
 }
 
 /** A P&L in full: points per contract, then the money across the contracts held where there is a
  *  contract size — masked under privacy. */
 export function pnlWords(pnl: number, unit: PayoffUnit): string {
-  const money = moneyWords(pnl, unit);
-  return money === null ? pointWords(pnl, unit, true) : `${pointWords(pnl, unit, true)} · ${money}`;
+  const dollars = moneyWords(pnl, unit);
+  return dollars === null ? pointWords(pnl, unit, true) : `${pointWords(pnl, unit, true)} · ${dollars}`;
 }
 
 /** A P&L as a label on the chart has room for: the money where it may be shown, else the points. */
 export function shortWords(pnl: number, unit: PayoffUnit): string {
-  return unit.size !== null && !unit.hidden ? MONEY.format(pnl * unit.size) : pointWords(pnl, unit, false);
+  return unit.size !== null && !unit.hidden ? money(pnl * unit.size) : pointWords(pnl, unit, false);
 }
 
 /** What the crosshair at `price` reads out: the price, how far it is from SPX's derived price where
@@ -137,7 +135,7 @@ export function shortWords(pnl: number, unit: PayoffUnit): string {
 export function readout(price: number, p: Payoff, unit: PayoffUnit, spx: number | null) {
   const d = spx === null ? null : price - spx;
   const away = d === null ? null
-    : Math.abs(d) < 0.005 ? "at SPX now" : `${Math.abs(d).toFixed(2)} ${d > 0 ? "above" : "below"} SPX now`;
+    : Math.abs(d) < 0.005 ? "at SPX now" : `${points(Math.abs(d))} ${d > 0 ? "above" : "below"} SPX now`;
   const pnl = pnlWords(pnlAt(p, price), unit);
   return {
     price: `SPX ${level(price)}`, away, pnl,

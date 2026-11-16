@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { correctClose } from "./shared/api";
 import { correctionBody, exitPrefill, type CloseDraft } from "./holding";
-import { madeWords } from "./journal";
+import { madeWords, storedWords } from "./journal";
 import { DayField, ExitField, type ClosedOutcome } from "./HoldingActions";
 
 /** Brings the account into view and puts the focus on it — once the sheet it was closed from has
@@ -36,7 +36,7 @@ function sayWhenSettled(section: HTMLElement | null, heading: HTMLElement | null
 }
 
 /** Entry and Exit as STORED — 1.225 is not 1.23 — with only a sum's float noise trimmed */
-const stored = (n: number | null) => (n === null ? null : String(Number(n.toFixed(6))));
+const stored = (n: number | null) => (n === null ? null : storedWords(n));
 
 export function ClosedResult({ outcome, privacy, onDone, onCorrected, served }: {
   outcome: ClosedOutcome;

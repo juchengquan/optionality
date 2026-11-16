@@ -19,6 +19,7 @@
  *
  *  On visx (`@visx/scale`, `@visx/shape`) at its measured width, as the burndown and the IV chart are.
  */
+import { spx as spxText } from "./shared/numbers";
 import { scaleLinear } from "@visx/scale";
 import { LinePath } from "@visx/shape";
 
@@ -94,8 +95,8 @@ export function SpxPath({ served, holding, span, gutters, cross, before = new Se
   const first = runs[0]![0]!;
   const last = runs.at(-1)!.at(-1)!;
   const said = [
-    `SPX ${first.spx.toFixed(2)} on ${dayWords(first.on)}`,
-    ...(last === first ? [] : [`${last.spx.toFixed(2)} on ${dayWords(last.on)}`]),
+    `SPX ${spxText(first.spx)} on ${dayWords(first.on)}`,
+    ...(last === first ? [] : [`${spxText(last.spx)} on ${dayWords(last.on)}`]),
   ].join(" → ");
   const timing = new Map(served.samples.map((s) => [s.observed_on, s.timing]));
 
@@ -174,7 +175,7 @@ export function SpxPath({ served, holding, span, gutters, cross, before = new Se
         {pointed !== null ? spxWords(pointed, holding, name)
           + (pointed.on !== null && before.has(pointed.on) ? ` — ${BEFORE_ENTRY_WORDS}` : "") : (
           <>
-            {`${said}${now ? ` · now ${now.spx.toFixed(2)}` : ""}`}
+            {`${said}${now ? ` · now ${spxText(now.spx)}` : ""}`}
             {gapWords ? <><br />{gapWords}</> : null}
           </>
         )}

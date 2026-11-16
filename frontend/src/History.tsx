@@ -240,7 +240,7 @@ function ivAxis(served: Samples, holding: Charted) {
   const legs = holding.legs.map((l) => ({
     code: legCode(holding.strike_date, l),
     leg: heldLeg(l),
-    name: legText(heldLeg(l), "minus"),
+    name: legText(heldLeg(l), "signs"),
     short: l.side === "short",
   }));
   const readings = served.samples.flatMap((s) => Object.values(s.legs_iv ?? {}));
@@ -303,7 +303,7 @@ function IvChart({ served, holding, gutters, cross, before }: {
     const v = pointed.sample!.legs_iv?.[leg.code];
     return typeof v === "number" ? [{ code: leg.code, y: y(v) }] : [];
   });
-  const name = (leg: IvLeg["leg"]) => legText(leg, "minus");
+  const name = (leg: IvLeg["leg"]) => legText(leg, "signs");
 
   return (
     <>
@@ -328,7 +328,7 @@ function IvChart({ served, holding, gutters, cross, before }: {
                 <circle key={p.dte} data-dte={p.dte} data-mark={MARK[p.timing]}
                         data-before-entry={p.watched ? "" : undefined} cx={x(p.dte)} cy={y(p.v)} r={2.25} />
               ))}
-              <SvgLeg leg={leg.leg} form="minus" x={x(last.dte) + 6} y={labelY + 4} />
+              <SvgLeg leg={leg.leg} form="signs" x={x(last.dte) + 6} y={labelY + 4} />
             </g>
           ))}
           {pointed === null ? null : (
@@ -348,7 +348,7 @@ function IvChart({ served, holding, gutters, cross, before }: {
                     W={W} H={IV_H}>
             <div className="nx-bd-tip-h">{read.day}</div>
             {read.none !== null ? <div>{read.none}</div> : read.legs.map((l, i) => (
-              <div key={i} data-iv-leg=""><Leg leg={l.leg} form="minus" />{` ${l.words}`}</div>
+              <div key={i} data-iv-leg=""><Leg leg={l.leg} form="signs" />{` ${l.words}`}</div>
             ))}
             {read.why === null ? null : <div className="nx-bd-tip-why">{read.why}</div>}
             {pointed.on !== null && before.has(pointed.on)

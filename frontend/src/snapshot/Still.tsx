@@ -24,7 +24,6 @@ export function Still(props: StillProps) {
 }
 
 function StillView({ view }: { view: PlainView }) {
-  const width = view.columns.length;
   return (
     <div className={STILL}>
       <h1>{view.title}</h1>
@@ -44,15 +43,16 @@ function StillView({ view }: { view: PlainView }) {
           {s.groups.length > 0 ? (
             <table>
               <thead>
-                <tr>{view.columns.map((c) => <th key={c} scope="col">{c}</th>)}</tr>
+                <tr>{s.columns.map((c, ci) => <th key={c} scope="col" data-align={s.align[ci]}>{c}</th>)}</tr>
               </thead>
               <tbody>
                 {s.groups.flatMap((g, gi) => [
                   ...(g.heading !== null
-                    ? [<tr key={`g${gi}`} data-group=""><th colSpan={width} scope="colgroup">{g.heading}</th></tr>]
+                    ? [<tr key={`g${gi}`} data-group=""><th colSpan={s.columns.length} scope="colgroup">{g.heading}</th></tr>]
                     : []),
                   ...g.rows.map((r, ri) => (
-                    <tr key={`${gi}:${ri}`}>{r.map((cell, ci) => <td key={view.columns[ci]}>{cell}</td>)}</tr>
+                    // a figure set to the right, so its places line up down the column
+                    <tr key={`${gi}:${ri}`}>{r.map((cell, ci) => <td key={s.columns[ci]} data-align={s.align[ci]}>{cell}</td>)}</tr>
                   )),
                 ])}
               </tbody>

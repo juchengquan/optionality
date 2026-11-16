@@ -7,6 +7,7 @@
  */
 import type { Holding } from "./shared/api";
 import { DASH } from "./shared/format";
+import { points } from "./shared/numbers";
 
 /** A gap that is nothing to the two places it is written in: said "on pace", in no colour — never
  *  "ahead by 0.00", which named a side the figure did not show (review of #415). */
@@ -44,7 +45,7 @@ export function costAndPace(h: Pick<Holding, "cost_to_close" | "schedule">): {
   cost: string; gap: string | null; text: string; words: string;
 } {
   if (h.cost_to_close === null || h.cost_to_close === undefined) return { cost: DASH, gap: null, text: DASH, words: DASH };
-  const cost = h.cost_to_close.toFixed(2);
+  const cost = points(h.cost_to_close);
   const g = h.schedule?.pace_gap;
   if (g === null || g === undefined) return { cost, gap: null, text: cost, words: cost };
   const said = none(g) ? "on pace" : `pace gap ${paceWords(g)}`;

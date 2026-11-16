@@ -12,6 +12,7 @@
  *  - **Never before it is opened.** A page nobody opens the section on never asks for it; the book
  *    draws `/positions/values`, which values open holdings alone (`openPositions`).
  */
+import { trueMinus } from "./shared/numbers";
 import { useCallback, useEffect, useState } from "react";
 
 import { fetchPositions, type Recorded } from "./shared/api";
@@ -28,10 +29,11 @@ export function journalOf(recorded: Recorded[]): ClosedTrade[] {
     b.closed_on.localeCompare(a.closed_on) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
-/** An Entry or an Exit as STORED — 1.225 is not 1.23 — with only a sum's float noise trimmed, and
- *  blank said as unknown: blank is what the owner did not know (ADR 0022), never 0. */
+/** An Entry or an Exit as STORED — 1.225 is not 1.23 — with only a sum's float noise trimmed, a
+ *  negative (a long's Exit) with the true minus as every figure is written, and blank said as
+ *  unknown: blank is what the owner did not know (ADR 0022), never 0. */
 export function storedWords(n: number | null): string {
-  return n === null ? "unknown" : String(Number(n.toFixed(6)));
+  return n === null ? "unknown" : trueMinus(String(Number(n.toFixed(6))));
 }
 
 /** What a trade made, in the service's points, or unknown where its Entry or Exit was not recorded.

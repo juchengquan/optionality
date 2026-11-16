@@ -240,6 +240,6 @@ describe("a quantity per leg (#351)", () => {
     const ratio = HOLDINGS.map((h) => (h.id === "h-puts"
       ? { ...h, legs: h.legs.map((l) => (l.side === "short" ? { ...l, qty: 2 } : l)) } : h));
     const found = findables(placeBook(QUOTES, ratio, MONITORS)).find((f) => f.ref === "h-puts")!;
-    expect(found.detail).toMatch(/-2P\d+ \+P\d+/);
+    expect(found.detail).toMatch(/\u22122P\d+ \+P\d+/);
   });
 });

@@ -47,7 +47,7 @@ describe.each(arrangements)("on the %s, the strip", (arrangement) => {
     await open(arrangement, [SPX]);
     await waitFor(() => expect(strip()).toBeTruthy());
     expect(within(strip() as HTMLElement).getByText("SPX (moomoo)")).toBeTruthy();
-    expect(within(strip() as HTMLElement).getByText("7,587.30")).toBeTruthy();
+    expect(within(strip() as HTMLElement).getByText("7587.30")).toBeTruthy();
   });
 
   it("sits BELOW what needs you, which must stay the conspicuous line", async () => {
@@ -69,7 +69,7 @@ describe.each(arrangements)("on the %s, the strip", (arrangement) => {
   it("goes away rather than showing figures it cannot vouch for", async () => {
     // a refusal here must neither blank the book nor leave a stale index level reading as current
     const svc = await open(arrangement, [SPX]);
-    await waitFor(() => expect(strip()?.textContent).toContain("7,587.30"));
+    await waitFor(() => expect(strip()?.textContent).toContain("7587.30"));
     svc.refuse.add("/references");
     fireEvent.click(document.querySelector('[aria-label="refresh now"]')!);
     await waitFor(() => expect(svc.count("/references")).toBe(2));

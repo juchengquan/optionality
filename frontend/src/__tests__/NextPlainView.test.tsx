@@ -48,34 +48,59 @@ function input(over: Partial<PlainInput> = {}): PlainInput {
 function rowsOf(view: ReturnType<typeof plainView>, title: string): string[][] {
   return view.sections.find((s) => s.title === title)!.groups.flatMap((g) => g.rows);
 }
-/** A row's cell under a column, by the column's label. */
+/** A section by its title. */
+const sectionOf = (view: ReturnType<typeof plainView>, title: string) => view.sections.find((s) => s.title === title)!;
+/** A row's cell under a column, by the column's label in the row's own section. */
 function cell(view: ReturnType<typeof plainView>, name: string, column: string): string {
-  const row = view.sections.flatMap((s) => s.groups.flatMap((g) => g.rows)).find((r) => r[0] === name);
-  expect(row, `no row for ${name}`).toBeTruthy();
-  return row![view.columns.indexOf(column)]!;
+  const s = view.sections.find((x) => x.groups.some((g) => g.rows.some((r) => r[0] === name)));
+  expect(s, `no row for ${name}`).toBeTruthy();
+  const row = s!.groups.flatMap((g) => g.rows).find((r) => r[0] === name)!;
+  expect(s!.columns, `no column ${column} in ${s!.title}`).toContain(column);
+  return row[s!.columns.indexOf(column)]!;
 }
 
 describe("the table", () => {
   it("carries every column the viewer ticked, under short headers, and no \"what\" or \"status\" (#400)", () => {
     const view = plainView(input());
-    expect(view.columns).toEqual([
-      "name", "legs", "value", "P&L ($)", "captured (%)", "pace gap (pts)", "Δ", "SPX→short", "DTE", "manage-by", "rule",
+    // a unit only where the cells do not say it: "+$177" and "38%" say theirs (2026-11-16)
+    expect(sectionOf(view, "Holdings").columns).toEqual([
+      "name", "legs", "value", "P&L", "captured", "pace gap (pts)", "Δ", "SPX→short", "DTE", "manage-by", "rule",
     ]);
-    for (const s of view.sections) for (const g of s.groups) for (const r of g.rows) expect(r).toHaveLength(view.columns.length);
+    for (const s of view.sections) for (const g of s.groups) for (const r of g.rows) expect(r).toHaveLength(s.columns.length);
     const without = plainView(input({ hidden: new Set(["captured", "strip"]) }));
-    expect(without.columns).not.toContain("captured (%)");
-    expect(without.columns).not.toContain("SPX→short");
+    expect(sectionOf(without, "Holdings").columns).not.toContain("captured");
+    expect(sectionOf(without, "Holdings").columns).not.toContain("SPX→short");
     // the name is pinned, as on the desk: a cookie that hides it hides nothing
-    expect(plainView(input({ hidden: new Set(["name"]) })).columns).toContain("name");
+    expect(sectionOf(plainView(input({ hidden: new Set(["name"]) })), "Holdings").columns).toContain("name");
+  });
+
+  it("gives the watchlist and the muted rules no column only a holding fills (2026-11-16)", () => {
+    const view = plainView(input());
+    for (const title of ["Watchlist", "Muted and expired"]) {
+      expect(sectionOf(view, title).columns).toEqual(["name", "legs", "value", "Δ", "SPX→short", "DTE", "rule"]);
+    }
+  });
+
+  it("sets a figure's column to the right and words to the left, in the picture and the Markdown alike", () => {
+    const view = plainView(input());
+    const holdings = sectionOf(view, "Holdings");
+    const right = holdings.columns.filter((_, i) => holdings.align[i] === "right");
+    expect(right).toEqual(["value", "P&L", "captured", "Δ", "DTE", "manage-by"]);
+    const md = toMarkdown(view);
+    expect(md).toContain("| --- | --- | ---: | ---: | ---: | --- | ---: | --- | ---: | ---: | --- |");
+    render(<Still {...input()} />);
+    const pnl = [...document.querySelectorAll("section")][0]!.querySelector<HTMLElement>("tbody tr:not([data-group]) td:nth-child(4)")!;
+    expect(pnl.dataset.align).toBe("right");
   });
 
   it("keeps the value and the pace gap apart, the gap ticked with the value it is drawn in on screen (2026-11-16)", () => {
     // hiding the value, the desk's one field, hides both here
-    const noValue = plainView(input({ hidden: new Set(["value"]) }));
+    const noValue = sectionOf(plainView(input({ hidden: new Set(["value"]) })), "Holdings");
     expect(noValue.columns).not.toContain("value");
     expect(noValue.columns).not.toContain("pace gap (pts)");
     // a cookie from before, when the pace gap had a column of its own on screen, hides nothing
-    expect(plainView(input({ hidden: new Set(["pace_gap"]) })).columns).toEqual(plainView(input()).columns);
+    expect(plainView(input({ hidden: new Set(["pace_gap"]) })).sections.map((s) => s.columns))
+      .toEqual(plainView(input()).sections.map((s) => s.columns));
   });
 
   it("puts the holdings first, then the watchlist, then the muted and expired, each by expiry", () => {
@@ -99,7 +124,7 @@ describe("the table", () => {
     expect(cell(view, "1218_C7300", "rule")).toBe("");
     expect(cell(view, "261218 7150P", "rule")).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
     expect(cell(view, "1204_P6900", "rule")).toBe("|value| ≥ 6.00 — now 6.20, past it by 0.20");
-    const rules = rowsOf(view, "Watchlist").map((r) => r[view.columns.indexOf("rule")]!).join(" ");
+    const rules = rowsOf(view, "Watchlist").map((r) => r[sectionOf(view, "Watchlist").columns.indexOf("rule")]!).join(" ");
     // the short form's arrows are the screen's; the field's words are one vocabulary since #404 — Δ
     // for a delta, `value` for a price, never `val` — and its minus is the real one
     expect(rules).not.toMatch(/\bval\b|[↑↓▲▼]|-\d/);
@@ -122,7 +147,7 @@ describe("the table", () => {
     // 500.50 points away: whole points, no "pts" and no "away"
     expect(cell(view, "1218_P6400", "SPX→short")).toBe("P6400 501 · 1.25σ");
     expect(cell(view, "1218_C6800", "SPX→short")).toBe("C6800 −101 · −0.25σ");
-    expect(cell(view, "1218_C7300", "legs")).toBe("-C7300 +C7350");
+    expect(cell(view, "1218_C7300", "legs")).toBe("−C7300 +C7350");
   });
 
   it("names a combo drawn apart from the holding it partly overlaps by its name alone, no note (#400)", () => {
@@ -219,7 +244,7 @@ describe("every state the status column carried is still named, in the header or
       ["sunset", ["261218 8007C"]],
     ]);
     // the rule in words, with no figure: nothing watches it
-    expect(muted.groups[0]!.rows[0]![view.columns.indexOf("rule")]).toBe("|Δ| ≥ 0.10");
+    expect(muted.groups[0]!.rows[0]![muted.columns.indexOf("rule")]).toBe("|Δ| ≥ 0.10");
   });
 });
 
@@ -242,7 +267,7 @@ describe("the header block", () => {
       { label: "taken", text: "Mon 16 Nov 2026 10:00 EST (New York) · Mon 16 Nov 2026 23:00 GMT+8 (Asia/Singapore)" },
       { label: "session", text: "in session" },
       { label: "figures", text: "fetched at 2026-11-16 23:00:05+08:00 · 10:00:05 EST · screen updated 23:00:09 · service sweeps every 15s" },
-      { label: "References", text: "", items: ["S&P 500 (moomoo) 7,612.25 +0.42%"] },
+      { label: "References", text: "", items: ["S&P 500 (moomoo) 7612.25 +0.42%"] },
     ]);
     // every item named, in the line's order: a picture cannot be opened to read "+N more"
     expect(needs.length, "too few needs to show none is dropped").toBeGreaterThan(3);
@@ -254,7 +279,7 @@ describe("the header block", () => {
   it("outside the session: the market-closed line's words, and each Reference with when it was read", () => {
     const view = plainView(input({ session: false, takenAt: SUNDAY, holdingsServed: "2026-11-15 23:00:05+08:00" }));
     expect(view.lines.find((l) => l.label === "session")!.text).toBe("market closed — valued at Sun 23:00");
-    expect(view.lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7,612.25 +0.42% read at 00:59"]);
+    expect(view.lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7612.25 +0.42% read at 00:59"]);
   });
 
   it("says nothing of needs when nothing needs you, as the page — and a warning when the figures may be stale", () => {
@@ -306,7 +331,7 @@ describe("the picture and the text, one builder", () => {
     expect(md).toContain("\n| 261218 · 38 DTE |  |  |");
     // the References a nested list, one a line (#400)
     const twice = toMarkdown(plainView(input({ references: [SPX_REF, { ...SPX_REF, id: "r2", label: "VIX" } as Reference] })));
-    expect(twice).toContain("\n- References:\n  - S&P 500 (moomoo) 7,612.25 +0.42%\n  - VIX (moomoo) 7,612.25 +0.42%\n");
+    expect(twice).toContain("\n- References:\n  - S&P 500 (moomoo) 7612.25 +0.42%\n  - VIX (moomoo) 7612.25 +0.42%\n");
   });
 });
 
@@ -315,20 +340,20 @@ describe("text from the service", () => {
     const view = plainView(input({ quotes: [...QUOTES, entry("w-odd", { code: "1231_A|B\nC", strike_date: "2026-12-31",
       legs: [{ sign: -1, option_type: "PUT", strike: 6000 }, { sign: 1, option_type: "PUT", strike: 5950 }] as never,
       error: " bad\r\nrow " } as Partial<Entry> & { strike_date: string })] }));
-    expect(cell(view, "1231_A|B C", "legs")).toBe("-P6000 +P5950");
+    expect(cell(view, "1231_A|B C", "legs")).toBe("−P6000 +P5950");
     const md = toMarkdown(view);
     expect(md).toContain("| 1231_A\\|B C |");
     // neither a backtick nor an asterisk may open code or emphasis in the text
     const marked = toMarkdown(plainView(input({ error: "see `x` and *y*" })));
     expect(marked).toContain("- warning: see \\`x\\` and \\*y\\*");
     // every table row still as wide as its header
-    for (const s of readMarkdown(md).sections) for (const r of s.rows) expect(r).toHaveLength(view.columns.length);
+    readMarkdown(md).sections.forEach((s, i) => { for (const r of s.rows) expect(r).toHaveLength(view.sections[i]!.columns.length); });
   });
 
   it("says why a Reference is a dash, as the strip's title does", () => {
     const dashed = { ...SPX_REF, id: "r2", label: "VIX", figure: null, change: null, error: "not entitled" } as Reference;
     const view = plainView(input({ references: [SPX_REF, dashed] }));
-    expect(view.lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7,612.25 +0.42%", "VIX (moomoo) — (not entitled)"]);
+    expect(view.lines.find((l) => l.label === "References")!.items).toEqual(["S&P 500 (moomoo) 7612.25 +0.42%", "VIX (moomoo) — (not entitled)"]);
   });
 });
 

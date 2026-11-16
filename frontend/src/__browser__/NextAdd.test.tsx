@@ -80,13 +80,13 @@ describe("the preview beside the form", () => {
     await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7100");
     await userEvent.fill(screen.getByLabelText("spread 1 entry"), "1.50");
     await waitFor(() => expect(curveOf(1)).not.toBeNull());
-    await waitFor(() => expect(maxLoss(1)).toBe("-48.50 pts"));
+    await waitFor(() => expect(maxLoss(1)).toBe("−48.50 pts"));
     const credit = curveOf(1);
 
     // a wider spread moves the curve: it follows the legs as they change
     await userEvent.fill(screen.getByLabelText("spread 1, leg 2 strike"), "7050");
     await waitFor(() => expect(curveOf(1)).not.toBe(credit));
-    await waitFor(() => expect(maxLoss(1)).toBe("-98.50 pts"));
+    await waitFor(() => expect(maxLoss(1)).toBe("−98.50 pts"));
 
     // the long leg flipped to short: two short puts can lose without a floor, and the curve says so
     const wide = curveOf(1);

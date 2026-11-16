@@ -1,3 +1,4 @@
+import { trueMinus } from "./shared/numbers";
 import type { Entry, Health, Holding, Monitor } from "./shared/api";
 import { shortContract, shortDate } from "./shared/format";
 import { overlapOf } from "./placement";
@@ -255,8 +256,8 @@ export function shapeOf(r: { field: string; legs?: unknown[] | null; compare: st
 const shapeIsCost = (r: RuleShape) => isCostToClose(r.field, r.combo, r.compare, r.direction, r.threshold);
 /** whether the rule as SAID is at-or-above, which the arrows follow: a cost to close is said `≥` */
 const saysAbove = (r: RuleShape) => shapeIsCost(r) || r.direction !== "below";
-/** the real minus, U+2212, as the pace gap writes it */
-const minus = (text: string) => (text.startsWith("-") ? `\u2212${text.slice(1)}` : text);
+/** the real minus, U+2212, as every figure is written (`shared/numbers.ts`) */
+const minus = trueMinus;
 
 /** "|Δ| ≥ 0.20", "close ≥ 9.44": a rule in symbols (#388). A threshold given as a number is written
  *  to two places at least and to every place it carries; one given as TEXT — a draft being typed —

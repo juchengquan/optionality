@@ -69,7 +69,7 @@ export function readMarkdown(md: string): ReadView {
       out.lines.push({ label: line.slice(2, at), text: unescape(line.slice(at + 2)) });
     } else if (line.startsWith("|")) {
       const cells = cellsOf(line);
-      if (cells.every((c) => /^-{3,}$/.test(c))) continue;
+      if (cells.every((c) => /^:?-{3,}:?$/.test(c))) continue;
       section!.rows.push(cells);
     } else section!.notes.push(unescape(line));
   }

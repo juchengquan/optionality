@@ -11,7 +11,7 @@
  *  coloured word mid-sentence reads as a link or a warning rather than as what the leg is. */
 import { Fragment } from "react";
 
-import { legParts, type LegForm, type WrittenLeg } from "./format";
+import { legParts, shortFirst, type LegForm, type WrittenLeg } from "./format";
 
 const sideOf = (l: WrittenLeg) => (l.short === undefined ? undefined : l.short ? "short" : "long");
 
@@ -30,11 +30,11 @@ function Drawn({ side, type, parts: [before, letter, after] }: {
   );
 }
 
-/** Legs as the book writes them, a space between each. */
+/** Legs as the book writes them, short first (`shortFirst`), a space between each. */
 export function Legs({ legs, form = "signs" }: { legs: readonly WrittenLeg[]; form?: LegForm }) {
   return (
     <>
-      {legs.map((l, i) => (
+      {shortFirst(legs).map((l, i) => (
         <Fragment key={`${i}:${l.option_type}${l.strike}`}>{i > 0 ? " " : null}<Leg leg={l} form={form} /></Fragment>
       ))}
     </>
@@ -42,14 +42,14 @@ export function Legs({ legs, form = "signs" }: { legs: readonly WrittenLeg[]; fo
 }
 
 /** One leg as a chart's text, its type in a `tspan`. */
-export function SvgLeg({ leg, form = "minus", ...at }: {
+export function SvgLeg({ leg, form = "signs", ...at }: {
   leg: WrittenLeg; form?: LegForm; x: number; y: number; textAnchor?: "start" | "middle" | "end";
 }) {
   return <text {...at}><SvgLegSpan leg={leg} form={form} /></text>;
 }
 
 /** One leg inside a chart's text that says more than the leg, as the price map's label does. */
-export function SvgLegSpan({ leg, form = "minus" }: { leg: WrittenLeg; form?: LegForm }) {
+export function SvgLegSpan({ leg, form = "signs" }: { leg: WrittenLeg; form?: LegForm }) {
   const [before, type, after] = legParts(leg, form);
   return (
     <tspan className="nx-leg" data-side={sideOf(leg)}>

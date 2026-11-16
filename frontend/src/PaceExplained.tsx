@@ -20,6 +20,7 @@
  *  - Nothing without a schedule: no Opened, no On-pace, no gap to explain — and the route would
  *    only say so again.
  */
+import { points, vega as vegaText } from "./shared/numbers";
 import { useEffect, useState } from "react";
 
 import { fetchVol, type Holding, type Vol } from "./shared/api";
@@ -31,7 +32,7 @@ export function PaceExplained({ holding }: { holding: Holding }) {
   const s = holding.schedule;
   if (!s) return null;
   const working = s.on_pace !== null && holding.entry !== null
-    ? `on pace ${s.on_pace.toFixed(2)} = ${holding.entry.toFixed(2)} × √(${holding.dte} ÷ ${s.dte_at_open})`
+    ? `on pace ${points(s.on_pace)} = ${points(holding.entry)} × √(${holding.dte} ÷ ${s.dte_at_open})`
     : null;
   return (
     <section className="nx-pace" aria-label="the pace explained">
@@ -105,7 +106,8 @@ function Split({ id }: { id: string }) {
     return <p className="nx-pace-note">{`what vol did could not be read — ${state.error}`}</p>;
   }
   const v = state.vol;
-  const vega = v.vega === null ? null : ` · net vega ${v.vega.toFixed(2)}`;
+  // the holding's net vega, called what the inspector's figures call it (2026-11-16)
+  const vega = v.vega === null ? null : ` · position ν ${vegaText(v.vega)}`;
   // the gap's own reason, unless the vol part's already said the same thing
   const noGap = v.gap === null && v.gap_reason !== null && v.gap_reason !== v.reason ? v.gap_reason : null;
   return (
@@ -131,7 +133,7 @@ function Split({ id }: { id: string }) {
         <>
           <p className="nx-pace-why">{`vol cannot be split out: ${v.reason ?? "the service gave no reason"}`}</p>
           {v.cover !== null ? (
-            <p className="nx-pace-note">{`${v.cover.toFixed(2)} vol points would cover this gap`}{vega}</p>
+            <p className="nx-pace-note">{`${points(v.cover)} vol points would cover this gap`}{vega}</p>
           ) : v.gap !== null && v.cover_reason !== null ? (
             <p className="nx-pace-note">{v.cover_reason}</p>
           ) : null}

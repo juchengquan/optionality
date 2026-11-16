@@ -63,8 +63,8 @@ describe("what it says of each thing it finds (#391)", () => {
     const ic = options().find((o) => o.querySelector("[data-label]")!.textContent === "1231_IC"
       && o.textContent!.includes("holding"))!;
     const detail = ic.querySelector(".nx-palette-detail")!;
-    expect(detail.textContent).toBe("holding · 261231 · -C7400 +C7450 -P6300 +P6250");
-    expect(legMarks(detail)).toEqual(["-C7400 short CALL", "+C7450 long CALL", "-P6300 short PUT", "+P6250 long PUT"]);
+    expect(detail.textContent).toBe("holding · 261231 · −C7400 −P6300 +C7450 +P6250");
+    expect(legMarks(detail)).toEqual(["−C7400 short CALL", "−P6300 short PUT", "+C7450 long CALL", "+P6250 long PUT"]);
   });
 });
 

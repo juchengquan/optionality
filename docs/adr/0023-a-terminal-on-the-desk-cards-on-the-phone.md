@@ -25,7 +25,10 @@ what is typed between Watch and Hold, says on each choice what it does, and "Rec
 prefilled from a watch rule, replacing #336's "I hold this" (last section). **Amended 2026-11-15
 (#410):** one refresh button, the header's; the header is held at the top of the screen on both
 arrangements, and on the phone carries Add and Settings, whose tab bar is retired; on the phone
-Settings is a bottom sheet over the book like Add's (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+Settings is a bottom sheet over the book like Add's (last section). **Amended 2026-11-16: one
+format and one vocabulary, first half** — every figure written by one formatter, each row kind's
+figures in one order, Δ said three ways, Greek labels never in capitals, and the saved view's tables
+per section (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -192,7 +195,9 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
   gap in points, as the table's value column, the inspector's Entry, Target and Stop and the payoff
   already did.)*
 - **Figures:**
-  - tabular numerals, with fixed decimals per field (gamma loses its six places);
+  - tabular numerals, with fixed decimals per field (gamma loses its six places); *(Amended
+    2026-11-16: one formatter, `shared/numbers.ts`, and the true minus on every negative — see the
+    last section.)*
   - dark first;
   - on the phone, 44px targets and 16px inputs, so iOS does not zoom.
 - **Payoff at expiry only.** There is no T+0 curve, "today" line or probability until a pricing
@@ -797,3 +802,62 @@ owner's decisions (2026-11-16), as built:
   amended), and the page draws it: a hollow dot on the strike strip with the reason in its words,
   the reason on the price map's line and beside the payoff's marker. The strike distances and σ are
   still measured against it, and say so through that reason. Never presented as current.
+
+## Amended 2026-11-16: one format and one vocabulary — numbers, figures, Δ (first half)
+
+An audit of the live page (2026-11-16) found the same figure written several ways — `-2.95` in the
+table, `−2.95` in a rule's sentence, `7,561.67` on the strip beside `SPX 7561.70` on the strike
+strip, ν drawn as "N" by an upper-case label, "short leg Δ" on the desk and "short Δ" on the phone.
+The owner set one standard (2026-11-16) in fourteen parts; this half builds five of them (A–E) and
+the picture's (M). The rest — clocks and zones, "rule" for "Monitor", sentence case and the actions'
+words, the muted reasons, one section order for the inspector and the sheet, the phone's cards, the
+payoff's maximums and the errors' words — is the second half, and amends this section when it lands.
+
+- **One number formatter** (`frontend/src/shared/numbers.ts`). Every figure on the page goes
+  through it: points and prices to 2 places, Δ to 3, Γ to 4, Θ and ν to 2, IV to 2 and a `%`,
+  breakevens and SPX's crosshair levels to 2 (`6295.00`, where a whole level was `6295`). Every
+  negative carries the true minus, U+2212 — money (`−$4,528`), points, greeks, percentages, the
+  burndown's axis, a long's stored Exit — where the table, the payoff and the inspector had the
+  hyphen-minus and only the rule's sentence and the pace gap had the true one. A served non-zero that
+  rounds away is a bound, `<0.0001` or `>−0.0001`, never `0.0000` or `-0.0000`. A typed input keeps
+  what was typed: the formatter writes figures, never the text of a box.
+- **SPX one way, with no thousands separator**: `7561.67` on the References strip, as on the strike
+  strip, the price map, the payoff and the SPX chart — read against strikes (`C8050`) and breakevens
+  (`8054.72`), which carry none. The strip's `7,561.67` was the only separated figure on the page.
+- **Legs with the true minus, short first** (`format.shortFirst`): `−C8050 +C8100`, a condor's two
+  short legs before its wings, in the legs column, the cards, the sheet's heading, the inspector's
+  list, the palette, the picture, and inside a payoff label that joins two strikes' legs. The legs
+  form "minus" is gone: there is one signed form. The palette still finds a leg typed with a
+  hyphen-minus.
+- **A row's figures in one order, by what the row is** (`quotefigures.ts`, drawn alike by the
+  inspector and the sheet):
+  - a single contract: its **value** (the mid — called what a rule on it calls it) first, then
+    Δ Γ Θ ν and its IV, then the quote's detail: bid, ask, last and the last trade;
+  - a spread on the watchlist: its **value**, signed as the service signs a combo, then Δ Γ Θ ν. A
+    delta rule's spread says the price its value cell says (#400) or a dash with why — never its
+    summed delta under "value". **No cost to close on the watchlist**, a spread that shares a
+    contract with a holding included: its "shares … with …" note says what it shares;
+  - a spread on something **held**: its **cost to close** first, then Δ Γ Θ ν, and its signed value
+    after them as detail.
+- **A held spread's rule row says its cost to close** in the desk's value column, positive as its
+  holding's, and a dash where the service could not price it — never its signed value in its place.
+  Watchlist rows keep the signed value. A rule's sentence is unchanged: `|value| ≥ 5.51 — now −2.95`.
+- **Δ said three ways** (`shared/words.ts`): `short Δ` on a holding (the desk's "short leg Δ"
+  retired), `Δ` on a spread or a contract, `position Δ` for a holding's net delta — and its other net
+  greeks `position Γ`, `position Θ`, `position ν`, on the desk and the phone alike, where the desk
+  said `position γ θ vega` and the phone `Δ γ θ vega`. The pace split's "net vega" is `position ν`.
+- **A label carrying a Greek letter is never set in capitals.** An upper-case ν is "Ν", which reads
+  as N: the inspector's and the payoff's figure labels are drawn as written, and a table header with
+  a Greek letter keeps its case (`data-greek`). Measured in the browser, desk and iPhone
+  (`__browser__/NextGreekLabels*`): no element whose own text has a lower-case Greek letter is drawn
+  with `text-transform: uppercase`.
+- **The saved picture and Copy as text** (#394, #400): each section has its own columns — the
+  watchlist's and the muted rules' carry none that only a holding fills (P&L, captured, pace gap,
+  manage-by); a figure's column is set to the right, in the picture and as `---:` in the Markdown;
+  and a unit sits in a header only where the cells do not say it — `P&L` above `+$177`, `captured`
+  above `38%`, `pace gap (pts)` above "ahead by 1.53". The two stay held to each other
+  (`NextPlainView`, `NextSaveImage`).
+- **Held by** `NumberFormat.test.tsx`: no rendered text — the desk's table and every inspector, the
+  phone's cards and every sheet, in session and out (histories and payoffs drawn), and the saved
+  view's text — has a hyphen-minus used as a sign.
+

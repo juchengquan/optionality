@@ -365,7 +365,7 @@ describe("the preview", () => {
     await waitFor(() => expect(strikes()).toBe("+P7100 −P7150"));
     fireEvent.keyDown(chart, { key: "Home" });
     // below both strikes: the 50-point width less the 1.50 taken, per contract
-    expect(said()).toMatch(/: -48\.50 pts$/);
+    expect(said()).toMatch(/: \u221248\.50 pts$/);
 
     // the long leg typed a digit at a time, from 7100 to 7050
     type("spread 1, leg 2 strike", "705");
@@ -373,7 +373,7 @@ describe("the preview", () => {
     await waitFor(() => expect(strikes()).toBe("+P7050 −P7150"));
     const redrawn = screen.getByRole("group", { name: /payoff at expiry by SPX price/ });
     fireEvent.keyDown(redrawn, { key: "Home" });
-    expect(said()).toMatch(/: -98\.50 pts$/);
+    expect(said()).toMatch(/: \u221298\.50 pts$/);
     fireEvent.keyDown(redrawn, { key: "End" });
     expect(said()).toMatch(/: \+1\.50 pts$/);
   });

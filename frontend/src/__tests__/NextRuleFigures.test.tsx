@@ -36,32 +36,33 @@ const figure = (rows: ReturnType<typeof ruleFigures>, label: string) => {
 };
 
 describe("a single contract's figures", () => {
-  it("are every figure its quote carries, at the decimals fixed per field", () => {
+  it("are every figure its quote carries, value first and the quote's detail after the greeks (2026-11-16)", () => {
     const rows = ruleFigures(withQuote("w-lone", { quote: FULL }));
-    expect(rows.map((r) => [r.label, r.text, r.why])).toEqual([
-      ["bid", "0.45", null],
-      ["ask", "0.55", null],
-      ["mid", "0.50", null],
-      ["last", "0.60", null],
+    expect(rows.map((r) => [r.label, r.text, r.why, r.detail ?? false])).toEqual([
+      // its value is its mid, called what a rule on it calls it
+      ["value", "0.50", null, false],
+      ["Δ", "0.040", null, false],
+      ["Γ", "0.0001", null, false],
+      ["Θ", "\u22120.06", null, false],
+      ["ν", "0.43", null, false],
+      ["IV", "14.24%", null, false],
+      ["bid", "0.45", null, true],
+      ["ask", "0.55", null, true],
+      ["last", "0.60", null, true],
       // the time of the last TRADE, not the quote's freshness: a far strike can go days unprinted
-      ["last trade", "2026-11-11 23:58:12", null],
-      ["IV", "14.24%", null],
-      ["Δ", "0.040", null],
-      ["Γ", "0.0001", null],
-      ["Θ", "-0.06", null],
-      ["ν", "0.43", null],
+      ["last trade", "2026-11-11 23:58:12", null, true],
     ]);
   });
 
   it("say a figure the Provider did not send as a dash with why, never 0", () => {
     // w-dec18-delta's quote carries its name and its delta, and nothing else
     const rows = ruleFigures(quote("w-dec18-delta"));
-    expect(figure(rows, "Δ")).toMatchObject({ text: "-0.170", why: null });
+    expect(figure(rows, "Δ")).toMatchObject({ text: "\u22120.170", why: null });
     for (const label of ["bid", "ask", "last", "IV", "Γ", "Θ", "ν"]) {
       expect(figure(rows, label)).toMatchObject({ text: "—", why: "not served for this contract" });
     }
     // the mid is derived, and only from both sides
-    expect(figure(rows, "mid")).toMatchObject({ text: "—", why: "needs both a bid and an ask" });
+    expect(figure(rows, "value")).toMatchObject({ text: "—", why: "needs both a bid and an ask" });
     // no stamp at all is a Provider that sends none (IB Gateway never does), not an untraded contract
     expect(figure(rows, "last trade")).toMatchObject({ text: "—", why: "not served by the provider" });
     expect(rows.some((r) => /^-?0(\.0+)?%?$/.test(r.text))).toBe(false);
@@ -105,13 +106,13 @@ describe("a single contract's figures", () => {
     const { mid_price: _mid, ...noMid } = FULL;
     const rows = ruleFigures(withQuote("w-lone", { quote: noMid }));
     expect(figure(rows, "bid")).toMatchObject({ text: "0.45", why: null });
-    expect(figure(rows, "mid")).toMatchObject({ text: "—", why: "needs both a bid and an ask" });
+    expect(figure(rows, "value")).toMatchObject({ text: "—", why: "needs both a bid and an ask" });
   });
 
   it("say a served Γ too small for four places as under 0.0001, never 0.0000", () => {
     const tiny = (g: number) => figure(ruleFigures(withQuote("w-lone", { quote: { ...FULL, option_gamma: g } })), "Γ").text;
     expect(tiny(0.00004)).toBe("<0.0001");
-    expect(tiny(-0.00004)).toBe(">-0.0001");
+    expect(tiny(-0.00004)).toBe(">\u22120.0001");
     expect(tiny(0)).toBe("0.0000");
     expect(tiny(0.00006)).toBe("0.0001");
   });
@@ -134,11 +135,11 @@ describe("a combo's figures", () => {
       combo_greeks: { option_delta: -0.0512, option_gamma: -0.00031, option_theta: 0.731, option_vega: -1.284 },
     }));
     expect(rows.map((r) => [r.label, r.text, r.why])).toEqual([
-      ["value", "-2.40", null],
-      ["Δ", "-0.051", null],
-      ["Γ", "-0.0003", null],
+      ["value", "\u22122.40", null],
+      ["Δ", "\u22120.051", null],
+      ["Γ", "\u22120.0003", null],
       ["Θ", "0.73", null],
-      ["ν", "-1.28", null],
+      ["ν", "\u22121.28", null],
     ]);
   });
 
@@ -148,7 +149,7 @@ describe("a combo's figures", () => {
     }));
     const partial = "a leg has no figure, and no sum is taken from part of them";
     expect(figure(rows, "value")).toMatchObject({ text: "—", why: partial });
-    expect(figure(rows, "Δ")).toMatchObject({ text: "-0.050", why: null });
+    expect(figure(rows, "Δ")).toMatchObject({ text: "\u22120.050", why: null });
     for (const label of ["Γ", "Θ", "ν"]) expect(figure(rows, label)).toMatchObject({ text: "—", why: partial });
     // the fixture's own combo carries no greeks at all, as a row from before they were served
     for (const label of ["Δ", "Γ", "Θ", "ν"]) {
@@ -164,13 +165,18 @@ describe("a combo's figures", () => {
       .toEqual(["mid_price", "option_delta", "option_gamma", "option_theta", "option_vega"].map((f) => fieldWords(f)));
   });
 
-  it("list no value for a rule watching a greek: its sum is that greek, not a price", () => {
+  it("never call a delta rule's sum its value: its value is a price rule's on the same legs, or a dash", () => {
     const rows = ruleFigures(withQuote("w-dec18", {
       field: "option_delta", combo_value: -0.05, combo_greeks: { option_delta: -0.0512 },
     }));
-    expect(rows.some((r) => r.label === "value")).toBe(false);
-    expect(rows.some((r) => r.text === "-0.05")).toBe(false);
-    expect(figure(rows, "Δ")).toMatchObject({ text: "-0.051", why: null });
+    expect(figure(rows, "value")).toMatchObject({ text: "—", why: "no rule on these contracts watches their value" });
+    expect(rows.some((r) => r.text === "\u22120.05")).toBe(false);
+    expect(figure(rows, "Δ")).toMatchObject({ text: "\u22120.051", why: null });
+    // the price its value cell says (#400), where a price rule on the same legs has one
+    const priced = ruleFigures(withQuote("w-dec18", {
+      field: "option_delta", combo_value: -0.05, price: -2.4, combo_greeks: { option_delta: -0.0512 },
+    }));
+    expect(figure(priced, "value")).toMatchObject({ text: "\u22122.40", why: null });
   });
 
   it("say why a held spread has no cost to close when every leg is priced but not held once", () => {
@@ -181,10 +187,21 @@ describe("a combo's figures", () => {
     expect(figure(unpriced, "cost to close").why).toBe("a leg has no figure, and no sum is taken from part of them");
   });
 
-  it("add the cost to close where the rule covers a holding", () => {
-    const rows = ruleFigures(withQuote("r-calls", { combo_value: -4.4, cost_to_close: 4.4 }));
-    expect(figure(rows, "cost to close")).toMatchObject({ text: "4.40", why: null });
+  it("list a held spread's cost to close first, and its signed value after the greeks as detail (2026-11-16)", () => {
+    const rows = ruleFigures(withQuote("r-calls", { combo_value: -4.4, cost_to_close: 4.4,
+      combo_greeks: { option_delta: -0.12, option_gamma: 0.0002, option_theta: 0.5, option_vega: -1 } }));
+    expect(rows.map((r) => [r.label, r.text, r.detail ?? false])).toEqual([
+      ["cost to close", "4.40", false],
+      ["Δ", "\u22120.120", false], ["Γ", "0.0002", false], ["Θ", "0.50", false], ["ν", "\u22121.00", false],
+      ["value", "\u22124.40", true],
+    ]);
     expect(ruleFigures(quote("w-dec18")).some((r) => r.label === "cost to close")).toBe(false);
+  });
+
+  it("list no cost to close on the watchlist, a spread sharing a contract with a holding included", () => {
+    // drawn in the watchlist because it only partly overlaps a holding (#346): its note says so
+    const overlapping = withQuote("w-dec18", { held: true, positions: [{ id: "h-puts", name: "1218_P6400" }], cost_to_close: 1.2 });
+    expect(ruleFigures(overlapping, false).map((r) => r.label)).toEqual(["value", "Δ", "Γ", "Θ", "ν"]);
   });
 });
 
@@ -225,32 +242,35 @@ async function openPhone(id: string, book: Entry[] = BOOK, privacy = false): Pro
 describe.each([["the desk's inspector", openDesk], ["the phone's sheet", openPhone]])("%s", (_, open) => {
   it("shows every figure of a single contract", async () => {
     const at = await open("w-lone");
-    expect(drawn(at, "bid")).toBe("0.45");
-    expect(drawn(at, "ask")).toBe("0.55");
-    expect(drawn(at, "mid")).toBe("0.50");
-    expect(drawn(at, "last")).toBe("0.60");
-    expect(drawn(at, "last trade")).toBe("2026-11-11 23:58:12");
-    expect(drawn(at, "IV")).toBe("14.24%");
+    expect(drawn(at, "value")).toBe("0.50");
     expect(drawn(at, "Δ")).toBe("0.040");
     expect(drawn(at, "Γ")).toBe("0.0001");
-    expect(drawn(at, "Θ")).toBe("-0.06");
+    expect(drawn(at, "Θ")).toBe("\u22120.06");
     expect(drawn(at, "ν")).toBe("0.43");
+    expect(drawn(at, "IV")).toBe("14.24%");
+    expect(drawn(at, "bid")).toBe("0.45");
+    expect(drawn(at, "ask")).toBe("0.55");
+    expect(drawn(at, "last")).toBe("0.60");
+    expect(drawn(at, "last trade")).toBe("2026-11-11 23:58:12");
+    // in that order: value, the greeks, IV, then the quote's detail
+    expect([...within(at).getByRole("group", { name: "figures" }).querySelectorAll("dt")].map((d) => d.textContent))
+      .toEqual(["value", "Δ", "Γ", "Θ", "ν", "IV", "bid", "ask", "last", "last trade"]);
   });
 
   it("says a figure not served as a dash with its reason, beside it", async () => {
     const at = await open("w-lone", BOOK.map((q) => q.id === "w-lone" ? { ...q, quote: { ...FULL, option_gamma: undefined } } as Entry : q));
     expect(drawn(at, "Γ")).toBe("— not served for this contract");
-    expect(drawn(at, "Θ")).toBe("-0.06");
+    expect(drawn(at, "Θ")).toBe("\u22120.06");
   });
 
   it("shows a combo's value and the greeks the service summed, and no IV", async () => {
     const greeks = { option_delta: -0.0512, option_gamma: -0.00031, option_theta: 0.731, option_vega: -1.284 };
     const at = await open("w-dec18", BOOK.map((q) => q.id === "w-dec18" ? { ...q, combo_greeks: greeks } as Entry : q));
-    expect(drawn(at, "value")).toBe("-2.40");
-    expect(drawn(at, "Δ")).toBe("-0.051");
-    expect(drawn(at, "Γ")).toBe("-0.0003");
+    expect(drawn(at, "value")).toBe("\u22122.40");
+    expect(drawn(at, "Δ")).toBe("\u22120.051");
+    expect(drawn(at, "Γ")).toBe("\u22120.0003");
     expect(drawn(at, "Θ")).toBe("0.73");
-    expect(drawn(at, "ν")).toBe("-1.28");
+    expect(drawn(at, "ν")).toBe("\u22121.28");
     expect(within(within(at).getByRole("group", { name: "figures" })).queryByText("IV")).toBeNull();
   });
 
@@ -259,15 +279,15 @@ describe.each([["the desk's inspector", openDesk], ["the phone's sheet", openPho
       ? { ...q, field: "option_delta", threshold: 0.2, combo_value: -0.05, watched: -0.05,
           combo_greeks: { option_delta: -0.0512 } } as Entry : q);
     const at = await open("w-dec18", delta);
-    expect(within(at).queryAllByText("value", { selector: "dt" })).toHaveLength(0);
-    expect(drawn(at, "Δ")).toBe("-0.051");
+    expect(drawn(at, "value")).toBe("— no rule on these contracts watches their value");
+    expect(drawn(at, "Δ")).toBe("\u22120.051");
   });
 
   it("labels the spread value once in the whole of it, for a rule on the spread's price", async () => {
     const at = await open("w-dec18");
     // as a figure's label, anywhere in the sheet or inspector — the facts once had one of their own
     expect(within(at).getAllByText("value", { selector: "dt" })).toHaveLength(1);
-    expect(drawn(at, "value")).toBe("-2.40");
+    expect(drawn(at, "value")).toBe("\u22122.40");
   });
 
   it("says once why there are no figures, rather than a dash per figure", async () => {
@@ -287,18 +307,19 @@ describe.each([["the desk's inspector", openDesk], ["the phone's sheet", openPho
 });
 
 describe("the desk's inspector, on a holding", () => {
-  it("gives its γ beside its Δ, θ and vega, at four places", async () => {
+  it("gives its position Γ beside its position Δ, Θ and ν, at four places, each its symbol", async () => {
     const held = HOLDINGS.map((h) => h.id === "h-ic"
       ? { ...h, greeks: { option_delta: -0.12, option_gamma: -0.00042, option_theta: 1.1, option_vega: -2.3 } } : h);
     render(<DeskBook {...props(BOOK, { holdings: held })} />);
     fireEvent.click(within(deskRow("h-ic")).getByRole("button", { name: "1231_IC" }));
     const insp = screen.getByRole("complementary", { name: /inspector/ });
-    expect(within(insp).getByText("position γ").nextElementSibling!.textContent).toBe("-0.0004");
+    expect(within(insp).getByText("position Γ").nextElementSibling!.textContent).toBe("\u22120.0004");
+    expect(within(insp).getByText("position ν").nextElementSibling!.textContent).toBe("\u22122.30");
     cleanup();
     // and a dash where the service summed none
     render(<DeskBook {...props(BOOK)} />);
     fireEvent.click(within(deskRow("h-ic")).getByRole("button", { name: "1231_IC" }));
     const bare = screen.getByRole("complementary", { name: /inspector/ });
-    expect(within(bare).getByText("position γ").nextElementSibling!.textContent).toBe("—");
+    expect(within(bare).getByText("position Γ").nextElementSibling!.textContent).toBe("—");
   });
 });

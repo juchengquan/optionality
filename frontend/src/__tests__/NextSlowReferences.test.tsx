@@ -109,7 +109,7 @@ describe.each(arrangements)("on the %s, a Reference source that never answers", 
     expect(strip()).toBeNull();
 
     held[0]!.answer([SPX]);
-    await waitFor(() => expect(strip()?.textContent).toContain("7,376.86"));
+    await waitFor(() => expect(strip()?.textContent).toContain("7376.86"));
   });
 
   it("does not hold up a mute: it finishes as soon as its own reads land", async () => {
@@ -138,7 +138,7 @@ describe.each(arrangements)("on the %s, a Reference source that never answers", 
     held[0]!.answer([SPX]);
     await waitFor(() => expect(held).toHaveLength(2));
     held[1]!.answer([SPX]);
-    await waitFor(() => expect(strip()?.textContent).toContain("7,376.86"));
+    await waitFor(() => expect(strip()?.textContent).toContain("7376.86"));
   });
 
   it("does not hold an edit at \"saving…\": the form closes when its own reads land", async () => {
@@ -203,7 +203,7 @@ describe.each(arrangements)("on the %s, one Reference call in flight at a time",
     await waitFor(() => expect(held).toHaveLength(2));
     // the follow-up, asked after every press, is what the strip shows once it lands
     held[1]!.answer([{ ...SPX, figure: 7549.94 }]);
-    await waitFor(() => expect(strip()?.textContent).toContain("7,549.94"));
+    await waitFor(() => expect(strip()?.textContent).toContain("7549.94"));
     await drain();
     expect(held, "one follow-up for all six presses").toHaveLength(2);
   });
@@ -212,7 +212,7 @@ describe.each(arrangements)("on the %s, one Reference call in flight at a time",
     const { held } = serve();
     await open(arrangement);
     held[0]!.answer([SPX]);
-    await waitFor(() => expect(strip()?.textContent).toContain("7,376.86"));
+    await waitFor(() => expect(strip()?.textContent).toContain("7376.86"));
     await drain();
     expect(held).toHaveLength(1);
   });
@@ -224,7 +224,7 @@ describe.each(arrangements)("on the %s, one Reference call in flight at a time",
     held[0]!.answer([{ ...SPX, figure: 7376.86 }]);
     await waitFor(() => expect(held).toHaveLength(2));
     held[1]!.answer([{ ...SPX, figure: 7549.94 }]);
-    await waitFor(() => expect(strip()?.textContent).toContain("7,549.94"));
+    await waitFor(() => expect(strip()?.textContent).toContain("7549.94"));
     await press(1);
     await waitFor(() => expect(held).toHaveLength(3));
     held[2]!.refuse("ibkr went away");

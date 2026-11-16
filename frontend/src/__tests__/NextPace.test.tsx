@@ -149,7 +149,7 @@ describe("the pace explained, in the desk's inspector", () => {
     // vol 0.31 hurt and the rest -0.73 helped, as served: a page subtracting from the live gap
     // would say the rest saved 0.81
     expect(split.textContent).toContain("vol cost you 0.31 · the rest saved you 0.73");
-    expect(split.textContent).toContain("over 6 days from 3 Nov · net vega -0.86");
+    expect(split.textContent).toContain("over 6 days from 3 Nov · position ν −0.86");
     // the hypothetical is never shown beside a measurement
     expect(split.textContent).not.toMatch(/would cover/);
     expect(volAsked()).toEqual(["GET /positions/h-puts/vol"]);
@@ -161,7 +161,7 @@ describe("the pace explained, in the desk's inspector", () => {
     expect(split.textContent).toContain("at the 9 Nov close: behind by 2.27");
     expect(within(split).getByText("behind by 2.27").dataset.outcome).toBe("loss");
     expect(split.textContent).toContain(`vol cannot be split out: ${VOLS["h-calls"]!.reason}`);
-    expect(split.textContent).toContain("1.82 vol points would cover this gap · net vega -1.25");
+    expect(split.textContent).toContain("1.82 vol points would cover this gap · position ν −1.25");
     expect(split.textContent).not.toMatch(/cost you|saved you/);
   });
 

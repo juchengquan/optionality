@@ -22,6 +22,7 @@
  *  The actions come from the page (`MonitorActionsContext`), so a book drawn without them — a test,
  *  or a page that cannot write — draws no controls rather than controls that do nothing.
  */
+import { fixed } from "./shared/numbers";
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
@@ -350,7 +351,7 @@ function points(n: number | null | undefined): string {
   if (n === undefined) return "not read";
   if (n === null) return DASH;
   const places = String(Number(n.toFixed(4))).split(".")[1]?.length ?? 0;
-  return n.toFixed(Math.max(2, places));
+  return fixed(n, Math.max(2, places));
 }
 
 /** Escape is the form's: it cancels and goes no further, so neither the desk's inspector nor the

@@ -302,7 +302,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     // two "$0" drawn over each other
     expect(new Set(labels).size).toBe(labels.length);
     expect(labels.at(-1)).toBe("$0");
-    expect(labels[0]).toMatch(/^-\$\d/);
+    expect(labels[0]).toMatch(/^\u2212\$\d/);
   });
 
   it("breaks the line across a missed session rather than joining the days either side", async () => {

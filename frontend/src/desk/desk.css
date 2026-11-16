@@ -55,6 +55,8 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+/* a header carrying a Greek letter is drawn as written: an upper-case ν is "Ν" (2026-11-16) */
+.nxd-head [data-greek] { text-transform: none; }
 .nxd-picker { margin-left: auto; }
 .nxd-picker button { height: 1.5rem; width: 1.5rem; padding: 0; }
 
@@ -170,7 +172,8 @@
 .nxd-legs { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; font-family: var(--nxd-mono); }
 .nxd-kv { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: 0.5rem 1rem; }
 .nxd-kv div { min-width: 0; }
-.nxd-kv dt { color: var(--muted-foreground); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.05em; }
+/* a figure's label as written, never in capitals: an upper-case ν is "Ν", which reads as N (2026-11-16) */
+.nxd-kv dt { color: var(--muted-foreground); font-size: 0.75rem; }
 .nxd-kv dd { font-family: var(--nxd-mono); font-variant-numeric: tabular-nums; font-size: 0.9375rem; white-space: nowrap; }
 .nxd-monitors h4 { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); margin-bottom: 0.25rem; }
 .nxd-monitor { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; padding: 0.375rem 0; border-bottom: 1px dashed var(--nxd-line); font-variant-numeric: tabular-nums; }

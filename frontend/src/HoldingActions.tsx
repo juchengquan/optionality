@@ -10,6 +10,7 @@
  *  block with it, so the outcome — what it made, where its Monitors went, and the correction — is
  *  handed up (`HoldingWrites.closed`) and drawn by the page (`ClosedResult.tsx`).
  */
+import { signedPoints } from "./shared/numbers";
 import { useEffect, useId, useRef, useState } from "react";
 
 import {
@@ -286,7 +287,7 @@ function QuantityFields({ holding, draft, error, followers, onChange }: {
 }
 
 const points = (p: number | null, none: string) =>
-  p === null ? none : `${p > 0 ? "+" : ""}${p.toFixed(2)} pts`;
+  p === null ? none : `${signedPoints(p)} pts`;
 
 /** The payoff at expiry per contract, as recorded and as corrected, both the service's (`POST
  *  /positions/payoff`: no Provider, nothing written): what a quantity changes is its maximums and

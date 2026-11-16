@@ -5,14 +5,19 @@ import type { Entry } from "./shared/api";
 import { ruleFigures, wholeMissing } from "./quotefigures";
 import "./rulefigures.css";
 
-export function RuleFigures({ entry, className }: { entry: Entry; className: string }) {
+export function RuleFigures({ entry, className, held = entry.held }: {
+  entry: Entry; className: string;
+  /** whether the row is drawn as something held (`ruleFigures`): not a spread drawn in the
+   *  watchlist because it only partly overlaps a holding (#346) */
+  held?: boolean;
+}) {
   // no quote at all: one reason, rather than ten dashes each repeating it
   const missing = wholeMissing(entry);
   if (missing !== null) return <p className="nx-meta nx-figures-missing" data-figures-missing="">{`no figures — ${missing}`}</p>;
   return (
     <dl className={`${className} nx-figures`} role="group" aria-label="figures">
-      {ruleFigures(entry).map((f) => (
-        <div key={f.key} data-figure={f.key}>
+      {ruleFigures(entry, held).map((f) => (
+        <div key={f.key} data-figure={f.key} data-detail={f.detail ? "" : undefined}>
           <dt>{f.label}</dt>
           {/* the reason sits under its dash, in words a finger can read: a title is for a pointer */}
           <dd>{f.text}{f.why === null ? null : <>{" "}<span className="nx-figure-why">{f.why}</span></>}</dd>

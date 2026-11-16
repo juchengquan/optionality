@@ -4,6 +4,7 @@ import type { Entry, Holding, Monitor } from "./shared/api";
 import type { EntryStyle } from "./shared/prefs";
 import type { MarketPhase } from "./session";
 import { DASH } from "./shared/format";
+import { money } from "./shared/numbers";
 import type { HoldingWrites } from "./HoldingActions";
 
 /** What every drawing of the book is handed: the polled figures and the viewer's settings. The
@@ -61,17 +62,13 @@ export function Chip({ state }: { state: keyof typeof CHIP }) {
   );
 }
 
-const MONEY = new Intl.NumberFormat("en-US", {
-  style: "currency", currency: "USD", maximumFractionDigits: 0, signDisplay: "exceptZero",
-});
-
 /** Money, or nothing a stranger can read. Privacy keeps %, Δ and DTE (ADR 0023): a share
  *  captured says how the trade is going without saying how big it is. */
 export function Money({ value, privacy }: { value: number | null; privacy: boolean }) {
   if (value === null) return <span data-money="">{DASH}</span>;
   return (
     <span data-money="" data-outcome={value > 0 ? "gain" : value < 0 ? "loss" : "flat"}>
-      {privacy ? "$•••" : MONEY.format(value)}
+      {privacy ? "$•••" : money(value)}
     </span>
   );
 }
