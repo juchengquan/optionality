@@ -9,7 +9,7 @@
  *  Every string here is asserted character for character in the tests, because they are read on a
  *  phone and a column that wraps is a table that cannot be read at all.
  */
-import { MARKET_TZ, valuedTiming } from "optionality/domain/expiry";
+import { MARKET_TZ, valuedTiming, type MarketPhase } from "optionality/domain/expiry";
 import { ruleShort, type RuleShape } from "optionality/domain/alarm";
 import { thresholdFault } from "optionality/domain/monitor";
 import type { HoldingValue } from "../../holdings.ts";
@@ -203,12 +203,28 @@ export function closeWords(close: { observed_on: string; observed_at: string | n
   }
 }
 
-/** The one line `/holdings` adds under its table outside the session (#380): which close the figures
+/** The one line `/holdings` adds under its table in the Curb and overnight (GTH, #416): the figures
+ *  are live where every leg is quoted, and thin — then how many holdings had a leg unquoted and were
+ *  valued from their latest close, and which close; and where the Provider could not be asked, that.
+ *  The page's session line says the same thing (`frontend/src/levels.ts`). */
+function thinLine(values: readonly HoldingValue[], phase: "overnight" | "curb"): string {
+  let line = phase === "overnight" ? "overnight session — live quotes, thin" : "Curb — live quotes, thin";
+  const closes = values.flatMap((v) => (v.close === null ? [] : [v.close]));
+  if (closes.length > 0) {
+    const latest = closes.reduce((a, b) => (b.observed_on > a.observed_on ? b : a));
+    line += `; ${closes.length} not quoted, ${closeWords(latest)}`;
+  }
+  if (values.some((v) => v.close === null && v.unpriced !== null)) line += "; the Provider could not be asked";
+  return line;
+}
+
+/** The one line `/holdings` adds under its table while nothing trades (#380): which close the figures
  *  are from. The latest close if any holding was valued from one in a session, else the latest row;
  *  then how many holdings were valued from another row, and how many had none and were valued live
  *  (a dash out of hours, never a 0) — or, where the Provider could not be asked for them, were not
  *  valued at all (#387). The page's market-closed line says the same thing. */
-export function closedLine(values: readonly HoldingValue[]): string {
+export function closedLine(values: readonly HoldingValue[], phase: MarketPhase = "closed"): string {
+  if (phase === "overnight" || phase === "curb") return thinLine(values, phase);
   const closes = values.flatMap((v) => (v.close === null ? [] : [v.close]));
   const live = values.length - closes.length;
   // one call prices every holding valued live, so either all of them were asked or none was

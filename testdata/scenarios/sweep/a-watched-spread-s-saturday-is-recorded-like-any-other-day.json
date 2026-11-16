@@ -143,10 +143,7 @@
             "contracts": "US.SPXW261218C7300000,US.SPXW261218C7350000",
             "observed_on": "2026-11-14",
             "dte": 34,
-            "legs_mid": {
-              "US.SPXW261218C7300000": 2.75,
-              "US.SPXW261218C7350000": 1.75
-            },
+            "legs_mid": null,
             "legs_iv": {
               "US.SPXW261218C7300000": 14.5,
               "US.SPXW261218C7350000": 14.5

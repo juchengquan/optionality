@@ -63,10 +63,13 @@ describe("what vol did to a holding, over its own samples", () => {
     id: string, on: string, dte: number,
     iv: Record<string, number> | null, vega: Record<string, number> | null,
   ) => {
+    // observed at that day's 16:00 New York: a regular session's price, the only kind a gap is
+    // measured from (#416)
     h.db.prepare(
-      `insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega)
-       values (?, ?, ?, 3.0, ?, ?)`,
-    ).run(id, on, dte, iv === null ? null : JSON.stringify(iv), vega === null ? null : JSON.stringify(vega));
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, legs_vega, observed_at)
+       values (?, ?, ?, 3.0, ?, ?, ?)`,
+    ).run(id, on, dte, iv === null ? null : JSON.stringify(iv), vega === null ? null : JSON.stringify(vega),
+      `${on} 20:00:00.000000`);
   };
   const legCodes = () => CONDOR_LEGS.map((l) => buildSpxCode(EXPIRY, l.option_type as "CALL" | "PUT", l.strike));
   const flat = (v: number) => Object.fromEntries(legCodes().map((c) => [c, v]));
@@ -86,8 +89,7 @@ describe("what vol did to a holding, over its own samples", () => {
     const gap = 3.0 - 3.0 * Math.sqrt(44 / 73);
     expect(await body(resp)).toEqual({
       vol: 4, from: "2026-10-06", to: "2026-10-07", days: 1, reason: null,
-      // a row with no observed time is said as one, never claimed as the close
-      at: "2026-10-07", timing: "unrecorded", gap, gap_reason: null, rest: gap - 4,
+      at: "2026-10-07", timing: "close", gap, gap_reason: null, rest: gap - 4,
       // the legs' flat vegas cancel: no cover, and why
       vega: 0, cover: null, cover_reason: "its legs' vegas cancel out, so no move in vol would cover the gap",
     });
@@ -218,15 +220,16 @@ describe("a holding's daily samples, served for the burndown and the IV chart (#
         legs_iv: JSON.parse(flat(14.5)), legs_vega: JSON.parse(flat(4.25)), legs_delta: JSON.parse(flat(0.2)),
         short_strikes: expect.any(Array),
       },
+      // a price read outside a regular session is served as none (#416): the burndown plots closes
       {
         observed_on: "2026-10-07", observed_at: "2026-10-08 08:30:00+08:00", timing: "after-close", dte: 72,
-        cost_to_close: 2.75, on_pace: 3 * Math.sqrt(72 / 73), spx: null, before_correction: false,
+        cost_to_close: null, on_pace: 3 * Math.sqrt(72 / 73), spx: null, before_correction: false,
         legs_iv: null, legs_vega: null, legs_delta: null,
         short_strikes: expect.any(Array),
       },
       {
         observed_on: "2026-10-08", observed_at: null, timing: "unrecorded", dte: 71,
-        cost_to_close: 2.5, on_pace: 3 * Math.sqrt(71 / 73), spx: null, before_correction: false,
+        cost_to_close: null, on_pace: 3 * Math.sqrt(71 / 73), spx: null, before_correction: false,
         legs_iv: null, legs_vega: null, legs_delta: null,
         short_strikes: expect.any(Array),
       },
@@ -883,6 +886,11 @@ describe("/positions/values", () => {
       });
     });
     await post(condor());
+    // the suite's clock is GTH: valued live, and SPX said stale beside its price (#416)
+    const overnight = (await body(await h.call("/positions/values")))[0];
+    expect(overnight.spx).toBe(7000);
+    expect(overnight.spx_reason).toBe("index not computed overnight — the last close's level");
+    h.now = new Date("2026-10-01T15:00:00Z"); // Thursday 11:00 New York, the session
     const v = (await body(await h.call("/positions/values")))[0];
     expect(v.spx).toBe(7000);
     expect(v.spx_reason).toBeNull();
@@ -990,6 +998,44 @@ describe("/positions/values", () => {
       cost_to_close: null, pnl: null, fetched_at: null, valued_from: "live",
       valued_reason: "moomoo call failed: quota exceeded",
     });
+  });
+});
+
+describe("/positions/values in the Curb and overnight (GTH, #416)", () => {
+  it("values a holding LIVE where every leg is quoted, and from its close where one is not", async () => {
+    // the suite's clock is 01:26 New York on a Friday: GTH, when SPX options trade live and thin
+    let thin = false;
+    start(async (codes) => {
+      const { records } = await pricedFetcher(codes);
+      return thin ? records.map((r) => (String(r.code).endsWith("P7075000") ? { ...r, mid_price: null } : r)) : records;
+    });
+    const id = (await body(await post(condor()))).id as string;
+    // Thursday's close, at 16:14 New York
+    h.db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at, contract_size)
+       values (?, '2026-10-01', 15, 2.5, '2026-10-01 20:14:00.000000', 100)`,
+    ).run(id);
+
+    const [live] = await body(await h.call("/positions/values"));
+    // 5.00 − 2.00 + 3.00 − 1.50: the quotes, never Thursday's 2.50
+    expect(live).toMatchObject({ cost_to_close: 4.5, valued_from: "live", valued_reason: null });
+    expect(live.fetched_at).not.toBeNull();
+
+    thin = true; // a leg with no two-sided quote: the close, as when nothing trades
+    const [close] = await body(await h.call("/positions/values"));
+    expect(close).toMatchObject({ cost_to_close: 2.5, valued_from: "close", valued_timing: "close" });
+  });
+
+  it("values from the close while nothing trades, though a Provider quotes every leg", async () => {
+    start();
+    const id = (await body(await post(condor()))).id as string;
+    h.db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, observed_at, contract_size)
+       values (?, '2026-10-01', 15, 2.5, '2026-10-01 20:14:00.000000', 100)`,
+    ).run(id);
+    h.now = new Date("2026-10-01T22:30:00Z"); // Thursday 18:30 New York: between the Curb and GTH
+    const [v] = await body(await h.call("/positions/values"));
+    expect(v).toMatchObject({ cost_to_close: 2.5, valued_from: "close" });
   });
 });
 

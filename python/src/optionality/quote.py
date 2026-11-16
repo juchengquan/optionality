@@ -11,6 +11,7 @@ from typing import Any, NamedTuple
 from pydantic import BaseModel, ConfigDict
 
 from optionality.contract import parse_spx_code
+from optionality.expiry import market_phase
 from optionality.js import to_fixed
 from optionality.timefmt import display_time, market_time_to_display
 
@@ -93,7 +94,8 @@ class DerivedSpx(BaseModel):
     model_config = ConfigDict(frozen=True)
     #: points, to two places; None where nothing in the batch can give it
     price: float | None
-    #: why `price` is None, in words a dash can sit beside; None when there is a price
+    #: why `price` is None, in words a dash can sit beside — or, beside a price, why it is not current:
+    #: outside the regular session the index is not computed (`session_spx`, #416). None for a current one
     reason: str | None
 
 
@@ -184,6 +186,24 @@ def derived_spx(records: list[Quote]) -> DerivedSpx:
     mid = len(levels) // 2
     median = levels[mid] if len(levels) % 2 == 1 else (levels[mid - 1] + levels[mid]) / 2
     return DerivedSpx(price=to_fixed(median, 2), reason=None)
+
+
+def session_spx(now: datetime, spx: DerivedSpx) -> DerivedSpx:
+    """SPX's derived price as it may be said at `now` (#416): as derived in the regular session, and
+    outside it with a reason beside the price, which is never presented as current — the index is not
+    computed then, so every premium inverts to its last close's level. A missing price keeps its own
+    reason. Mirrors `quote.ts`."""
+    if spx.price is None:
+        return spx
+    phase = market_phase(now)
+    if phase == "regular":
+        return spx
+    reason = {
+        "overnight": "index not computed overnight — the last close's level",
+        "curb": "index not computed after the close — the close's level",
+        "closed": "index not computed while the market is closed — the last close's level",
+    }[phase]
+    return DerivedSpx(price=spx.price, reason=reason)
 
 
 def sigma_distance(points: float, spx: float, iv: float, dte: float) -> float | None:

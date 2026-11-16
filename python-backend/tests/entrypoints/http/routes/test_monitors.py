@@ -852,13 +852,19 @@ class TestAWatchedRulesDailyCloses:
             "price": 3, "observed_on": "2026-10-01", "observed_at": "2026-10-02 04:14:00+08:00", "timing": "close",
         }  # fmt: skip
 
-    async def test_closes_is_the_latest_reading_with_a_price_where_no_close_has_one(self, start):
+    async def test_closes_is_never_a_price_read_outside_a_regular_session(self, start):
+        # #416: an overnight (GTH) price is no close
         h, _ = self.start_closed(start)
         id_ = (await post(h, combo(field="mid_price"))).json()["id"]
+        # Thursday 21:00 New York, GTH: before #416 the sweep stored such a price
         self.watched(h, self.spread_codes(), "2026-10-01", 31, [5, 2], "2026-10-02 01:00:00.000000")
+        assert (await self.closes_of(h))[id_] is None
+        # and beside a session's close, the close, though the GTH row is later
+        self.watched(h, self.spread_codes(), "2026-09-30", 32, [6, 2], "2026-09-30 20:14:00.000000")
         found = (await self.closes_of(h))[id_]
-        assert found["price"] == 3
-        assert found["timing"] == "after-close"
+        assert found["observed_on"] == "2026-09-30"
+        assert found["price"] == 4
+        assert found["timing"] == "close"
 
     async def test_closes_is_null_for_a_rule_with_no_day_priced(self, start):
         h, _ = self.start_closed(start)

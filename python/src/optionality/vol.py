@@ -12,7 +12,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from optionality.exit import dte_at_open, on_pace
-from optionality.expiry import in_sample_hours, market_date, sample_timing
+from optionality.expiry import in_sample_hours, market_date, sample_timing, taken_in_session
 from optionality.position import Position, position_leg_codes
 
 
@@ -125,11 +125,16 @@ def _day_words(iso: str) -> str:
 
 def pace_explained(samples: list[PacedSample], position: Position, now: datetime) -> PaceExplained:
     """The vol part, the gap at the last sample it splits, and why for each figure that is absent."""
+
     # the gap is at the last day with a Cost to close, and the vol part runs to that same day, so the
     # three stay one instant: a day kept only for its vol readings (#380) is SKIPPED. Where no day has
-    # a cost, nothing is skipped and the last day says so.
+    # a cost, nothing is skipped and the last day says so. A cost is a REGULAR session's or none
+    # (#416): one read overnight, in the Curb, at the weekend or with no stamp is skipped the same way.
+    def session_cost(s: PacedSample) -> float | None:
+        return s.cost_to_close if taken_in_session(s.observed_at) else None
+
     priced = len(samples) - 1
-    while priced >= 0 and samples[priced].cost_to_close is None:
+    while priced >= 0 and session_cost(samples[priced]) is None:
         priced -= 1
     up_to = samples if priced < 0 else samples[: priced + 1]
     m = _measure(up_to, position)
@@ -163,6 +168,8 @@ def pace_explained(samples: list[PacedSample], position: Position, now: datetime
             gap_reason = f"there is no On-pace at {last.dte} DTE for a holding opened at {opened_dte} DTE"
         elif last.cost_to_close is None:
             gap_reason = f"{_day_words(last.observed_on)} has no Cost to close"
+        elif session_cost(last) is None:
+            gap_reason = f"{_day_words(last.observed_on)} has no Cost to close from a regular session"
         else:
             gap = last.cost_to_close - pace
 

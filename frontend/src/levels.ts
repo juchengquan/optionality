@@ -1,6 +1,6 @@
 import type { Holding } from "./shared/api";
 import { servedClock } from "./shared/format";
-import { marketDayWords, newYorkWhen, servedWhen } from "./session";
+import { marketDayWords, marketPhase, newYorkWhen, servedInstant, servedWhen, type MarketPhase } from "./session";
 
 /** A holding's Levels as its chip says them, on every surface that draws one (#354, re-keyed to
  *  the session by #371).
@@ -45,12 +45,20 @@ export function valuedStamp(holdings: readonly Holding[]): string | null {
  *  @param now the clock that decides that, the page's own */
 export function levelWords(level: Level, holding: Holding, session: boolean, now: Date = new Date()): string {
   const words = LEVEL_WORDS[level];
-  if (session) return words;
-  // valued from a stored close outside the session (#380): the market-closed line says which close
-  // and when, on New York's clock; the chip says only that it is that close, so the two state ONE
-  // clock between them (#354) and the chip stays short
+  // valued from a stored close outside the session (#380) — or in the Curb or GTH where a leg had
+  // no quote (#416): the session line says which close and when, on New York's clock; the chip says
+  // only that it is that close, so the two state ONE clock between them (#354) and the chip stays short
   if (holding.valued_from === "close") {
     return `${words} · ${holding.valued_timing === "close" ? "as of the close" : "as of the last reading"}`;
+  }
+  if (session) {
+    // polled: bare in the regular session; in the Curb and GTH (#416) a live valuation from thin
+    // quotes, so the chip says when it was made
+    const made = servedInstant(holding.fetched_at);
+    const thin = made !== null && ["overnight", "curb"].includes(marketPhase(made));
+    if (!thin) return words;
+    const clock = valuedClock(holding.fetched_at);
+    return clock ? `${words} · live at ${clock}` : words;
   }
   const at = servedWhen(holding.fetched_at, now);
   // a valuation with no time on it is still not live, and is said to be as last valued
@@ -101,6 +109,23 @@ export function closeLineWords(holdings: readonly Holding[] | null): string | nu
   return line;
 }
 
+/** The session line's words in the Curb and overnight (GTH, #416): the page is polled and the
+ *  holdings valued live where every leg is quoted, and the quotes are thin — then how many holdings
+ *  had a leg unquoted and were valued from their latest close, and which close; and where the
+ *  Provider could not be asked, that. The bot's `/holdings` line, word for word (`thinLine`). */
+export function thinLineWords(holdings: readonly Holding[] | null, phase: "overnight" | "curb"): string {
+  let line = phase === "overnight" ? "overnight session — live quotes, thin" : "Curb — live quotes, thin";
+  const closes = (holdings ?? []).filter((h) => h.valued_from === "close");
+  if (closes.length > 0) {
+    const latest = closes.reduce((a, b) => ((b.valued_on ?? "") > (a.valued_on ?? "") ? b : a));
+    line += `; ${closes.length} not quoted, ${closeWords(latest)}`;
+  }
+  if ((holdings ?? []).some((h) => h.valued_from === "live" && h.valued_reason !== null)) {
+    line += "; the Provider could not be asked";
+  }
+  return line;
+}
+
 /** Whether every holding was VALUED, which is what lets the needs-you list claim to be whole (ADR
  *  0012): an answer arrived, without an error, and no holding in it is one the service could not
  *  value because the Provider could not be asked out of the session (`valued_reason`, #387) — a 200
@@ -114,8 +139,9 @@ export function everyHoldingValued(holdings: readonly Holding[] | null, error: s
  *  needs its date. */
 export function closedLineText(
   at: string | null, served: string | null | undefined, holdings: readonly Holding[] | null,
-  now: Date = new Date(),
+  now: Date = new Date(), phase: MarketPhase = "closed",
 ): string {
+  if (phase === "overnight" || phase === "curb") return thinLineWords(holdings, phase);
   const words = at === null ? null : served ? servedWhen(served, now) ?? at.slice(0, 5) : at.slice(0, 5);
   return closeLineWords(holdings) ?? (words ? `market closed — valued at ${words}` : "market closed");
 }

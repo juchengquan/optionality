@@ -292,6 +292,32 @@ describe("the pace gap explained", () => {
     expect(e.rest).toBe(e.gap! - e.vol!);
   });
 
+  it("never measures from a price read outside the regular session: GTH, the Curb (#416)", () => {
+    // Friday the 9th priced at its close; Sunday's and Monday's rows priced overnight (GTH) by the
+    // service before #416 — Sunday 20:15 and Monday 00:00 New York. The split stays at Friday's close.
+    const chain = [
+      paced(6.86, "2026-10-08", 45, FLAT, VEGA),
+      paced(6.9, "2026-10-09", 44, [11, 10, 22, 22], VEGA),
+      { ...paced(5.2, "2026-10-10", 43, [11, 10, 22, 22], VEGA), observed_at: "2026-10-10 20:00:00" },
+      { ...paced(5.1, "2026-10-11", 42, [11, 10, 22, 22], VEGA), observed_at: "2026-10-12 00:15:07" },
+      { ...paced(5.0, "2026-10-12", 41, [11, 10, 22, 22], VEGA), observed_at: "2026-10-12 04:00:06" },
+    ];
+    const e = paceExplained(chain, condor(), LATER);
+    expect(e).toEqual(paceExplained(chain.slice(0, 2), condor(), LATER));
+    expect([e.at, e.gap, e.timing]).toEqual(["2026-10-09", 6.9 - pace(44), "close"]);
+    // a Curb price, Friday 16:40, is no close either
+    const curb = [chain[0]!, { ...paced(6.5, "2026-10-09", 44, FLAT, VEGA), observed_at: "2026-10-09 20:40:00" }];
+    expect(paceExplained(curb, condor(), LATER).at).toBe("2026-10-08");
+  });
+
+  it("says why when the only price is one read outside the regular session (#416)", () => {
+    const e = paceExplained([
+      { ...paced(6.86, "2026-10-06", 45, FLAT, VEGA), observed_at: "2026-10-07 00:30:00" },
+    ], condor(), LATER);
+    expect(e.gap).toBeNull();
+    expect(e.gap_reason).toBe("6 Oct has no Cost to close from a regular session");
+  });
+
   describe("says what the last sample is", () => {
     const at = (observed_at: string | null, now: Date) => paceExplained([
       { ...paced(6.86, "2026-10-06", 45, FLAT, VEGA), observed_at },

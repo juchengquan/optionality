@@ -12,7 +12,7 @@
  *  move apart.
  */
 import { dteAtOpen, onPace } from "./exit.ts";
-import { inSampleHours, marketDate, sampleTiming } from "./expiry.ts";
+import { inSampleHours, marketDate, sampleTiming, takenInSession } from "./expiry.ts";
 import { positionLegCodes, type Position } from "./position.ts";
 
 /** One market day's readings, as the sampler stored them. */
@@ -190,8 +190,13 @@ export function paceExplained(
   // hours — a weekend, the small hours before the open) is SKIPPED, never the end of the split:
   // otherwise every weekend read "has no Cost to close". Where no day has a cost, nothing is skipped
   // and the last day says so.
+  //
+  // A cost is a REGULAR session's or none (#416): one read overnight (GTH), in the Curb, at the
+  // weekend or with no stamp is skipped as a costless day is, so the gap is never measured from a
+  // thin overnight mark while the holding says "as of the close".
+  const sessionCost = (s: PacedSample) => (takenInSession(s.observed_at) ? s.cost_to_close : null);
   let priced = samples.length - 1;
-  while (priced >= 0 && samples[priced]!.cost_to_close === null) priced -= 1;
+  while (priced >= 0 && sessionCost(samples[priced]!) === null) priced -= 1;
   const upTo = priced < 0 ? samples : samples.slice(0, priced + 1);
   const m = measure(upTo, position);
   const measured = typeof m === "string" ? null : m;
@@ -221,6 +226,8 @@ export function paceExplained(
       gapReason = `there is no On-pace at ${last.dte} DTE for a holding opened at ${openedDte} DTE`;
     } else if (last.cost_to_close === null) {
       gapReason = `${dayWords(last.observed_on)} has no Cost to close`;
+    } else if (sessionCost(last) === null) {
+      gapReason = `${dayWords(last.observed_on)} has no Cost to close from a regular session`;
     } else {
       gap = last.cost_to_close - pace;
     }

@@ -48,6 +48,38 @@ export function inSession(now: Date): boolean {
   return second >= OPEN && second <= CLOSE;
 }
 
+/** Which of SPX options' sessions New York's clock is in (#416), as the domain's `marketPhase`
+ *  (`typescript/src/domain/expiry.ts`) has it, edge for edge — held to the same instants by this
+ *  page's tests, since the page cannot import it:
+ *
+ *  - **regular**: 09:30:00 to 16:15:00, Monday to Friday — `inSession`, exactly;
+ *  - **curb**: after 16:15:00 and before 17:00:00, Monday to Friday;
+ *  - **overnight**: Global Trading Hours, 20:15:00 to before 09:25:00 the next morning, for a trade
+ *    date of Monday to Friday — so Sunday 20:15 starts Monday's, and Friday 20:15 starts nothing;
+ *  - **closed**: every other instant.
+ *
+ *  The page treats the Curb and GTH as it treats the session for what it fetches — it polls, since
+ *  SPX options trade then and the holdings are valued live where quoted — and says which it is: the
+ *  session line reads "overnight session — live quotes, thin" rather than "market closed". */
+export type MarketPhase = "regular" | "curb" | "overnight" | "closed";
+
+const GTH_UNTIL = (9 * 60 + 25) * 60;
+const CURB_UNTIL = 17 * 60 * 60;
+const GTH_FROM = (20 * 60 + 15) * 60;
+
+export function marketPhase(now: Date): MarketPhase {
+  const { weekday, second } = newYork(now);
+  const weekend = weekday === "Sat" || weekday === "Sun";
+  if (!weekend) {
+    if (second >= OPEN && second <= CLOSE) return "regular";
+    if (second > CLOSE && second < CURB_UNTIL) return "curb";
+    if (second < GTH_UNTIL) return "overnight";
+  }
+  // an evening's GTH is the NEXT weekday's: Sunday's to Thursday's evenings have one
+  if (second >= GTH_FROM && weekday !== "Fri" && weekday !== "Sat") return "overnight";
+  return "closed";
+}
+
 /** The instant New York's wall clock reads `second` on the calendar `day` (a UTC midnight). Found
  *  by correcting a guess by the offset it lands on, twice: once is enough except across a change of
  *  clocks, and the edges here (09:30, 16:15) are never inside the hour a change skips or repeats. */

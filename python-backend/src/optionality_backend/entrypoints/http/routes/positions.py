@@ -41,7 +41,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Path, Response
 from optionality.contract import build_spx_code
 from optionality.exit import dte_at_open, exit_levels, on_pace
-from optionality.expiry import market_date, sample_timing, valued_timing
+from optionality.expiry import market_date, sample_timing, taken_in_session, valued_timing
 from optionality.monitor import monitor_leg_codes
 from optionality.payoff import payoff_at_expiry
 from optionality.position import (
@@ -206,7 +206,8 @@ class PositionValues(PositionOut):
     #: same on every holding, as `contract_size` is. None where the batch cannot give it, never a
     #: Reference's figure.
     spx: float | None
-    #: why `spx` is None, in words; None when there is a figure
+    #: why `spx` is None, in words — or, beside a figure, why it is not current: outside the regular session
+    #: the index is not computed, and the figure is its last close's level (`session_spx`, #416)
     spx_reason: str | None
     greeks: dict[str, float | None]
     #: each leg's OWN delta, contract code -> delta, from the same batch: what a short leg's Δ is read
@@ -648,7 +649,8 @@ def position_routes(deps: Deps) -> APIRouter:
                     "observed_at": None if timing == "unrecorded" else display_stored(s["observed_at"], tz),
                     "timing": timing,
                     "dte": s["dte"],
-                    "cost_to_close": s["cost_to_close"],
+                    # a regular session's price only (#416): the burndown plots closes
+                    "cost_to_close": s["cost_to_close"] if taken_in_session(s["observed_at"]) else None,
                     "on_pace": on_pace(row["entry"], opened_dte, s["dte"]),
                     "legs_iv": _leg_map(s["legs_iv"]),
                     "legs_vega": _leg_map(s["legs_vega"]),

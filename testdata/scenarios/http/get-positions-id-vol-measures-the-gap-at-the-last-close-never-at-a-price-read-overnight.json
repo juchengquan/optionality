@@ -1,0 +1,235 @@
+{
+  "name": "GET /positions/{id}/vol measures the gap at the last close, never at a price read overnight",
+  "world": {
+    "clock": "2026-11-16T05:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-12",
+          "dte": 36,
+          "cost_to_close": 3.75,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-12 21:14:58.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-13",
+          "dte": 35,
+          "cost_to_close": 3.25,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-13 21:14:59.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-14",
+          "dte": 34,
+          "cost_to_close": null,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-14 05:00:12.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-15",
+          "dte": 33,
+          "cost_to_close": 3.4,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-16 01:15:07.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-16",
+          "dte": 32,
+          "cost_to_close": 3.05,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14.5,
+            "US.SPXW261218C7350000": 14,
+            "US.SPXW261218P6400000": 19.25,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4,
+            "US.SPXW261218P6400000": 4.5,
+            "US.SPXW261218P6350000": 3.75
+          },
+          "legs_delta": {
+            "US.SPXW261218C7300000": 0.2,
+            "US.SPXW261218C7350000": 0.14,
+            "US.SPXW261218P6400000": -0.17,
+            "US.SPXW261218P6350000": -0.11
+          },
+          "observed_at": "2026-11-16 05:00:06.000000",
+          "spx": 6900.5,
+          "contract_size": 100
+        }
+      ],
+      "watch_samples": [],
+      "reference_securities": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/positions/pos-1/vol",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "vol": null,
+        "from": null,
+        "to": null,
+        "days": null,
+        "reason": "its samples begin on 12 Nov, not on 12 Oct when it was Opened: the vol it was sold at was never recorded",
+        "at": "2026-11-13",
+        "timing": "close",
+        "gap": -1.3756907511606453,
+        "gap_reason": null,
+        "rest": null,
+        "vega": -1,
+        "cover": 1.3756907511606453,
+        "cover_reason": null
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

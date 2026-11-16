@@ -6,6 +6,7 @@
  *  on a bool gives 1 there as `Number(true)` does here.
  */
 import { parseSpxCode } from "./contract.ts";
+import { marketPhase } from "./expiry.ts";
 import { toFixed } from "./js.ts";
 import { displayTime, marketTimeToDisplay } from "./timefmt.ts";
 
@@ -135,7 +136,9 @@ export function verifyVerdict(codes: string[], batch: Batch): string | null {
 export interface DerivedSpx {
   /** points, to two places; null where nothing in the batch can give it */
   price: number | null;
-  /** why `price` is null, in words a dash can sit beside; null when there is a price */
+  /** why `price` is null, in words a dash can sit beside — or, beside a price, why it is not
+   *  current: outside the regular session the index is not computed, and the price is its last
+   *  close's level (`sessionSpx`, #416). Null for a price that is current. */
   reason: string | null;
 }
 
@@ -201,6 +204,25 @@ export function derivedSpx(records: Quote[]): DerivedSpx {
   const mid = Math.floor(levels.length / 2);
   const median = levels.length % 2 === 1 ? levels[mid]! : (levels[mid - 1]! + levels[mid]!) / 2;
   return { price: toFixed(median, 2), reason: null };
+}
+
+/** SPX's derived price as it may be said at `now` (#416): as derived in the regular session, and
+ *  outside it with a reason beside the price, which is never presented as current.
+ *
+ *  The index is computed only while the stocks trade. Overnight (GTH) and in the Curb moomoo still
+ *  quotes SPX options live, but its SPX quote stands at the last close, and each `option_premium`
+ *  is worked out against that — so `derivedSpx` inverts them back to the last close's level, not
+ *  to where SPX would be now. The price is kept, because the strike distances and σ are still
+ *  measured against something; the reason says what. A missing price keeps its own reason. */
+export function sessionSpx(now: Date, spx: DerivedSpx): DerivedSpx {
+  if (spx.price === null) return spx;
+  switch (marketPhase(now)) {
+    case "regular": return spx;
+    case "overnight": return { price: spx.price, reason: "index not computed overnight — the last close's level" };
+    case "curb": return { price: spx.price, reason: "index not computed after the close — the close's level" };
+    case "closed":
+      return { price: spx.price, reason: "index not computed while the market is closed — the last close's level" };
+  }
 }
 
 /** How many standard deviations of SPX to expiry a distance in points is (#297):

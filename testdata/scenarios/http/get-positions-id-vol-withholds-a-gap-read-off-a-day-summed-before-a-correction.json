@@ -56,7 +56,7 @@
           "manage_notified_at": null,
           "closed_on": null,
           "exit": null,
-          "qty_corrected_at": "2026-11-09 14:00:00.000000"
+          "qty_corrected_at": "2026-11-09 14:50:00.000000"
         }
       ],
       "monitors": [],
@@ -88,7 +88,7 @@
           "position_id": "pos-1",
           "observed_on": "2026-11-07",
           "dte": 41,
-          "cost_to_close": 6.1,
+          "cost_to_close": null,
           "legs_iv": {
             "US.SPXW261218C7300000": 14.75,
             "US.SPXW261218C7350000": 14,
@@ -110,7 +110,7 @@
           "position_id": "pos-1",
           "observed_on": "2026-11-08",
           "dte": 40,
-          "cost_to_close": 6.25,
+          "cost_to_close": null,
           "legs_iv": {
             "US.SPXW261218C7300000": 15,
             "US.SPXW261218C7350000": 14.25,
@@ -125,6 +125,28 @@
           },
           "legs_delta": null,
           "observed_at": "2026-11-08 21:05:00.000000",
+          "spx": null,
+          "contract_size": null
+        },
+        {
+          "position_id": "pos-1",
+          "observed_on": "2026-11-09",
+          "dte": 39,
+          "cost_to_close": 6.3,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 15.25,
+            "US.SPXW261218C7350000": 14.5,
+            "US.SPXW261218P6400000": 19.5,
+            "US.SPXW261218P6350000": 20.5
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 5.5,
+            "US.SPXW261218C7350000": 4.75,
+            "US.SPXW261218P6400000": 4.25,
+            "US.SPXW261218P6350000": 3.5
+          },
+          "legs_delta": null,
+          "observed_at": "2026-11-09 14:45:00.000000",
           "spx": null,
           "contract_size": null
         }
@@ -145,19 +167,19 @@
     "response": {
       "status": 200,
       "body": {
-        "vol": 0.5,
+        "vol": 1.0625,
         "from": "2026-11-06",
-        "to": "2026-11-08",
-        "days": 2,
+        "to": "2026-11-09",
+        "days": 3,
         "reason": null,
-        "at": "2026-11-08",
-        "timing": "close",
+        "at": "2026-11-09",
+        "timing": "in-hours",
         "gap": null,
-        "gap_reason": "the Cost to close of 2026-11-08 was summed before a leg's quantity was corrected",
+        "gap_reason": "the Cost to close of 2026-11-09 was summed before a leg's quantity was corrected",
         "rest": null,
         "vega": -1.5,
         "cover": null,
-        "cover_reason": "the Cost to close of 2026-11-08 was summed before a leg's quantity was corrected"
+        "cover_reason": "the Cost to close of 2026-11-09 was summed before a leg's quantity was corrected"
       }
     },
     "rows": {},

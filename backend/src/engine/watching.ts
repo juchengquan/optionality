@@ -22,7 +22,7 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 
-import { daysToExpiry, marketDate, takesSample } from "optionality/domain/expiry";
+import { daysToExpiry, marketDate, sampledPrice, takesSample } from "optionality/domain/expiry";
 import { monitorLegCodes } from "optionality/domain/monitor";
 import { contractSize, positionLegCodes } from "optionality/domain/position";
 import { derivedSpx } from "optionality/domain/quote";
@@ -102,10 +102,14 @@ export function recordWatchSamples(
       if (dte < 0) continue;
       const maps = ["mid_price", "option_implied_volatility", "option_vega", "option_delta"]
         .map((field) => readings(codes, byCode, field));
-      // nothing observed at all — contracts the Provider did not return — is no row
-      if (maps.every((m) => m === null)) continue;
-      const [mids, ivs, vegas, deltas] = maps.map((m) => (m === null ? null : toSqliteJson(m))) as
+      const [read, ivs, vegas, deltas] = maps.map((m) => (m === null ? null : toSqliteJson(m))) as
         [string | null, string | null, string | null, string | null];
+      // the mids are a REGULAR session's or none (#416): a GTH, Curb or weekend quote is no day's
+      // price, and the day keeps its vol with the mids left empty
+      const mids = sampledPrice(at, priced(read)) === null ? null : read;
+      // nothing observed at all — contracts the Provider did not return, or only an out-of-session
+      // price — is no row
+      if (mids === null && ivs === null && vegas === null && deltas === null) continue;
 
       const day = findWatchSample(db, key, observedOn);
       const write = takesSample(

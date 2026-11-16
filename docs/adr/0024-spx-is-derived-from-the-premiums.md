@@ -5,7 +5,8 @@ Date: 2026-11-11
 ## Status
 
 Accepted and built. The owner accepted the method on 2026-11-11 ("accept, build #288"), on the
-market-hours check reported in #288. Both backends carry it, in lockstep (ADR 0021).
+market-hours check reported in #288. Both backends carry it, in lockstep (ADR 0021). **Amended
+2026-11-16 (#416)**: outside the regular session the price is said stale (last section).
 
 Decides what **ADR 0023** left pending: SPX's price, live and in each sample, which the strike
 strip, the price map and the payoff's spot marker wait on. Amends **ADR 0011**, whose daily sample
@@ -83,3 +84,22 @@ and the column is no part of `takesSample`'s completion rule. Rows written befor
 - **A figure on every row** repeats one number per row of a response. That costs a few bytes and
   keeps both routes' shapes, where an object wrapper would have changed the old dashboard, the
   `hc` pins and every scenario that reads them.
+
+## Amended 2026-11-16: outside the regular session, the last close's level, said so (#416)
+
+The check above was made in the session. Overnight (GTH, 20:15–09:25 New York) and in the Curb,
+moomoo quotes SPX options live but its SPX quote stands at the last close, and each `option_premium`
+is worked out against that — so the median inverts to the last close's level: on 2026-11-15/16 the
+holding and every watched row said 7561.68, Friday's, with `spx_reason: null`, and the strike
+distances and σ were Friday's too. The price is not wrong as "where SPX last was", but it is not
+where SPX is now.
+
+So outside the regular session (`marketPhase`) the service keeps the price and says why it is not
+current, in `spx_reason`, beside it: "index not computed overnight — the last close's level" (in the
+Curb "after the close — the close's level"; while nothing trades "while the market is closed — the
+last close's level") — `sessionSpx`, golden-cased and ported. `spx_reason` was "why there is no
+price"; it is now that, or, beside a price, why the price is not current. On every live figure:
+`/quotes`, `/positions/values` valued live. A holding valued from its close keeps the close's own
+stored SPX, which is that close's. The samples' stored `spx` is unchanged — a sample is labelled
+by its own `observed_at` — and, since #416 stores no price outside the regular session, a GTH row's
+SPX is a vol reading's companion, never a priced one's.

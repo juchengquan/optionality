@@ -5,7 +5,8 @@ Date: 2026-10-17
 ## Status
 
 Accepted. Ratified by the owner on 2026-10-17, in the design session that produced the top line
-("both", then "more like a mix of a and b — we can put it into settings side panel").
+("both", then "more like a mix of a and b — we can put it into settings side panel"). **Amended
+2026-11-16 (#416)**: "polled" includes the Curb and GTH (last section).
 
 ## Context
 
@@ -55,3 +56,13 @@ revisited rather than quietly worked around.
 
 Telegram is unaffected: alarms still push, and `/holdings` answers on demand, through the same
 service-side figures.
+
+## Amended 2026-11-16: the Curb and GTH are polled as the session is (#416)
+
+What the page polls was re-keyed from a mode to New York's session by ADR 0023 (2026-11-13). SPX
+options also trade in the Curb (16:15–17:00) and overnight, in GTH (20:15–09:25, Sunday 20:15 starting
+Monday's trade date), and the owner trades them in Singapore's daytime, which is GTH. So in both the
+page polls exactly as in session — `/quotes`, `/positions/values` and `/references`, one bounded call
+each per poll per tab — and the holdings are valued live where every leg is quoted. Only while
+nothing trades (17:00–20:15, Friday 17:00 to Sunday 20:15, 09:25–09:30) is the book valued once. The
+bounded-call invariant is unchanged: the valuation is still ONE batch, every holding in it.

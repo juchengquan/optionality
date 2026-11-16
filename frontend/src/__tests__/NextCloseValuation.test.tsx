@@ -83,8 +83,9 @@ describe("naming the close", () => {
   it("puts no time on a chip from a close: the line says it, on New York's clock", () => {
     expect(levelWords("stop", fromClose("a"), false)).toBe("at stop · as of the close");
     expect(levelWords("stop", fromClose("a", { valued_timing: "after-close" }), false)).toBe("at stop · as of the last reading");
-    // in the session no chip carries a time, however it was valued
-    expect(levelWords("stop", fromClose("a"), true)).toBe("at stop");
+    // polled — in the Curb or GTH, where a holding with a leg unquoted is valued from its close (#416)
+    // — the chip still says it is the close
+    expect(levelWords("stop", fromClose("a"), true)).toBe("at stop · as of the close");
   });
 });
 
@@ -103,7 +104,7 @@ describe("a watched rule out of hours (F8)", () => {
   const FRIDAY_CLOSE = "2026-11-14 05:14:59+08:00";
 
   it("says the sweep's last reading in the session, with its time, beside the dash", () => {
-    const [e] = withLastKnown([rule], [stored(3.05, FRIDAY_CLOSE)], false);
+    const [e] = withLastKnown([rule], [stored(3.05, FRIDAY_CLOSE)], "close");
     expect(e!.last_reading).toEqual({ value: 3.05, at: FRIDAY_CLOSE });
     // on New York's clock, as the market-closed line names the same close: one clock on the page
     expect(sentence(e!)).toBe("|value| ≥ 6.01 — no figure out of session; last 3.05 at Fri 13 Nov 16:14");
@@ -113,7 +114,7 @@ describe("a watched rule out of hours (F8)", () => {
     // what three live price rules hold until the first sweep in the session: 0.0 read at 01:47
     // New York on a Saturday
     expect(lastKnown(rule, stored(0, "2026-11-14 14:47:28+08:00"), false)).toBeNull();
-    const [e] = withLastKnown([rule], [stored(0, "2026-11-14 14:47:28+08:00")], false);
+    const [e] = withLastKnown([rule], [stored(0, "2026-11-14 14:47:28+08:00")], "close");
     expect(sentence(e!)).toBe("|value| ≥ 6.01 — no figure");
   });
 

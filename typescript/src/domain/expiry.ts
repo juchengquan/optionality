@@ -60,9 +60,10 @@ const WEEKDAY = new Intl.DateTimeFormat("en-US", { timeZone: MARKET_TZ, weekday:
  *
  *  The same edges as `inSampleHours`, and a different question: the daily sample is written on EVERY
  *  calendar day, because the vol chain steps one day at a time (ADR 0011), while the session is when
- *  the market is open to be priced. Outside it the service values a holding from its latest close
- *  rather than from the Provider's out-of-hours quote (`valuesFromClose`, #380) — moomoo quotes every
- *  option bid 0 / ask 0 then, which is no price at all.
+ *  the market is open to be priced: the REGULAR session (`marketPhase`). Outside it the service values a
+ *  holding from its latest close (`valuesFromClose`, #380) — except in the Curb and overnight (GTH),
+ *  where SPX options trade and moomoo quotes them live, so a holding every leg of which is quoted is
+ *  valued live (#416). moomoo quotes every option bid 0 / ask 0 only while nothing trades.
  *
  *  The page asks the same question of its own clock (`frontend/src/session.ts`), which it cannot
  *  import from here; the two are held to the same edges by their own tests.
@@ -71,6 +72,58 @@ export function inSession(now: Date = new Date()): boolean {
   const weekday = WEEKDAY.format(now);
   if (weekday === "Sat" || weekday === "Sun") return false;
   return inSampleHours(now);
+}
+
+/** Which of SPX options' sessions New York's clock is in at `now` (#416), from Cboe's hours:
+ *
+ *  - **regular**: 09:30:00 to 16:15:00, both ends included, Monday to Friday — `inSession`, exactly.
+ *  - **curb**: after 16:15:00 and before 17:00:00, Monday to Friday.
+ *  - **overnight**: Global Trading Hours, GTH — from 20:15:00 to before 09:25:00 the next morning,
+ *    for a trade date of Monday to Friday. An evening's GTH trades for the NEXT weekday, so it runs
+ *    from Sunday evening to Friday morning: **Sunday 20:15 starts Monday's trade date**, and Friday
+ *    20:15 starts nothing.
+ *  - **closed**: every other instant — 09:25 to 09:30, 17:00 to 20:15, and Friday 17:00 to Sunday
+ *    20:15.
+ *
+ *  Holidays are not detected, as `inSession` does not detect them; some have no GTH at all, and on
+ *  one the service finds no quote, which values from the close as any unquoted hour does.
+ *
+ *  What it decides: only a regular session's price is a day's sample (`sampledPrice`) or a close
+ *  (`closeSample`); in the Curb and overnight a holding is valued LIVE where every leg is quoted
+ *  (`valuesFromClose`) and the page polls as in session; and outside the regular session SPX's
+ *  derived price is the index's last computed level, said so (`sessionSpx`). The page asks the same
+ *  question of its own clock (`frontend/src/session.ts`), held to the same edges by its tests. */
+export type MarketPhase = "regular" | "curb" | "overnight" | "closed";
+
+/** 09:25, 17:00 and 20:15 in New York, as milliseconds since its midnight. */
+const GTH_UNTIL = (9 * 60 + 25) * 60_000;
+const CURB_UNTIL = 17 * 60 * 60_000;
+const GTH_FROM = (20 * 60 + 15) * 60_000;
+
+export function marketPhase(now: Date = new Date()): MarketPhase {
+  const weekday = WEEKDAY.format(now);
+  const t = sinceNewYorkMidnight(now);
+  const weekend = weekday === "Sat" || weekday === "Sun";
+  if (!weekend) {
+    if (t >= SAMPLE_FROM && t <= SAMPLE_UNTIL) return "regular";
+    if (t > SAMPLE_UNTIL && t < CURB_UNTIL) return "curb";
+    // the morning's end of the GTH that began the evening before (Monday's began on Sunday)
+    if (t < GTH_UNTIL) return "overnight";
+  }
+  // an evening's GTH is the NEXT weekday's: Sunday's to Thursday's evenings have one, and
+  // Friday's and Saturday's do not
+  if (t >= GTH_FROM && weekday !== "Fri" && weekday !== "Sat") return "overnight";
+  return "closed";
+}
+
+/** The price a day's sample may store, observed at `now` (#416): a regular session's, and nothing
+ *  else. In the Curb and overnight moomoo quotes SPX options live but thin, and at the weekend a
+ *  Provider that quotes then is quoting nothing that traded: none of it is the day's close, which
+ *  is what a sample's price is (ADR 0011). The reading keeps its IV, vega and delta — the vol chain
+ *  needs the day — with the price left EMPTY, and an empty price never replaces a stored one
+ *  (`takesSample`). So a GTH price is never a day's Cost to close, nor a watched day's mid. */
+export function sampledPrice(now: Date, price: number | null): number | null {
+  return marketPhase(now) === "regular" ? price : null;
 }
 
 /** Milliseconds since midnight in New York at `now`. */
@@ -134,8 +187,14 @@ export type SampleWrite = "no" | "if-changed" | "yes";
  *  **An empty Cost to close never replaces a stored one** (#380), whatever the hour. A sweep with no
  *  two-sided quote for a leg has no cost — moomoo's 0/0 out of hours — but still reads the vol, so
  *  a day with no row is filled with an empty cost and its readings (the chain needs the day), while
- *  a row that has a cost keeps it. A row without one counts as incomplete and is given one by the
- *  first whole reading after the close; a costless reading is never complete.
+ *  a row that has a cost keeps it.
+ *
+ *  **Outside the regular session no reading has a cost at all** (#416): the sweep stores a regular
+ *  session's price only (`sampledPrice`), so a GTH, Curb or weekend reading fills a day with its vol
+ *  and an empty cost, and never touches a priced row. After the close a row is therefore complete
+ *  by its IV and vega alone, and a costless row missing one is completed by a reading with both.
+ *  A PRICED row missing its IV or vega is no longer completed after the close — the completing
+ *  reading would blank its price — and is completed only by the session's own later sweeps.
  */
 export function takesSample(
   now: Date, stored: StoredSample | null, observed: SampleReadings,
@@ -151,10 +210,11 @@ export function takesSample(
   const t = sinceNewYorkMidnight(now);
   if (t < SAMPLE_FROM) return "no";
   if (t <= SAMPLE_UNTIL) return provisional ? "yes" : "if-changed";
-  // a row without a cost is incomplete as one without its IV or vega is, and only a reading with
-  // all three is complete: a costless reading must not rewrite a costless row on every sweep
-  const incomplete = stored.legs_iv === null || stored.legs_vega === null || stored.cost_to_close === null;
-  const complete = observed.legs_iv !== null && observed.legs_vega !== null && observed.cost_to_close !== null;
+  // after the close no reading has a price — the sweep stores a regular session's only
+  // (`sampledPrice`, #416) — so a row is complete, and a reading whole, by its IV and vega alone; a
+  // priced row is never changed here at all (above), and a costless one is completed by the vol
+  const incomplete = stored.legs_iv === null || stored.legs_vega === null;
+  const complete = observed.legs_iv !== null && observed.legs_vega !== null;
   if (provisional) return incomplete || complete ? "yes" : "no";
   return incomplete && complete ? "yes" : "no";
 }
@@ -213,34 +273,35 @@ export interface CloseCandidate {
   cost_to_close: number | null;
 }
 
-/** Which of a holding's stored rows it is valued from outside the session (#380, F6), or null where
- *  none can value it.
+/** Which of a holding's stored rows it is valued from where it is not valued live (#380, F6), or
+ *  null where none can value it.
  *
- *  The LATEST row with a Cost to close that was taken in the hours, 09:30–16:15 New York
- *  (`sampleTiming` "close"): the day's close, which is what the sample is for (ADR 0011). Where no
- *  row with a cost was taken in the hours — a holding recorded in New York's evening and not yet
- *  through a session — the latest row with a cost of any timing, which the caller states
- *  (`sampleTiming`), so an evening's reading is never passed off as a close. A row without a cost
- *  values nothing: a weekend's row since #380 carries only the vol.
+ *  The LATEST row with a Cost to close observed in a REGULAR session — a weekday's 09:30–16:15 New
+ *  York: the day's close, which is what the sample is for (ADR 0011). Nothing else (#416): a reading
+ *  taken overnight (GTH), in the Curb, after the close, before the open or at the weekend is no
+ *  close, and neither is a row with no stamp, which nothing says was a session's. Since #416 the
+ *  sweep stores no price but a regular session's (`sampledPrice`), and migration 0015 cleared the
+ *  ones it had; this reads that rule again rather than trusting that the rows keep it. A row without
+ *  a cost values nothing: a weekend's row since #380 carries only the vol.
  *
  *  Latest by its market day, whatever order the rows come in.
  */
 export function closeSample<T extends CloseCandidate>(samples: readonly T[]): T | null {
   let close: T | null = null;
-  let any: T | null = null;
   for (const s of samples) {
-    if (s.cost_to_close === null) continue;
-    if (any === null || s.observed_on > any.observed_on) any = s;
-    if (takenInSession(s.observed_at) && (close === null || s.observed_on > close.observed_on)) close = s;
+    if (s.cost_to_close === null || !takenInSession(s.observed_at)) continue;
+    if (close === null || s.observed_on > close.observed_on) close = s;
   }
-  return close ?? any;
+  return close;
 }
 
-/** Whether a stored row was observed IN New York's session — a weekday's 09:30–16:15 — and so is
- *  that day's close. `sampleTiming` says "close" by the hour alone, which a weekend's or a holiday's
+/** Whether a stored row was observed IN New York's regular session — a weekday's 09:30–16:15 —
+ *  and so its price is a session's: that day's close, or the session so far. What every reader of a
+ *  stored price asks (#416): `closeSample`, `paceExplained`, a watched rule's last close and the
+ *  burndown read no other row's price. A row with no stamp, or one that will not read, is not. `sampleTiming` says "close" by the hour alone, which a weekend's or a holiday's
  *  row in those hours also is: a Saturday noon reading carries Friday's close forward at best, and
  *  must never beat Friday's own (#380 review). Holidays are not detected, as `inSession` does not. */
-function takenInSession(observedAt: string | null): boolean {
+export function takenInSession(observedAt: string | null): boolean {
   if (sampleTiming(observedAt) !== "close") return false;
   return inSession(storedInstant(observedAt!)!);
 }
@@ -286,15 +347,25 @@ export function sessionClosedSince(day: string, now: Date): boolean {
   return false;
 }
 
-/** The row a holding is valued from at `now`, or null to value it LIVE (#380).
+/** The row a holding is valued from at `now`, or null to value it LIVE (#380, #416).
  *
- *  In the session, always live: the Provider's quote is the price. Outside it, the holding's latest
- *  close (`closeSample`) — moomoo quotes every option bid 0 / ask 0 out of hours, which is no price,
- *  and the close is what the owner reviews a trade against. A holding with no row that has a cost is
- *  still valued live, which out of hours is a dash rather than a figure (`midPrice`).
+ *  - **In the regular session**, always live: the Provider's quote is the price.
+ *  - **In the Curb and overnight (GTH)**, live where `quoted` — every leg has a two-sided quote in
+ *    this batch, so there is a Cost to close — and the latest close (`closeSample`) where a leg has
+ *    none: SPX options trade then, thinly, and the owner trades them from Singapore's daytime.
+ *  - **Closed**, the latest close, quoted or not: nothing trades, and moomoo quotes every option
+ *    bid 0 / ask 0.
+ *
+ *  A holding with no row that has a cost is valued live, which unquoted is a dash rather than a
+ *  figure (`midPrice`).
  */
-export function valuesFromClose<T extends CloseCandidate>(now: Date, samples: readonly T[]): T | null {
-  return inSession(now) ? null : closeSample(samples);
+export function valuesFromClose<T extends CloseCandidate>(
+  now: Date, quoted: boolean, samples: readonly T[],
+): T | null {
+  const phase = marketPhase(now);
+  if (phase === "regular") return null;
+  if (quoted && (phase === "overnight" || phase === "curb")) return null;
+  return closeSample(samples);
 }
 
 /** Calendar days from the current MARKET date to expiry.

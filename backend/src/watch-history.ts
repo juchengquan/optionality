@@ -15,7 +15,8 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import {
-  closeSample, inSession, marketDate, sampleTiming, valuedTiming, type SampleTiming, type ValuedTiming,
+  closeSample, inSession, marketDate, sampleTiming, takenInSession, valuedTiming, type SampleTiming,
+  type ValuedTiming,
 } from "optionality/domain/expiry";
 import { buildSpxCode } from "optionality/domain/contract";
 import { monitorLegCodes, monitorValue, type Monitor } from "optionality/domain/monitor";
@@ -75,7 +76,8 @@ export interface WatchDay {
   timing: SampleTiming;
   dte: number;
   /** the reader's price for the day: a rule's signed value, a holding's Cost to close. Null where a
-   *  contract had no two-sided quote (#380) */
+   *  contract had no two-sided quote (#380), and where the day's price was not read in a regular
+   *  session (`takenInSession`, #416) */
   value: number | null;
   legs_iv: Record<string, number> | null;
   legs_vega: Record<string, number> | null;
@@ -95,7 +97,8 @@ function days(
       observed_at: timing === "unrecorded" ? null : displayStored(s.observed_at, tz),
       timing,
       dte: s.dte,
-      value: value(records),
+      // a regular session's price only (#416): a chart of closes plots no overnight mark
+      value: takenInSession(s.observed_at) ? value(records) : null,
       legs_iv: storedLegMap(s.legs_iv),
       legs_vega: storedLegMap(s.legs_vega),
       legs_delta: storedLegMap(s.legs_delta),

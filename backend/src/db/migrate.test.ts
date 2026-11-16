@@ -11,6 +11,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { takenInSession } from "optionality/domain/expiry";
+
 import { COLUMNS } from "./rows.ts";
 import { createDatabase, openDatabase } from "./open.ts";
 import { APPLIED_TABLE, migrate, pendingMigrations, stampAll } from "./migrate.ts";
@@ -295,6 +297,85 @@ describe("0005: the run pipeline's tables go with it (phase 10, ADR 0014)", () =
  *  This is what notices, and it needs a baseline that predates the first migration: schema-base.sql
  *  (a transcription, see its header).
  */
+describe("0015: no price read outside a regular session is a day's price (#416)", () => {
+  const NAME = "0015-no-overnight-price-is-a-close.sql";
+  /** a database one migration behind: built current, then 0015 un-recorded */
+  function behind(): DatabaseSync {
+    const db = createDatabase(join(dir, "behind.db"));
+    db.prepare(`delete from ${APPLIED_TABLE} where name = ?`).run(NAME);
+    db.prepare(
+      `insert into positions (id, name, strategy, strike_date, contracts, entry, legs, created_at)
+       values ('pos-1', 'condor', null, '2026-12-18', 1, 6.4, '[]', '2026-11-02 14:30:00.000000')`,
+    ).run();
+    return db;
+  }
+  /** Every edge the domain draws, in both of New York's offsets and across both changes of the
+   *  clocks, as stored: the live rows the migration exists for among them. */
+  const STAMPS = [
+    // the live database's two GTH rows (Sunday 20:15:07 and Monday 00:00 New York, EST)
+    "2026-11-16 01:15:07.004000", "2026-11-16 05:00:06.363000",
+    // Friday's and Thursday's closes, 16:14 EST
+    "2026-11-13 21:14:59.561000", "2026-11-12 21:14:58.100000",
+    // the session's edges in EST: 09:29:59.999, 09:30, 16:15, 16:15:00.001
+    "2026-11-09 14:29:59.999000", "2026-11-09 14:30:00.000000", "2026-11-09 21:15:00.000000",
+    "2026-11-09 21:15:00.001000",
+    // ...and in EDT
+    "2026-10-01 13:29:59.999000", "2026-10-01 13:30:00.000000", "2026-10-01 20:15:00.000000",
+    "2026-10-01 20:15:00.001000",
+    // the Curb, a weekend's noon, Saturday's midnight fill, a weekday's evening
+    "2026-11-13 21:40:00.000000", "2026-11-14 17:00:00.000000", "2026-11-14 05:00:12.407000",
+    "2026-11-11 01:00:00.000000",
+    // the Mondays after each change of the clocks, at 09:30 New York, and the Sundays themselves
+    "2026-03-09 13:30:00.000000", "2026-03-09 13:29:59.000000", "2026-11-02 14:30:00.000000",
+    "2026-11-02 14:29:59.000000", "2026-03-08 06:59:59.000000", "2026-03-08 07:00:00.000000",
+    "2026-11-01 05:59:59.000000", "2026-11-01 06:00:00.000000",
+    // a stamp with no fraction, and one with a short fraction
+    "2026-11-10 15:00:00", "2026-11-10 21:15:00.5",
+  ];
+
+  it("clears exactly the holdings' prices the domain would not read as a session's", () => {
+    const db = behind();
+    const insert = db.prepare(
+      `insert into position_samples (position_id, observed_on, dte, cost_to_close, legs_iv, observed_at, spx)
+       values ('pos-1', ?, 30, 3.05, '{"a":14.5}', ?, 6900.5)`,
+    );
+    STAMPS.forEach((stamp, i) => insert.run(`d${String(i).padStart(3, "0")}`, stamp));
+    // a row with no stamp, and one that will not read, are left as they are
+    insert.run("legacy", null);
+    insert.run("garbled", "2026-11-14T17:00:00Z");
+    expect(migrate(db)).toEqual([NAME]);
+
+    const rows = db.prepare("select observed_on, observed_at, cost_to_close, legs_iv, spx from position_samples")
+      .all() as { observed_on: string; observed_at: string | null; cost_to_close: number | null; legs_iv: string; spx: number }[];
+    for (const r of rows) {
+      const kept = r.observed_on === "legacy" || r.observed_on === "garbled" || takenInSession(r.observed_at);
+      expect(r.cost_to_close, `${r.observed_at}`).toBe(kept ? 3.05 : null);
+      // the row stays, and everything but its price
+      expect([r.legs_iv, r.spx]).toEqual(['{"a":14.5}', 6900.5]);
+    }
+    // and the classification is not trivial: some of each
+    expect(rows.filter((r) => r.cost_to_close === null).length).toBeGreaterThan(10);
+    expect(rows.filter((r) => r.cost_to_close !== null).length).toBeGreaterThan(5);
+  });
+
+  it("clears exactly the watched days' mids the domain would not read as a session's", () => {
+    const db = behind();
+    const insert = db.prepare(
+      `insert into watch_samples (contracts, observed_on, dte, legs_mid, legs_iv, observed_at)
+       values ('US.X', ?, 30, '{"US.X":3.65}', '{"US.X":14.5}', ?)`,
+    );
+    STAMPS.forEach((stamp, i) => insert.run(`d${String(i).padStart(3, "0")}`, stamp));
+    migrate(db);
+    const rows = db.prepare("select observed_at, legs_mid, legs_iv from watch_samples").all() as
+      { observed_at: string; legs_mid: string | null; legs_iv: string }[];
+    expect(rows).toHaveLength(STAMPS.length);
+    for (const r of rows) {
+      expect(r.legs_mid, r.observed_at).toBe(takenInSession(r.observed_at) ? '{"US.X":3.65}' : null);
+      expect(r.legs_iv).toBe('{"US.X":14.5}');
+    }
+  });
+});
+
 describe("the two roads into a database", () => {
   /** The database as it stood before migration 0001, with no schema_migrations table — so every
    *  migration is pending, exactly as it was on the live file. */

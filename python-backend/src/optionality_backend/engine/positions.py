@@ -30,7 +30,15 @@ from datetime import date, datetime, timedelta
 
 from optionality.contract import normalize_strike_date
 from optionality.exit import dte_at_open, on_pace
-from optionality.expiry import days_to_expiry, market_date, session_closed_since, takes_sample, valued_timing
+from optionality.expiry import (
+    days_to_expiry,
+    market_date,
+    sampled_price,
+    session_closed_since,
+    takes_sample,
+    valued_timing,
+    values_from_close,
+)
 from optionality.js import js_string, to_fixed
 from optionality.position import contract_size, cost_to_close, leg_readings
 from optionality.quote import ByCode, derived_spx
@@ -40,7 +48,7 @@ from ..db.rows import PositionRow, PositionSampleRow
 from ..db.time import to_sql_datetime
 from ..db.values import to_sqlite_json
 from ..env import Settings
-from ..holdings import close_of
+from ..holdings import close_candidates
 from ..hydrate import to_position
 from ..notify import Notifier
 
@@ -79,8 +87,9 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
     deploy would have fired three retroactive notices and looked like a fault.
 
     **Held until there is a Cost to close to say** (#380): valued as `/holdings` and the page value the
-    holding (#387) — in the session from the sweep's own batch, and outside it from the holding's latest
-    close (`close_of`) even where the batch prices it overnight, that close's day said beside the figure
+    holding (#387, #416) — in the session from the sweep's own batch, in the Curb and GTH from it where it
+    quotes every leg, and otherwise from the holding's latest close (`values_from_close`) even where the
+    batch prices it, that close's day said beside the figure
     and its pace at that close's own DTE; out of the session with no row that has a cost, the batch's — and where neither gives a
     cost the notice is not sent and not stamped, and the next sweep asks again. The wait is BOUNDED: once a
     whole session has closed since the holding entered the window (`session_closed_since`) with still no
@@ -95,10 +104,12 @@ async def notice_manage_by(deps: PositionSweepDeps, rows: list[PositionRow], by_
             if dte < 0 or dte > settings.exit_manage_by_dte:
                 continue
 
-            # valued as `/holdings` and the page value it (#387): out of the session from the latest close
-            # whatever the batch says, and live in the session, or where no row has a cost
-            close = close_of(deps.db, row, at)
-            cost = cost_to_close(to_position(row), by_code) if close is None else close["cost_to_close"]
+            # valued as `/holdings` and the page value it (#387, #416): live in the session, and in the Curb
+            # and GTH where the batch quotes every leg; from the latest close otherwise, or live where no
+            # row has a cost
+            live = cost_to_close(to_position(row), by_code)
+            close = values_from_close(at, live is not None, close_candidates(deps.db, row))
+            cost = live if close is None else close["cost_to_close"]
             # no cost yet: HELD, unsent and unstamped, until a sweep has one to say
             # — but not for ever: once a whole session has closed since the holding entered the window with
             # still no price, it goes without its "now" line, as it did before #380
@@ -186,8 +197,9 @@ def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByC
             # unknown, not zero: one leg without a mid and there is no cost to record. The vol may
             # still be there to read — moomoo quotes every option 0/0 out of hours and serves the
             # greeks — and the chain needs the day, so the row is written with the cost left empty
-            # (#380, below).
-            cost = cost_to_close(position, by_code)
+            # (#380, below). And a REGULAR session's only (#416): a GTH, Curb or weekend price is no
+            # day's close, so the reading keeps its vol with the cost left empty.
+            cost = sampled_price(at, cost_to_close(position, by_code))
 
             # Per LEG, because a structure has no IV — "IV is never summed" (CLAUDE.md), and these
             # legs run 10.5% to 22.1%, so one number for them would be a fiction. The vegas go with

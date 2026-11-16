@@ -243,8 +243,9 @@ class TestRecordingWhatAPositionWasWorth:
         b.now = datetime(2026, 10, 2, 0, 45, tzinfo=UTC)  # 20:45, a moved mark, and the row now exists
         await b.sweeper(self.pricing(short, 4.0)).sweep()
 
-        assert b.samples() == [{"position_id": id_, "observed_on": "2026-10-01", "dte": 31, "cost_to_close": 4}]
-        assert self.rows(b)[0][2] == "2026-10-02 00:30:00.000000"
+        # ...with its vol and no price: 20:30 is GTH, and an overnight price is no day's close (#416)
+        assert b.samples() == [{"position_id": id_, "observed_on": "2026-10-01", "dte": 31, "cost_to_close": None}]
+        assert self.rows(b)[0] == ("2026-10-01", None, "2026-10-02 00:30:00.000000", 1, 1)
 
     async def test_fills_a_day_whose_session_was_missed_whole_after_the_hours_and_marks_it(self, b: Book) -> None:
         # a reboot waiting at the FileVault login, OpenD waiting for one: no sweep ran in the session,
@@ -259,20 +260,44 @@ class TestRecordingWhatAPositionWasWorth:
 
         assert self.rows(b) == [
             ("2026-10-01", 4, "2026-10-01 15:00:00.000000", 1, 1),
-            ("2026-10-02", 3, "2026-10-03 00:30:00.000000", 1, 1),
+            # Friday 20:30: nothing trades, and no price is stored but a regular session's (#416)
+            ("2026-10-02", None, "2026-10-03 00:30:00.000000", 1, 1),
         ]
 
-    async def test_completes_a_row_the_feed_left_without_its_vega_after_the_hours_from_a_sweep_with_both(
+    async def test_never_completes_a_priced_row_after_the_close_the_gth_reading_would_blank_its_price(
         self, b: Book
     ) -> None:
-        # the vol chain needs an IV and a vega for every leg on every day; the row is written whole
+        # the row is written whole, and after the close no reading has a price; trading the session's
+        # Cost to close for the evening's vega would cost the day its close, so the row stays (#416)
         b.held("held")
         short = b.sold()
         await b.sweeper(self.pricing(short, 5.0, "vega")).sweep()  # 11:00: the vegas withheld all session
-        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 the same market day
+        b.now = datetime(2026, 10, 2, 0, 30, tzinfo=UTC)  # 20:30 the same market day, GTH
         await b.sweeper(self.pricing(short, 4.5)).sweep()
 
-        assert self.rows(b) == [("2026-10-01", 3.5, "2026-10-02 00:30:00.000000", 1, 1)]
+        assert self.rows(b) == [("2026-10-01", 4, "2026-10-01 15:00:00.000000", 1, 0)]
+
+    async def test_stores_no_price_from_a_gth_sweep_keeps_its_vol_and_never_replaces_a_stored_close(
+        self, b: Book
+    ) -> None:
+        # Sunday 20:15 New York starts Monday's GTH: the first sweep fills Sunday's costless row with its
+        # vol, Monday 00:00 fills Monday's the same way, and Friday's close is never touched (#416)
+        b.held("held")
+        short = b.sold()
+        b.now = datetime(2026, 10, 2, 19, 0, tzinfo=UTC)  # Friday 15:00 EDT, the session
+        await b.sweeper(self.pricing(short, 5.0)).sweep()
+        b.now = datetime(2026, 10, 3, 0, 30, tzinfo=UTC)  # Friday 20:30: priced by a fake, never the session
+        await b.sweeper(self.pricing(short, 3.0)).sweep()
+        b.now = datetime(2026, 10, 5, 0, 15, 7, tzinfo=UTC)  # Sunday 20:15:07 EDT, GTH
+        await b.sweeper(self.pricing(short, 4.4)).sweep()
+        b.now = datetime(2026, 10, 5, 4, 0, 6, tzinfo=UTC)  # Monday 00:00 EDT, GTH
+        await b.sweeper(self.pricing(short, 4.05)).sweep()
+
+        assert self.rows(b) == [
+            ("2026-10-02", 4, "2026-10-02 19:00:00.000000", 1, 1),
+            ("2026-10-04", None, "2026-10-05 00:15:07.000000", 1, 1),
+            ("2026-10-05", None, "2026-10-05 04:00:06.000000", 1, 1),
+        ]
 
     async def test_does_not_complete_a_row_from_a_sweep_missing_the_other_map(self, b: Book) -> None:
         # the row is written whole, so this would trade the stored IV for the missing vega
@@ -369,7 +394,8 @@ class TestRecordingWhatAPositionWasWorth:
         b.now = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)  # 05:00 EDT, a moved overnight mark
         await b.sweeper(self.pricing(short, 4.0)).sweep()
 
-        assert self.rows(b) == [("2026-10-01", 4, "2026-10-01 04:05:00.000000", 1, 1)]
+        # the fill keeps its vol and no price: 00:05 is GTH (#416)
+        assert self.rows(b) == [("2026-10-01", None, "2026-10-01 04:05:00.000000", 1, 1)]
 
     async def test_replaces_the_midnight_fill_with_the_evenings_after_a_session_missed_whole(self, b: Book) -> None:
         # the first sweep after New York's midnight fills the day from overnight marks; the session is
@@ -383,7 +409,8 @@ class TestRecordingWhatAPositionWasWorth:
         b.now = datetime(2026, 10, 2, 0, 45, tzinfo=UTC)  # and now settled, so a later mark does not move it
         await b.sweeper(self.pricing(short, 3.0)).sweep()
 
-        assert self.rows(b) == [("2026-10-01", 3, "2026-10-02 00:30:00.000000", 1, 1)]
+        # neither with a price: both readings are GTH's (#416)
+        assert self.rows(b) == [("2026-10-01", None, "2026-10-02 00:30:00.000000", 1, 1)]
 
     async def test_restamps_a_weekends_midnight_fill_in_the_hours_though_nothing_moved(self, b: Book) -> None:
         # nothing trades on a Saturday, so the "only when something differs" check would leave the
@@ -398,7 +425,8 @@ class TestRecordingWhatAPositionWasWorth:
         b.now = datetime(2026, 10, 3, 16, 0, tzinfo=UTC)  # 12:00, still the same: settled, no write
         await b.sweeper(self.pricing(short, 5.0)).sweep()
 
-        assert restamped == [("2026-10-03", 4, "2026-10-03 15:00:00.000000", 1, 1)]
+        # a weekend's row has no price, whoever quotes one (#416)
+        assert restamped == [("2026-10-03", None, "2026-10-03 15:00:00.000000", 1, 1)]
         assert self.rows(b) == restamped
 
     async def test_leaves_a_row_settled_after_the_close_alone_up_to_midnight(self, b: Book) -> None:
@@ -409,7 +437,7 @@ class TestRecordingWhatAPositionWasWorth:
         b.now = datetime(2026, 10, 2, 3, 59, 59, tzinfo=UTC)  # 23:59:59 EDT, a moved mark
         await b.sweeper(self.pricing(short, 3.0)).sweep()
 
-        assert self.rows(b) == [("2026-10-01", 4, "2026-10-02 00:30:00.000000", 1, 1)]
+        assert self.rows(b) == [("2026-10-01", None, "2026-10-02 00:30:00.000000", 1, 1)]
 
     async def test_records_a_position_whose_opened_nobody_has_entered_yet(self, b: Book) -> None:
         # the sample is raw: (DTE, Cost to close) means something without an Opened, and filling the
@@ -559,7 +587,8 @@ class TestRecordingWhatAPositionWasWorth:
         saved = b.now
         b.now = datetime(2026, 10, 17, 14, 0, tzinfo=UTC)
         try:
-            await b.sweeper(b.spread(5.0, 1.0)).sweep()
+            # with its vol: a Saturday's row has no price (#416), and is kept for the vol readings
+            await b.sweeper(self.pricing(build_spx_code(b.future(), "CALL", 8050), 5.0)).sweep()
         finally:
             b.now = saved
 
@@ -1060,9 +1089,19 @@ class TestTheManageByNotice:
         assert self.notices(b) == ["⏰ condor is at 19 DTE — manage by 21\nentry 6.86\non-pace 4.46"]
         assert self.notified_at(b, id_)
 
-    async def test_out_of_hours_says_the_latest_close_though_the_batch_prices_it_overnight(self, b: Book) -> None:
-        # #387: a Provider that quotes overnight prices the leg at 3.90, but the page and the bot value the
-        # holding from yesterday's close out of the session, so the notice says that one
+    async def test_overnight_gth_says_the_batch_s_cost_where_it_quotes_every_leg(self, b: Book) -> None:
+        # #416: 01:00 New York is GTH: the leg is quoted at 3.90, and the page and the bot value the
+        # holding live from that quote, so the notice says it, never yesterday's close
+        id_ = self.held(b, "condor", b.days_from_now(-24), 21)
+        self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
+        await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 3.9})).sweep()
+        assert len(self.notices(b)) == 1
+        assert "entry 6.86 · now 3.90" in self.notices(b)[0]
+
+    async def test_while_nothing_trades_says_the_latest_close_though_the_batch_prices_it(self, b: Book) -> None:
+        # #387: 18:30 New York, between the Curb and GTH: a Provider that quotes then prices the leg at
+        # 3.90, but the page and the bot value the holding from yesterday's close
+        b.now = datetime(2026, 10, 1, 22, 30, tzinfo=UTC)
         id_ = self.held(b, "condor", b.days_from_now(-24), 21)
         self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
         await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 3.9})).sweep()
@@ -1070,12 +1109,11 @@ class TestTheManageByNotice:
         assert "entry 6.86 · 4.40 at the 2026-09-30 close" in self.notices(b)[0]
         assert "now" not in self.notices(b)[0]
 
-    async def test_out_of_hours_with_no_close_says_the_reading_this_sweep_just_stored(self, b: Book) -> None:
-        # #387: the sweep fills the day from its own batch before the notice, and that costed row before the
-        # open is what the page and the bot value the holding from now
+    async def test_overnight_with_no_close_says_the_batch_s_cost_live_never_a_stored_gth_price(self, b: Book) -> None:
+        # #416: the sweep fills the day with no price (GTH), and the holding is valued live from the batch
         id_ = self.held(b, "condor", b.days_from_now(-24), 21)
         await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 4.4})).sweep()
-        notice = "⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · 4.40 on 2026-10-01, before the open"
+        notice = "⏰ condor is at 21 DTE — manage by 21\nentry 6.86 · now 4.40"
         assert self.notices(b) == [f"{notice}\non-pace 4.69 — ahead by 0.29"]
         assert self.notified_at(b, id_)
 
@@ -1087,15 +1125,15 @@ class TestTheManageByNotice:
         assert len(self.notices(b)) == 1
         assert "entry 6.86 · now 3.90" in self.notices(b)[0]
 
-    async def test_names_a_weekend_reading_it_is_valued_from_by_its_day_never_as_a_close(self, b: Book) -> None:
-        # #387: Saturday 3 October, 13:00 New York; no weekday close has a cost, and Saturday's noon row was
-        # priced by a Provider that quotes at weekends — the fallback, which is no close
+    async def test_never_values_from_a_weekend_reading_a_provider_s_weekend_price_is_no_close(self, b: Book) -> None:
+        # #387, #416: Saturday 3 October, 13:00 New York; no weekday close has a cost, and Saturday's noon
+        # row was priced by a Provider that quotes at weekends — no close, so no cost to say yet
         b.now = datetime(2026, 10, 3, 17, 0, tzinfo=UTC)
         id_ = self.held(b, "condor", b.days_from_now(-24), 21)
         self.close_row(b, id_, "2026-10-03", "2026-10-03 16:00:00.000000", 4.1, 21)
         await b.sweeper(self.priceless(b, 21)).sweep()
-        assert len(self.notices(b)) == 1
-        assert "entry 6.86 · 4.10 on 2026-10-03\n" in self.notices(b)[0]
+        assert self.notices(b) == []
+        assert self.notified_at(b, id_) is None
 
     async def test_in_the_session_with_no_price_holds_it_whatever_close_is_stored(self, b: Book) -> None:
         b.now = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)  # 11:00 New York, Thursday

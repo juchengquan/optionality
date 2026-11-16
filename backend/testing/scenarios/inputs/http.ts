@@ -72,7 +72,7 @@ const day = (observed_on: string, dte: number, ivs: number[]) => sample({
 });
 
 /** A day with its own Cost to close, each leg's own vega and the instant it was observed (#333). */
-const dayAt = (observed_on: string, dte: number, cost: number, ivs: number[], vegas: number[],
+const dayAt = (observed_on: string, dte: number, cost: number | null, ivs: number[], vegas: number[],
   observed_at: string) => sample({
   position_id: "pos-1", observed_on, dte, cost_to_close: cost, observed_at,
   legs_iv: Object.fromEntries(codes.map((c, i) => [c, ivs[i]])),
@@ -97,6 +97,24 @@ const closeRow = (observed_on: string, dte: number, cost: number | null, observe
 const THU = closeRow("2026-11-12", 36, 3.75, "2026-11-12 21:14:58.000000");
 const FRI = closeRow("2026-11-13", 35, 3.25, "2026-11-13 21:14:59.000000");
 const SAT = closeRow("2026-11-14", 34, null, "2026-11-14 05:00:12.000000");
+/** 20:15:07 on Sunday 15 November in New York: the first moment of Monday's GTH (#416), and 00:00
+ *  on Monday, still in it. */
+const GTH = "2026-11-16T01:15:07.000Z";
+const GTH_MONDAY = "2026-11-16T05:00:00.000Z";
+/** Thursday's and Friday's closes, Saturday's costless fill, and the two rows the service priced
+ *  overnight before #416 — Sunday 20:15:07 and Monday 00:00 New York — which migration 0015 clears. */
+const GTH_ROWS = [THU, FRI, SAT,
+  closeRow("2026-11-15", 33, 3.4, "2026-11-16 01:15:07.000000"),
+  closeRow("2026-11-16", 32, 3.05, "2026-11-16 05:00:06.000000"),
+];
+/** A call spread beside the condor, its long leg the 7500 call. */
+const wing = position({
+  id: "pos-2", name: "dec-call-wing", strategy: "call spread", entry: 1.5, opened_at: "2026-11-13",
+  legs: [
+    { side: "short", option_type: "CALL", strike: 7350 },
+    { side: "long", option_type: "CALL", strike: 7500 },
+  ],
+});
 /** moomoo's answer for the condor out of hours: no mid on any leg (`midPrice`), the rest as before. */
 const OUT_OF_HOURS = Object.fromEntries(Object.entries(BOOK).map(([code, q]) => {
   const { mid_price: _mid, ...rest } = q;
@@ -948,9 +966,10 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/values"),
   },
   {
-    // F6's fallback: a trade recorded in New York's evening has no close yet, only its first row,
-    // taken after the close — valued from that, and said to be from after the close
-    name: "GET /positions/values outside the session values from a reading after the close where no close has a cost",
+    // a trade recorded in New York's evening has no close yet, only its first row, taken after the
+    // close: no close (#416), so it values nothing, and the holding is valued live — the Provider
+    // down, a dash
+    name: "GET /positions/values outside the session values nothing from a reading after the close",
     world: world({
       clock: SATURDAY,
       tables: {
@@ -1040,6 +1059,69 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/values"),
   },
   {
+    // #416: Sunday 20:15:07 New York is Monday's GTH, and moomoo quotes SPX options live. The condor,
+    // every leg quoted, is valued LIVE — never Friday's close — with SPX said stale beside its price;
+    // the call wing, one leg with no two-sided quote, from its close, as when nothing trades
+    name: "GET /positions/values overnight (GTH) values live where every leg is quoted, from the close where one is not",
+    world: world({
+      clock: GTH,
+      tables: {
+        positions: [position({ id: "pos-1" }), wing],
+        position_samples: [FRI, closeRow("2026-11-13", 35, 1.25, "2026-11-13 21:14:59.000000", { position_id: "pos-2" })],
+      },
+      provider: { quotes: { ...PREMIUM_BOOK, [C7500]: { ...quote("SPXW 261218 7500C", 0.5, 0.06), mid_price: null, bid_price: 0, ask_price: 0 } } },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // ...and with the Provider down overnight, no 502 as in the session: every leg is unquoted, so
+    // each holding is valued from its close
+    name: "GET /positions/values overnight with the Provider down values each holding from its close",
+    world: world({
+      clock: GTH,
+      tables: { positions: [position({ id: "pos-1" })], position_samples: [FRI] },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/positions/values"),
+  },
+  {
+    // #416: the derived SPX overnight is the last close's level — moomoo's index quote stands still
+    // and each premium is worked out against it — so it is said stale beside its price, never current
+    name: "GET /quotes overnight says SPX is the last close's level beside its price",
+    world: world({ clock: GTH, tables: held, provider: { quotes: PREMIUM_BOOK } }),
+    request: request("GET", "/quotes"),
+  },
+  {
+    // #416: rows the service priced overnight before the change — Sunday 20:15 and Monday 00:00 New
+    // York — are served with no price: the burndown plots closes
+    name: "GET /positions/{id}/samples serves no price read overnight",
+    world: world({ clock: GTH_MONDAY, tables: { positions: [position({ id: "pos-1" })], position_samples: GTH_ROWS } }),
+    request: request("GET", "/positions/pos-1/samples"),
+  },
+  {
+    // ...and the pace gap is measured at Friday's close, past both
+    name: "GET /positions/{id}/vol measures the gap at the last close, never at a price read overnight",
+    world: world({ clock: GTH_MONDAY, tables: { positions: [position({ id: "pos-1" })], position_samples: GTH_ROWS } }),
+    request: request("GET", "/positions/pos-1/vol"),
+  },
+  {
+    // ...and a watched rule's last close is Friday's, never the GTH mids stored after it
+    name: "GET /monitors/closes never serves a price read overnight as a close",
+    world: world({
+      clock: GTH_MONDAY,
+      tables: {
+        monitors: [monitor({ id: "mon-1", field: "mid_price", threshold: 3 })],
+        watch_samples: [
+          watchDay([C7300], { observed_on: "2026-11-13", dte: 35, legs_mid: { [C7300]: 2.75 }, observed_at: "2026-11-13 21:14:59.000000" }),
+          watchDay([C7300], { observed_on: "2026-11-15", dte: 33, legs_mid: { [C7300]: 3.4 }, observed_at: "2026-11-16 01:15:07.000000" }),
+          watchDay([C7300], { observed_on: "2026-11-16", dte: 32, legs_mid: { [C7300]: 3.05 }, observed_at: "2026-11-16 05:00:06.000000" }),
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("GET", "/monitors/closes"),
+  },
+  {
     // ...and where no holding has a close, every one is a dash with the reason, as out of hours it
     // would be with the Provider up: a 200, not the 502 the session still answers
     name: "GET /positions/values outside the session with the Provider down and no close dashes every holding",
@@ -1047,9 +1129,9 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/values"),
   },
   {
-    // #387: a fallback row priced in the hours on a Saturday is no close, and says so — by the session
-    // closeSample asks, not by the hour
-    name: "GET /positions/values outside the session says a weekend reading it values from is no close",
+    // #387, #416: a row priced in the hours on a Saturday is no close — by the session closeSample
+    // asks, not by the hour — and values nothing
+    name: "GET /positions/values outside the session never values from a weekend reading, which is no close",
     world: world({
       clock: SATURDAY,
       tables: {
@@ -1130,15 +1212,16 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/positions/pos-1/vol"),
   },
   {
-    // the 7th is missing: the chain is broken and the reason names the two days around it; the
-    // 8th's row from 16:05 New York is that day's close
+    // the weekend is missing: the chain is broken and the reason names the two days around it; the
+    // Monday's row from 16:05 New York is that day's close, asked on the Tuesday
     name: "GET /positions/{id}/vol names a missing day, and still covers the gap at the last close",
     world: world({
+      clock: "2026-11-10T15:00:00.000Z",
       tables: {
         positions: [opened],
         position_samples: [
           dayAt("2026-11-06", 42, 6.4, [14.5, 14, 19.25, 20], VEGAS, "2026-11-06 21:05:00.000000"),
-          dayAt("2026-11-08", 40, 6.25, [15, 14.25, 19, 20], VEGAS, "2026-11-08 21:05:00.000000"),
+          dayAt("2026-11-09", 39, 6.25, [15, 14.25, 19, 20], VEGAS, "2026-11-09 21:05:00.000000"),
         ],
       },
     }),
@@ -1601,11 +1684,13 @@ export const HTTP: readonly HttpInput[] = [
     name: "GET /positions/{id}/vol withholds a gap read off a day summed before a correction",
     world: world({
       tables: {
-        positions: [{ ...opened, qty_corrected_at: "2026-11-09 14:00:00.000000" }],
+        positions: [{ ...opened, qty_corrected_at: "2026-11-09 14:50:00.000000" }],
+        // the weekend's rows with no price, as the sweep keeps them (#416); Monday's in the session
         position_samples: [
           dayAt("2026-11-06", 42, 6.4, [14.5, 14, 19.25, 20], VEGAS, "2026-11-06 21:05:00.000000"),
-          dayAt("2026-11-07", 41, 6.1, [14.75, 14, 19.5, 20.25], VEGAS, "2026-11-07 21:05:00.000000"),
-          dayAt("2026-11-08", 40, 6.25, [15, 14.25, 19, 20], VEGAS, "2026-11-08 21:05:00.000000"),
+          dayAt("2026-11-07", 41, null, [14.75, 14, 19.5, 20.25], VEGAS, "2026-11-07 21:05:00.000000"),
+          dayAt("2026-11-08", 40, null, [15, 14.25, 19, 20], VEGAS, "2026-11-08 21:05:00.000000"),
+          dayAt("2026-11-09", 39, 6.3, [15.25, 14.5, 19.5, 20.5], VEGAS, "2026-11-09 14:45:00.000000"),
         ],
       },
     }),

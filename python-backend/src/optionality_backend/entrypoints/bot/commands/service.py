@@ -25,7 +25,7 @@ disagree about a cost, a P&L or a Level.
 """
 
 from optionality.contract import build_spx_code
-from optionality.expiry import in_session
+from optionality.expiry import market_phase
 from optionality.js import js_string, math_round, truthy
 from optionality.timefmt import display_time_short
 
@@ -61,8 +61,10 @@ async def holdings(ctx: BotContext, args: list[str]) -> str:
         ],
     )
     # outside the session the figures are a close's, and the table keeps its four columns: the one line
-    # under it says which close (#380)
-    return reply if in_session(now) else f"{reply}\n{closed_line(valued.values)}"
+    # under it says which close (#380) — or, in the Curb and overnight, that they are live and thin, and
+    # which were valued from a close (#416)
+    phase = market_phase(now)
+    return reply if phase == "regular" else f"{reply}\n{closed_line(valued.values, phase)}"
 
 
 async def snapshot(ctx: BotContext, args: list[str]) -> str:

@@ -120,7 +120,7 @@ const MONITORS: Monitor[] = ROWS.map((r) => monitor(r.id, {
 }));
 
 /** The rows as the page holds them: through `withLastKnown`, as `Next.tsx` passes them on. */
-const page = (session: boolean) => withLastKnown(quotes(session), MONITORS, session);
+const page = (session: boolean) => withLastKnown(quotes(session), MONITORS, session ? "live" : "close");
 
 function props(session: boolean): BookProps {
   return {
@@ -199,17 +199,26 @@ describe("the last close the service stored (#402)", () => {
 
   it("is what the value cell says out of the session, before the sweep's last reading", () => {
     const m = monitor("w-p", { last_value: -2.5, last_checked_at: FRIDAY_CLOSE });
-    const [p] = withLastKnown([priceRule], [m], false);
+    const [p] = withLastKnown([priceRule], [m], "close");
     expect(lastPriceWords(p!.last_price!)).toBe("-3.85 (Fri 16:14)");
   });
 
   it("gives a spread watched only on its delta a price out of the session", () => {
-    const [d] = withLastKnown([deltaRule], [], false);
+    const [d] = withLastKnown([deltaRule], [], "close");
     expect(lastPriceWords(d!.last_price!)).toBe("-3.85 (Fri 16:14)");
   });
 
   it("changes nothing in the session", () => {
-    const [p] = withLastKnown([priceRule], [], true);
+    const [p] = withLastKnown([priceRule], [], "live");
     expect(p!.last_price).toBeUndefined();
+  });
+
+  it("in the Curb and GTH says the live price where the poll has one, and the last close where not (#416)", () => {
+    const [p] = withLastKnown([{ ...priceRule, combo_value: -3.6, watched: -3.6 }], [], "live-or-close");
+    expect(p!.price).toBe(-3.6);
+    expect(p!.last_price).toBeUndefined();
+    const [q] = withLastKnown([priceRule], [], "live-or-close");
+    expect(q!.price).toBeNull();
+    expect(lastPriceWords(q!.last_price!)).toBe("-3.85 (Fri 16:14)");
   });
 });

@@ -56,7 +56,8 @@ interface Lane {
 /** SPX's price for the map's one line, and the batch it is from. */
 interface SpxLine {
   spx: number | null;
-  /** why `spx` is null, as the service said it */
+  /** why `spx` is null, as the service said it — or, beside a price, why it is not current: outside
+   *  the regular session the index is not computed, and the price is its last close's level (#416) */
   reason: string | null;
   /** which response's batch: `/quotes` (the watchlist) or `/positions/values` (the holdings) */
   source: "watchlist" | "holdings" | null;
@@ -90,7 +91,8 @@ export function spxOfBook(quotes: Entry[], holdings: Holding[] | null): SpxLine 
   const priced = batches.filter((b) => typeof b.rows[0]?.spx === "number");
   if (priced.length > 0) {
     const best = priced.reduce((a, b) => ((instant(b.at) ?? -Infinity) > (instant(a.at) ?? -Infinity) ? b : a));
-    return { spx: best.rows[0]!.spx!, reason: null, source: best.source, at: best.at };
+    // its stale reason with it, outside the regular session (#416): never presented as current
+    return { spx: best.rows[0]!.spx!, reason: best.rows[0]!.spx_reason ?? null, source: best.source, at: best.at };
   }
   const said = batches.flatMap((b) => b.rows).find((r) => r.spx_reason);
   return { spx: null, reason: said?.spx_reason ?? "nothing on the book to derive it from", source: null, at: null };
@@ -109,7 +111,8 @@ export function spxWords(line: SpxLine, session: boolean): string {
   const time = clockOf(line.at);
   const whose = line.source === "holdings" && !session ? "as last valued"
     : `from the ${line.source === "holdings" ? "holdings'" : "watchlist's"} batch`;
-  return `SPX ${line.spx.toFixed(2)} · ${whose}${time ? `, ${time}` : ""}`;
+  const stale = line.reason ? ` (${line.reason})` : "";
+  return `SPX ${line.spx.toFixed(2)}${stale} · ${whose}${time ? `, ${time}` : ""}`;
 }
 
 const spreadOf = (id: string, name: string, kind: MapSpread["kind"],

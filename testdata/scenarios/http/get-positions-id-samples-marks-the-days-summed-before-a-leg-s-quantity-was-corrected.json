@@ -332,7 +332,7 @@
             "observed_at": null,
             "timing": "unrecorded",
             "dte": 42,
-            "cost_to_close": 3.25,
+            "cost_to_close": null,
             "on_pace": 6.4,
             "legs_iv": {
               "US.SPXW261218C7300000": 14.5,
@@ -375,7 +375,7 @@
             "observed_at": "2026-11-08 05:05:00+08:00",
             "timing": "close",
             "dte": 41,
-            "cost_to_close": 6.1,
+            "cost_to_close": null,
             "on_pace": 6.323350528379864,
             "legs_iv": {
               "US.SPXW261218C7300000": 14.75,
@@ -418,7 +418,7 @@
             "observed_at": "2026-11-09 05:05:00+08:00",
             "timing": "close",
             "dte": 40,
-            "cost_to_close": 6.25,
+            "cost_to_close": null,
             "on_pace": 6.245760466870613,
             "legs_iv": {
               "US.SPXW261218C7300000": 15,

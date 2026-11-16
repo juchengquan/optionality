@@ -233,16 +233,17 @@ describe("what it asks for, by New York's session (#371)", () => {
     for (const path of [...LINE, ...VALUED]) expect(count(path), `${path}, each poll\n${said()}`).toBe(2);
   });
 
-  it("crosses the night by the clock: from 16:14:59 to 09:30 the next day", async () => {
+  it("crosses the night by the clock: from the Curb's end to 09:30 the next day", async () => {
+    // the Curb (16:15 to 17:00) is polled as the session is (#416): SPX options trade in it
     document.cookie = "ui_arrangement=desk;path=/";
-    at("2026-11-09T21:14:59Z"); // Monday 16:14:59, the session's last second but one
+    at("2026-11-09T21:59:59Z"); // Monday 16:59:59, the Curb's last second
     await open();
     await quiet();
     calls = [];
-    await polls(1); // 16:15:14: the clock is read past the close
+    await polls(1); // 17:00:14: the clock is read past the Curb, and nothing trades till 20:15
     calls = [];
     await polls(3);
-    for (const path of VALUED) expect(count(path), `${path}, after the close\n${said()}`).toBe(0);
+    for (const path of VALUED) expect(count(path), `${path}, after the Curb\n${said()}`).toBe(0);
     vi.setSystemTime(new Date("2026-11-10T14:29:50Z")); // Tuesday 09:29:50
     await polls(1); // 09:30:05: the clock reads the open
     calls = [];
@@ -279,18 +280,34 @@ describe("what it asks for, by New York's session (#371)", () => {
     });
   }
 
-  it("the close stops polling the holdings and the References", async () => {
+  it("the Curb's end stops polling the holdings and the References", async () => {
     document.cookie = "ui_arrangement=desk;path=/";
     at("2026-11-09T21:14:00Z"); // Monday 16:14
     await open();
     await quiet();
-    await readClock("2026-11-09T21:16:00Z"); // 16:16
+    await readClock("2026-11-09T22:01:00Z"); // 17:01: the Curb is over, and nothing trades
     await quiet();
     calls = [];
     await polls(3);
     for (const path of LINE) expect(count(path), `${path}\n${said()}`).toBe(3);
     for (const path of VALUED) expect(count(path), `${path}\n${said()}`).toBe(0);
   });
+
+  for (const [what, now] of [
+    ["the Curb", "2026-11-09T21:40:00Z"], // Monday 16:40 New York
+    ["GTH", "2026-11-10T01:30:00Z"], // Monday 20:30 New York, Tuesday's overnight session
+    ["GTH from Sunday 20:15", "2026-11-16T01:15:00Z"], // Sunday 20:15 starts Monday's trade date
+  ] as const) {
+    it(`polls the holdings and the References in ${what}, as in session (#416)`, async () => {
+      document.cookie = "ui_arrangement=desk;path=/";
+      at(now);
+      await open();
+      await quiet();
+      calls = [];
+      await polls(2);
+      for (const path of [...LINE, ...VALUED]) expect(count(path), `${path}\n${said()}`).toBe(2);
+    });
+  }
 });
 
 describe("the market-closed line and its refresh (#371)", () => {
@@ -515,7 +532,7 @@ describe("the desk inspector's history, by the session (#372)", () => {
     await quiet();
     await inspect();
     expect(history().getAttribute("aria-expanded")).toBe("false");
-    await readClock("2026-11-09T21:16:00Z"); // 16:16: the session is over
+    await readClock("2026-11-09T22:01:00Z"); // 17:01: the session and the Curb are over
     await quiet();
     expect(closedLine(), "the page has not seen the close").toBeTruthy();
     expect(history().getAttribute("aria-expanded"), "the close unfolded it under the reader").toBe("false");
@@ -590,7 +607,7 @@ describe("a holding's history in the phone's sheet, by the session (#374)", () =
     calls = [];
     await openSheet();
     expect(toggle().getAttribute("aria-expanded")).toBe("false");
-    await readClock("2026-11-09T21:16:00Z"); // the close, with the sheet open
+    await readClock("2026-11-09T22:01:00Z"); // past the Curb, with the sheet open
     await quiet();
     expect(toggle().getAttribute("aria-expanded")).toBe("false");
     expect(samples(), `still shut, nothing\n${said()}`).toBe(0);
@@ -808,9 +825,9 @@ describe("one page at every hour (#375)", () => {
   }
 
   for (const where of ["desk", "phone"] as const) {
-    it(`draws the same ${where} at 10:00 and at 21:00 New York: only the session line differs`, async () => {
+    it(`draws the same ${where} at 10:00, 18:00 and 21:00 New York: only the session line differs`, async () => {
       const seen: Record<string, ReturnType<typeof drawn>> = {};
-      for (const [name, now] of [["10:00", MORNING], ["21:00", NIGHT]] as const) {
+      for (const [name, now] of [["10:00", MORNING], ["18:00", EVENING], ["21:00", NIGHT]] as const) {
         document.cookie = `ui_arrangement=${where};path=/`;
         at(now);
         await open();
@@ -819,7 +836,9 @@ describe("one page at every hour (#375)", () => {
         seen[name] = drawn(where);
         // the session line, and nothing else, says which side of the session it is
         if (name === "10:00") expect(closedLine(), "in session, no market-closed line").toBeNull();
-        else expect(closedLine()?.textContent).toContain("market closed");
+        else if (name === "18:00") expect(closedLine()?.textContent).toContain("market closed");
+        // 21:00 is GTH (#416): SPX options trade, and the line says so rather than "market closed"
+        else expect(closedLine()?.textContent).toContain("overnight session — live quotes, thin");
         // no switch, at either hour: no mode group, no Live or Review, no "by the clock"
         expect(screen.queryByRole("group", { name: "mode" })).toBeNull();
         expect(screen.queryByRole("button", { name: /^(live|review)$/i })).toBeNull();
@@ -834,6 +853,7 @@ describe("one page at every hour (#375)", () => {
       if (where === "desk") expect(seen["10:00"]!.columns!.length).toBeGreaterThan(1);
       expect(seen["10:00"]!.tabs).toBe(0);
       expect(seen["10:00"]!.header.slice(-2)).toEqual(["BUTTON:add", "BUTTON:settings"]);
+      expect(seen["18:00"]).toEqual(seen["10:00"]);
       expect(seen["21:00"]).toEqual(seen["10:00"]);
     });
   }

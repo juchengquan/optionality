@@ -241,6 +241,32 @@ class TestUnderExactlyTheHoldingsSamplingRules:
             ],
         )
 
+    async def test_stores_no_gth_price_the_day_keeps_its_vol_with_the_mids_empty_and_a_close_is_never_replaced(
+        self, w: World
+    ) -> None:
+        # #416: moomoo quotes SPX options live overnight, none of which is a day's close
+        w.spread_rule()
+        w.now = datetime(2026, 10, 2, 19, 0, tzinfo=UTC)  # Friday 15:00 in New York, the session
+        await w.sweep()
+        w.book[SHORT] = quote(7)
+        w.now = datetime(2026, 10, 5, 0, 15, 7, tzinfo=UTC)  # Sunday 20:15:07, GTH for Monday
+        await w.sweep()
+        w.now = datetime(2026, 10, 5, 4, 0, 6, tzinfo=UTC)  # Monday 00:00, GTH
+        await w.sweep()
+        assert matches(
+            w.stored(),
+            [
+                {"observed_on": "2026-10-02", "legs_mid": to_sqlite_json({SHORT: 5, LONG: 2})},
+                {
+                    "observed_on": "2026-10-04",
+                    "legs_mid": None,
+                    "legs_iv": to_sqlite_json({SHORT: 12.5, LONG: 11.5}),
+                    "observed_at": "2026-10-05 00:15:07.000000",
+                },
+                {"observed_on": "2026-10-05", "legs_mid": None, "observed_at": "2026-10-05 04:00:06.000000"},
+            ],
+        )
+
     async def test_never_replaces_a_stored_price_with_an_empty_one(self, w: World) -> None:
         w.spread_rule()
         await w.sweep()

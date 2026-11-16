@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { arrangementFor, DESK_FROM } from "../arrangement";
-import { inSession, servedWhen, sessionEdge } from "../session";
+import { inSession, marketPhase, servedWhen, sessionEdge } from "../session";
 
 describe("the measured width chooses the arrangement", () => {
   it("puts the cards on anything narrower than the desk and the terminal on the rest", () => {
@@ -71,6 +71,38 @@ describe("the clock says whether the session is open", () => {
 /** WHICH session the clock is in, or after: the last open or close at or before now (#371's
  *  review). A boolean cannot tell Monday evening from Tuesday evening, and a tab asleep through a
  *  whole session (iOS suspends timers) woke to the same `false` and never valued the book again. */
+describe("which of SPX options' sessions the clock is in (#416), as the domain's marketPhase", () => {
+  const at = (iso: string) => new Date(iso);
+  // the domain's golden cases, instant for instant (typescript/src/cases/inputs.ts)
+  const cases: [string, string][] = [
+    ["2026-11-09T14:24:59Z", "overnight"], // Monday 09:24:59, GTH's last second
+    ["2026-11-09T14:25:00Z", "closed"], // 09:25, GTH's end
+    ["2026-11-09T14:29:59Z", "closed"],
+    ["2026-11-09T14:30:00Z", "regular"],
+    ["2026-11-09T21:15:00Z", "regular"], // 16:15, the options' close
+    ["2026-11-09T21:15:01Z", "curb"],
+    ["2026-11-09T21:59:59Z", "curb"],
+    ["2026-11-09T22:00:00Z", "closed"], // 17:00
+    ["2026-11-10T01:14:59Z", "closed"],
+    ["2026-11-10T01:15:00Z", "overnight"], // Monday 20:15, Tuesday's GTH
+    ["2026-11-14T01:15:00Z", "closed"], // Friday 20:15: no GTH into a Saturday
+    ["2026-11-14T17:00:00Z", "closed"], // Saturday noon
+    ["2026-11-15T21:40:00Z", "closed"], // Sunday 16:40: no Curb on a Sunday
+    ["2026-11-16T01:14:59Z", "closed"],
+    ["2026-11-16T01:15:00Z", "overnight"], // Sunday 20:15 starts Monday's trade date
+    ["2026-11-16T05:00:00Z", "overnight"],
+    ["2026-03-09T00:15:00Z", "overnight"], // Sunday 20:15 EDT, the night the clocks went forward
+    ["2026-11-02T01:15:00Z", "overnight"], // Sunday 20:15 EST, the night they went back
+  ];
+  for (const [iso, phase] of cases) {
+    it(`${iso} is ${phase}`, () => expect(marketPhase(at(iso))).toBe(phase));
+  }
+
+  it("is regular exactly where inSession is", () => {
+    for (const [iso] of cases) expect(marketPhase(at(iso)) === "regular").toBe(inSession(at(iso)));
+  });
+});
+
 describe("the last edge of the session", () => {
   const at = (iso: string) => new Date(iso);
   const edge = (iso: string) => sessionEdge(at(iso)).toISOString();

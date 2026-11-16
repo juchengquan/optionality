@@ -597,7 +597,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
   By New York's session (09:30–16:15, weekdays; `frontend/src/session.ts`) and by nothing
   else — the page has no mode (#371, #375): in session it polls `/positions/values` and `/references` with it — three calls
-  per poll per open tab, where the old page made two; outside the session it reads those two once
+  per poll per open tab, where the old page made two — and in the Curb (16:15–17:00) and overnight
+  (Cboe GTH, 20:15–09:25 New York, Sunday 20:15 starting Monday's trade date) EXACTLY as in session,
+  since SPX options trade then (`marketPhase`, #416); only while nothing trades does it read those two once
   each time it is asked — on opening, at each edge of the session (one slept through included), on
   the header's refresh button, on opening Settings, and after every write the page makes — and polls neither.) `/references` is a call of its own rather than part of that batch for containment, not for cost:
   moomoo rejects a whole batch for one bad code and the containment loop drops only a code it
@@ -674,15 +676,23 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   session missed whole); a row observed before its day's 09:30 is PROVISIONAL — restamped in the hours
   even if unchanged, replaced after the close — and a settled row is only ever COMPLETED out of hours
   (missing IV or vega, from a sweep with both), never changed (`takesSample`). Every write stamps
-  `observed_at`, so an off-close point is marked.
+  `observed_at`, so an off-close point is marked. **A sample stores a REGULAR session's price only**
+  (`sampledPrice`, #416): a reading in GTH, the Curb, a weekend or any hour outside a weekday's
+  09:30–16:15 keeps its IV, vega and delta with the Cost to close (a watched day's mids) EMPTY, and
+  never replaces a stored price — so a PRICED row missing its vega is no longer completed after the
+  close. Every reader reads a regular session's price only (`takenInSession`): `closeSample` (no
+  fallback to another timing, nor to a row with no stamp), `paceExplained`, a rule's last close, and
+  the burndown (`/samples` serves such a price as none). Migration 0015 cleared those already stored.
   Each carries per-leg IV, vega and delta, all-or-nothing per map, each gated on its own.
   Its Cost to close may be EMPTY (#380, migration 0012): a sweep with no two-sided quote for a leg (out
   of hours) still keeps the day for its vol readings, which the chain needs, and an empty cost NEVER
-  replaces a stored one, at any hour; a costless row is incomplete, completed only by a reading with
-  cost, IV and vega (ADR 0011, amended 2026-11-14). The burndown draws no point for it and does not
+  replaces a stored one, at any hour; after the close a costless row is complete by its IV and vega
+  alone (ADR 0011, amended 2026-11-14 and 2026-11-16). The burndown draws no point for it and does not
   call it missed, and `/vol`'s split skips it: taken at the last day with a cost, vol part included. A sweep that read nothing at all (a leg not returned) writes no row.
   And SPX's price as that sweep's batch implied it (`derivedSpx`, ADR 0024), null where it could not;
-  it is never taken from a Reference, here or on `/quotes` and `/positions/values`, which carry it too.
+  it is never taken from a Reference, here or on `/quotes` and `/positions/values`, which carry it too —
+  there, outside the regular session, with `spx_reason` saying it is the last close's level beside the
+  price (`sessionSpx`, #416): the index is not computed then, and it is never presented as current.
   **What is watched is sampled the same way** (`watch_samples`, #402): a row per day for every set of
   contracts an ENABLED rule watches, from the sweep's own batch, under the same rules — keyed by the
   CONTRACTS (sorted codes, no signs, no quantities), not a rule, storing each contract's mid rather
@@ -696,13 +706,16 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 - Out of New York's SESSION — `inSession`: 09:30:00–16:15:00 New York, Monday to Friday, both ends
   included, holidays not detected (the page's own edges) — a holding is valued from its LATEST CLOSE,
   not from the Provider, in `/positions/values` and the bot's `/holdings` alike (`holdings.ts`, #380;
-  ADR 0023, amended 2026-11-14). moomoo quotes every option bid 0 / ask 0 out of hours, which is no
-  price. `valuesFromClose` decides per holding: in the session always live; outside it the latest row
-  with a Cost to close taken IN the session — a weekday's hours, so a weekend row is never "the
-  close" (`closeSample`) — else the latest with a cost of any timing,
-  stated as such (`valued_timing`, from `valuedTiming`: the same session test, so a weekend row at
-  any hour is `weekend` — never `close`, nor "after the close" of a session it had not, #387); a row summed before a quantity correction is no candidate; and a
-  holding with no such row is valued live — a dash, never 0. Only the holdings valued live are asked
+  ADR 0023, amended 2026-11-14) — EXCEPT in the Curb and overnight (GTH, `marketPhase`), where SPX
+  options trade and moomoo quotes them live: there a holding is valued LIVE where every leg has a
+  two-sided quote, and from its close where one has none (#416; the page and `/holdings` say
+  "overnight session — live quotes, thin"). moomoo quotes every option bid 0 / ask 0 only while
+  nothing trades. `valuesFromClose` decides per holding: in the session always live; in the Curb and
+  GTH live where quoted; otherwise the latest row with a Cost to close taken IN the session — a
+  weekday's hours, so a weekend row is never "the close" (`closeSample`), and nothing else since #416
+  (`valued_timing`, from `valuedTiming`); a row summed before a quantity correction is no candidate; and a
+  holding with no such row is valued live — a dash, never 0. In the session, the Curb and GTH every
+  holding is asked for in the one batch; while nothing trades only the holdings valued live are asked
   for, so a book wholly valued from its closes makes NO market-data call — and out of the session a
   FAILED call costs only the holdings it would have priced: each a dash with `valued_reason` (the
   502's words), the rest served from their closes, where it was a 502 for the whole book (#387). In
@@ -713,8 +726,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `fetched_at` is the row's observed time, so the page's chips and market-closed line ("market
   closed — as of the close, Fri 13 Nov 16:14", New York's clock) and the bot's one line under its
   table say which close. The manage-by notice, sent once, is HELD until it has a cost to say, and
-  it is the cost the page and the bot say (#387): the batch's in the session, and out of it the latest
-  close's, named, even where the batch prices the holding overnight — but at most until a whole weekday
+  it is the cost the page and the bot say (#387): the batch's in the session (and in the Curb and GTH
+  where it quotes every leg, #416), and otherwise the latest close's, named, even where the batch
+  prices the holding — but at most until a whole weekday
   session has closed inside the window (`sessionClosedSince`), after which it goes without its "now"
   line, stamped. The
   watchlist has no close: out of the session the page says a price rule's last reading beside its

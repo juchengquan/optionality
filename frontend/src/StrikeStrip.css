@@ -45,6 +45,10 @@
   background: var(--foreground); box-shadow: 0 0 0 2px var(--background);
 }
 .nxs[data-compact] .nxs-spx { width: 0.5rem; height: 0.5rem; box-shadow: 0 0 0 1.5px var(--background); }
+/* SPX at the last close's level, outside the regular session (#416): a hollow dot, never drawn as
+   the current price */
+.nxs-spx[data-stale] { background: var(--background); border: 2px solid var(--muted-foreground); }
+.nxs-spx-words[data-stale] { color: var(--muted-foreground); font-weight: 400; }
 
 .nxs-words {
   display: flex; flex-wrap: wrap; column-gap: 0.9rem; row-gap: 0.1rem; margin-top: 0.15rem;

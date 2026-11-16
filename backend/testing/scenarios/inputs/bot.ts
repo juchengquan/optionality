@@ -102,8 +102,32 @@ export const BOT: readonly BotInput[] = [
     update: message("/holdings"),
   },
   {
-    // #387: a reading priced in the hours on a Saturday is no close: the line says when it was
-    name: "/holdings outside the session says a weekend reading it values from is no close",
+    // #416: overnight (GTH) the condor, every leg quoted, is valued live, and the line under the
+    // table says so — live and thin — with how many were valued from a close for want of a quote
+    name: "/holdings overnight says the figures are live and thin, and which were valued from a close",
+    world: world({
+      clock: "2026-11-16T05:00:00.000Z", // 00:00 on Monday 16 November in New York, GTH
+      tables: {
+        positions: [
+          ...held.positions,
+          position({
+            id: "pos-2", name: "dec-call-wing", strategy: "call spread", entry: 1.5, opened_at: "2026-11-13",
+            legs: [
+              { side: "short", option_type: "CALL", strike: 7350 },
+              { side: "long", option_type: "CALL", strike: 7500 },
+            ],
+          }),
+        ],
+        position_samples: [FRIDAY_CLOSE, { ...FRIDAY_CLOSE, position_id: "pos-2", cost_to_close: 1.25 }],
+      },
+      provider: { quotes: BOOK },
+    }),
+    update: message("/holdings"),
+  },
+  {
+    // #387, #416: a reading priced in the hours on a Saturday is no close, nor one after Friday's
+    // close: neither values the holding, which is valued live — the Provider down, a dash
+    name: "/holdings outside the session never values from a weekend reading, which is no close",
     world: world({
       clock: SATURDAY,
       tables: {

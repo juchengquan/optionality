@@ -328,6 +328,91 @@
       "expect": null
     },
     {
+      "fn": "sessionSpx",
+      "name": "in the session, as derived",
+      "args": [
+        {
+          "$date": "2026-11-13T20:00:00.000Z"
+        },
+        {
+          "price": 7561.68,
+          "reason": null
+        }
+      ],
+      "expect": {
+        "price": 7561.68,
+        "reason": null
+      }
+    },
+    {
+      "fn": "sessionSpx",
+      "name": "overnight, the last close's level",
+      "args": [
+        {
+          "$date": "2026-11-16T01:15:00.000Z"
+        },
+        {
+          "price": 7561.68,
+          "reason": null
+        }
+      ],
+      "expect": {
+        "price": 7561.68,
+        "reason": "index not computed overnight — the last close's level"
+      }
+    },
+    {
+      "fn": "sessionSpx",
+      "name": "in the Curb, the close's level",
+      "args": [
+        {
+          "$date": "2026-11-13T21:40:00.000Z"
+        },
+        {
+          "price": 7561.68,
+          "reason": null
+        }
+      ],
+      "expect": {
+        "price": 7561.68,
+        "reason": "index not computed after the close — the close's level"
+      }
+    },
+    {
+      "fn": "sessionSpx",
+      "name": "closed, the last close's level",
+      "args": [
+        {
+          "$date": "2026-11-14T17:00:00.000Z"
+        },
+        {
+          "price": 7561.68,
+          "reason": null
+        }
+      ],
+      "expect": {
+        "price": 7561.68,
+        "reason": "index not computed while the market is closed — the last close's level"
+      }
+    },
+    {
+      "fn": "sessionSpx",
+      "name": "no price keeps its own reason",
+      "args": [
+        {
+          "$date": "2026-11-16T01:15:00.000Z"
+        },
+        {
+          "price": null,
+          "reason": "no SPX option in the batch to derive it from"
+        }
+      ],
+      "expect": {
+        "price": null,
+        "reason": "no SPX option in the batch to derive it from"
+      }
+    },
+    {
       "fn": "derivedSpx",
       "name": "a call: (strike + last) / (1 + premium)",
       "args": [
