@@ -27,7 +27,8 @@ import { outOfHoursValue, priceOf } from "../lastknown";
 import { cellWords, stripOfEntry, stripOfHolding, type Strip } from "../strip";
 
 export type DeskRow =
-  | { kind: "holding"; holding: Holding; rules: Entry[] }
+  /** `legRules`: the single-contract rules on its legs, drawn in Contracts, read for its Δ alone */
+  | { kind: "holding"; holding: Holding; rules: Entry[]; legRules?: Entry[] }
   /** a rule as `/quotes` serves it; `nested` when it sits under a spread or a holding; `overlap`,
    *  the note of a combo drawn in the watchlist because it only partly overlaps a holding (#346) */
   | { kind: "rule"; entry: Entry; nested: boolean; overlap?: string | null }
@@ -124,7 +125,7 @@ export function tableRows(placed: BookModel): DeskRow[] {
   const out: DeskRow[] = [];
   for (const g of placed.book) {
     for (const p of g.held.flat()) {
-      out.push({ kind: "holding", holding: p.holding, rules: p.rules });
+      out.push({ kind: "holding", holding: p.holding, rules: p.rules, legRules: p.legRules });
       for (const entry of subRules(p)) out.push({ kind: "rule", entry, nested: true });
     }
     for (const i of [...g.spreads, ...g.contracts]) {
@@ -287,7 +288,7 @@ const CAPTURED: DeskColumn = {
 const DELTA: DeskColumn = {
   // a holding's SHORT LEG's delta; a spread's own (a signed sum of its legs, served); a contract's
   key: "delta", label: "Δ",
-  text: (r) => r.kind === "holding" ? delta(shortLegDelta(r.holding, r.rules))
+  text: (r) => r.kind === "holding" ? delta(shortLegDelta(r.holding, [...r.rules, ...(r.legRules ?? [])]))
     : r.kind === "rule"
       ? delta(r.entry.legs ? r.entry.combo_greeks?.option_delta : quoted(r.entry, "option_delta"))
       : "",

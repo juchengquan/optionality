@@ -47,7 +47,7 @@ export const OVERLAP_QUOTES: Entry[] = [
   entry("r-8050", { code: "1231_8050", strike_date: DATE, legs: call(8050, 8100), held: true,
     scope: "all", positions: to8050, cost_to_close: 1.2, combo_value: -1.2, watched: -1.2,
     short_strikes: [served(DATE, "CALL", 8050, 0.04, 38)] }),
-  // a single contract on its short leg: stays under it, as every single-contract rule does
+  // a single contract on its short leg: a contract row of its own, in Contracts (2026-11-17)
   entry("r-8050-delta", { code: code(8050), strike_date: DATE, option_type: "CALL",
     field: "option_delta", threshold: 0.2, watched: 0.04, distance: 0.16, held: true, scope: "leg",
     positions: to8050, in_combos: ["r-8050"], quote: { name: "SPXW 261231 8050.00C", option_delta: 0.04 } }),

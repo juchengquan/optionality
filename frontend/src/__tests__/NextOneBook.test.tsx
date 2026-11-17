@@ -21,7 +21,7 @@ import { PhoneBook } from "../phone/PhoneBook";
 import { plainView, toMarkdown, type PlainInput } from "../snapshot/plain";
 import { tableRows } from "../desk/columns";
 import { ownRule, placeBook } from "../placement";
-import { entry, holding, HOLDINGS, monitor, MONITORS, QUOTES, side } from "../testing/ownerBook";
+import { call, entry, holding, HOLDINGS, monitor, MONITORS, QUOTES, side } from "../testing/ownerBook";
 import { readMarkdown } from "../testing/plainRead";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
@@ -30,14 +30,16 @@ afterEach(() => {
   document.cookie = "ui_cols_combo=;path=/;max-age=0";
 });
 
-/** A second rule on the held call spread: the delta of its short leg, linked to it. */
+/** A second rule on the held call spread: the spread's delta, over all of it, linked to it. (A rule
+ *  on its short leg alone is a contract row since 2026-11-17, as `ON_LEG` is.) */
 const SECOND: Entry = entry("r-calls-short", {
-  code: "US.SPXW261218C7300000", strike_date: "2026-12-18", option_type: "CALL", field: "option_delta",
-  threshold: 0.3, watched: 0.33, distance: -0.03, held: true, scope: "leg",
-  positions: [{ id: "h-calls", name: "1218_C7300" }], quote: { name: "SPXW 261218 7300.00C", option_delta: 0.33 },
-});
+  code: "1218_C7300 Δ", strike_date: "2026-12-18", legs: call(7300, 7350), field: "option_delta",
+  threshold: 0.3, watched: 0.33, distance: -0.03, held: true, scope: "all",
+  positions: [{ id: "h-calls", name: "1218_C7300" }], combo_greeks: { option_delta: 0.33 },
+} as Partial<Entry> & { strike_date: string });
 /** A delta rule on the held put spread's short leg, as the service serves one: held, and linked to
- *  the holding with scope leg (`holdsAnyOf`, `adoptOrphanMonitors`). */
+ *  the holding with scope leg (`holdsAnyOf`, `adoptOrphanMonitors`) — a contract row of its own, in
+ *  Contracts, since 2026-11-17. */
 const ON_LEG: Entry = entry("w-p6400", {
   code: "US.SPXW261218P6400000", strike_date: "2026-12-18", option_type: "PUT", field: "option_delta",
   threshold: 0.3, watched: -0.21, distance: 0.09, held: true, scope: "leg",
@@ -91,17 +93,20 @@ const plainNames = (view: ReturnType<typeof plain>) => bookParts(view)
 const GROUPS = [
   ["spreads",
     ["2026-12-04", "w-dec04"],
-    ["2026-12-18", "h-calls", "r-calls-short", "h-puts", "w-p6400", "w-dec18", "w-dec18-delta"],
+    ["2026-12-18", "h-calls", "r-calls-short", "h-puts", "w-dec18", "w-dec18-delta"],
     ["2026-12-31", "h-ic", "w-dec31"]],
   ["contracts",
+    // the delta on a held spread's short leg: a contract row of its own (2026-11-17)
+    ["2026-12-18", "w-p6400"],
     ["2026-12-31", "w-lone"]],
 ];
+const HEADINGS = ["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"];
 
 describe("1–2. two sections (2026-11-17): Spreads, then Contracts, each by expiry, its held rows first", () => {
   it("on the desk", () => {
     render(<DeskBook {...props()} />);
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Book", "Spreads", "Contracts"]);
-    expect(deskHeadings()).toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE", "20261231 · 38 DTE"]);
+    expect(deskHeadings()).toEqual(HEADINGS);
     expect(deskGroups()).toEqual(GROUPS);
     expect(screen.getByRole("region", { name: "Spreads" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Contracts" })).toBeTruthy();
@@ -115,14 +120,15 @@ describe("1–2. two sections (2026-11-17): Spreads, then Contracts, each by exp
     render(<PhoneBook {...props()} />);
     expect([...document.querySelectorAll(".nxp-part > h2")].map((h) => h.textContent)).toEqual(["Spreads", "Contracts"]);
     expect([...document.querySelectorAll(".nxp-expiry h3")].map((h) => h.textContent))
-      .toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE", "20261231 · 38 DTE"]);
+      .toEqual(HEADINGS);
     expect(phoneGroups()).toEqual([
       ["spreads",
         ["2026-12-04", "w-dec04"],
         // the own rule is on the card, first, as the desk draws it on the row
-        ["2026-12-18", "h-calls", "r-calls", "r-calls-short", "h-puts", "w-p6400", "w-dec18", "w-dec18-delta"],
+        ["2026-12-18", "h-calls", "r-calls", "r-calls-short", "h-puts", "w-dec18", "w-dec18-delta"],
         ["2026-12-31", "h-ic", "r-ic", "w-dec31"]],
       ["contracts",
+        ["2026-12-18", "w-p6400"],
         ["2026-12-31", "w-lone"]],
     ]);
     expect(document.querySelectorAll("[data-sub]")).toHaveLength(0);
@@ -134,9 +140,10 @@ describe("1–2. two sections (2026-11-17): Spreads, then Contracts, each by exp
     expect(plainNames(view)).toEqual([
       ["Spreads",
         ["20261204 · 38 DTE", "1204_P6900"],
-        ["20261218 · 38 DTE", "1218_C7300 held", "20261218 C7300", "1218_P6400 held", "20261218 P6400", "1218_P7150", "20261218 P7150"],
+        ["20261218 · 38 DTE", "1218_C7300 held", "1218_C7300 Δ", "1218_P6400 held", "1218_P7150", "20261218 P7150"],
         ["20261231 · 38 DTE", "1231_IC held", "1231_C7600"]],
       ["Contracts",
+        ["20261218 · 38 DTE", "20261218 P6400"],
         ["20261231 · 38 DTE", "20261231 C8000"],
         // what follows the book on the page follows its last section here
         ["Quarantined — switched off by the service", "20261211 C8000"]],
@@ -147,7 +154,7 @@ describe("1–2. two sections (2026-11-17): Spreads, then Contracts, each by exp
   });
 
   it("leaves Contracts out where nothing is a contract, on any surface", () => {
-    const noLone = MORE_QUOTES.filter((q) => q.id !== "w-lone");
+    const noLone = MORE_QUOTES.filter((q) => q.id !== "w-lone" && q.id !== ON_LEG.id);
     render(<DeskBook {...props({ quotes: noLone })} />);
     expect(document.querySelector('[data-section="contracts"]')).toBeNull();
     cleanup();
@@ -232,7 +239,7 @@ describe("4. a holding's own rule on its row, a second rule still a row under it
     const lines = [...card("h-calls").querySelectorAll<HTMLElement>(".nxp-rule")];
     expect(lines.map((l) => l.dataset.ref)).toEqual(["r-calls", "r-calls-short"]);
     expect(lines[0]!.querySelector(".nxp-rule-name")).toBeNull();
-    expect(lines[1]!.querySelector(".nxp-rule-name")!.textContent).toBe("20261218 C7300");
+    expect(lines[1]!.querySelector(".nxp-rule-name")!.textContent).toBe("1218_C7300 Δ");
   });
 
   it("in the picture: the own rule's sentence in the holding's rule cell, the second a row under it", () => {
@@ -242,22 +249,29 @@ describe("4. a holding's own rule on its row, a second rule still a row under it
     const rule = s.columns.indexOf("rule");
     expect(rows.find((r) => r[0] === "1218_C7300 held")![rule]).toBe("|value| ≥ 4.00 — now 4.40, past it by 0.40");
     expect(rows.filter((r) => r[0] === "1218_C7300")).toEqual([]);
-    expect(rows.find((r) => r[0] === "20261218 C7300")![rule]).toMatch(/^\|Δ\| ≥ 0\.30 — now 0\.330/);
+    expect(rows.find((r) => r[0] === "1218_C7300 Δ")![rule]).toMatch(/^\|Δ\| ≥ 0\.30 — now 0\.330/);
   });
 });
 
-describe("5. a leg's rule under its spread, and a contract rule on a held leg under the holding", () => {
+describe("5. a leg's rule under its spread, and a contract rule on a held leg a row of its own in Contracts (2026-11-17)", () => {
   it("on the desk", () => {
     render(<DeskBook {...props()} />);
     expect(deskRow("w-dec18")!.closest("li")!.contains(deskRow("w-dec18-delta"))).toBe(true);
-    expect(deskRow("h-puts")!.closest("li")!.contains(deskRow("w-p6400"))).toBe(true);
-    expect(deskRow("w-p6400")!.dataset.nested).toBe("");
+    expect(deskRow("h-puts")!.closest("li")!.contains(deskRow("w-p6400"))).toBe(false);
+    expect(deskRow("w-p6400")!.dataset.nested).toBeUndefined();
+    expect(deskRow("w-p6400")!.closest('[data-section="contracts"]')).toBeTruthy();
   });
 
   it("on the phone", () => {
     render(<PhoneBook {...props()} />);
     expect(card("w-dec18").querySelector('[data-ref="w-dec18-delta"]')).toBeTruthy();
-    expect(card("h-puts").querySelector('[data-ref="w-p6400"]')).toBeTruthy();
+    expect(card("h-puts").querySelector('[data-ref="w-p6400"]')).toBeNull();
+    expect(card("w-p6400").closest('[data-section="contracts"]')).toBeTruthy();
+  });
+
+  it("in the picture", () => {
+    const contracts = plain().sections.find((x) => x.title === "Contracts")!;
+    expect(contracts.groups[0]!.rows.map((r) => r[0])).toEqual(["20261218 P6400"]);
   });
 });
 
@@ -312,7 +326,7 @@ describe("4. a holding's own rule in the picture, where the rule's column is hid
     expect(rows.map((r) => r[0])).toContain("1218_C7300 held — |value| ≥ 4.00 — now 4.40, past it by 0.40");
     // a holding with no own rule says its name alone, and a rule's own row is unchanged
     expect(rows.map((r) => r[0])).toContain("1218_P6400 held");
-    expect(rows.map((r) => r[0])).toContain("20261218 C7300");
+    expect(rows.map((r) => r[0])).toContain("1218_C7300 Δ");
     const text = toMarkdown(hidden);
     expect(text).toContain("| 1218_C7300 held — \\|value\\| ≥ 4.00 — now 4.40, past it by 0.40 |");
     // shown, the name is the name

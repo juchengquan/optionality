@@ -318,13 +318,13 @@ function Expiry({ g, ctx }: { g: ExpiryBook; ctx: Ctx }) {
               data-bracket={bracket.length === 2 ? "condor" : undefined}>
             <ul>
               {bracket.map((placed, i) => {
-                const { holding, rules } = placed;
+                const { holding, rules, legRules } = placed;
                 // drawn in pieces on the rows it passes, so it runs from the first holding's
                 // row to the second's whatever rules sit under either
                 const paired = bracket.length === 2;
                 return (
                   <li key={holding.id}>
-                    <Row row={{ kind: "holding", holding, rules }} ctx={ctx}
+                    <Row row={{ kind: "holding", holding, rules, legRules }} ctx={ctx}
                          bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} />
                     {/* its own rule is on its row: only the others are rows under it */}
                     {subRules(placed).map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx}

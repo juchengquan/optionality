@@ -442,9 +442,9 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     draw({ quotes: OVERLAP_QUOTES, holdings: OVERLAP_HOLDINGS, monitors: OVERLAP_MONITORS, ...over });
   const note = (ref: string) => card(ref).querySelector<HTMLElement>("[data-overlap]")?.textContent ?? null;
   const OVERLAP_ORDER = [
-    "h-8050", "r-8050", "r-8050-delta", "h-ic", "r-ic-calls", "h-7200",
+    "h-8050", "r-8050", "h-ic", "r-ic-calls", "h-7200",
     "r-8100", "w-8150-delta", "w-7700", "r-ratio",
-    "h-7700", "r-7700",
+    "h-7700", "r-7700", "r-8050-delta",
   ];
 
   it("is a card among the watched spreads with no note on it, and the holding's card keeps its own rules", () => {

@@ -176,7 +176,7 @@ export function plainView(input: PlainInput): PlainView {
     heading: `${writtenDate(g.expiry)} · ${g.dte} DTE`,
     rows: [
       ...g.held.flat().flatMap((p: PlacedHolding) => [
-        row({ kind: "holding", holding: p.holding, rules: p.rules }),
+        row({ kind: "holding", holding: p.holding, rules: p.rules, legRules: p.legRules }),
         ...subRules(p).map((e) => row({ kind: "rule", entry: e, nested: true })),
       ]),
       // each rule once (2026-11-17): a leg rule met under a second spread is not written again
