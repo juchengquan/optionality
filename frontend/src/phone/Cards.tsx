@@ -9,7 +9,7 @@ import type { Entry, Holding, Monitor } from "../shared/api";
 import { heldLeg, signedLeg } from "../shared/format";
 import { Leg, Legs } from "../shared/Legs";
 import { Chip, Money } from "../Book";
-import { levelWords } from "../levels";
+import { LEVEL_WORDS, levelWords } from "../levels";
 import { costAndPace, paceOutcome } from "../pace";
 import { Glyph } from "../NeedsLine";
 import { entryName, fieldWords, monitorName } from "../needs";
@@ -37,12 +37,18 @@ function OpenCard({ name, onOpen }: { name: string; onOpen: () => void }) {
 
 /** A Level reached is attention, drawn as attention is: a filled chip with a glyph — outside the
  *  session saying which valuation it is from (`levelWords`, #354, #371). */
-export function LevelChip({ holding, session }: { holding: Holding; session: boolean }) {
+export function LevelChip({ holding, session, short = false }: {
+  holding: Holding; session: boolean;
+  /** the Level alone, on a card's head (the owner, 2026-11-17): when it was valued is the sheet's to say */
+  short?: boolean;
+}) {
   const level = holding.schedule?.reached ?? null;
   if (!level) return null;
   const kind = level === "stop" ? "stop" : "target";
   return (
-    <span className="nx-chip" data-kind={kind}><Glyph kind={kind} />{levelWords(kind, holding, session)}</span>
+    <span className="nx-chip" data-kind={kind}>
+      <Glyph kind={kind} />{short ? LEVEL_WORDS[kind] : levelWords(kind, holding, session)}
+    </span>
   );
 }
 
@@ -95,14 +101,12 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
         <span className="nxp-name">{holding.name}{" "}<span className="nx-held" data-held="">{HELD}</span></span>
         <span className="nxp-legs"><Legs legs={holding.legs.map(heldLeg)} /></span>
         {/* no DTE here: its expiry's heading says it, once (part K) */}
+        {/* its Level in its head, as a watched card's state (the owner, 2026-11-17) */}
+        <LevelChip holding={holding} session={session} short />
       </header>
-      <div className="nxp-hero">
-        <Money value={holding.pnl} privacy={privacy} />
-        <span className="nxp-hero-sub">{`captured ${percent(holding.captured)}`}</span>
-        {/* its chip by the session (#371) */}
-        <LevelChip holding={holding} session={session} />
-      </div>
-      <dl className="nxp-facts">
+      {/* three figures of one size (the owner, 2026-11-17): the P&L no longer a large figure of its own */}
+      <dl className="nxp-facts nxp-held-figs">
+        <div><dt>P&amp;L · captured</dt><dd><Money value={holding.pnl} privacy={privacy} />{` · ${percent(holding.captured)}`}</dd></div>
         {/* the Cost to close with its pace gap beside it, one field as the desk's value column draws
             it (the owner, 2026-11-16) — the gap on the card since #374, said in words to a reader */}
         <div><dt>cost to close</dt><dd><CostAndPace holding={holding} /></dd></div>

@@ -69,6 +69,10 @@
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.375rem 0.75rem;
   margin: 0.375rem 0;
 }
+/* a held card's three figures, one row (the owner, 2026-11-17): each figure whole and on one line,
+   and one too wide for what is left of the row — a condor's two short legs' Δ — starts the next */
+.nxp-held-figs { display: flex; flex-wrap: wrap; gap: 0.375rem 1rem; }
+.nxp-held-figs dd { white-space: nowrap; }
 .nxp-facts dt { color: var(--muted-foreground); font-size: 0.75rem; }
 .nxp-facts dd { font-weight: 600; font-variant-numeric: tabular-nums; }
 
