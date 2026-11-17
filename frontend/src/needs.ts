@@ -2,7 +2,7 @@ import { unreadableWords } from "./UnreadableHoldings";
 import { trueMinus } from "./shared/numbers";
 import { REASONS } from "./shared/groups";
 import type { Entry, Health, Holding, Monitor } from "./shared/api";
-import { shortContract } from "./shared/format";
+import { contractName } from "./shared/format";
 import { writtenDate } from "./shared/times";
 import { overlapOf } from "./placement";
 import { newYorkWeekdayWhen, newYorkWhen } from "./session";
@@ -51,14 +51,14 @@ export function isEntrySignal(entry: Entry): boolean {
 }
 
 export function entryName(entry: Entry): string {
-  return entry.legs ? entry.code : shortContract(entry.quote?.name ?? entry.code);
+  return entry.legs ? entry.code : contractName(entry.code, entry.quote?.name ?? entry.code);
 }
 
 /** A rule as `/monitors` gives it, which carries no quote: a combo by its name, a single leg as
- *  the contract names it everywhere else on the page (`20261211 6800P`). */
+ *  the contract names it everywhere else on the page (`20261211 P6800`). */
 export function monitorName(monitor: Monitor): string {
   if (monitor.legs) return monitor.code;
-  return `${writtenDate(monitor.strike_date)} ${monitor.strike}${monitor.option_type[0]}`;
+  return `${writtenDate(monitor.strike_date)} ${monitor.option_type[0]}${monitor.strike}`;
 }
 
 /** @param holdings the holdings whose Levels the line says, or null where it says none: in

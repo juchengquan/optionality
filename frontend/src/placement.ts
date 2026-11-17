@@ -188,7 +188,7 @@ export function drawnUnder(rules: readonly Entry[], elsewhere: readonly Elsewher
   return rules.filter((r) => r !== own && !away.has(r.id));
 }
 
-/** The note where a rule is met again: "20261218 7150P also in 1218_P7150". */
+/** The note where a rule is met again: "20261218 P7150 also in 1218_P7150". */
 export const alsoWords = (e: Elsewhere) => `${entryName(e.entry)} also in ${e.in}`;
 
 /** A holding's OWN rule (2026-11-17): the one rule the service links to this holding alone over

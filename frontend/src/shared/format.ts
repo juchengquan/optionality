@@ -48,23 +48,19 @@ export const signedLeg = (l: Leg): WrittenLeg =>
 export const heldLeg = (l: { side: string; option_type: string; strike: number; qty?: number }): WrittenLeg =>
   ({ short: l.side === "short", option_type: l.option_type, strike: l.strike, qty: l.qty });
 
-/** "SPXW 261016 8050.00C" → "20261016 8050C".
+/** A contract as the owner reads it everywhere — the page, `/monitors`, every alarm: an SPXW code
+ *  `US.SPXW261218P6800000` as `20261218 P6800`, its letter before its strike as a leg's is
+ *  (`−P6800`), and anything else by `name` (the provider's name, or the code itself).
  *
- *  Every contract this service can create goes through build_spx_code, which hardcodes the
- *  SPXW symbol and builds the strike with int() — so the prefix and the decimals are
- *  identical on every row and carry no information at all. Eight of twenty characters, in
- *  the widest column on the page.
- *
- *  It matches strictly and returns anything else untouched: a name from a symbol this does
- *  not know about must not be quietly shortened into a different-looking contract. If SPX
- *  monthlies or fractional strikes ever appear, this stops applying rather than lying.
- */
-const SPXW_NAME = /^SPXW (\d{6}) (\d+)\.00([CP])$/;
+ *  The domain's `contractName` (`contract.ts`), which the page cannot import (it reaches only the
+ *  backend), so `Format.test.ts` holds it to the domain's golden cases, case for case. Until
+ *  2026-11-17 this rewrote moomoo's NAME, "SPXW 261218 6800.00P", into `20261218 6800P`: the strike
+ *  first, where the legs beside it and the bot wrote the letter first. Strict, as the domain's is: a
+ *  code in any other shape is not shortened into a different-looking contract. */
+const SPX_CODE = /^US\.SPXW(\d{6})([CP])(0|[1-9]\d*)000$/;
 
-export function shortContract(name: string): string {
-  const m = SPXW_NAME.exec(name);
-  // the vendor's six digits read as 20YY, as the service reads a code (`parseSpxCode`), and written
-  // as every date is (`times.writtenDate`): "SPXW 261218 6800.00P" is "20261218 6800P"
+export function contractName(code: string, name: string = code): string {
+  const m = SPX_CODE.exec(code);
   return m ? `20${m[1]} ${m[2]}${m[3]}` : name;
 }
 

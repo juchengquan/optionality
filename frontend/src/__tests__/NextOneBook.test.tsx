@@ -119,9 +119,9 @@ describe("1–2. each expiry once: held spreads, watched spreads, then the lone 
     expect(view.sections.map((s) => s.title)).toEqual(["Book", "Muted and expired"]);
     expect(plainNames(view)).toEqual([
       ["20261204 · 38 DTE", "1204_P6900"],
-      ["20261218 · 38 DTE", "1218_C7300 held", "20261218 7300C", "1218_P6400 held", "20261218 6400P", "1218_P7150", "20261218 7150P"],
-      ["20261231 · 38 DTE", "1231_IC held", "1231_C7600", "contracts", "20261231 8000C"],
-      ["Quarantined — switched off by the service", "20261211 8000C"],
+      ["20261218 · 38 DTE", "1218_C7300 held", "20261218 C7300", "1218_P6400 held", "20261218 P6400", "1218_P7150", "20261218 P7150"],
+      ["20261231 · 38 DTE", "1231_IC held", "1231_C7600", "contracts", "20261231 C8000"],
+      ["Quarantined — switched off by the service", "20261211 C8000"],
     ]);
     const md = toMarkdown(view);
     for (const day of ["20261204", "20261218", "20261231"]) expect(md.match(new RegExp(`\\n\\| ${day} · `, "g"))).toHaveLength(1);
@@ -145,7 +145,7 @@ describe("3. \"held\" after a holding's name, and in what a reader hears", () =>
       expect(within(deskRow(id)!).getByRole("button", { name: `${name} held` })).toBeTruthy();
       expect(deskRow(id)!.querySelector("[data-held]")!.textContent).toBe("held");
     }
-    for (const [id, name] of [["w-dec18", "1218_P7150"], ["w-lone", "20261231 8000C"], ["w-dec18-delta", "20261218 7150P"]] as const) {
+    for (const [id, name] of [["w-dec18", "1218_P7150"], ["w-lone", "20261231 C8000"], ["w-dec18-delta", "20261218 P7150"]] as const) {
       expect(within(deskRow(id)!).getByRole("button", { name })).toBeTruthy();
       expect(deskRow(id)!.querySelector("[data-held]")).toBeNull();
     }
@@ -213,7 +213,7 @@ describe("4. a holding's own rule on its row, a second rule still a row under it
     const lines = [...card("h-calls").querySelectorAll<HTMLElement>(".nxp-rule")];
     expect(lines.map((l) => l.dataset.ref)).toEqual(["r-calls", "r-calls-short"]);
     expect(lines[0]!.querySelector(".nxp-rule-name")).toBeNull();
-    expect(lines[1]!.querySelector(".nxp-rule-name")!.textContent).toBe("20261218 7300C");
+    expect(lines[1]!.querySelector(".nxp-rule-name")!.textContent).toBe("20261218 C7300");
   });
 
   it("in the picture: the own rule's sentence in the holding's rule cell, the second a row under it", () => {
@@ -223,7 +223,7 @@ describe("4. a holding's own rule on its row, a second rule still a row under it
     const rule = s.columns.indexOf("rule");
     expect(rows.find((r) => r[0] === "1218_C7300 held")![rule]).toBe("|value| ≥ 4.00 — now 4.40, past it by 0.40");
     expect(rows.filter((r) => r[0] === "1218_C7300")).toEqual([]);
-    expect(rows.find((r) => r[0] === "20261218 7300C")![rule]).toMatch(/^\|Δ\| ≥ 0\.30 — now 0\.330/);
+    expect(rows.find((r) => r[0] === "20261218 C7300")![rule]).toMatch(/^\|Δ\| ≥ 0\.30 — now 0\.330/);
   });
 });
 
@@ -291,7 +291,7 @@ describe("4. a holding's own rule in the picture, where the rule's column is hid
     expect(rows.map((r) => r[0])).toContain("1218_C7300 held — |value| ≥ 4.00 — now 4.40, past it by 0.40");
     // a holding with no own rule says its name alone, and a rule's own row is unchanged
     expect(rows.map((r) => r[0])).toContain("1218_P6400 held");
-    expect(rows.map((r) => r[0])).toContain("20261218 7300C");
+    expect(rows.map((r) => r[0])).toContain("20261218 C7300");
     const text = toMarkdown(hidden);
     expect(text).toContain("| 1218_C7300 held — \\|value\\| ≥ 4.00 — now 4.40, past it by 0.40 |");
     // shown, the name is the name
@@ -367,7 +367,7 @@ describe("6. each rule drawn once, its second place a note (the owner, 2026-11-1
     expect(deskRow("w-dec18")!.closest("li")!.contains(deskRow("w-dec18-delta"))).toBe(true);
     expect(deskRow("h-calls")!.closest("li")!.contains(deskRow("r-condor"))).toBe(true);
     const notes = [...document.querySelectorAll<HTMLElement>("[data-also]")];
-    expect(notes.map((n) => n.textContent)).toEqual(["1218_IC also in 1218_C7300", "20261218 7150P also in 1218_P7150"]);
+    expect(notes.map((n) => n.textContent)).toEqual(["1218_IC also in 1218_C7300", "20261218 P7150 also in 1218_P7150"]);
     expect(deskRow("h-puts")!.closest("li")!.contains(notes[0]!)).toBe(true);
     expect(deskRow("w-dec18b")!.closest("li")!.contains(notes[1]!)).toBe(true);
     for (const n of notes) {
@@ -382,7 +382,7 @@ describe("6. each rule drawn once, its second place a note (the owner, 2026-11-1
       expect([...document.querySelectorAll<HTMLElement>("[data-ref]")].filter((e) => e.dataset.ref === id)).toHaveLength(1);
     }
     expect(card("h-puts").querySelector("[data-also]")!.textContent).toBe("1218_IC also in 1218_C7300");
-    expect(card("w-dec18b").querySelector("[data-also]")!.textContent).toBe("20261218 7150P also in 1218_P7150");
+    expect(card("w-dec18b").querySelector("[data-also]")!.textContent).toBe("20261218 P7150 also in 1218_P7150");
   });
 
   it("in the inspector, still listed under each: it is a rule about both", () => {

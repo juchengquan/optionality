@@ -116,9 +116,9 @@ describe("the table", () => {
     // spreads, then its lone contracts under a "contracts" row — only where it has some
     expect(rowsOf(view, "Book").map((r) => r[0])).toEqual([
       "1204_P6900",
-      "1218_C7300 held", "1218_P6400 held", "1218_P7150", "20261218 7150P",
-      "1231_IC held", "1231_C7600", "contracts", "20261231 8000C",
-      "20261211 8000C",
+      "1218_C7300 held", "1218_P6400 held", "1218_P7150", "20261218 P7150",
+      "1231_IC held", "1231_C7600", "contracts", "20261231 C8000",
+      "20261211 C8000",
     ]);
     // the label row says nothing but its word
     const label = rowsOf(view, "Book").find((r) => r[0] === "contracts")!;
@@ -130,7 +130,7 @@ describe("the table", () => {
     // a holding's own rule, on its row (2026-11-17)
     expect(cell(view, "1218_C7300 held", "rule")).toBe("|value| ≥ 4.00 — now 4.40, past it by 0.40");
     expect(cell(view, "1218_P6400 held", "rule")).toBe("");
-    expect(cell(view, "20261218 7150P", "rule")).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
+    expect(cell(view, "20261218 P7150", "rule")).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
     expect(cell(view, "1204_P6900", "rule")).toBe("|value| ≥ 6.00 — now 6.20, past it by 0.20");
     const rules = rowsOf(view, "Book").map((r) => r[sectionOf(view, "Book").columns.indexOf("rule")]!).join(" ");
     // the short form's arrows are the screen's; the field's words are one vocabulary since #404 — Δ
@@ -247,9 +247,9 @@ describe("every state the status column carried is still named, in the header or
     const muted = view.sections.find((s) => s.title === "Muted and expired")!;
     // the desk's fold's order, in the page's one set of words (part I), each a heading (part H)
     expect(muted.groups.map((g) => [g.heading, g.rows.map((r) => r[0])])).toEqual([
-      ["Expired", ["20261218 8003C"]], ["Holding closed", ["20261218 8004C"]],
-      ["Muted by you", ["20261218 8002C", "20261218 8006C"]], ["Reason not recorded", ["20261218 8005C"]],
-      ["Sunset", ["20261218 8007C"]],
+      ["Expired", ["20261218 C8003"]], ["Holding closed", ["20261218 C8004"]],
+      ["Muted by you", ["20261218 C8002", "20261218 C8006"]], ["Reason not recorded", ["20261218 C8005"]],
+      ["Sunset", ["20261218 C8007"]],
     ]);
     // the rule in words, with no figure: nothing watches it
     expect(muted.groups[0]!.rows[0]![muted.columns.indexOf("rule")]).toBe("|Δ| ≥ 0.10");
@@ -311,7 +311,7 @@ describe("the minus, in the picture and in the text (the owner, 2026-11-16)", ()
     expect([rowIn(picture)[pnl!], rowIn(picture)[delta!]]).toEqual(["\u2212$240", "0.330"]);
     expect(rowIn(text)[pnl!]).toBe("-$240");
     const short = sectionOf(plainView(given), "Book");
-    const lone = readMarkdown(toMarkdown(plainView(given))).sections[0]!.rows.find((r) => r[0] === "20261218 7150P")!;
+    const lone = readMarkdown(toMarkdown(plainView(given))).sections[0]!.rows.find((r) => r[0] === "20261218 P7150")!;
     expect(lone[short.columns.indexOf("Δ")]).toBe("-0.170");
     // words keep the true minus in both: a leg, and a rule's sentence
     expect(rowIn(text)[legs!]).toBe("\u2212C7300 +C7350");

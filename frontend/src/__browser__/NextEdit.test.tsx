@@ -18,7 +18,7 @@ import { settle } from "./nextBook";
 beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-const DELTA = "20261218 7150P Δ";
+const DELTA = "20261218 P7150 Δ";
 
 async function openDesk(refuse?: Parameters<typeof serveEditing>[0]) {
   await page.viewport(1440, 900);
@@ -32,7 +32,7 @@ const inspector = () => screen.getByRole("complementary", { name: /^inspector/ }
 
 /** The delta rule under the 12-18 put spread, opened in the inspector. */
 async function inspectDelta() {
-  await userEvent.click(screen.getByRole("button", { name: "20261218 7150P" }));
+  await userEvent.click(screen.getByRole("button", { name: "20261218 P7150" }));
   return inspector();
 }
 
@@ -140,15 +140,15 @@ describe("mute, unmute and delete from the desk", () => {
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes).toEqual([{ what: "DELETE /monitors/w-dec18-delta", body: null }]));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "20261218 7150P" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "20261218 P7150" })).toBeNull());
   });
 
   it("switches a quarantined rule back on only after saying why it was switched off", async () => {
     const writes = await openDesk();
-    await userEvent.click(screen.getByRole("button", { name: "20261211 8000C" }));
+    await userEvent.click(screen.getByRole("button", { name: "20261211 C8000" }));
     const panel = inspector();
-    await userEvent.click(within(panel).getByRole("button", { name: "switch 20261211 8000C Δ back on" }));
-    const ask = within(panel).getByRole("group", { name: "switch 20261211 8000C Δ back on?" });
+    await userEvent.click(within(panel).getByRole("button", { name: "switch 20261211 C8000 Δ back on" }));
+    const ask = within(panel).getByRole("group", { name: "switch 20261211 C8000 Δ back on?" });
     expect(ask.textContent).toMatch(/the provider does not know its contract — US\.SPXW261211C8300000/);
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "switch it on" }));

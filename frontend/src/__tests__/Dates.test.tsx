@@ -13,7 +13,7 @@ import { PhoneBook } from "../phone/PhoneBook";
 import { closeWords } from "../levels";
 import { needsYou } from "../needs";
 import { newYorkWhen, servedWhen } from "../session";
-import { fetchedWords, shortContract } from "../shared/format";
+import { contractName, fetchedWords } from "../shared/format";
 import { setDisplayZone, weekdayDate, writtenDate } from "../shared/times";
 import { plainView, takenWords, toMarkdown, type PlainInput } from "../snapshot/plain";
 import { holding, HOLDINGS, MONITORS, QUOTES, side } from "../testing/ownerBook";
@@ -55,18 +55,18 @@ describe("an expiry's heading", () => {
 });
 
 describe("a contract's name", () => {
-  it("writes the vendor's six digits as the whole date", () => {
-    expect(shortContract("SPXW 261218 6800.00P")).toBe("20261218 6800P");
+  it("writes the code's six digits as the whole date", () => {
+    expect(contractName("US.SPXW261218P6800000", "SPXW 261218 6800.00P")).toBe("20261218 P6800");
     // anything else is left as it is, a name the owner typed included
-    for (const name of ["1231_8050", "1218-6800", "SPXW 261218 6800.50P"]) expect(shortContract(name)).toBe(name);
+    for (const name of ["1231_8050", "1218-6800", "SPXW 261218 6800.50P"]) expect(contractName(name)).toBe(name);
   });
 
   it("is drawn so on the desk and the phone", () => {
     const desk = render(<DeskBook {...props()} />);
-    expect(desk.container.textContent).toContain("20261218 7150P");
+    expect(desk.container.textContent).toContain("20261218 P7150");
     cleanup();
     const phone = render(<div className="nx"><PhoneBook {...props()} /></div>);
-    expect(phone.container.textContent).toContain("20261218 7150P");
+    expect(phone.container.textContent).toContain("20261218 P7150");
   });
 });
 
@@ -109,7 +109,7 @@ describe("the saved picture and Copy as text", () => {
     for (const h of heads) expect(h).toMatch(/^\d{8} · \d+ DTE$/);
     const text = toMarkdown(view);
     expect(text).toContain("20261218 · 38 DTE");
-    expect(text).toContain("20261218 7150P");
+    expect(text).toContain("20261218 P7150");
     expect(text).not.toMatch(/(?<![\w\d])2\d[01]\d[0-3]\d(?![\d_\-])/);
     expect(takenWords(new Date("2026-11-16T15:00:00Z"), "Asia/Singapore"))
       .toBe("Mon 20261116 10:00 ET · Mon 20261116 23:00 SGT");

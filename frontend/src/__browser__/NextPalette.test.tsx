@@ -72,9 +72,9 @@ describe("every action, from the keyboard", () => {
   it("edits the selected Monitor, found first by its strike", async () => {
     await openDesk();
     await run("7150 delta");
-    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 20261218 7150P"));
+    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 20261218 P7150"));
     await run("edit the selected");
-    const form = await screen.findByRole("form", { name: "editing 20261218 7150P Δ" });
+    const form = await screen.findByRole("form", { name: "editing 20261218 P7150 Δ" });
     await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("threshold")));
   });
 

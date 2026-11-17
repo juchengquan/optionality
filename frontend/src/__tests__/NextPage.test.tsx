@@ -952,7 +952,7 @@ describe("the needs-you line", () => {
       at(now);
       await open();
       const line = screen.getByRole("status", { name: "needs you" });
-      expect(line.textContent).toContain("20261211 8300C Δ quarantined — the provider does not know its contract");
+      expect(line.textContent).toContain("20261211 C8300 Δ quarantined — the provider does not know its contract");
       expect(line.getAttribute("data-tone")).toBe("bad");
     });
   }
@@ -1032,7 +1032,7 @@ describe("a banner leads to its row", () => {
     quotes = [spread, { ...shortLeg, triggered: true }];
     await open();
     const banners = screen.getByRole("status", { name: "needs you" });
-    fireEvent.click(within(banners).getByRole("button", { name: /20261218 7150P entry signal/ }));
+    fireEvent.click(within(banners).getByRole("button", { name: /20261218 P7150 entry signal/ }));
     await waitFor(() =>
       expect(document.querySelector('[data-ref="w2"]')!.hasAttribute("data-revealed")).toBe(true));
   });

@@ -20,7 +20,7 @@ beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const SPREAD = "1218_P7150 value";
-const DELTA = "20261218 7150P Δ";
+const DELTA = "20261218 P7150 Δ";
 
 async function show(refuse?: Parameters<typeof serveEditing>[0]) {
   const writes = serveEditing(refuse);
@@ -150,8 +150,8 @@ describe("mute, unmute and delete on the phone", () => {
   it("switches a quarantined rule back on from the switched-off list, saying why first", async () => {
     const writes = await show();
     const off = await screen.findByRole("region", { name: "Switched off" });
-    await userEvent.click(within(off).getByRole("button", { name: "switch 20261211 8000C Δ back on" }));
-    const ask = within(off).getByRole("group", { name: "switch 20261211 8000C Δ back on?" });
+    await userEvent.click(within(off).getByRole("button", { name: "switch 20261211 C8000 Δ back on" }));
+    const ask = within(off).getByRole("group", { name: "switch 20261211 C8000 Δ back on?" });
     expect(ask.textContent).toMatch(/does not know its contract — US\.SPXW261211C8300000/);
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "switch it on" }));

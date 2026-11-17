@@ -6,9 +6,11 @@
  *  back here, against the module alone. The suite runs under TZ=UTC (vitest.config.ts), so a case
  *  that reads the DEVICE's zone writes its instant in another one and states the conversion.
  */
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { clockTime, heldLeg, legText, marketDay, shortContract, shortFirst, shortStamp, signedLeg } from "../shared/format";
+import { clockTime, contractName, heldLeg, legText, marketDay, shortFirst, shortStamp, signedLeg } from "../shared/format";
 
 describe("legs, short as the true minus (#351, 2026-11-16)", () => {
   it("writes a quantity between the sign and the contract, and a quantity of one not at all", () => {
@@ -22,22 +24,29 @@ describe("legs, short as the true minus (#351, 2026-11-16)", () => {
   });
 });
 
-describe("contract names", () => {
-  it("drops the noise that every contract carries", () => {
-    // build_spx_code hardcodes SPXW and builds strikes with int(), so the symbol and the
-    // decimals are identical on every row this service can create — twenty characters of
-    // which eight say nothing
-    expect(shortContract("SPXW 261016 8050.00C")).toBe("20261016 8050C");
-    expect(shortContract("SPXW 261120 7100.00P")).toBe("20261120 7100P");
-  });
+/** One spelling of a contract on the page, the bot's and the leg's (2026-11-17): `20261218 P6800`,
+ *  letter first, from the CODE — not moomoo's name rewritten, `20261218 P6800`, which another vendor
+ *  would have named differently again. The domain's `contractName`, which the page cannot import, so
+ *  it is held to the domain's own cases. */
+const CONTRACT_CASES = (() => {
+  const file = [".", ".."].map((d) => resolve(process.cwd(), d, "testdata/golden/contract.json"))
+    .find((f) => existsSync(f))!;
+  return (JSON.parse(readFileSync(file, "utf8")) as { cases: { fn: string; name: string; args: string[]; expect: string }[] })
+    .cases;
+})();
 
-  it("leaves anything it does not recognise exactly as it found it", () => {
-    // a name from somewhere else must not be quietly mangled into a different contract: an SPX
-    // monthly, a fractional strike, and something that is not a contract at all
-    expect(shortContract("SPX 261016 8050.00C")).toBe("SPX 261016 8050.00C");
-    expect(shortContract("SPXW 261016 8050.50C")).toBe("SPXW 261016 8050.50C");
-    expect(shortContract("1016_bs_8050")).toBe("1016_bs_8050");
+describe("contract names", () => {
+  it("has the domain's cases", () => {
+    expect(CONTRACT_CASES.filter((c) => c.fn === "contractName").length).toBeGreaterThanOrEqual(4);
+    expect(CONTRACT_CASES.filter((c) => c.fn === "shortSpxCode").length).toBeGreaterThanOrEqual(2);
   });
+  for (const c of CONTRACT_CASES.filter((x) => x.fn === "contractName")) {
+    it(`contractName: ${c.name}`, () => { expect(contractName(c.args[0]!, c.args[1]!)).toBe(c.expect); });
+  }
+  for (const c of CONTRACT_CASES.filter((x) => x.fn === "shortSpxCode")) {
+    // shortSpxCode is contractName with the code as the fallback
+    it(`shortSpxCode: ${c.name}`, () => { expect(contractName(c.args[0]!)).toBe(c.expect); });
+  }
 });
 
 /** The service renders every timestamp in DISPLAY_TZ, so the trailing offset is the same on every
