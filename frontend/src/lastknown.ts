@@ -69,13 +69,17 @@ export function valueCell(phase: MarketPhase, quotesFailed: boolean): ValueCell 
  *  its value cell says (#400): `price`, at every hour, and `last_price` wherever the cell says the
  *  last price instead — for a row the poll has no price for outside the regular session (#416,
  *  2026-11-17), and for every row while `/quotes` fails. */
-export function withLastKnown(quotes: readonly Entry[], monitors: readonly Monitor[], cell: ValueCell): Entry[] {
+export function withLastKnown(
+  quotes: readonly Entry[], monitors: readonly Monitor[], cell: ValueCell,
+  /** the gap before the open (`preOpen`): the one hour a reading newer than the close is said */
+  gap = false,
+): Entry[] {
   const byId = new Map(monitors.map((m) => [m.id, m]));
   const read = quotes.map((e) => ({ ...e, last_reading: lastKnown(e, byId.get(e.id), cell === "live") }));
   return read.map((e) => {
     const price = priceIn(e, read);
     const closed = cell === "close" || (cell === "live-or-close" && price === null);
-    return { ...e, price, ...(closed ? { last_price: lastPriceIn(e, read) } : {}) };
+    return { ...e, price, ...(closed ? { last_price: lastPriceIn(e, read, gap) } : {}) };
   });
 }
 
@@ -112,22 +116,24 @@ function priceIn(e: Entry, rows: readonly Entry[]): number | null {
   return twin ? ownPrice(twin) : null;
 }
 
-/** A row's last price: the newer of its last close where the service has one (#402) — the stored
+/** A row's last price: its last close where the service has one (#402) — or, in the gap before the
+ *  open only, the newer of it and the sweep's last reading (2026-11-18) — the stored
  *  history of the contracts it watches, its price under the rule's own signs (`last_close`), the same
  *  close a watched spread's payoff is drawn at, and a figure a delta rule's spread has as well as its
  *  price rule's — and the sweep's last reading (#400): the price rule's on these contracts — the row's
  *  own, or another rule's on the same contracts — as `lastKnown` keeps it, so one read while nothing
- *  traded is never one. A reading from the Curb or overnight after the close is the newer
- *  (2026-11-17): in the 09:25–09:30 gap, the overnight's last price. Null where neither has one. */
-function lastPriceIn(e: Entry, rows: readonly Entry[]): LastKnown | null {
+ *  traded is never one. Where no close is stored, the reading. Null where neither has one. */
+function lastPriceIn(e: Entry, rows: readonly Entry[], gap: boolean): LastKnown | null {
   const close = e.last_close ?? null;
   const key = contractsKey(e);
   const own = e.field === "mid_price" ? e.last_reading ?? null : null;
   const reading = own ?? rows.find((r) => r.field === "mid_price" && contractsKey(r) === key && r.last_reading)?.last_reading ?? null;
   if (close === null) return reading;
   const stored = { value: close.price, at: close.observed_at ?? "" };
-  // a reading from the Curb or overnight after that close is the newer price (2026-11-17)
-  return reading !== null && newer(reading.at, stored.at) ? reading : stored;
+  // in the gap before the open, the overnight's reading after that close is the newer price
+  // (2026-11-17); at every other hour the close stands, the figure a trade is reviewed against —
+  // an evening's or a weekend's thin Curb reading is not (2026-11-18)
+  return gap && reading !== null && newer(reading.at, stored.at) ? reading : stored;
 }
 
 const newer = (a: string, b: string) => {
