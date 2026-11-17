@@ -289,7 +289,10 @@ for (const arrangement of ["desk", "phone"] as const) {
       expect(strip.querySelector(".nxs-scale")!.textContent).toContain("Δ 0.330");
       // the reader's line, which the scale is decoration to, keeps every figure
       expect(strip.querySelector("figcaption")!.textContent).toMatch(/C7300 Δ 0\.330 · 399\.50 pts · 1\.00σ away/);
-      expect(seen(strip.querySelector("figcaption")!)).toMatch(/C7300 399\.50 pts · 1\.00σ away/);
+      // and the distance, drawn on the scale since 2026-11-17, seen there once and not under it
+      expect(count(seen(strip), "399.50 pts")).toBe(1);
+      expect(strip.querySelector(".nxs-scale")!.textContent).toContain("399.50 pts");
+      expect(seen(strip.querySelector("figcaption")!)).not.toMatch(/399\.50 pts/);
     });
 
     it("draws no rule's name under its own card's or sheet's heading, and a leg rule's name where it differs", async () => {

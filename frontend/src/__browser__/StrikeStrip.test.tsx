@@ -91,7 +91,8 @@ function stripFaults(): string[] {
   const f = fig.getBoundingClientRect();
   const out: string[] = [];
   if (!inside(f, insp.getBoundingClientRect())) out.push("the strip is outside the inspector");
-  const labels = [...fig.querySelectorAll<HTMLElement>(".nxs-l")];
+  // a strike's label, and each distance drawn on the scale (2026-11-17): the same rules hold for both
+  const labels = [...fig.querySelectorAll<HTMLElement>(".nxs-l, .nxs-gap:not([data-unfit]) .nxs-gap-l")];
   for (const l of labels) if (!inside(l.getBoundingClientRect(), f)) out.push(`label ${l.textContent} outside`);
   for (let i = 0; i < labels.length; i++) {
     for (let j = i + 1; j < labels.length; j++) {
