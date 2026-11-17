@@ -288,7 +288,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   importable, so the service cannot trade by absence rather than by discipline; `yahoo/` wraps
   `yahoo-finance2`. Each vendor's pure `fields.ts` is re-exported by `vendors/fields.ts`, a door
   of its own so `testdata/vendors/` can record one truth for two languages: it imports nothing but
-  the two `fields.ts` modules, because a door that reached a client would typecheck the moomoo
+  the vendors' `fields.ts` modules (`opend/fields.ts` is only a list, `RECORD_FIELDS`: what
+  `snapshot.ts`'s record carries, since the Python reads the SDK's frame rather than the protobuf
+  and can be held only to the record's keys), because a door that reached a client would typecheck the moomoo
   SDK's declarations into the case generator, which calls neither. `ibkr/fake.ts` is the fake
   gateway (`make ibkr-fake-gateway`), replaying `ibkr/recordings.ts`'s files, and `ibkr/replay.ts`
   turns each into its expected batch for `make cases` — a door that takes no host and no port.
@@ -441,6 +443,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   must reproduce (cased since ADR 0017, and named `js.py` not `_js.py` for that reason),
   `opend.py` needs the `opend` extra AND owns the containment loop that drops a code moomoo names as
   unknown — inside the provider, where `opend/client.ts` has it (ADR 0015, #168), not above the port;
+  its record keeps only `RECORD_FIELDS`, held to `testdata/vendors/opend-fields.json` (the SDK's
+  frame has 143 columns, and `/quotes` served them all until a side-by-side run on 2026-11-17);
   `quotes.py` is the port's contract plus the one fetch-and-catch that cannot be pure, and `api.py`
   loads Positions, Monitors and References from the live service (`OPTIONALITY_API` for its
   URL) — `positions()` only what is still HELD, `closed_positions()` the closed ones as

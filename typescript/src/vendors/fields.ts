@@ -15,7 +15,7 @@
  *  never calls.
  *
  *  So the widening happens here instead, in a file whose only job is to say which parts are pure.
- *  It imports nothing but the two `fields.ts` modules, so nothing that reaches for the mapping
+ *  It imports nothing but the vendors' `fields.ts` modules, so nothing that reaches for the mapping
  *  pulls a socket or an SDK behind it. `check-seams` lists it as a door of the library's vendor
  *  seam; `never` still forbids a client from ever becoming one.
  *
@@ -24,4 +24,5 @@
  *  nothing from the backend at all (`check-boundaries`).
  */
 export * as ibkrFields from "./ibkr/fields.ts";
+export * as opendFields from "./opend/fields.ts";
 export * as yahooFields from "./yahoo/fields.ts";

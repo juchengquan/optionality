@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { RECORD_FIELDS } from "./fields.ts";
 import { toRecord } from "./snapshot.ts";
 import type { Snapshot } from "./types.ts";
 
@@ -232,5 +233,12 @@ describe("every field the service consumes", () => {
       option_area_type: "AMERICAN",
       mid_price: (6.6 + 7.7) / 2,
     });
+  });
+
+  it("is exactly RECORD_FIELDS, the list the Python's record is held to", () => {
+    // the Python SDK hands back a 143-column row; `optionality.opend` keeps these and nothing else,
+    // through `testdata/vendors/opend-fields.json`. A field mapped here and not listed there would
+    // be a `/quotes` key one backend serves and the other does not.
+    expect(Object.keys(toRecord(full)).sort()).toEqual([...RECORD_FIELDS].sort());
   });
 });
