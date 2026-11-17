@@ -273,6 +273,56 @@
       }
     },
     {
+      "fn": "degradedVerdict",
+      "name": "once told, it reminds by the clock below the threshold in force",
+      "args": [
+        {
+          "failures": 3,
+          "since": {
+            "$date": "2026-11-01T11:20:00.000Z"
+          },
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:29:59.000Z"
+          }
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "x",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": "⚠️ monitoring still degraded: 3 consecutive sweep failures over 40m (x)"
+      }
+    },
+    {
+      "fn": "degradedVerdict",
+      "name": "and below it, untold, still says nothing",
+      "args": [
+        {
+          "failures": 3,
+          "since": {
+            "$date": "2026-11-01T11:20:00.000Z"
+          },
+          "lastNoticeAt": null
+        },
+        {
+          "afterFailures": 5,
+          "repeatSeconds": 1800
+        },
+        "x",
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "notice": null
+      }
+    },
+    {
       "fn": "recoveredNotice",
       "name": "says how long it was out",
       "args": [
@@ -284,10 +334,6 @@
           "lastNoticeAt": {
             "$date": "2026-11-01T11:59:00.000Z"
           }
-        },
-        {
-          "afterFailures": 5,
-          "repeatSeconds": 1800
         },
         {
           "$date": "2026-11-01T12:00:00.000Z"
@@ -307,10 +353,6 @@
           "lastNoticeAt": null
         },
         {
-          "afterFailures": 5,
-          "repeatSeconds": 1800
-        },
-        {
           "$date": "2026-11-01T12:00:00.000Z"
         }
       ],
@@ -328,14 +370,46 @@
           }
         },
         {
-          "afterFailures": 5,
-          "repeatSeconds": 1800
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": "✅ monitoring recovered"
+    },
+    {
+      "fn": "recoveredNotice",
+      "name": "told, it recovers below the threshold in force",
+      "args": [
+        {
+          "failures": 3,
+          "since": {
+            "$date": "2026-11-01T11:58:00.000Z"
+          },
+          "lastNoticeAt": {
+            "$date": "2026-11-01T11:59:00.000Z"
+          }
         },
         {
           "$date": "2026-11-01T12:00:00.000Z"
         }
       ],
-      "expect": "✅ monitoring recovered"
+      "expect": "✅ monitoring recovered after 2m"
+    },
+    {
+      "fn": "recoveredNotice",
+      "name": "untold, it stays quiet above the threshold in force",
+      "args": [
+        {
+          "failures": 12,
+          "since": {
+            "$date": "2026-11-01T11:59:00.000Z"
+          },
+          "lastNoticeAt": null
+        },
+        {
+          "$date": "2026-11-01T12:00:00.000Z"
+        }
+      ],
+      "expect": null
     }
   ]
 }

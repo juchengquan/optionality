@@ -275,7 +275,7 @@ describe("the seams this repository declares", () => {
     expect(Object.keys(door), "the engine's door exports SweepHealth again — M7 is reopened")
       .not.toContain("SweepHealth");
     // and it still hands out what main.ts actually needs, so this is not passing by exporting nothing
-    for (const name of ["MonitorSweeper", "Scheduler", "STALE_AFTER_SWEEPS"]) {
+    for (const name of ["MonitorSweeper", "Scheduler", "staleAfterSeconds"]) {
       expect(Object.keys(door), `the engine's door no longer exports ${name}`).toContain(name);
     }
   });

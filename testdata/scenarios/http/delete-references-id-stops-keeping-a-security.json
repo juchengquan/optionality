@@ -48,7 +48,8 @@
           "source": "ibkr",
           "created_at": "2026-11-02 14:32:00.000000"
         }
-      ]
+      ],
+      "sweep_interval": []
     }
   },
   "request": {

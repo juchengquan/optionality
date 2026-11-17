@@ -41,7 +41,15 @@ MIGRATIONS = DIRECTORY
 #: every table a scenario states, in an order rows can be inserted without breaking a foreign key.
 #: `schema_migrations` is not one: it is bookkeeping, stamped when a database is made, and no door
 #: reads it (`format.ts`'s TABLES)
-TABLES = ("positions", "monitors", "monitor_positions", "position_samples", "watch_samples", "reference_securities")
+TABLES = (
+    "positions",
+    "monitors",
+    "monitor_positions",
+    "position_samples",
+    "watch_samples",
+    "reference_securities",
+    "sweep_interval",
+)
 
 #: the columns that hold JSON text. A scenario writes their CONTENT, so they are compared as
 #: values, and their bytes may differ between languages by design (`8050` against `8050.0`)

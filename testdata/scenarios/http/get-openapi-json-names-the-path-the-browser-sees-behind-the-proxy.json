@@ -27,7 +27,8 @@
       "monitor_positions": [],
       "position_samples": [],
       "watch_samples": [],
-      "reference_securities": []
+      "reference_securities": [],
+      "sweep_interval": []
     }
   },
   "request": {
@@ -149,21 +150,47 @@
                               "manage_by_dte": {
                                 "type": "number"
                               },
-                              "sweep_seconds": {
-                                "type": "number"
-                              },
                               "expired_retention_days": {
                                 "type": "number"
                               },
                               "display_tz": {
                                 "type": "string"
+                              },
+                              "sweep_seconds": {
+                                "type": "number"
+                              },
+                              "sweep_source": {
+                                "type": "string",
+                                "enum": [
+                                  "settings",
+                                  "env"
+                                ]
+                              },
+                              "sweep_default_seconds": {
+                                "type": "number"
+                              },
+                              "sweep_presets": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                }
+                              },
+                              "sweep_refused": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
                               }
                             },
                             "required": [
                               "manage_by_dte",
-                              "sweep_seconds",
                               "expired_retention_days",
-                              "display_tz"
+                              "display_tz",
+                              "sweep_seconds",
+                              "sweep_source",
+                              "sweep_default_seconds",
+                              "sweep_presets",
+                              "sweep_refused"
                             ]
                           }
                         },
@@ -4324,6 +4351,113 @@
               ],
               "tags": [
                 "references"
+              ]
+            }
+          },
+          "/settings": {
+            "patch": {
+              "operationId": "patchSettings",
+              "summary": "Set the sweep's interval, or null for MONITOR_INTERVAL_SECONDS; in force at the next sweep",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "sweep_seconds": {
+                            "type": "number"
+                          },
+                          "sweep_source": {
+                            "type": "string",
+                            "enum": [
+                              "settings",
+                              "env"
+                            ]
+                          },
+                          "sweep_default_seconds": {
+                            "type": "number"
+                          },
+                          "sweep_presets": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "sweep_refused": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "sweep_seconds",
+                          "sweep_source",
+                          "sweep_default_seconds",
+                          "sweep_presets",
+                          "sweep_refused"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$schema": "https://json-schema.org/draft/2020-12/schema",
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              },
+              "requestBody": {
+                "required": true,
+                "content": {
+                  "application/json": {
+                    "schema": {
+                      "type": "object",
+                      "properties": {
+                        "sweep_seconds": {
+                          "anyOf": [
+                            {
+                              "type": "number",
+                              "enum": [
+                                5,
+                                10,
+                                15,
+                                30,
+                                60
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "sweep_seconds"
+                      ]
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "settings"
               ]
             }
           },

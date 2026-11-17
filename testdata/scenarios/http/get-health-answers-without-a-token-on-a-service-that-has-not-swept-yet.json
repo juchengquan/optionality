@@ -26,7 +26,8 @@
       "monitor_positions": [],
       "position_samples": [],
       "watch_samples": [],
-      "reference_securities": []
+      "reference_securities": [],
+      "sweep_interval": []
     }
   },
   "request": {
@@ -44,7 +45,7 @@
           "name": "moomoo",
           "ok": true
         },
-        "golden_cases": "c40c81cc8e72",
+        "golden_cases": "d3017c1a4314",
         "monitor": {
           "last_sweep_at": null,
           "last_sweep_ok": true,
@@ -57,9 +58,19 @@
         },
         "settings": {
           "manage_by_dte": 21,
-          "sweep_seconds": 15,
           "expired_retention_days": 7,
-          "display_tz": "Asia/Singapore"
+          "display_tz": "Asia/Singapore",
+          "sweep_seconds": 15,
+          "sweep_source": "env",
+          "sweep_default_seconds": 15,
+          "sweep_presets": [
+            5,
+            10,
+            15,
+            30,
+            60
+          ],
+          "sweep_refused": null
         }
       }
     },

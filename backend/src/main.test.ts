@@ -26,7 +26,7 @@ import { type Server, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it } from "vitest";
 
 import { startFakeGateway, type FakeGateway } from "optionality/vendors/ibkr/fake";
 
@@ -176,4 +176,33 @@ describe("IB Gateway as the Provider", () => {
     expect(quotes.map((q: { code: string }) => q.code)).toContain(code);
     expect(up.log()).not.toMatch(/is not a function/);
   }, 40_000);
+});
+
+describe("the sweep's interval at boot (#442)", () => {
+  let child: ChildProcess | undefined;
+  afterEach(() => { child?.kill("SIGTERM"); child = undefined; });
+
+  /** An empty watchlist, so the sweep at once asks nobody for anything, and `sweep_interval` as given. */
+  function database(seconds: unknown): string {
+    const path = join(mkdtempSync(join(tmpdir(), "boot-")), "optionality-ts.db");
+    const db = createDatabase(path);
+    if (seconds !== null) {
+      db.prepare("insert into sweep_interval values (1, ?, '2026-11-17 10:00:00.000000')").run(seconds as number);
+    }
+    db.close();
+    return path;
+  }
+
+  it("sweeps at the interval the page chose, and says where it came from", async () => {
+    const up = await serve({ OPTIONALITY_DB_PATH: database(30), MONITOR_INTERVAL_SECONDS: "15" });
+    child = up.child;
+    expect(up.log()).toMatch(/sweeping every 30s \(set from the page\), /);
+  }, 30_000);
+
+  it("refuses a stored interval that is not a preset, says so, and sweeps at .env's rather than crashing", async () => {
+    const up = await serve({ OPTIONALITY_DB_PATH: database(2), MONITOR_INTERVAL_SECONDS: "15" });
+    child = up.child;
+    expect(up.log()).toMatch(/sweep_interval in the database is 2, not one of the presets: sweeping every 15s/);
+    expect(up.log()).toMatch(/sweeping every 15s \(MONITOR_INTERVAL_SECONDS\), /);
+  }, 30_000);
 });

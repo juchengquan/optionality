@@ -39,3 +39,4 @@ export {
 export {
   deleteReferenceRow, findReference, findReferenceByCode, insertReference, listReferences,
 } from "./references.ts";
+export { clearSweepInterval, readSweepInterval, writeSweepInterval } from "./sweep-interval.ts";

@@ -1,0 +1,244 @@
+{
+  "module": "cadence",
+  "constants": {
+    "SWEEP_PRESETS": [
+      5,
+      10,
+      15,
+      30,
+      60
+    ]
+  },
+  "cases": [
+    {
+      "fn": "isSweepPreset",
+      "name": "is 5 a preset",
+      "args": [
+        5
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 10 a preset",
+      "args": [
+        10
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 15 a preset",
+      "args": [
+        15
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 30 a preset",
+      "args": [
+        30
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 60 a preset",
+      "args": [
+        60
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 0 a preset",
+      "args": [
+        0
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 4 a preset",
+      "args": [
+        4
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 7 a preset",
+      "args": [
+        7
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 20 a preset",
+      "args": [
+        20
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 120 a preset",
+      "args": [
+        120
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is 5.5 a preset",
+      "args": [
+        5.5
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is -5 a preset",
+      "args": [
+        -5
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is \"5\" a preset",
+      "args": [
+        "5"
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is null a preset",
+      "args": [
+        null
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isSweepPreset",
+      "name": "is true a preset",
+      "args": [
+        true
+      ],
+      "expect": false
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "the count, at the interval it was sized at",
+      "args": [
+        5,
+        15,
+        15
+      ],
+      "expect": 5
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "five failures at 15s are fifteen at 5s",
+      "args": [
+        5,
+        15,
+        5
+      ],
+      "expect": 15
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "ten silent sweeps at 15s are thirty at 5s",
+      "args": [
+        10,
+        15,
+        5
+      ],
+      "expect": 30
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "7.5 sweeps are 8",
+      "args": [
+        5,
+        15,
+        10
+      ],
+      "expect": 8
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "1.25 sweeps are 2 at 60s, never 1",
+      "args": [
+        5,
+        15,
+        60
+      ],
+      "expect": 2
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "2.5 sweeps are 3",
+      "args": [
+        10,
+        15,
+        60
+      ],
+      "expect": 3
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "exactly one sweep is one",
+      "args": [
+        4,
+        15,
+        60
+      ],
+      "expect": 1
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "exactly two is two",
+      "args": [
+        4,
+        15,
+        30
+      ],
+      "expect": 2
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "a second past two is three",
+      "args": [
+        4,
+        16,
+        30
+      ],
+      "expect": 3
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "a count of 0 stays off",
+      "args": [
+        0,
+        15,
+        5
+      ],
+      "expect": 0
+    },
+    {
+      "fn": "sweepsFor",
+      "name": "a count that was on stays at least one",
+      "args": [
+        1,
+        1,
+        60
+      ],
+      "expect": 1
+    }
+  ]
+}

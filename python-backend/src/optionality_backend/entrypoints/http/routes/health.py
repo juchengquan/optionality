@@ -31,7 +31,9 @@ from optionality.timefmt import display_time
 from pydantic import BaseModel, ConfigDict
 
 from ....db.queries import database_responds
+from ....sweep_interval import sweep_interval
 from ..deps import Deps
+from .settings import SweepSettings, sweep_settings
 
 #: zod's refusals: no coercion between types, and no number that is not finite
 _AS_ZOD = ConfigDict(strict=True, allow_inf_nan=False)
@@ -61,14 +63,17 @@ class MonitorOut(BaseModel):
     fetched_at: str | None
 
 
-class SettingsOut(BaseModel):
+class SettingsOut(SweepSettings):
+    """The knobs a client cannot guess, and — from `SweepSettings` — the sweep's interval IN FORCE, the
+    page's choice or `.env`'s, where it came from, the default, and the presets (#442): what
+    `PATCH /settings` answers too."""
+
     model_config = _AS_ZOD
 
     #: the horizon the dashboard weighs a fill against when it is reading pressure rather than distance —
     #: one definition, because a second copy of 21 in the frontend drifts the first time
     #: EXIT_MANAGE_BY_DTE moves
     manage_by_dte: float
-    sweep_seconds: float
     expired_retention_days: float
     display_tz: str
 
@@ -117,13 +122,14 @@ def health_routes(deps: Deps) -> APIRouter:
                 "alarms": asdict(sweeper.alarm_state()),
                 "fetched_at": display_time(sweeper.last_fetch_at(), tz),
             },
-            # knobs a client cannot guess: the sweep cadence the meta line names, and the retention
-            # window the muted table counts down to
+            # knobs a client cannot guess: the sweep cadence the meta line names — read from the database,
+            # so a choice made on the page shows at once (#442) — and the retention window the muted
+            # table counts down to
             "settings": {
                 "manage_by_dte": settings.exit_manage_by_dte,
-                "sweep_seconds": settings.monitor_interval_seconds,
                 "expired_retention_days": settings.expired_retention_days,
                 "display_tz": settings.display_tz,
+                **sweep_settings(sweep_interval(db, settings)),
             },
         }
 

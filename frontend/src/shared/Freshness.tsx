@@ -16,11 +16,13 @@ import { freshnessWords } from "./format";
  *  had it again, so the image could have told a different story about its own freshness than the
  *  page did.
  */
-export function Freshness({ fetchedAt, polledAt, sweepSeconds }: {
+export function Freshness({ fetchedAt, polledAt, sweepSeconds, refreshSeconds = null }: {
   fetchedAt: string | null;
   polledAt: string | null;
   sweepSeconds: number | null;
+  /** this page's own poll (#442): `refreshes every 5s · service sweeps every 15s` */
+  refreshSeconds?: number | null;
 }) {
-  return <p className="meta">{freshnessWords(fetchedAt, polledAt, sweepSeconds)}</p>;
+  return <p className="meta">{freshnessWords(fetchedAt, polledAt, sweepSeconds, undefined, refreshSeconds)}</p>;
 }
 

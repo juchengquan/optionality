@@ -18,6 +18,8 @@ import { databaseResponds } from "../../../db/queries/index.ts";
 import { GOLDEN_CASES } from "optionality/golden";
 import { documented } from "../openapi.ts";
 import { displayTime } from "optionality/domain/timefmt";
+import { sweepInterval } from "../../../sweep-interval.ts";
+import { SweepSettings, sweepSettings } from "./settings.ts";
 
 const HealthResponse = z.object({
   db: z.boolean(),
@@ -43,10 +45,11 @@ const HealthResponse = z.object({
      *  distance — one definition, because a second copy of 21 in the frontend drifts the first
      *  time EXIT_MANAGE_BY_DTE moves */
     manage_by_dte: z.number(),
-    sweep_seconds: z.number(),
     expired_retention_days: z.number(),
     display_tz: z.string(),
-  }),
+    /** the sweep's interval IN FORCE — the page's choice or `.env`'s — where it came from, the
+     *  default, and the presets (#442): what `PATCH /settings` answers too */
+  }).extend(SweepSettings.shape),
 });
 
 const health = documented("Service health; needs no token", { 200: HealthResponse });
@@ -76,13 +79,14 @@ export function healthRoutes(deps: Deps) {
           alarms: sweeper.alarmState(),
           fetched_at: displayTime(sweeper.lastFetchAt(), tz),
         },
-        // knobs a client cannot guess: the sweep cadence the meta line names, and the retention
-        // window the muted table counts down to
+        // knobs a client cannot guess: the sweep cadence the meta line names — read from the
+        // database, so a choice made on the page shows at once (#442) — and the retention window
+        // the muted table counts down to
         settings: {
           manage_by_dte: settings.exitManageByDte,
-          sweep_seconds: settings.monitorIntervalSeconds,
           expired_retention_days: settings.expiredRetentionDays,
           display_tz: settings.displayTz,
+          ...sweepSettings(sweepInterval(db, settings)),
         },
       });
   });

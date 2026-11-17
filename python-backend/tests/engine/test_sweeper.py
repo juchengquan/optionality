@@ -29,10 +29,10 @@ from sweep import SWEEP_SETTINGS as BASE
 from sweep import MonitorState, insert_combo, insert_monitor, monitor_state, quoting
 
 from optionality_backend.db.open import create_database
-from optionality_backend.db.queries import find_monitor, update_monitor_fields
+from optionality_backend.db.queries import find_monitor, update_monitor_fields, write_sweep_interval
 from optionality_backend.db.time import to_sql_datetime
 from optionality_backend.db.values import to_sqlite_json
-from optionality_backend.engine.health import STALE_AFTER_SWEEPS
+from optionality_backend.engine.health import STALE_AFTER_SWEEPS, stale_after_seconds
 from optionality_backend.engine.sweeper import MonitorSweeper, SweeperDeps
 from optionality_backend.env import settings_for
 from optionality_backend.monitors import edited_monitor
@@ -1307,6 +1307,206 @@ class TestARuleRedefinedWhileTheSweepIsOut:
         await t.sweeper(racing).sweep()
         assert len(t.said("crossed")) == 0
         assert (t.row(id_)["triggered"], t.row(id_)["last_value"]) == (0, None)
+
+
+class TestAtTheIntervalThePageChose:
+    """The interval the page chose (#442, ADR 0025). Every count the engine keeps in sweeps was sized at
+    `.env`'s interval and keeps that TIME at the one in force: a faster sweep checks more often and never
+    judges sooner. `.env` sweeps every 15s here, as the live one does."""
+
+    ENV_15: ClassVar[dict[str, Any]] = {"monitor_interval_seconds": 15}
+
+    @staticmethod
+    def choose(t: Sweeps, seconds: int) -> None:
+        write_sweep_interval(t.db, seconds, to_sql_datetime(t.now))
+
+    def failing_for(self, t: Sweeps, **over: Any) -> MonitorSweeper:
+        t.monitor()
+        return t.sweeper(failing_while(lambda: True), **{**self.ENV_15, **over})
+
+    @staticmethod
+    async def sweeps_at(t: Sweeps, s: MonitorSweeper, every: int, n: int) -> None:
+        """`n` sweeps `every` seconds apart, the clock moving as the scheduler moves it."""
+        for _ in range(n):
+            t.now += timedelta(seconds=every)
+            await s.sweep()
+
+    @staticmethod
+    def degraded(t: Sweeps) -> list[str]:
+        return [m for m in t.sent if m.startswith("⚠️ monitoring degraded")]
+
+    async def test_reads_the_interval_from_the_database_at_every_asking_env_s_when_nothing_is_chosen(self, t):
+        s = self.failing_for(t)
+        assert s.every_seconds() == 15
+        self.choose(t, 5)
+        assert s.every_seconds() == 5
+        self.choose(t, 7)  # by hand: not a preset, so .env's
+        assert s.every_seconds() == 15
+
+    async def test_logs_a_stored_value_it_refuses_once_when_it_appears_and_once_when_it_clears_never_per_tick(
+        self, t, caplog
+    ):
+        # #442's review: a hand edit after boot was silent. Said when it appears, whenever that is…
+        caplog.set_level(logging.INFO, logger=LOG)
+        s = self.failing_for(t)
+        assert s.every_seconds() == 15
+        self.choose(t, 2)
+        for _ in range(5):
+            s.every_seconds()
+        said = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == LOG]
+        assert said == [
+            (
+                logging.ERROR,
+                (
+                    "sweep_interval in the database is 2, not one of the presets: sweeping every 15s, "
+                    "MONITOR_INTERVAL_SECONDS, until it is set from the page"
+                ),
+            )
+        ]
+        # …and once when it is gone, by a choice from the page
+        self.choose(t, 5)
+        for _ in range(5):
+            s.every_seconds()
+        said = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == LOG]
+        assert said[1:] == [(logging.INFO, "sweep_interval is no longer refused: sweeping every 5s, set from the page")]
+
+    async def test_calls_monitoring_degraded_after_the_same_75s_at_5s_fifteen_failures_not_five(self, t):
+        s = self.failing_for(t)
+        self.choose(t, 5)
+        await self.sweeps_at(t, s, 5, 14)
+        assert self.degraded(t) == [], "five failures at 5s are 25s, not the 75s it was sized for"
+        await self.sweeps_at(t, s, 5, 1)
+        assert len(self.degraded(t)) == 1
+        assert "15 consecutive sweep failures" in self.degraded(t)[0]
+
+    async def test_and_after_two_at_60s_rounded_up_from_1_25_so_never_in_less_than_75s(self, t):
+        s = self.failing_for(t)
+        self.choose(t, 60)
+        await self.sweeps_at(t, s, 60, 1)
+        assert self.degraded(t) == []
+        await self.sweeps_at(t, s, 60, 1)
+        assert len(self.degraded(t)) == 1
+
+    async def test_says_it_recovered_only_from_an_outage_it_announced_at_the_threshold_in_force(self, t):
+        t.monitor()
+        failing = [True]
+        s = t.sweeper(failing_while(lambda: failing[0], "down"), **self.ENV_15)
+        self.choose(t, 5)
+        await self.sweeps_at(t, s, 5, 5)  # five failures: degraded at 15s, not at 5s
+        failing[0] = False
+        await self.sweeps_at(t, s, 5, 1)
+        assert t.said("recovered") == []
+
+    def outage(self, t: Sweeps) -> tuple[MonitorSweeper, list[bool]]:
+        """A Provider down while `down[0]` says so, on a rule, at .env's 15s."""
+        t.monitor()
+        down = [True]
+        return t.sweeper(failing_while(lambda: down[0], "down"), **self.ENV_15), down
+
+    async def test_says_it_recovered_from_an_outage_it_announced_though_the_interval_changed_under_it(self, t):
+        # #442's review: told at five failures at 15s; then 5s, where the threshold is fifteen; three
+        # more failures and a success — read against the count, the owner was never told it came back
+        s, down = self.outage(t)
+        await self.sweeps_at(t, s, 15, 5)
+        assert len(self.degraded(t)) == 1
+        self.choose(t, 5)
+        await self.sweeps_at(t, s, 5, 3)
+        down[0] = False
+        await self.sweeps_at(t, s, 5, 1)
+        assert len(t.said("recovered")) == 1
+
+    async def test_announces_no_recovery_from_an_outage_nobody_heard_about_the_other_way_round(self, t):
+        # twelve failures at 5s is 60s, under the 75s: nothing said. Switched to 15s, where five is the
+        # threshold, a count read against it would announce a recovery from silence
+        s, down = self.outage(t)
+        self.choose(t, 5)
+        await self.sweeps_at(t, s, 5, 12)
+        assert self.degraded(t) == []
+        self.choose(t, 15)
+        down[0] = False
+        await self.sweeps_at(t, s, 15, 1)
+        assert t.said("recovered") == []
+
+    async def test_goes_on_reminding_about_an_announced_outage_after_a_faster_interval_raises_the_threshold(self, t):
+        s, _ = self.outage(t)
+        await self.sweeps_at(t, s, 15, 5)
+        self.choose(t, 5)
+        await self.sweeps_at(t, s, 5, 1800 // 5)  # half an hour at 5s, still down
+        assert len([m for m in t.sent if m.startswith("⚠️ monitoring still degraded")]) == 1
+
+    async def test_calls_a_provider_unreliable_after_the_same_time_of_failure_inside_the_window(self, t):
+        # fail, succeed, fail… at 5s: five failures in the window are 25s of failure, not 75s
+        t.monitor()
+        failing = [True]
+        s = t.sweeper(failing_while(lambda: failing[0], "down"), **self.ENV_15)
+        self.choose(t, 5)
+        for i in range(28):
+            failing[0] = i % 2 == 0
+            await self.sweeps_at(t, s, 5, 1)
+        assert t.said("unreliable") == [], "fourteen failures"
+        failing[0] = True
+        await self.sweeps_at(t, s, 5, 1)
+        assert len(t.said("unreliable")) == 1
+        assert "15 failed sweeps in the last 15m" in t.said("unreliable")[0]
+
+    async def test_quarantines_a_figure_that_never_arrives_after_the_same_time_thirty_silent_sweeps_at_5s(self, t):
+        id_ = t.monitor()
+        s = t.sweeper(lambda codes: [{"code": c, "name": c, "mid_price": 4.2} for c in codes], **self.ENV_15)
+        self.choose(t, 5)
+        await self.sweeps_at(t, s, 5, 29)
+        assert t.row(id_)["enabled"] == 1, "ten silent sweeps at 5s are 50s, not 150s"
+        await self.sweeps_at(t, s, 5, 1)
+        assert t.row(id_)["enabled"] == 0
+        assert t.row(id_)["disabled_reason"] == "no-figure"
+
+    async def test_takes_a_change_at_the_next_sweep_with_no_restart(self, t):
+        id_ = t.monitor()
+        s = t.sweeper(lambda codes: [{"code": c, "name": c, "mid_price": 4.2} for c in codes], **self.ENV_15)
+        await self.sweeps_at(t, s, 15, 9)  # nine of .env's ten
+        self.choose(t, 5)  # now thirty: the nine already counted still count
+        await self.sweeps_at(t, s, 5, 20)
+        assert t.row(id_)["enabled"] == 1
+        await self.sweeps_at(t, s, 5, 1)
+        assert t.row(id_)["enabled"] == 0
+
+    async def test_calls_itself_stalled_after_the_same_minute_at_5s_not_after_four_intervals_of_20s(self, t):
+        s = self.failing_for(t)
+        self.choose(t, 5)
+        s.health.sweep_ok = True
+        s.health.sweep_at = t.now - timedelta(seconds=59)
+        assert s.health.alarm_state() == AlarmState(label="active", bad=False), (
+            "a sweep that logs in and asks can take 18s"
+        )
+        s.health.sweep_at = t.now - timedelta(seconds=61)
+        assert s.health.alarm_state().bad is True
+
+    async def test_never_calls_itself_stalled_within_four_intervals_at_60s_as_at_15s(self, t):
+        # the floor: one 60s sweep's tolerance of a minute would call every ordinary tick late
+        s = self.failing_for(t)
+        self.choose(t, 60)
+        s.health.sweep_ok = True
+        s.health.sweep_at = t.now - timedelta(seconds=239)
+        assert s.health.alarm_state() == AlarmState(label="active", bad=False)
+        s.health.sweep_at = t.now - timedelta(seconds=241)
+        assert s.health.alarm_state().bad is True
+
+
+class TestHowLongASweepMayGoUnstarted:
+    @staticmethod
+    def at(sized: int):
+        return settings_for(monitor_interval_seconds=sized)
+
+    def test_is_four_intervals_at_env_s_interval_as_it_always_was(self):
+        assert stale_after_seconds(self.at(15), 15) == 60
+        assert stale_after_seconds(self.at(60), 60) == 240
+
+    def test_keeps_env_s_minute_at_a_faster_sweep(self):
+        assert stale_after_seconds(self.at(15), 5) == 60
+        assert stale_after_seconds(self.at(15), 10) == 60
+
+    def test_is_never_fewer_than_four_intervals_at_a_slower_one(self):
+        assert stale_after_seconds(self.at(15), 30) == 120
+        assert stale_after_seconds(self.at(15), 60) == 240
 
 
 class TestWhatOnlyThePythonCanGetWrong:

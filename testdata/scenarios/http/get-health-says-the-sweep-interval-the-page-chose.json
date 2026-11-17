@@ -1,0 +1,86 @@
+{
+  "name": "GET /health says the sweep interval the page chose",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": [
+        {
+          "id": 1,
+          "seconds": 5,
+          "set_at": "2026-11-09 14:00:00.000000"
+        }
+      ]
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/health",
+    "headers": {},
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "db": true,
+        "provider": {
+          "name": "moomoo",
+          "ok": true
+        },
+        "golden_cases": "d3017c1a4314",
+        "monitor": {
+          "last_sweep_at": null,
+          "last_sweep_ok": true,
+          "consecutive_failures": 0,
+          "alarms": {
+            "label": "starting",
+            "bad": false
+          },
+          "fetched_at": null
+        },
+        "settings": {
+          "manage_by_dte": 21,
+          "expired_retention_days": 7,
+          "display_tz": "Asia/Singapore",
+          "sweep_seconds": 5,
+          "sweep_source": "settings",
+          "sweep_default_seconds": 15,
+          "sweep_presets": [
+            5,
+            10,
+            15,
+            30,
+            60
+          ],
+          "sweep_refused": null
+        }
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

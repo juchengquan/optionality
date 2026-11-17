@@ -48,8 +48,9 @@ class SweepWatchdog:
     failed sweep, which is what makes it visible on /health and, at the threshold, on Telegram.
     """
 
-    #: how long a single sweep may be unfinished before the loop stops waiting for it
-    stall_after_seconds: float
+    #: how long a single sweep may be unfinished before the loop stops waiting for it; asked at each tick
+    #: when it is a function, because it follows the interval and the interval may change
+    stall_after_seconds: float | Callable[[], float]
     #: told the abandoned sweep's age in seconds, for the record it leaves
     on_stall: Callable[[float], None]
 
@@ -60,7 +61,12 @@ class Scheduler:
         #: every sweep started and not yet settled, abandoned ones included (see the docstring)
         self._sweeps: set[asyncio.Task[None]] = set()
 
-    def start_sweep(self, every_seconds: float, sweep: Callable[[], Awaitable[None]], watchdog: SweepWatchdog) -> None:
+    def start_sweep(
+        self,
+        every_seconds: float | Callable[[], float],
+        sweep: Callable[[], Awaitable[None]],
+        watchdog: SweepWatchdog,
+    ) -> None:
         """The sweep, on a plain interval. Called on the running loop.
 
         An interval rather than a cron expression, because an interval is what this is: a cron
@@ -73,6 +79,10 @@ class Scheduler:
         """
         self.stop_sweep()
         loop = asyncio.get_running_loop()
+
+        def seconds(x: float | Callable[[], float]) -> float:
+            return x() if callable(x) else x
+
         running = False
         started_at = 0.0
         # which sweep the flag belongs to. Bumped when one is abandoned, so the abandoned sweep, when
@@ -96,7 +106,7 @@ class Scheduler:
             # of it
             if running:
                 age = loop.time() - started_at
-                if age < watchdog.stall_after_seconds:
+                if age < seconds(watchdog.stall_after_seconds):
                     return
                 # Give up on it. Coalescing forever is indistinguishable from a stopped engine, and the
                 # sweep is not cancelled — only disowned.
@@ -110,11 +120,14 @@ class Scheduler:
                 self._sweeps.add(task)
                 task.add_done_callback(self._sweeps.discard)
 
+        # Each tick arms the next, at the interval in force THEN (#442): the page may change it, and a
+        # timer armed once at boot would sweep at the old one until a restart. Asked before the sweep
+        # starts, so a sweep that overruns does not push the next tick later.
         def tick() -> None:
-            self._sweep_timer = loop.call_later(every_seconds, tick)
+            self._sweep_timer = loop.call_later(seconds(every_seconds), tick)
             run()
 
-        self._sweep_timer = loop.call_later(every_seconds, tick)
+        self._sweep_timer = loop.call_later(seconds(every_seconds), tick)
         run()
 
     def stop_sweep(self) -> None:

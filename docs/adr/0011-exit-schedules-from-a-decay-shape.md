@@ -50,7 +50,8 @@ Around it:
   still a rule with one stored threshold.
 - **`positions.opened_at` holds the fact**; Target, Stop and Manage-by are `.env` knobs beside
   `EXPIRED_RETENTION_DAYS`, because a schedule applied to every trade is a policy and CLAUDE.md
-  ratifies no DB config layer.
+  ratifies no DB config layer (amended by ADR 0025 for one other knob, the sweep's interval; these
+  three stay in `.env`).
 - **A daily sample per Position** records `(dte, cost_to_close)`, because the shape has been
   checked against exactly one observation.
 

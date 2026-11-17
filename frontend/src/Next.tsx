@@ -3,10 +3,11 @@ import { ClipboardCopy, ImageDown, Plus, RefreshCw, Search, Settings2 } from "lu
 
 import "./next.css";
 import {
-  addReference, deleteMonitor, fetchCloses, fetchHealth, fetchHoldings, fetchMonitors, fetchPositions,
+  addReference, chooseSweep, deleteMonitor, fetchCloses, fetchHealth, fetchHoldings, fetchMonitors, fetchPositions,
   fetchQuotes, fetchReferences,
   patchMonitor, removeReference, setTotalEntry,
   type Added, type Closes, type Entry, type Health, type Holding, type Monitor, type Reference,
+  type SweepChoice,
 } from "./shared/api";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -365,6 +366,7 @@ export function Next() {
       privacy={privacy} onPrivacy={(v) => { setPrivacy(v); writePrivacy(v); }}
       choice={choice} onChoice={chooseArrangement}
       refresh={book.refresh} onRefresh={(n) => { book.setRefresh(n); writeRefresh(n); }}
+      onSweep={book.chooseSweep}
       health={book.health} needs={everything}
       complete={everyHoldingValued(holdings, book.holdingsError)}
       holdingsAt={book.holdingsAt}
@@ -435,7 +437,7 @@ export function Next() {
           </div>
         ) : null}
         <Freshness fetchedAt={book.health?.monitor.fetched_at ?? null} polledAt={book.polledAt}
-                   sweepSeconds={book.health?.settings.sweep_seconds ?? null} />
+                   sweepSeconds={book.health?.settings.sweep_seconds ?? null} refreshSeconds={book.refresh} />
         <NeedsLine items={items} arrangement={arrangement} entryStyle={entryStyle} onReveal={reveal} />
         {/* the market, at every hour (#371): polled in session; outside it read once with the
             holdings, and every reading says when — a figure frozen at a read would otherwise be
@@ -860,12 +862,26 @@ function useBook(session: boolean, edge: number, regular: boolean) {
   /** everything again, after the add form saved */
   const reload = useCallback(() => load(true, true), [load]);
 
+  /** The service's sweep, chosen in Settings (#442): written, then `/health` read back with the line,
+   *  so what Settings and the header say is what the service says is in force. The refusal's raw
+   *  words, for Settings to say in place, or null. */
+  const chooseSweepInterval = useCallback(async (seconds: number | null) => {
+    try {
+      // a preset from `/health`'s own list, or null: the service refuses anything else in words
+      await chooseSweep(seconds as SweepChoice);
+    } catch (e: unknown) {
+      return rawError(e);
+    }
+    await loadLine();
+    return null;
+  }, [loadLine]);
+
   return {
     quotes, monitors, health, references, holdings, holdingsError, holdingsAt, holdingsServed, error, errorRaw, polledAt,
     holdingsKept: holdings === null && holdingsError !== null ? lastValued : null,
     closes, quotesFailed,
     refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
-    referencesPending: referencesPending > 0, reload,
+    referencesPending: referencesPending > 0, reload, chooseSweep: chooseSweepInterval,
   };
 }
 

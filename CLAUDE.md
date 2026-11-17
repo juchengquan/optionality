@@ -236,7 +236,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   exist, and the five questions only a real gateway can answer.
 - `make serve` — run the TypeScript API locally (loads `.env`): on a SNAPSHOT of the live database,
   with the sweep at an hour and the Telegram variables blanked, because the live service is always up
-  here and the alarm rows tolerate no second writer. The bot stays off by `OPTIONALITY_BOT` being
+  here and the alarm rows tolerate no second writer. The snapshot's `sweep_interval` row (ADR 0025) is
+  cleared after the backup (`tools/serve-db.mjs`, which refuses the live file): the page's choice
+  overrides `.env`, and would otherwise sweep live OpenD every 5–60s from here. The bot stays off by `OPTIONALITY_BOT` being
   unset (only the plist sets it); blanking the token additionally stops a local sweep from messaging
   you. Port 31417, not 31415, and IB client id 31417 for the same reason: the gateway allows one
   connection per client id, and a local run on the live service's would displace it in silence.
@@ -363,6 +365,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   what makes ADR 0019's "one client either way" structural rather than remembered — IB Gateway
   allows one connection per client id and the second displaces the first in silence. It replaced
   three shapes merged by hand in `main.ts` and again in `routes/references.ts`),
+  `sweep-interval.ts` (the sweep's interval in force — the page's choice or `.env`'s — and
+  `atInterval`, the counted knobs at it; paired with `routes/settings.ts`, `PATCH /settings`; ADR 0025),
   `references.ts` (the Reference path: one bounded
   call of its own, and the only degrade in the service that retries one code at a time — bounded by
   the number of References, which the sweep could not afford; ADR 0018), and `create-spread.ts`
@@ -643,7 +647,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   are public, the dashboard asks `/positions/values` and the bot asks `/holdings`, and renaming
   either would be an API change for a glossary's sake (ADR 0020).
 - Vocabulary: "quote(s)" = live market data, everywhere. moomoo's "snapshot" jargon stays out of the API.
-- A provider is reported two ways, because they measure different things. `DEGRADED_AFTER_FAILURES`
+- A provider is reported two ways, because they measure different things (both counts kept as the
+  time they were sized for at `.env`'s interval when the page chooses another, ADR 0025). `DEGRADED_AFTER_FAILURES`
   counts CONSECUTIVE failed sweeps — how long a failure lasted — and `FLAPPING_AFTER_FAILURES`
   counts them inside `FLAPPING_WINDOW_SECONDS` whatever happened between — how often one happens.
   The second exists because the first is blind to a provider that keeps dropping and recovering:
@@ -777,7 +782,19 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   and means LAST TRADE, not freshness — `fetched_at` is freshness.
 - Config: behavior knobs live in `.env` (which mirrors `.env.example`'s structure — active lines are overrides,
   commented lines show defaults); viewer preferences (dashboard refresh) live in browser cookies. No DB config
-  layer.
+  layer — with ONE exception, by name (ADR 0025, the owner's decision of 2026-11-17, #442): the SWEEP'S
+  INTERVAL, set from the page's Settings ("service sweeps every": 5, 10, 15, 30 or 60s, or "default"),
+  stored in `sweep_interval` (one row at most; none means `.env`'s `MONITOR_INTERVAL_SECONDS`, which stays
+  the default), written by `PATCH /settings`, served in force by `/health` (`sweep_seconds`,
+  `sweep_source`, `sweep_refused`), and READ at every tick so a choice applies at the next sweep with no
+  restart. A stored value that is not a preset got in by hand: refused when read, logged once when it
+  appears and once when it clears, `.env`'s used — never a crash. Since the thresholds move with the
+  interval, the degraded RECOVERY and its reminders are decided by whether the owner was told
+  (`lastNoticeAt`), never by the count read against today's threshold. Every knob COUNTED IN SWEEPS keeps the TIME it was sized for at `.env`'s interval, not its count
+  (`domain/cadence.ts`'s `sweepsFor`, rounded up; `sweep-interval.ts`'s `atInterval`):
+  `DEGRADED_AFTER_FAILURES`, `QUARANTINE_AFTER_SILENT_SWEEPS` and `FLAPPING_AFTER_FAILURES` — at 5s, 15,
+  30 and 15 sweeps — and `STALE_AFTER_SWEEPS`, with a floor of four intervals (`engine/health.ts`'s
+  `staleAfterSeconds`). A second knob in the database is a migration and an ADR, never a row.
 - Behind the path-stripping proxy the browser sees `/opt/...` while the app sees `/...`. The bundle is built
   for its prefix (`UI_BASE`), and `ROOT_PATH` tells the API's `/docs` and `/openapi.json` theirs.
 

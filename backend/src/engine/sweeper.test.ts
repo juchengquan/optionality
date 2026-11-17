@@ -2,7 +2,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildSpxCode } from "optionality/domain/contract";
 import { createDatabase } from "../db/open.ts";
@@ -10,12 +10,12 @@ import { toSqlDatetime } from "../db/time.ts";
 import { toSqliteJson } from "../db/values.ts";
 import { settingsFor, type Settings } from "../env.ts";
 import { type FakeProvider, fakeFetcher } from "../../testing/harness.ts";
-import { STALE_AFTER_SWEEPS } from "./health.ts";
+import { STALE_AFTER_SWEEPS, staleAfterSeconds } from "./health.ts";
 import {
   SINGLE_CODE as CODE, SWEEP_SETTINGS as BASE, insertCombo, insertMonitor, monitorState, quoting,
 } from "../../testing/sweep.ts";
 import { MonitorSweeper } from "./sweeper.ts";
-import { findMonitor, updateMonitorFields } from "../db/queries/index.ts";
+import { findMonitor, updateMonitorFields, writeSweepInterval } from "../db/queries/index.ts";
 import { editedMonitor } from "../monitors.ts";
 import { createSpreads, isSpreadFault } from "../create-spread.ts";
 
@@ -1342,3 +1342,215 @@ describe("a rule redefined while the sweep is out", () => {
  *  and names the message each one must carry; this file's copy restated it one layer further in,
  *  where the subject is not the alarm engine at all.
  */
+
+/** The interval the page chose (#442, ADR 0025). Every count the engine keeps in sweeps was sized
+ *  at `.env`'s interval and keeps that TIME at the one in force: a faster sweep checks more often
+ *  and never judges sooner. `.env` sweeps every 15s here, as the live one does. */
+describe("at the interval the page chose", () => {
+  const ENV_15: Partial<Settings> = { monitorIntervalSeconds: 15 };
+  const choose = (seconds: number) => writeSweepInterval(db, seconds, toSqlDatetime(now));
+  const failingFor = (over: Partial<Settings> = {}) => {
+    monitor();
+    return sweeper(() => Promise.reject(new Error("Client connection failed!")), { ...ENV_15, ...over });
+  };
+  /** `n` sweeps `every` seconds apart, the clock moving as the scheduler moves it. */
+  const sweepsAt = async (s: MonitorSweeper, every: number, n: number) => {
+    for (let i = 0; i < n; i += 1) {
+      now = new Date(now.getTime() + every * 1000);
+      await s.sweep();
+    }
+  };
+  const degraded = () => sent.filter((t) => t.startsWith("⚠️ monitoring degraded"));
+
+  it("reads the interval from the database at every asking, .env's when nothing is chosen", () => {
+    const s = failingFor();
+    expect(s.everySeconds()).toBe(15);
+    choose(5);
+    expect(s.everySeconds()).toBe(5);
+    choose(7);   // by hand: not a preset, so .env's
+    expect(s.everySeconds()).toBe(15);
+  });
+
+  it("logs a stored value it refuses once when it appears and once when it clears, never per tick", () => {
+    // #442's review: a hand edit after boot was silent. Said when it appears, whenever that is…
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const infos = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const s = failingFor();
+      expect(s.everySeconds()).toBe(15);
+      choose(2);
+      for (let i = 0; i < 5; i += 1) s.everySeconds();
+      expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([
+        "sweep_interval in the database is 2, not one of the presets: sweeping every 15s, "
+        + "MONITOR_INTERVAL_SECONDS, until it is set from the page",
+      ]);
+      // …and once when it is gone, by a choice from the page
+      choose(5);
+      for (let i = 0; i < 5; i += 1) s.everySeconds();
+      expect(errors).toHaveBeenCalledTimes(1);
+      expect(infos.mock.calls.map((c) => String(c[0])))
+        .toEqual(["sweep_interval is no longer refused: sweeping every 5s, set from the page"]);
+    } finally {
+      errors.mockRestore();
+      infos.mockRestore();
+    }
+  });
+
+  it("calls monitoring degraded after the same 75s at 5s: fifteen failures, not five", async () => {
+    const s = failingFor();
+    choose(5);
+    await sweepsAt(s, 5, 14);
+    expect(degraded(), "five failures at 5s are 25s, not the 75s it was sized for").toEqual([]);
+    await sweepsAt(s, 5, 1);
+    expect(degraded()).toHaveLength(1);
+    expect(degraded()[0]).toContain("15 consecutive sweep failures");
+  });
+
+  it("and after two at 60s, rounded up from 1.25 so never in less than 75s", async () => {
+    const s = failingFor();
+    choose(60);
+    await sweepsAt(s, 60, 1);
+    expect(degraded()).toEqual([]);
+    await sweepsAt(s, 60, 1);
+    expect(degraded()).toHaveLength(1);
+  });
+
+  it("says it recovered only from an outage it announced, at the threshold in force", async () => {
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => failing ? Promise.reject(new Error("down"))
+      : Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 }))), ENV_15);
+    choose(5);
+    await sweepsAt(s, 5, 5);   // five failures: degraded at 15s, not at 5s
+    failing = false;
+    await sweepsAt(s, 5, 1);
+    expect(sent.filter((t) => t.includes("recovered"))).toEqual([]);
+  });
+
+  /** A Provider down while `down.now` says so, on a rule, at .env's 15s. */
+  const outage = () => {
+    monitor();
+    const down = { now: true };
+    const s = sweeper((codes) => down.now ? Promise.reject(new Error("down"))
+      : Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 }))), ENV_15);
+    return { s, down };
+  };
+
+  it("says it recovered from an outage it announced, though the interval changed under it", async () => {
+    // #442's review: told at five failures at 15s; then 5s, where the threshold is fifteen; three
+    // more failures and a success — read against the count, the owner was never told it came back
+    const { s, down } = outage();
+    await sweepsAt(s, 15, 5);
+    expect(degraded()).toHaveLength(1);
+    choose(5);
+    await sweepsAt(s, 5, 3);
+    down.now = false;
+    await sweepsAt(s, 5, 1);
+    expect(sent.filter((t) => t.includes("recovered"))).toHaveLength(1);
+  });
+
+  it("announces no recovery from an outage nobody heard about, the other way round", async () => {
+    // twelve failures at 5s is 60s, under the 75s: nothing said. Switched to 15s, where five is
+    // the threshold, a count read against it would announce a recovery from silence
+    const { s, down } = outage();
+    choose(5);
+    await sweepsAt(s, 5, 12);
+    expect(degraded()).toEqual([]);
+    choose(15);
+    down.now = false;
+    await sweepsAt(s, 15, 1);
+    expect(sent.filter((t) => t.includes("recovered"))).toEqual([]);
+  });
+
+  it("goes on reminding about an announced outage after a faster interval raises the threshold", async () => {
+    const { s } = outage();
+    await sweepsAt(s, 15, 5);
+    choose(5);
+    await sweepsAt(s, 5, 1800 / 5);   // half an hour at 5s, still down
+    expect(sent.filter((t) => t.startsWith("⚠️ monitoring still degraded"))).toHaveLength(1);
+  });
+
+  it("calls a provider unreliable after the same time of failure inside the window", async () => {
+    // fail, succeed, fail… at 5s: five failures in the window are 25s of failure, not 75s
+    monitor();
+    let failing = true;
+    const s = sweeper((codes) => failing ? Promise.reject(new Error("down"))
+      : Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 }))), ENV_15);
+    choose(5);
+    const unreliable = () => sent.filter((t) => t.includes("unreliable"));
+    for (let i = 0; i < 28; i += 1) {
+      failing = i % 2 === 0;
+      await sweepsAt(s, 5, 1);
+    }
+    expect(unreliable(), "fourteen failures").toEqual([]);
+    failing = true;
+    await sweepsAt(s, 5, 1);
+    expect(unreliable()).toHaveLength(1);
+    expect(unreliable()[0]).toContain("15 failed sweeps in the last 15m");
+  });
+
+  it("quarantines a figure that never arrives after the same time: thirty silent sweeps at 5s", async () => {
+    const id = monitor();
+    const s = sweeper((codes) => Promise.resolve(codes.map((c) => ({ code: c, name: c, mid_price: 4.2 }))),
+      ENV_15);
+    choose(5);
+    await sweepsAt(s, 5, 29);
+    expect(findMonitor(db, id)!.enabled, "ten silent sweeps at 5s are 50s, not 150s").toBe(1);
+    await sweepsAt(s, 5, 1);
+    expect(findMonitor(db, id)!.enabled).toBe(0);
+    expect(findMonitor(db, id)!.disabled_reason).toBe("no-figure");
+  });
+
+  it("takes a change at the next sweep, with no restart", async () => {
+    const id = monitor();
+    const s = sweeper((codes) => Promise.resolve(codes.map((c) => ({ code: c, name: c, mid_price: 4.2 }))),
+      ENV_15);
+    await sweepsAt(s, 15, 9);      // nine of .env's ten
+    choose(5);                     // now thirty: the nine already counted still count
+    await sweepsAt(s, 5, 20);
+    expect(findMonitor(db, id)!.enabled).toBe(1);
+    await sweepsAt(s, 5, 1);
+    expect(findMonitor(db, id)!.enabled).toBe(0);
+  });
+
+  it("calls itself stalled after the same minute at 5s, not after four intervals of 20s", () => {
+    const s = failingFor();
+    choose(5);
+    s.health.sweepOk = true;
+    s.health.sweepAt = new Date(now.getTime() - 59_000);
+    expect(s.health.alarmState(), "a sweep that logs in and asks can take 18s").toEqual(
+      { label: "active", bad: false });
+    s.health.sweepAt = new Date(now.getTime() - 61_000);
+    expect(s.health.alarmState().bad).toBe(true);
+  });
+
+  it("never calls itself stalled within four intervals, at 60s as at 15s", () => {
+    // the floor: one 60s sweep's tolerance of a minute would call every ordinary tick late
+    const s = failingFor();
+    choose(60);
+    s.health.sweepOk = true;
+    s.health.sweepAt = new Date(now.getTime() - 239_000);
+    expect(s.health.alarmState()).toEqual({ label: "active", bad: false });
+    s.health.sweepAt = new Date(now.getTime() - 241_000);
+    expect(s.health.alarmState().bad).toBe(true);
+  });
+});
+
+describe("how long a sweep may go unstarted", () => {
+  const at = (sized: number) => settingsFor({ monitorIntervalSeconds: sized });
+
+  it("is four intervals at .env's interval, as it always was", () => {
+    expect(staleAfterSeconds(at(15), 15)).toBe(60);
+    expect(staleAfterSeconds(at(60), 60)).toBe(240);
+  });
+
+  it("keeps .env's minute at a faster sweep", () => {
+    expect(staleAfterSeconds(at(15), 5)).toBe(60);
+    expect(staleAfterSeconds(at(15), 10)).toBe(60);
+  });
+
+  it("is never fewer than four intervals at a slower one", () => {
+    expect(staleAfterSeconds(at(15), 30)).toBe(120);
+    expect(staleAfterSeconds(at(15), 60)).toBe(240);
+  });
+});

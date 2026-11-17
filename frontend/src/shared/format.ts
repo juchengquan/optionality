@@ -162,13 +162,17 @@ export function fetchedWords(served: string, now: Date = new Date()): string {
 }
 
 /** The line's words, for the freshness line (`Freshness.tsx`) and the saved
- *  picture's header and its text (#394). */
+ *  picture's header and its text (#394). Both cadences where the page has one (#442): this page's
+ *  refresh and the service's sweep are two knobs, set in two places, and a line naming one read as
+ *  if it were the other. The saved picture refreshes nothing, so it names the sweep alone. */
 export function freshnessWords(
   fetchedAt: string | null, polledAt: string | null, sweepSeconds: number | null, now: Date = new Date(),
+  refreshSeconds: number | null = null,
 ): string {
   const session = marketClock(fetchedAt);
   return (fetchedAt ? `fetched at ${fetchedWords(fetchedAt, now)}` : "waiting for first sweep")
     + (session ? ` · ${session}` : "")
     + (polledAt ? ` · screen updated ${polledAt}` : "")
+    + (refreshSeconds ? ` · refreshes every ${refreshSeconds}s` : "")
     + (sweepSeconds ? ` · service sweeps every ${sweepSeconds}s` : "");
 }

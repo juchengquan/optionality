@@ -60,7 +60,7 @@ class TestTheSchema:
     def test_creates_the_tables_the_alarm_engine_and_the_holdings_use_and_no_others(self, db):
         # the run pipeline's four tables and alembic's bookkeeping went in phase 10 (ADR 0014);
         # `reference_securities` arrived with ADR 0018, and is not called `references` because that
-        # is a SQLite keyword
+        # is a SQLite keyword; `sweep_interval` with ADR 0025, the one knob kept in the database
         assert names(db, "table") == [
             "monitor_positions",
             "monitors",
@@ -68,6 +68,7 @@ class TestTheSchema:
             "positions",
             "reference_securities",
             "schema_migrations",
+            "sweep_interval",
             "watch_samples",
         ]
 

@@ -109,3 +109,13 @@ CREATE TABLE reference_securities (
 	PRIMARY KEY (id),
 	CONSTRAINT uq_reference_code UNIQUE (code)
 );
+
+-- The sweep's interval as the page set it, one row at most (#442, ADR 0025; migration 0016 says
+-- why it is a table of its own and why `seconds` is not checked here). No row: `.env`'s
+-- MONITOR_INTERVAL_SECONDS.
+CREATE TABLE sweep_interval (
+	id INTEGER NOT NULL CHECK (id = 1),
+	seconds INTEGER NOT NULL,
+	set_at DATETIME NOT NULL,
+	PRIMARY KEY (id)
+);
