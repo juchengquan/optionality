@@ -1017,7 +1017,8 @@ describe("the book", () => {
     const money = [...document.querySelectorAll("[data-money]")];
     expect(money.length).toBeGreaterThan(0);
     for (const m of money) expect(m.textContent).not.toMatch(/\d/);
-    expect(document.querySelector('[data-ref="p1"]')!.textContent).toContain("captured 60%");
+    const card = document.querySelector<HTMLElement>('[data-ref="p1"]')!;
+    expect(within(card).getByText("P&L · captured").nextSibling!.textContent).toBe("$••• · 60%");
   });
 
   it("shows the money otherwise", async () => {

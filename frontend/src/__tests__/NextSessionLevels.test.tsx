@@ -173,7 +173,8 @@ describe("outside the session, a holding's chip and the needs-you line never con
       await open("phone", now);
       const t = valuedTime(now);
       const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
-      expect(card.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t} SGT`);
+      // the card's chip is the Level alone (the owner, 2026-11-17): when it was valued is the sheet's
+      expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop");
       expect(line()).not.toContain("1231_7000P");
       fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P held" }));
       const sheet = await screen.findByRole("dialog");
@@ -287,11 +288,14 @@ describe("a valuation from another day says its date (#371's review)", () => {
     expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at Fri 23:04 SGT");
   });
 
-  it("on the phone's card", async () => {
+  it("in the phone's sheet, the card's chip saying the Level alone (the owner, 2026-11-17)", async () => {
     stamp = "2026-10-30 23:04:11+08:00";
     await open("phone", SUNDAY);
     const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
-    expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at Fri 20261030 23:04 SGT");
+    expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop");
+    fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P held" }));
+    const sheet = await screen.findByRole("dialog");
+    await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at Fri 20261030 23:04 SGT"));
   });
 });
 

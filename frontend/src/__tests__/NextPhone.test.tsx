@@ -73,19 +73,24 @@ describe("the cards, on the owner's book", () => {
       .toEqual(["h-calls", "h-puts"]);
   });
 
-  it("give a held spread a large P&L, its Cost to close, short-leg Δ and the Level reached, its DTE once, on its expiry", () => {
+  it("give a held spread its P&L, Cost to close and short-leg Δ as three figures, the Level in its head, its DTE once, on its expiry", () => {
     // the deltas withheld, so the short call's is its rule's (the fallback, #318)
     const stopped: Holding[] = HOLDINGS.map((h) => ({ ...h, legs_delta: null })).map((h) => h.id === "h-calls"
       ? { ...h, schedule: { ...SCHEDULE, reached: "stop" } } as Holding : h);
     draw({ holdings: stopped, quotes: [...QUOTES, SHORT_LEG], monitors: [...MONITORS, SHORT_LEG_RULE] });
     const c = card("h-calls");
-    expect(c.querySelector(".nxp-hero [data-money]")!.textContent).toBe("−$240");
+    // no large figure (the owner, 2026-11-17): the P&L is the first of the card's figures, its share captured beside it
+    expect(c.querySelector(".nxp-hero")).toBeNull();
+    const figures = [...c.querySelectorAll(".nxp-facts dt")].map((dt) => dt.textContent);
+    expect(figures).toEqual(["P&L · captured", "cost to close", "short Δ"]);
+    expect(within(c).getByText("P&L · captured").nextSibling!.textContent).toMatch(/^−\$240 · \d+%$/);
     expect(within(c).getByText("4.40")).toBeTruthy();         // cost to close
     expect(within(c).getByText("0.231")).toBeTruthy();        // the short call's Δ, from its rule
     // the DTE is its expiry's heading's, and not said again on the card (part K)
     expect(c.textContent).not.toContain("DTE");
     expect(c.closest("[data-expiry]")!.querySelector("h3")!.textContent).toMatch(/38 DTE/);
-    expect(within(c).getByText("at stop")).toBeTruthy();
+    // the Level's chip in the card's head, as a watched card's state chip is, and short: its time is the sheet's
+    expect(c.querySelector(".nxp-head .nx-chip")!.textContent).toBe("at stop");
     // no served delta and no rule on its short leg: no figure to show, and it says so with a dash
     expect(within(card("h-puts")).getByText("short Δ").nextSibling!.textContent).toBe("—");
   });
@@ -144,8 +149,8 @@ describe("the cards, on the owner's book", () => {
 
   it("hide $ amounts under privacy and keep the rest", () => {
     draw({ privacy: true });
-    expect(card("h-calls").querySelector(".nxp-hero [data-money]")!.textContent).toBe("$•••");
-    expect(within(card("h-calls")).getByText(/^captured \d+%$/)).toBeTruthy();
+    expect(card("h-calls").querySelector(".nxp-facts [data-money]")!.textContent).toBe("$•••");
+    expect(within(card("h-calls")).getByText("P&L · captured").nextSibling!.textContent).toMatch(/^\$••• · \d+%$/);
   });
 
   it("hide a condor's summed P&L under privacy, and show it otherwise", () => {
@@ -419,7 +424,7 @@ describe("one book, in session and out of it (#374)", () => {
       .find((d) => d.querySelector("dt")?.textContent === "cost to close")!.querySelector("dd")!;
     const drawn = (ref: string) => field(ref).querySelector<HTMLElement>('[aria-hidden="true"]') ?? field(ref);
     // one field: no "pace gap" of its own
-    expect(terms("h-calls")).toEqual(["cost to close", "short Δ"]);
+    expect(terms("h-calls")).toEqual(["P&L · captured", "cost to close", "short Δ"]);
     expect(drawn("h-calls").textContent).toBe("4.40 +0.30");
     expect(drawn("h-calls").querySelector("[data-outcome]")?.getAttribute("data-outcome")).toBe("loss");
     expect(drawn("h-puts").textContent).toBe("1.00 \u22120.25");
