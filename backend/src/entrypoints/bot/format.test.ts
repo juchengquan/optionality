@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isContract,
   BOT_COMMANDS, HELP_TEXT, TABLE_WIDTH, closeWords, closedLine, escapeHtml, fitCell, fmtValue, minusSign,
   pyNumber, ruleText, table, thresholdError,
 } from "./format.ts";
@@ -102,6 +103,28 @@ describe("a name too long for the table (#351)", () => {
     const out = table(["contract", "mid", "bid/ask"], [[`${LONG} 🔔`, "1.5", "1.45/1.55"]]);
     expect(lines(out)[1]).toMatch(/…C7800 🔔 +1\.5/);
     expect(Math.max(...lines(out).map((l) => l.length))).toBeLessThanOrEqual(TABLE_WIDTH);
+  });
+
+  // the owner's decision of 2026-11-17: a contract is shown WHOLE; the row runs wide instead
+  it("never shortens a contract, with or without its bell, and cuts no other name narrower than it", () => {
+    for (const c of ["20261218 C7300", "20261218 P6425 🔔"]) {
+      const out = table(["contract", "rule", "last", "now"], [
+        [c, "|value| ≥ 4000.00", "−3999.99", "on"], ["1231_8050", "|value| ≥ 4.51", "−1.75", "on"],
+      ]);
+      expect(lines(out)[1]!.startsWith(`${c}  `), out).toBe(true);
+      expect(out).not.toContain("…");
+    }
+    // a rule's own name too long is still cut, but never narrower than the contract beside it
+    const out = table(["contract", "rule", "last", "now"], [
+      ["20261218 C7300", "|value| ≥ 4000.00", "−3999.99", "on"], [LONG, "|value| ≥ 4.51", "−1.75", "on"],
+    ]);
+    expect(lines(out)[1]).toMatch(/^20261218 C7300  \|value\|/);
+    expect(lines(out)[2]).toMatch(/^1218_\+P70…7800  \|value\|/);
+  });
+
+  it("knows a contract as the bot writes one, and nothing else", () => {
+    for (const c of ["20261218 C7300", "20261218 P6425 🔔", "261218 C7300"]) expect(isContract(c), c).toBe(c !== "261218 C7300");
+    for (const n of ["1231_8050", "1218-6800", "20261218 C7300 x", "dec-calls", "20260230 C7300"]) expect(isContract(n), n).toBe(false);
   });
 
   it("leaves every table that already fits exactly as it was", () => {

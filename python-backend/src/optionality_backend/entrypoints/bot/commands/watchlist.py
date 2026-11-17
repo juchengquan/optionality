@@ -57,7 +57,8 @@ def monitors(ctx: BotContext, args: list[str]) -> str:
         return EMPTY_WATCHLIST
     lines: list[list[str]] = []
     for m in rows:
-        state = "🔔" if from_sqlite_bool(m["triggered"]) else "armed"
+        # `on`, where it was `armed`: three characters a contract written whole needs (2026-11-17)
+        state = "🔔" if from_sqlite_bool(m["triggered"]) else "on"
         if not from_sqlite_bool(m["enabled"]):
             state = "off"
         rule = RuleShape(
@@ -69,7 +70,9 @@ def monitors(ctx: BotContext, args: list[str]) -> str:
         )
         last = "—" if m["last_value"] is None else figure_short(rule, m["last_value"])
         lines.append([short_spx_code(m["code"]), rule_short(rule), last, state])
-    return table(["contract", "rule", "last", "state"], lines)
+    # `now`, where it was `state`: the heading is the column's widest cell once its words are `on`, `off`
+    # and 🔔, and a contract written whole needs the two characters (2026-11-17)
+    return table(["contract", "rule", "last", "now"], lines)
 
 
 async def _quote_table(ctx: BotContext, label: str, headers: list[str], cells: Callable[[Quote], list[str]]) -> str:

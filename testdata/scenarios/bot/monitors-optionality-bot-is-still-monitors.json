@@ -139,7 +139,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "<pre>contract       rule            last   state\ndec-calls      |value| ≥ 4.00  −1.00  armed\n20261218…7300  |Δ| ≥ 0.30      0.312  🔔</pre>",
+      "text": "<pre>contract        rule            last   now\ndec-calls       |value| ≥ 4.00  −1.00  on\n20261218 C7300  |Δ| ≥ 0.30      0.312  🔔</pre>",
       "parse_mode": "HTML"
     },
     "rows": {},

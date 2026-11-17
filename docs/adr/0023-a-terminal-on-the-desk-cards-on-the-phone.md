@@ -1123,14 +1123,18 @@ prose — and the bot's `Fri 13 Nov` and ISO.
 - **Not dates on screen, and unchanged**: a name the owner chose (`1231_8050`, `1218-6800`), moomoo's
   codes (`US.SPXW261218P6800000`), every date the API serves (ISO), the stored data, the browser's
   own date inputs and the formats they and the bot's commands accept.
-- **The bot's widest table**: `/monitors`' contract is two characters wider, and on the owner's book
-  (a price rule `|value| ≥ 4.51` beside single contracts) its rows are 45 of `TABLE_WIDTH`'s 43, so
-  `fitCell` cuts each contract to `FIT_FLOOR`'s 12 (`20261218…100`). Measured and left to the owner
-  (2026-11-17); every other table fits (`/greeks` 41 with the bell, `/quotes` 35, `/vol` 31,
-  `/combo` 25).
+- **A contract is written whole in every bot table** (the owner, 2026-11-17): `fitCell` never cuts
+  `20261218 C7300` (`isContract`, both backends), and no rule's own name is cut narrower than the
+  widest contract beside it. `/monitors`' state is `on` where it was `armed`, under the heading `now`
+  where it was `state` (the heading was the column's widest cell). Measured on the owner's book its
+  widest line is 43, the heading's, and its rows 42; a rule with a wider threshold or figure
+  (`|value| ≥ 4000.00`) runs the row past `TABLE_WIDTH` rather than cut the contract. Every other
+  table fits: `/greeks` 41 with the bell, `/quotes` 35, `/vol` 31, `/combo` 25. `/unwatch` and
+  `/threshold` take the contract as `/monitors` writes it (door scenarios).
 - **Held by** `Dates.test.tsx` (each place above by name, the two arrangements' headings against each
   other) and `WordsPage.test.tsx`'s two new checks over the whole page walk, desk and phone, in
   session and out: no date in words (`31 Dec`, `Dec 31`) and no six-digit date — read over each text
   node apart as well as the whole, since `261218` and `7150P` in two cells run together into one
-  number — each held to planted faults. The bot's by its tests and the door scenarios; the domain's
+  number — each held to planted faults. The bot's tables by `isContract`'s tests, and a test that no
+  `/monitors` on the owner's book or in a door scenario cuts a contract. The bot's by its tests and the door scenarios; the domain's
   by its golden cases.

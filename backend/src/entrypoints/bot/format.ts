@@ -11,6 +11,7 @@
  */
 import { MARKET_TZ, valuedTiming, type MarketPhase } from "optionality/domain/expiry";
 import { ruleShort, type RuleShape } from "optionality/domain/alarm";
+import { expandSpxShort } from "optionality/domain/contract";
 import { thresholdFault } from "optionality/domain/monitor";
 import { displayDate } from "optionality/domain/timefmt";
 import type { HoldingValue } from "../../holdings.ts";
@@ -77,14 +78,24 @@ export function escapeHtml(value: string): string {
     .replaceAll("'", "&#x27;");
 }
 
-/** The widest a table row may be (CLAUDE.md: about forty monospace characters). 43, not 40: a
- *  `/monitors` row with a twelve-character contract, a price threshold and a figure of five
- *  characters each (`|value| ≥ 30.00`, `26.41`) is 43 — 41 until #404 wrote `|value|` for `|mid|`. A wider threshold or figure
- *  makes a wider row, and `FIT_FLOOR` lets it through rather than cut the name to nothing. */
+/** The widest a table row may be (CLAUDE.md: about forty monospace characters), before a NAME is
+ *  shortened to fit. 43, not 40: `|value|` for `|mid|` (#404) made `/monitors`' widest row 43 when a
+ *  contract was twelve characters. Since 2026-11-17 a contract is written `20261218 C7300`, fourteen,
+ *  and is never shortened (`isContract`, the owner's decision): a `/monitors` row with a contract and a
+ *  price rule (`|value| ≥ 4.51`, `−3.35`, `on`) is then 42, and one with a wider threshold or figure
+ *  runs past this rather than lose the contract's side or strike. `FIT_FLOOR` lets a row through
+ *  wide in the same way rather than cut a rule's own name to nothing. */
 export const TABLE_WIDTH = 43;
 /** The narrowest a shortened name is made, whatever the other columns take: past this a name says
  *  nothing, and a row a little too wide is better than one that names nothing. */
 const FIT_FLOOR = 12;
+
+/** A contract as the bot writes one, `20261218 C7300` (`shortSpxCode`), with or without the bell
+ *  `/quotes` puts after it: never shortened, since a contract cut in its middle loses its side or its
+ *  strike and names another contract, or none (the owner's decision of 2026-11-17). */
+export function isContract(cell: string): boolean {
+  return expandSpxShort(cell.replace(/ 🔔$/u, "")) !== null && /^\d{8} [CP]\d+( 🔔)?$/u.test(cell);
+}
 
 /** `cell` in at most `room` UTF-16 units — JavaScript's `length`, which every width here counts —
  *  shortened in its MIDDLE: the head names it (the expiry, the first leg) and the last third keeps
@@ -123,8 +134,10 @@ export function minusSign(cell: string): string {
  *  not occur. Faithful, and noted.
  *
  *  A row the FIRST column would push past `TABLE_WIDTH` has that cell shortened (`fitCell`): it is
- *  the name — a rule's code, a holding's — and a derived name keeps every leg (#351), so six legs
- *  with quantities run to some fifty characters. The figures beside it are never cut.
+ *  the name — a rule's own, a holding's — and a derived name keeps every leg (#351), so six legs
+ *  with quantities run to some fifty characters. A CONTRACT is never shortened (`isContract`): the
+ *  row runs wide instead, and no other name is cut narrower than the widest contract, since the
+ *  column is that wide anyway. The figures beside it are never cut.
  */
 export function table(headers: string[], rows: string[][]): string {
   const measure = (cells: string[][]) => cells.map((row) => row.map((cell) => escapeHtml(String(cell))));
@@ -135,7 +148,10 @@ export function table(headers: string[], rows: string[][]): string {
     headers.map((_, i) => Math.max(...all.map((row) => (row[i] ?? "").length)));
   if (headers.length > 1) {
     const w = widthsOf(escaped);
-    const room = Math.max(FIT_FLOOR, TABLE_WIDTH - (w.slice(1).reduce((a, b) => a + b, 0) + 2 * (headers.length - 1)));
+    // never narrower than the widest contract: a contract then always fits, and is never cut
+    const whole = Math.max(0, ...rows.map((row) => String(row[0] ?? "")).filter(isContract).map((c) => c.length));
+    const room = Math.max(FIT_FLOOR, whole,
+      TABLE_WIDTH - (w.slice(1).reduce((a, b) => a + b, 0) + 2 * (headers.length - 1)));
     if (w[0]! > room) {
       escaped = measure([headers, ...rows.map((row) => [fitCell(String(row[0] ?? ""), room), ...row.slice(1)])]);
     }

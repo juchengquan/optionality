@@ -31,6 +31,7 @@ from optionality_backend.entrypoints.bot.format import (
     fit_cell,
     fixed,
     fmt_value,
+    is_contract,
     js_text,
     minus_sign,
     py_number,
@@ -125,6 +126,27 @@ class TestANameTooLongForTheTable:
         out = table(["contract", "mid", "bid/ask"], [[f"{self.LONG} 🔔", "1.5", "1.45/1.55"]])
         assert re.search(r"…C7800 🔔 +1\.5", self.lines(out)[1])
         assert max(self.width(line) for line in self.lines(out)) <= TABLE_WIDTH
+
+    def test_never_shortens_a_contract_with_or_without_its_bell_and_cuts_no_other_name_narrower_than_it(self):
+        for c in ("20261218 C7300", "20261218 P6425 🔔"):
+            out = table(
+                ["contract", "rule", "last", "now"],
+                [[c, "|value| ≥ 4000.00", "−3999.99", "on"], ["1231_8050", "|value| ≥ 4.51", "−1.75", "on"]],
+            )
+            assert self.lines(out)[1].startswith(f"{c}  "), out
+            assert "…" not in out
+        out = table(
+            ["contract", "rule", "last", "now"],
+            [["20261218 C7300", "|value| ≥ 4000.00", "−3999.99", "on"], [self.LONG, "|value| ≥ 4.51", "−1.75", "on"]],
+        )
+        assert re.match(r"^20261218 C7300  \|value\|", self.lines(out)[1])
+        assert re.match(r"^1218_\+P70…7800  \|value\|", self.lines(out)[2])
+
+    def test_knows_a_contract_as_the_bot_writes_one_and_nothing_else(self):
+        for c in ("20261218 C7300", "20261218 P6425 🔔"):
+            assert is_contract(c), c
+        for n in ("261218 C7300", "1231_8050", "1218-6800", "20261218 C7300 x", "dec-calls", "20260230 C7300"):
+            assert not is_contract(n), n
 
     def test_leaves_every_table_that_already_fits_exactly_as_it_was(self):
         rows = [["dec-calls", "mid", "-1.0000", "≥4.0", "armed"]]

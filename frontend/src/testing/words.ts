@@ -34,7 +34,7 @@ const MONTH = "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec";
 export const DATE_CHECKS: Record<string, (text: string) => string[]> = {
   "a date in words": (text) => [...text.matchAll(new RegExp(String.raw`(?<![\w])\d{1,2} (?:${MONTH})\b|\b(?:${MONTH}) \d{1,2}(?!\d)`, "g"))]
     .map((m) => around(text, m.index)),
-  "a six-digit date": (text) => [...text.matchAll(/(?<![\w.\-+\u2212$])2\d(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?![\w.,\-])/g)]
+  "a six-digit date": (text) => [...text.matchAll(/(?<![\w.\-+\u2212$])2\d(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?![\w\-]|[.,]\d)/g)]
     .map((m) => around(text, m.index)),
 };
 

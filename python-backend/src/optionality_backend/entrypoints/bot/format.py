@@ -37,6 +37,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from optionality.alarm import RuleShape, rule_short
+from optionality.contract import expand_spx_short
 from optionality.expiry import MARKET_TZ, MarketPhase, valued_timing
 from optionality.js import js_string, to_fixed
 from optionality.monitor import threshold_fault
@@ -149,10 +150,11 @@ def _width(cell: str) -> int:
     return len(cell.encode("utf-16-le")) // 2
 
 
-#: The widest a table row may be (CLAUDE.md: about forty monospace characters). 43, not 40: a
-#: `/monitors` row with a twelve-character contract, a price threshold and a figure of five
-#: characters each (`|value| ≥ 30.00`, `26.41`) is 43 — 41 until #404 wrote `|value|` for `|mid|`. A wider threshold or figure
-#: makes a wider row, and `FIT_FLOOR` lets it through rather than cut the name to nothing.
+#: The widest a table row may be (CLAUDE.md: about forty monospace characters), before a NAME is
+#: shortened to fit. Since 2026-11-17 a contract is written `20261218 C7300` and never shortened
+#: (`is_contract`, the owner's decision): a `/monitors` row with a contract and a price rule
+#: (`|value| ≥ 4.51`, `−3.35`, `on`) is 42, and one with a wider threshold or figure runs past this
+#: rather than lose the contract's side or strike.
 TABLE_WIDTH = 43
 #: The narrowest a shortened name is made, whatever the other columns take.
 _FIT_FLOOR = 12
@@ -185,6 +187,16 @@ def minus_sign(cell: str) -> str:
     return f"\u2212{text[1:]}" if re.match(r"-[\d.]", text, re.ASCII) else cell
 
 
+_CONTRACT = re.compile(r"\d{8} [CP]\d+( 🔔)?", re.ASCII)
+
+
+def is_contract(cell: str) -> bool:
+    """A contract as the bot writes one, `20261218 C7300`, with or without the bell: never shortened,
+    since a contract cut in its middle loses its side or strike (the owner's decision of 2026-11-17)."""
+    bare = cell.removesuffix(" 🔔")
+    return expand_spx_short(bare) is not None and _CONTRACT.fullmatch(cell) is not None
+
+
 def table(headers: list[str], rows: list[list[str]]) -> str:
     """A `<pre>` table with space-aligned columns.
 
@@ -194,7 +206,9 @@ def table(headers: list[str], rows: list[list[str]]) -> str:
     Faithful, and noted.
 
     A row the FIRST column would push past `TABLE_WIDTH` has that cell shortened (`fit_cell`): it is the
-    name, and a derived name keeps every leg (#351). The figures beside it are never cut.
+    name, and a derived name keeps every leg (#351). A CONTRACT is never shortened (`is_contract`): the
+    row runs wide instead, and no other name is cut narrower than the widest contract. The figures beside
+    it are never cut.
     """
 
     def measure(cells: list[list[str]]) -> list[list[str]]:
@@ -209,9 +223,17 @@ def table(headers: list[str], rows: list[list[str]]) -> str:
     escaped = measure([headers, *rows])
     if len(headers) > 1:
         w = widths_of(escaped)
-        room = max(_FIT_FLOOR, TABLE_WIDTH - (sum(w[1:]) + 2 * (len(headers) - 1)))
+        names = [js_text(row[0]) if row else "" for row in rows]
+        # never narrower than the widest contract: a contract then always fits, and is never cut
+        whole = max([_width(n) for n in names if is_contract(n)], default=0)
+        room = max(_FIT_FLOOR, whole, TABLE_WIDTH - (sum(w[1:]) + 2 * (len(headers) - 1)))
         if w[0] > room:
-            escaped = measure([headers, *[[fit_cell(js_text(row[0]) if row else "", room), *row[1:]] for row in rows]])
+            escaped = measure(
+                [
+                    headers,
+                    *[[fit_cell(n, room), *row[1:]] for n, row in zip(names, rows, strict=True)],
+                ]
+            )
     widths = widths_of(escaped)
     lines = [
         "  ".join(

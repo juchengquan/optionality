@@ -285,7 +285,13 @@ export const BOT: readonly BotInput[] = [
     update: message("/watchcombo dec-calls 2026-12-18 -C7300 4"),
   },
   {
-    name: "/unwatch removes a rule named by its short contract and keeps the holding",
+    // what /monitors prints is what /unwatch takes: the contract with its date whole (2026-11-17)
+    name: "/unwatch removes a rule named by its contract as /monitors writes it and keeps the holding",
+    world: world({ tables: held }),
+    update: message("/unwatch 20261218 C7300"),
+  },
+  {
+    name: "/unwatch still takes a contract by the six digits it was written with before",
     world: world({ tables: held }),
     update: message("/unwatch 261218 C7300"),
   },
@@ -341,6 +347,11 @@ export const BOT: readonly BotInput[] = [
     name: "/threshold moves a rule named by its code",
     world: world({ tables: held }),
     update: message(`/threshold ${C7300} 0.35`),
+  },
+  {
+    name: "/threshold moves a rule named by its contract as /monitors writes it",
+    world: world({ tables: held }),
+    update: message("/threshold 20261218 C7300 0.35"),
   },
   {
     name: "/threshold refuses a zero threshold",

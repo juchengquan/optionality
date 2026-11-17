@@ -8,7 +8,7 @@
  *  Replies are asserted character for character where the formatting is the point. They are read on a
  *  phone, and a column that wraps is a table that cannot be read at all.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -30,12 +30,11 @@ const OPENED = "2026-09-17";
 const YYMMDD = "261101";
 const FAR = "2026-11-11";
 /** `/monitors` for the two rules of "says each rule in the short form", character for character.
- *  The contract's date is YYYYMMDD since 2026-11-17, two characters wider, and this row is then 45
- *  of `TABLE_WIDTH`'s 43: `fitCell` shortens the name to `FIT_FLOOR`'s 12, losing its C —
- *  measured and reported to the owner rather than decided here (a wider table, or another fit). */
-const MONITORS_TABLE = "<pre>contract      rule             last   state\n"
-  + "bear-cs       close ≥ 4.05     3.05   armed\n"
-  + "20261101…100  |value| ≥ 30.00  26.41  armed</pre>";
+ *  The contract is written whole, `20261101 C8100` (2026-11-17): never shortened, and its state
+ *  `on` where it was `armed` under `now` where it was `state`, so the widest line is 43, the heading's. */
+const MONITORS_TABLE = "<pre>contract        rule             last   now\n"
+  + "bear-cs         close ≥ 4.05     3.05   on\n"
+  + "20261101 C8100  |value| ≥ 30.00  26.41  on</pre>";
 
 let dir: string;
 let db: ReturnType<typeof createDatabase>;
@@ -370,8 +369,8 @@ describe("/monitors", () => {
     const reply = last();
     expect(reply.startsWith("<pre>")).toBe(true);
     expect(reply.endsWith("</pre>")).toBe(true);
-    expect(reply).toContain(`${YYMMDD} P6425`); // not the full moomoo code
-    expect(reply).toContain("armed");
+    expect(reply).toContain(`20${YYMMDD} P6425`); // not the full moomoo code, and the date whole
+    expect(reply).toMatch(/ on<\/pre>$/); // its state, `on` since 2026-11-17
     expect(lastParams().parse_mode).toBe("HTML");
   });
 
@@ -410,6 +409,46 @@ describe("/monitors", () => {
     await b.handleUpdate(update("/monitors"));
     expect(last()).toBe(MONITORS_TABLE);
     for (const line of last().replace(/<\/?pre>/g, "").split("\n")) expect(line.length).toBeLessThanOrEqual(TABLE_WIDTH);
+  });
+
+  /** A contract cut in its middle: eight digits, a gap, and an ellipsis before its side and strike
+   *  are whole — `20261218…7300`, `20261218 C7…`. The owner's decision of 2026-11-17: never. */
+  const CUT_CONTRACT = /\d{4,8}…|\d{8} [CP]?\d*…/;
+
+  it("writes every contract whole on the owner's book, a ringing one and a wide threshold beside it", async () => {
+    // the live book of 2026-11-17: three spreads on a price rule, three contracts on Δ
+    const b = bot();
+    await b.handleUpdate(update(`/watchcombo 1218-6800 ${FUTURE} -P6800 +P6750 4.51`));
+    await b.handleUpdate(update(`/watchcombo 1231_8100 ${FAR} -C8100 +C8150 5.01`));
+    await b.handleUpdate(update(`/watchcombo 1231_8050 ${FAR} -C8050 +C8100 5.51`));
+    await b.handleUpdate(update(`/watch ${FUTURE} CALL 8100 0.1`));
+    await b.handleUpdate(update(`/watch ${FUTURE} PUT 6700 0.16`));
+    await b.handleUpdate(update(`/watch ${FUTURE} PUT 6800 0.2`));
+    db.prepare("update monitors set last_value = -3.35 where legs is not null").run();
+    db.prepare("update monitors set last_value = -0.121 where legs is null").run();
+    await b.handleUpdate(update("/monitors"));
+    const book = last();
+    expect(book, book).not.toMatch(CUT_CONTRACT);
+    for (const c of ["20261101 C8100", "20261101 P6700", "20261101 P6800"]) expect(book).toContain(`${c}  `);
+    const widest = (t: string) => Math.max(...t.replace(/<\/?pre>/g, "").split("\n").map((l) => l.length));
+    expect(widest(book)).toBeLessThanOrEqual(TABLE_WIDTH);
+    // a four-digit price threshold and a ringing contract: the row runs wide, the contract stays whole
+    await b.handleUpdate(update(`/watch ${FUTURE} CALL 7300 4000 mid_price`));
+    db.prepare("update monitors set triggered = 1 where code like '%P6800%'").run();
+    await b.handleUpdate(update("/monitors"));
+    expect(last(), last()).not.toMatch(CUT_CONTRACT);
+    expect(last()).toContain("20261101 P6800  ");
+    expect(last()).toContain("20261101 C7300  ");
+  });
+
+  it("writes every contract whole in every /monitors the door scenarios hold", () => {
+    const dir = join(import.meta.dirname, "../../../../testdata/scenarios/bot");
+    const replies = readdirSync(dir).filter((f) => f.endsWith(".json"))
+      .map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")) as { expect: { reply: { text?: string } | null } })
+      .map((sc) => sc.expect.reply?.text ?? "")
+      .filter((t) => t.startsWith("<pre>contract"));
+    expect(replies.length).toBeGreaterThan(2);
+    for (const t of replies) expect(t, t).not.toMatch(CUT_CONTRACT);
   });
 
   it("shows an em dash for a monitor that has never been swept", async () => {

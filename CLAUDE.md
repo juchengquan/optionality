@@ -767,7 +767,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   a spread's and a contract's alike, and the Greeks are `Δ Γ Θ ν` — in the short form AND in the
   page's full sentence (`needs.ts`'s `fieldWords`, held to the same cases), which also takes the
   short form's places and its real minus; only a held credit's stop is said apart, `close ≥` short
-  and `cost to close ≥` in full. `|value|` made `/monitors`' widest row 43 (`TABLE_WIDTH`).
+  and `cost to close ≥` in full. `|value|` made `/monitors`' widest row 43 (`TABLE_WIDTH`); since 2026-11-17 a contract
+  (`20261218 C7300`) is never cut to fit (`isContract`) — a row runs wide instead.
 - Timestamps: storage is UTC; display converts via `DISPLAY_TZ`. moomoo `update_time` arrives naive US-Eastern
   and means LAST TRADE, not freshness — `fetched_at` is freshness.
 - Config: behavior knobs live in `.env` (which mirrors `.env.example`'s structure — active lines are overrides,
