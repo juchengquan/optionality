@@ -36,7 +36,7 @@ describe("moving the selection", () => {
     render(<DeskBook {...props()} />);
     // the one book's order (2026-11-17): each expiry's held spreads, watched spreads, contracts
     expect(order()).toEqual([
-      "w-dec04", "h-calls", "h-puts", "w-dec18", "w-dec18-delta", "h-ic", "w-dec31", "w-lone", "q-unknown",
+      "w-dec04", "h-calls", "h-puts", "w-dec18", "h-ic", "w-dec31", "w-dec18-delta", "w-lone", "q-unknown",
     ]);
     const seen: string[] = [];
     for (let i = 0; i < order().length + 2; i++) {

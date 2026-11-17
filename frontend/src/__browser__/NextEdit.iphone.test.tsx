@@ -21,6 +21,8 @@ afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 const SPREAD = "1218_P7150 value";
 const DELTA = "20261218 P7150 Δ";
+/** The short leg's rule's own card: a contract row since 2026-11-17. */
+const LEG = "20261218 P7150";
 
 async function show(refuse?: Parameters<typeof serveEditing>[0]) {
   const writes = serveEditing(refuse);
@@ -36,9 +38,10 @@ async function animationsDone(): Promise<void> {
   await new Promise((r) => setTimeout(r, 50));
 }
 
-/** The 12-18 put spread's sheet, with its own rule and its short leg's. */
-async function openSheet() {
-  await userEvent.click(screen.getByRole("button", { name: "details of 1218_P7150" }));
+/** A card's sheet: the 12-18 put spread's, with its own rule, or — named — its short leg's rule's
+ *  own, a contract card since 2026-11-17. */
+async function openSheet(name = "1218_P7150") {
+  await userEvent.click(screen.getByRole("button", { name: `details of ${name}` }));
   const sheet = await screen.findByRole("dialog");
   await animationsDone();
   return sheet;
@@ -80,7 +83,7 @@ describe("editing a Monitor from the sheet", () => {
   it("says a signed threshold of 0 in the sheet beside the threshold, on screen and on top", async () => {
     const refusal = "signed threshold cannot be 0; use e.g. ±0.01";
     await show((_, body) => body.threshold === 0 ? refusal : null);
-    const sheet = await openSheet();
+    const sheet = await openSheet(LEG);
     const form = await openEditor(sheet, DELTA);
     await userEvent.selectOptions(within(form).getByLabelText("compare"), "signed");
     await userEvent.fill(within(form).getByLabelText("threshold"), "0");
@@ -97,7 +100,7 @@ describe("editing a Monitor from the sheet", () => {
 
   it("gives every box 16px text so iOS does not zoom, every control 44pt, and pushes nothing sideways", async () => {
     await show();
-    const sheet = await openSheet();
+    const sheet = await openSheet(LEG);
     const form = await openEditor(sheet, DELTA);
     const boxes = [...form.querySelectorAll("input, select")];
     // what it watches, compare and threshold: the direction is a pair of buttons (#405), measured below
@@ -121,10 +124,10 @@ describe("editing a Monitor from the sheet", () => {
 describe("mute, unmute and delete on the phone", () => {
   it("mutes from the sheet, then unmutes from the switched-off list", async () => {
     const writes = await show();
-    const sheet = await openSheet();
+    const sheet = await openSheet(LEG);
     await userEvent.click(within(sheet).getByRole("button", { name: `mute ${DELTA}` }));
     await waitFor(() => expect(writes).toHaveLength(1));
-    history.back();
+    // the rule was the sheet's subject: muted, it leaves the book and its sheet goes with it
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     const off = await screen.findByRole("region", { name: "Switched off" });
     await userEvent.click(within(off).getByRole("button", { name: `unmute ${DELTA}` }));
@@ -136,15 +139,17 @@ describe("mute, unmute and delete on the phone", () => {
 
   it("asks before deleting, in the sheet where it can be read", async () => {
     const writes = await show();
-    const sheet = await openSheet();
+    const sheet = await openSheet(LEG);
     await userEvent.click(within(sheet).getByRole("button", { name: `delete ${DELTA}` }));
     const ask = within(sheet).getByRole("group", { name: `delete ${DELTA}?` });
     expect(visible(ask)).toBe(true);
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes).toEqual([{ what: "DELETE /monitors/w-dec18-delta", body: null }]));
-    // the rule is gone with its buttons: the focus is on the sheet's heading, not the body
-    await waitFor(() => expect(document.activeElement).toBe(within(sheet).getByRole("heading", { name: "1218_P7150" })));
+    // the rule is gone, and its sheet with it (its own card's, since 2026-11-17): the focus is on a
+    // heading of the page, not the body
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    await waitFor(() => expect(document.activeElement?.tagName).toMatch(/^H[234]$/));
   });
 
   it("switches a quarantined rule back on from the switched-off list, saying why first", async () => {

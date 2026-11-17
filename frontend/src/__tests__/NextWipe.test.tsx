@@ -49,8 +49,8 @@ function savedElsewhere(svc: PageService) {
 describe.each(arrangements)("on the %s, a reload landing mid-edit", (arrangement) => {
   it("keeps what is typed into a rule's threshold, though the service answers another", async () => {
     const svc = await open(arrangement);
-    if (arrangement === "phone") fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
-    else fireEvent.click(await screen.findByRole("button", { name: "1218_P7150" }));
+    if (arrangement === "phone") fireEvent.click(await screen.findByRole("button", { name: "details of 20261218 P7150" }));
+    else fireEvent.click(await screen.findByRole("button", { name: "20261218 P7150" }));
     const home = arrangement === "phone" ? await screen.findByRole("dialog")
       : await screen.findByRole("complementary", { name: /^inspector/ });
     fireEvent.click(within(home).getByRole("button", { name: "edit 20261218 P7150 Δ" }));

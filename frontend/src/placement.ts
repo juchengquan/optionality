@@ -7,12 +7,11 @@
  *
  *  - a rule about a holding sits under that holding, because it is a risk on something owned;
  *  - a rule on nothing held is the watchlist, an entry signal on a candidate spread;
- *  - a single-contract rule whose contract is a leg of a watched spread (`in_combos`, a link the
- *    service discovers) sits under that spread, which is how a short leg's delta joins its spread;
- *  - a single-contract rule on a leg of a HELD spread (`heldLeg`) is a row of its own in Contracts,
- *    at its expiry, before the watched contracts — not a rule under the holding, nor under a watched
- *    spread naming the same leg (the owner, 2026-11-17). On a holding of ONE contract it stays under
- *    that holding, which is itself in Contracts;
+ *  - EVERY single-contract rule is a row of its own in Contracts, at its expiry (the owner,
+ *    2026-11-17): a short leg's delta is not drawn under the spread it is a leg of, watched
+ *    (`in_combos`) or held. One on a leg of a held spread (`heldLeg`) comes first, before the watched
+ *    contracts. On a holding of ONE contract it stays under that holding, itself in Contracts. So a
+ *    watched spread has nothing under it, and its `under` is always empty;
  *  - a rule on something held whose holding is not drawn — the valuation failed or has not arrived,
  *    or two holdings share its contract, as on a roll day — is still shown, unplaced;
  *  - a condor held as two spreads on one expiry is BRACKETED: one call vertical and one put
@@ -26,9 +25,8 @@
  *    watches risk on something held — stay under it;
  *  - a holding's OWN rule (`ownRule`) is drawn on the holding's row, not under it: the row named
  *    the same twice said one thing twice (2026-11-17);
- *  - every rule is drawn ONCE (2026-11-17): a leg rule in two watched spreads, or a rule linked to
- *    two drawn holdings, sits under the first by the book's order, and the other place says
- *    "also in <the first>" (`elsewhere`).
+ *  - every rule is drawn ONCE (2026-11-17): a rule linked to two drawn holdings sits under the
+ *    first by the book's order, and the other place says "also in <the first>" (`elsewhere`).
  *
  *  A single-contract rule on a held leg needs no rule to FIND its holding: the service marks it held
  *  and links it (`holdsAnyOf`, `adoptOrphanMonitors`), and `heldLeg` reads that link.
@@ -62,10 +60,11 @@ interface HoldingGroup {
   rows: PlacedHolding[][];
 }
 
-/** A watched rule and the single-contract rules that sit under it (empty for most). */
+/** A watched rule. */
 export interface PlacedRule {
   entry: Entry;
-  /** every leg rule under it: what its inspector or sheet lists */
+  /** the rules drawn under it: none since 2026-11-17, when every single-contract rule became a row
+   *  of its own in Contracts. Kept, empty, because every surface still draws what is here */
   under: Entry[];
   /** those of `under` drawn under an earlier watched spread (a leg in two spreads) */
   elsewhere?: Elsewhere[];
@@ -131,13 +130,6 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
   const watched = quotes.filter((e) => isEntrySignal(e) || overlap(e) !== null || heldLeg(e));
   const unplaced = quotes.filter((e) => !isEntrySignal(e) && !e.positions.some((p) => drawn.has(p.id)));
 
-  const ids = new Set(watched.map((e) => e.id));
-  // a leg rule with a spread on the watchlist to sit under; one whose spreads are all held or gone
-  // stands alone rather than disappearing
-  const nested = (e: Entry) => !e.legs && !heldLeg(e) && e.in_combos.some((id) => ids.has(id));
-  const under = (combo: Entry) =>
-    combo.legs ? watched.filter((e) => !e.legs && !heldLeg(e) && e.in_combos.includes(combo.id)) : [];
-
   const off = monitors.filter((m) => !m.enabled);
   const quarantine = (m: Monitor) => m.disabled_reason !== null && m.disabled_reason in QUARANTINED;
 
@@ -153,8 +145,8 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
   }));
   // a held leg's rule first among its expiry's contracts: the held rows first (2026-11-17)
   const heldFirst = (rows: Entry[]) => [...rows.filter(heldLeg), ...rows.filter((e) => !heldLeg(e))];
-  const watchGroups: WatchGroup[] = byExpiry(watched.filter((e) => !nested(e))).map(([expiry, group]) => ({
-    expiry, items: heldFirst(group).map((entry) => ({ entry, under: under(entry), overlap: overlap(entry) })),
+  const watchGroups: WatchGroup[] = byExpiry(watched).map(([expiry, group]) => ({
+    expiry, items: heldFirst(group).map((entry) => ({ entry, under: [], overlap: overlap(entry) })),
   }));
 
   const sections = twoSections(holdingGroups, watchGroups);

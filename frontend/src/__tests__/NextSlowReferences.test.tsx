@@ -84,13 +84,14 @@ async function open(arrangement: Arrangement, { poll = false } = {}) {
     expect(document.querySelector(".nx")?.getAttribute("data-arrangement")).toBe(arrangement));
 }
 
-/** Where the spread 1218_P7150's rules are edited: the phone's sheet, or the desk's inspector. */
+/** Where the short leg's rule 20261218 P7150 Δ is edited: its own sheet, or its own inspector — a
+ *  contract row since 2026-11-17, no longer under the spread 1218_P7150. */
 async function openSpread(arrangement: Arrangement): Promise<HTMLElement> {
   if (arrangement === "phone") {
-    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
+    fireEvent.click(await screen.findByRole("button", { name: "details of 20261218 P7150" }));
     return screen.findByRole("dialog");
   }
-  fireEvent.click(await screen.findByRole("button", { name: "1218_P7150" }));
+  fireEvent.click(await screen.findByRole("button", { name: "20261218 P7150" }));
   return screen.findByRole("complementary", { name: /^inspector/ });
 }
 
@@ -125,10 +126,10 @@ describe.each(arrangements)("on the %s, a Reference source that never answers", 
       expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18-delta", body: { enabled: false } }]));
     // the save's reload has landed: the rule is off, listed with what is switched off
     await screen.findByRole("button", { name: "unmute 20261218 P7150 Δ", hidden: true });
-    // and the mute has FINISHED: it hands the focus on only once its write and its reads are done,
-    // here to the heading of the surface the rule has left. Awaiting the References, it never would.
-    await until(() => expect(home.contains(document.activeElement)
-      && document.activeElement?.matches("h2, h3, h4")).toBe(true));
+    // and the mute has FINISHED: it hands the focus on only once its write and its reads are done —
+    // the rule's own surface closes with it (a contract row since 2026-11-17), so to the book's
+    // heading. Awaiting the References, it never would.
+    await until(() => expect(!home.isConnected && document.activeElement?.matches("h2, h3, h4")).toBe(true));
     // the save's reload wants the References too: not a second call beside the silent one, but
     // one more once it has answered
     expect(held).toHaveLength(1);
@@ -166,8 +167,7 @@ describe.each(arrangements)("on the %s, a Reference source that refuses", (arran
     fireEvent.click(mute);
     await waitFor(() => expect(writes).toHaveLength(1));
     await screen.findByRole("button", { name: "unmute 20261218 P7150 Δ", hidden: true });
-    await until(() => expect(home.contains(document.activeElement)
-      && document.activeElement?.matches("h2, h3, h4")).toBe(true));
+    await until(() => expect(!home.isConnected && document.activeElement?.matches("h2, h3, h4")).toBe(true));
     await drain();
     // the strip goes away rather than showing figures it cannot vouch for, and that is all:
     // no banner, no toast, no refusal beside the buttons

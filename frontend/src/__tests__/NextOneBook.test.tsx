@@ -93,11 +93,11 @@ const plainNames = (view: ReturnType<typeof plain>) => bookParts(view)
 const GROUPS = [
   ["spreads",
     ["2026-12-04", "w-dec04"],
-    ["2026-12-18", "h-calls", "r-calls-short", "h-puts", "w-dec18", "w-dec18-delta"],
+    ["2026-12-18", "h-calls", "r-calls-short", "h-puts", "w-dec18"],
     ["2026-12-31", "h-ic", "w-dec31"]],
   ["contracts",
-    // the delta on a held spread's short leg: a contract row of its own (2026-11-17)
-    ["2026-12-18", "w-p6400"],
+    // every short leg's delta a contract row of its own (2026-11-17): a held spread's first
+    ["2026-12-18", "w-p6400", "w-dec18-delta"],
     ["2026-12-31", "w-lone"]],
 ];
 const HEADINGS = ["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"];
@@ -125,10 +125,10 @@ describe("1–2. two sections (2026-11-17): Spreads, then Contracts, each by exp
       ["spreads",
         ["2026-12-04", "w-dec04"],
         // the own rule is on the card, first, as the desk draws it on the row
-        ["2026-12-18", "h-calls", "r-calls", "r-calls-short", "h-puts", "w-dec18", "w-dec18-delta"],
+        ["2026-12-18", "h-calls", "r-calls", "r-calls-short", "h-puts", "w-dec18"],
         ["2026-12-31", "h-ic", "r-ic", "w-dec31"]],
       ["contracts",
-        ["2026-12-18", "w-p6400"],
+        ["2026-12-18", "w-p6400", "w-dec18-delta"],
         ["2026-12-31", "w-lone"]],
     ]);
     expect(document.querySelectorAll("[data-sub]")).toHaveLength(0);
@@ -140,10 +140,10 @@ describe("1–2. two sections (2026-11-17): Spreads, then Contracts, each by exp
     expect(plainNames(view)).toEqual([
       ["Spreads",
         ["20261204 · 38 DTE", "1204_P6900"],
-        ["20261218 · 38 DTE", "1218_C7300 held", "1218_C7300 Δ", "1218_P6400 held", "1218_P7150", "20261218 P7150"],
+        ["20261218 · 38 DTE", "1218_C7300 held", "1218_C7300 Δ", "1218_P6400 held", "1218_P7150"],
         ["20261231 · 38 DTE", "1231_IC held", "1231_C7600"]],
       ["Contracts",
-        ["20261218 · 38 DTE", "20261218 P6400"],
+        ["20261218 · 38 DTE", "20261218 P6400", "20261218 P7150"],
         ["20261231 · 38 DTE", "20261231 C8000"],
         // what follows the book on the page follows its last section here
         ["Quarantined — switched off by the service", "20261211 C8000"]],
@@ -154,7 +154,7 @@ describe("1–2. two sections (2026-11-17): Spreads, then Contracts, each by exp
   });
 
   it("leaves Contracts out where nothing is a contract, on any surface", () => {
-    const noLone = MORE_QUOTES.filter((q) => q.id !== "w-lone" && q.id !== ON_LEG.id);
+    const noLone = MORE_QUOTES.filter((q) => q.legs);
     render(<DeskBook {...props({ quotes: noLone })} />);
     expect(document.querySelector('[data-section="contracts"]')).toBeNull();
     cleanup();
@@ -253,10 +253,11 @@ describe("4. a holding's own rule on its row, a second rule still a row under it
   });
 });
 
-describe("5. a leg's rule under its spread, and a contract rule on a held leg a row of its own in Contracts (2026-11-17)", () => {
+describe("5. a leg's rule a row of its own in Contracts, its spread watched or held (2026-11-17)", () => {
   it("on the desk", () => {
     render(<DeskBook {...props()} />);
-    expect(deskRow("w-dec18")!.closest("li")!.contains(deskRow("w-dec18-delta"))).toBe(true);
+    expect(deskRow("w-dec18")!.closest("li")!.contains(deskRow("w-dec18-delta"))).toBe(false);
+    expect(deskRow("w-dec18-delta")!.closest('[data-section="contracts"]')).toBeTruthy();
     expect(deskRow("h-puts")!.closest("li")!.contains(deskRow("w-p6400"))).toBe(false);
     expect(deskRow("w-p6400")!.dataset.nested).toBeUndefined();
     expect(deskRow("w-p6400")!.closest('[data-section="contracts"]')).toBeTruthy();
@@ -264,14 +265,15 @@ describe("5. a leg's rule under its spread, and a contract rule on a held leg a 
 
   it("on the phone", () => {
     render(<PhoneBook {...props()} />);
-    expect(card("w-dec18").querySelector('[data-ref="w-dec18-delta"]')).toBeTruthy();
+    expect(card("w-dec18").querySelector('[data-ref="w-dec18-delta"]')).toBeNull();
+    expect(card("w-dec18-delta").closest('[data-section="contracts"]')).toBeTruthy();
     expect(card("h-puts").querySelector('[data-ref="w-p6400"]')).toBeNull();
     expect(card("w-p6400").closest('[data-section="contracts"]')).toBeTruthy();
   });
 
   it("in the picture", () => {
     const contracts = plain().sections.find((x) => x.title === "Contracts")!;
-    expect(contracts.groups[0]!.rows.map((r) => r[0])).toEqual(["20261218 P6400"]);
+    expect(contracts.groups[0]!.rows.map((r) => r[0])).toEqual(["20261218 P6400", "20261218 P7150"]);
   });
 });
 
@@ -399,12 +401,12 @@ describe("6. each rule drawn once, its second place a note (the owner, 2026-11-1
     for (const id of ["w-dec18-delta", "r-condor"]) {
       expect(deskRows().filter((r) => r.dataset.ref === id)).toHaveLength(1);
     }
-    expect(deskRow("w-dec18")!.closest("li")!.contains(deskRow("w-dec18-delta"))).toBe(true);
+    // a leg rule in two watched spreads is a contract row (2026-11-17): under neither, no note
+    expect(deskRow("w-dec18-delta")!.closest('[data-section="contracts"]')).toBeTruthy();
     expect(deskRow("h-calls")!.closest("li")!.contains(deskRow("r-condor"))).toBe(true);
     const notes = [...document.querySelectorAll<HTMLElement>("[data-also]")];
-    expect(notes.map((n) => n.textContent)).toEqual(["1218_IC also in 1218_C7300", "20261218 P7150 also in 1218_P7150"]);
+    expect(notes.map((n) => n.textContent)).toEqual(["1218_IC also in 1218_C7300"]);
     expect(deskRow("h-puts")!.closest("li")!.contains(notes[0]!)).toBe(true);
-    expect(deskRow("w-dec18b")!.closest("li")!.contains(notes[1]!)).toBe(true);
     for (const n of notes) {
       expect(n.closest("[data-ref]")).toBeNull();
       expect(n.querySelector("button, [tabindex]")).toBeNull();
@@ -417,7 +419,7 @@ describe("6. each rule drawn once, its second place a note (the owner, 2026-11-1
       expect([...document.querySelectorAll<HTMLElement>("[data-ref]")].filter((e) => e.dataset.ref === id)).toHaveLength(1);
     }
     expect(card("h-puts").querySelector("[data-also]")!.textContent).toBe("1218_IC also in 1218_C7300");
-    expect(card("w-dec18b").querySelector("[data-also]")!.textContent).toBe("20261218 P7150 also in 1218_P7150");
+    expect(card("w-dec18b").querySelector("[data-also]")).toBeNull();
   });
 
   it("in the inspector, still listed under each: it is a rule about both", () => {
