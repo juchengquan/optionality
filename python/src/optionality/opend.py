@@ -11,6 +11,7 @@ The connection is ALWAYS closed on the way out. The TypeScript client learned th
 protocol (port 11111 by default); the service's own client speaks the websocket one.
 """
 
+import math
 import re
 from collections.abc import Callable
 from typing import Any, Self
@@ -40,6 +41,43 @@ def _moomoo_connect(host: str, port: int) -> Any:
 
 # replaced in tests; None stands for "the SDK is not installed"
 _sdk_connect: Callable[[str, int], Any] | None = _moomoo_connect
+
+
+#: the record's fields, exactly the TypeScript's (`typescript/src/vendors/opend/fields.ts`, recorded in
+#: `testdata/vendors/opend-fields.json`). The SDK's frame has 143 columns and this kept them all
+#: until a side-by-side run of both backends on 2026-11-17 found `/quotes` serving 107 keys the
+#: TypeScript does not, and missing one it does.
+RECORD_FIELDS: tuple[str, ...] = (
+    "code", "name", "update_time", "lot_size", "suspension",
+    "last_price", "open_price", "high_price", "low_price", "prev_close_price",
+    "ask_price", "bid_price", "ask_vol", "bid_vol", "volume",
+    "turnover", "turnover_rate", "amplitude", "avg_price", "bid_ask_ratio",
+    "option_type", "stock_owner", "option_strike_time", "option_strike_price",
+    "option_contract_size", "option_contract_multiplier", "option_open_interest",
+    "option_implied_volatility", "option_premium",
+    "option_delta", "option_gamma", "option_vega", "option_theta", "option_rho",
+    "option_expiry_date_distance", "option_area_type",
+    "mid_price",
+)  # fmt: skip
+
+#: where the SDK's column name is not the record's; every other field is read under its own name
+_SDK_NAMES = {"option_strike_time": "strike_time"}
+
+
+def _absent(value: Any) -> bool:
+    # the SDK writes the STRING "N/A" where the protobuf had no value, and pandas a NaN where a column
+    # had none; the TypeScript's `put` leaves such a key out, so "not there" reads as unknown, never 0
+    return value is None or value == "N/A" or (isinstance(value, float) and math.isnan(value))
+
+
+def _record(row: dict[str, Any]) -> Quote:
+    """One SDK row as the TypeScript's `toRecord` builds one from the websocket's protobuf."""
+    record: Quote = {}
+    for field in RECORD_FIELDS:
+        value = row.get(_SDK_NAMES.get(field, field))
+        if field != "mid_price" and not _absent(value):
+            record[field] = value
+    return _with_mid(record)
 
 
 def _with_mid(record: Quote) -> Quote:
@@ -81,7 +119,7 @@ class OpenD:
         ret, data = self._ctx.get_market_snapshot(list(codes))
         if ret != 0:
             raise RuntimeError(f"snapshot API failed: {data}")
-        return [_with_mid(r) for r in data.to_dict("records")]
+        return [_record(r) for r in data.to_dict("records")]
 
     def quotes(self, codes: list[str]) -> Batch:
         """Every quote moomoo has, and the codes it refused as unknown.

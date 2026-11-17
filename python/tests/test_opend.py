@@ -1,6 +1,9 @@
 """Quote batches and the OpenD client, with fakes — a test must NEVER reach the real moomoo SDK, which
 blocks for ever on a dead port, so a missing fake looks like a hung suite (CLAUDE.md)."""
 
+import json
+from pathlib import Path
+
 import pytest
 
 from optionality import opend
@@ -123,6 +126,68 @@ def test_an_empty_book_is_no_mid_and_keeps_its_sides():
     assert "mid_price" not in records[0]
     assert (records[0]["bid_price"], records[0]["ask_price"]) == (0.0, 0.0)
     assert records[1]["mid_price"] == 0.025  # a worthless wing offered at 0.05 is a quote
+
+
+#: the TypeScript's record, as `make cases` recorded it from `typescript/src/vendors/opend/fields.ts`
+CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "vendors" / "opend-fields.json"
+
+
+def test_the_record_fields_are_the_typescripts():
+    recorded = json.loads(CORPUS.read_text())["constants"]
+    assert list(opend.RECORD_FIELDS) == recorded["RECORD_FIELDS"]
+    # and every constant the corpus states, this port has (one way only: the port's own connection
+    # defaults, DEFAULT_HOST and DEFAULT_PORT, are no part of the record and the corpus omits them)
+    assert {k for k in vars(opend) if k.isupper() and k in recorded} == set(recorded)
+
+
+def _sdk_row(code: str) -> dict:
+    """A row shaped as the SDK's `get_market_snapshot` frame gives it for an option: every field the
+    TypeScript maps, under the SDK's own names, among columns no backend reads — the frame has 143,
+    and the Python served them all on `/quotes` until a side-by-side run on 2026-11-17 saw 107 keys
+    the TypeScript does not have."""
+    row: dict = {f: i + 0.5 for i, f in enumerate(opend.RECORD_FIELDS) if f not in ("mid_price", "code")}
+    row["strike_time"] = row.pop("option_strike_time")  # the one field the SDK names differently
+    return {
+        "code": code,
+        **row,
+        "listing_date": "N/A",
+        "wrt_valid": False,
+        "pe_ratio": 0.0,
+        "enable_margin": None,
+        "price_spread": 0.05,
+    }
+
+
+def test_a_record_carries_exactly_the_typescripts_fields():
+    ctx = FakeContext(rows=[_sdk_row(A)])
+    with opend.OpenD(connect=connect(ctx)) as od:
+        [record] = od.fetch([A])
+    assert sorted(record) == sorted(opend.RECORD_FIELDS)
+    assert record["option_strike_time"] == _sdk_row(A)["strike_time"]
+
+
+def test_a_field_the_sdk_marks_absent_is_absent_as_in_the_typescript():
+    # the SDK writes the STRING 'N/A' where the protobuf has no value — a one-sided book among them —
+    # and pandas a NaN; the TypeScript's record leaves the key out, and so a backend must
+    row = {
+        **_sdk_row(A),
+        "bid_price": "N/A",
+        "option_delta": float("nan"),
+        "option_rho": None,
+        "suspension": False,
+        "open_price": 0.0,
+        "volume": 0,
+    }
+    ctx = FakeContext(rows=[row])
+    with opend.OpenD(connect=connect(ctx)) as od:
+        [record] = od.fetch([A])
+    for gone in ("bid_price", "option_delta", "option_rho", "mid_price"):
+        assert gone not in record
+    # a present value is kept, whatever it is — falsy ones above all, since the TypeScript's `put`
+    # keeps `suspension: false` on every row and a "falsy is absent" test would drop it from all
+    assert record["suspension"] is False
+    assert record["open_price"] == 0.0
+    assert record["volume"] == 0
 
 
 def test_closes_the_connection_even_when_the_call_fails():
