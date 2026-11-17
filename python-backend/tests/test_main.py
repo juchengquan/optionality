@@ -51,7 +51,8 @@ from optionality_backend.db.open import create_database
 
 #: what the service says once it is up, as `main.ts` says it
 STARTED = re.compile(
-    r"^optionality backend on 127\.0\.0\.1:(?P<port>\d+) — reading (?P<provider>\S+), sweeping every (?P<every>\d+)s, "
+    r"^optionality backend on 127\.0\.0\.1:(?P<port>\d+) — reading (?P<provider>\S+), "
+    r"sweeping every (?P<every>\d+)s \((?P<sweep_source>[^)]+)\), "
     r"references from (?P<sources>[^,]+(?:, [^,]+)*), bot (?P<bot>.+)$"
 )
 #: the last thing it says, on every way out
@@ -264,6 +265,7 @@ class TestStopping:
         started = service.wait_for("stdout", STARTED)
         assert started["provider"] == "moomoo"
         assert started["every"] == "60"
+        assert started["sweep_source"] == "MONITOR_INTERVAL_SECONDS", "nothing was chosen from the page"
         assert started["sources"] == "moomoo, yahoo", "IBKR_HOST is blank, so ibkr is absent"
         assert started["bot"] == "not started (set OPTIONALITY_BOT=1)"
         port = int(started["port"])
@@ -370,6 +372,39 @@ def telegram() -> Iterator[FakeTelegram]:
     fake = FakeTelegram()
     yield fake
     fake.close()
+
+
+class TestTheSweepsIntervalAtBoot:
+    """The sweep's interval at boot (#442). Port of main.test.ts's describe of the same name."""
+
+    @staticmethod
+    def database(tmp_path, seconds) -> Path:
+        """An empty watchlist, so the sweep at once asks nobody for anything, and `sweep_interval` as given."""
+        path = tmp_path / "optionality-ts.db"
+        db = create_database(path)
+        if seconds is not None:
+            db.execute("insert into sweep_interval values (1, ?, '2026-11-17 10:00:00.000000')", (seconds,))
+        db.close()
+        return path
+
+    def test_sweeps_at_the_interval_the_page_chose_and_says_where_it_came_from(self, running, tmp_path):
+        db = self.database(tmp_path, 30)
+        service = running({"OPTIONALITY_DB_PATH": str(db), "MONITOR_INTERVAL_SECONDS": "15"})
+        started = service.wait_for("stdout", STARTED)
+        assert started["every"] == "30"
+        assert started["sweep_source"] == "set from the page"
+        assert service.stop(signal.SIGTERM) == 0
+
+    def test_refuses_a_stored_interval_that_is_not_a_preset_says_so_and_sweeps_at_env_s_rather_than_crashing(
+        self, running, tmp_path
+    ):
+        db = self.database(tmp_path, 2)
+        service = running({"OPTIONALITY_DB_PATH": str(db), "MONITOR_INTERVAL_SECONDS": "15"})
+        started = service.wait_for("stdout", STARTED)
+        assert started["every"] == "15"
+        assert started["sweep_source"] == "MONITOR_INTERVAL_SECONDS"
+        service.wait_for("stderr", r"sweep_interval in the database is 2, not one of the presets: sweeping every 15s")
+        assert service.stop(signal.SIGTERM) == 0
 
 
 class TestTheBot:

@@ -22,6 +22,7 @@ from .monitor import (
 )
 from .position import ClosePositionIn, LegIn, PayoffIn, PositionIn, PositionPatch
 from .reference import SOURCES, ReferenceIn, Source
+from .settings import SettingsPatch
 from .spread import SpreadIn, SpreadMonitorIn, SpreadsIn
 
 __all__ = [
@@ -38,6 +39,7 @@ __all__ = [
     "PositionIn",
     "PositionPatch",
     "ReferenceIn",
+    "SettingsPatch",
     "Source",
     "SpreadIn",
     "SpreadMonitorIn",

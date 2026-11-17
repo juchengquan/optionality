@@ -59,6 +59,46 @@ describe("the sweep job", () => {
   });
 });
 
+/** The interval the page chose (#442): asked at every tick, so a change is in force at the next
+ *  sweep with no restart. */
+describe("the interval in force", () => {
+  it("re-arms each tick at the interval asked for then", async () => {
+    let every = 0.5;
+    let sweeps = 0;
+    scheduler.startSweep(() => every, async () => { sweeps += 1; }, patient);
+    expect(sweeps).toBe(1);                              // at once, as ever
+    every = 0.02;                                        // chosen between ticks
+    await new Promise((r) => setTimeout(r, 700));        // the 0.5s tick, then 0.02s ones
+    scheduler.stopSweep();
+    expect(sweeps, "still sweeping at the interval armed at boot").toBeGreaterThanOrEqual(6);
+  });
+
+  it("slows down as readily", async () => {
+    let every = 0.02;
+    let sweeps = 0;
+    scheduler.startSweep(() => every, async () => { sweeps += 1; }, patient);
+    await new Promise((r) => setTimeout(r, 100));
+    every = 10;
+    const before = sweeps;
+    await new Promise((r) => setTimeout(r, 300));
+    scheduler.stopSweep();
+    expect(sweeps - before, "one tick at most was already armed at the old interval").toBeLessThanOrEqual(1);
+  });
+
+  it("asks the watchdog's deadline at each tick, since it follows the interval", async () => {
+    let deadline = 3600;
+    let starts = 0;
+    scheduler.startSweep(0.05, () => { starts += 1; return new Promise<void>(() => { /* hangs */ }); },
+      { stallAfterSeconds: () => deadline, onStall: () => { /* counted elsewhere */ } });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(starts).toBe(1);
+    deadline = 0.1;
+    await new Promise((r) => setTimeout(r, 300));
+    scheduler.stopSweep();
+    expect(starts).toBeGreaterThanOrEqual(2);
+  });
+});
+
 /** Coalescing is right, and on 2026-10-16 it was also how the alarm engine died: an OpenD request
  *  that never answered left `running` true, so every later tick returned at the first line. For
  *  eight minutes nothing swept, nothing threw, and /health reported "active" throughout. The

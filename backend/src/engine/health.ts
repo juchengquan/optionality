@@ -25,7 +25,9 @@
  */
 import { degradedPolicy, degradedVerdict, recoveredNotice } from "optionality/domain/degraded";
 import { flappingPolicy, flappingVerdict } from "optionality/domain/flapping";
+import { sweepsFor } from "optionality/domain/cadence";
 import type { Settings } from "../env.ts";
+import { atInterval } from "../sweep-interval.ts";
 import type { Notifier } from "../notify.ts";
 import type { SweeperPort } from "../ports.ts";
 
@@ -38,10 +40,30 @@ import type { SweeperPort } from "../ports.ts";
  */
 export const STALE_AFTER_SWEEPS = 4;
 
+/** How long a sweep may go unstarted, or unfinished, before the engine calls itself stalled and
+ *  the watchdog abandons it — at the interval in force (#442, ADR 0025).
+ *
+ *  Counted in sweeps, so it keeps its TIME as sized at `.env`'s interval like the knobs
+ *  `atInterval` scales — four sweeps at 15s is a minute, and at 5s it is still a minute, not 20s,
+ *  which a sweep that logs in to OpenD (8s) and then asks (10s) could take legitimately. With a
+ *  FLOOR the other knobs do not have: never fewer than `STALE_AFTER_SWEEPS` intervals, because what
+ *  it measures is ticks that passed with nothing starting, and at 60s one sweep's tolerance of the
+ *  same minute would call every ordinary tick late. */
+export function staleAfterSeconds(settings: Settings, everySeconds: number): number {
+  const sweeps = Math.max(
+    STALE_AFTER_SWEEPS,
+    sweepsFor(STALE_AFTER_SWEEPS, settings.monitorIntervalSeconds, everySeconds),
+  );
+  return sweeps * everySeconds;
+}
+
 export interface SweepHealthDeps {
   settings: Settings;
   notify: Notifier;
   now: () => Date;
+  /** the sweep's interval in force, asked at every reading: the page may change it (#442), and
+   *  every count below is a TIME at that interval (`atInterval`, `staleAfterSeconds`) */
+  everySeconds: () => number;
 }
 
 export class SweepHealth implements SweeperPort {
@@ -134,7 +156,7 @@ export class SweepHealth implements SweeperPort {
   private staleFor(): number | null {
     if (this.sweepAt === null) return null;   // nothing has started: that is "starting", not stalled
     const age = (this.deps.now().getTime() - this.sweepAt.getTime()) / 1000;
-    const limit = this.deps.settings.monitorIntervalSeconds * STALE_AFTER_SWEEPS;
+    const limit = staleAfterSeconds(this.deps.settings, this.deps.everySeconds());
     return age > limit ? age : null;
   }
 
@@ -154,7 +176,9 @@ export class SweepHealth implements SweeperPort {
    *  configured with, and this said "OpenD unreachable?" whatever was answering. Same bug ADR
    *  0018 fixed in `verifyContracts`, which was not the only place it had been written. */
   async failure(reason = "the Provider did not answer"): Promise<void> {
-    const { settings, notify } = this.deps;
+    const { notify } = this.deps;
+    // the counted knobs at the interval in force, so each keeps its time (#442)
+    const settings = atInterval(this.deps.settings, this.deps.everySeconds());
     const now = this.deps.now();
     this.sweepOk = false;
     this.consecutiveFailuresCount += 1;
@@ -198,7 +222,9 @@ export class SweepHealth implements SweeperPort {
   }
 
   async success(): Promise<void> {
-    const { settings, notify } = this.deps;
+    const { notify } = this.deps;
+    // the same threshold the notice was sent at, or recovery is announced for nothing said
+    const settings = atInterval(this.deps.settings, this.deps.everySeconds());
     const notice = recoveredNotice(
       {
         failures: this.consecutiveFailuresCount,

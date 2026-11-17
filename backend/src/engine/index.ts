@@ -29,4 +29,5 @@
  */
 export { MonitorSweeper, type SweeperDeps } from "./sweeper.ts";
 export { Scheduler } from "./scheduler.ts";
-export { STALE_AFTER_SWEEPS } from "./health.ts";
+// how long a sweep may go unstarted at the interval in force (#442): the watchdog's deadline
+export { staleAfterSeconds } from "./health.ts";

@@ -42,7 +42,14 @@ class Engine:
         self.failing = False
         self.settings = settings_for(**{**SWEEP_SETTINGS, **over})
         notify = notifier(self.settings, send or self.sent.append)
-        self.health = SweepHealth(SweepHealthDeps(settings=self.settings, notify=notify, now=lambda: self.now))
+        self.health = SweepHealth(
+            SweepHealthDeps(
+                settings=self.settings,
+                notify=notify,
+                now=lambda: self.now,
+                every_seconds=lambda: self.settings.monitor_interval_seconds,
+            )
+        )
 
     async def sweep(self) -> None:
         """One sweep with something to fetch, as `runSweep` tells the account about it."""

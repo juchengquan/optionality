@@ -445,6 +445,9 @@ export const NOT_A_DECISION: Readonly<Record<string, string>> = {
   alarmPolicy: "reads two knobs for alarmTransition",
   degradedPolicy: "reads two knobs for degradedVerdict",
   flappingPolicy: "reads the knobs for flappingVerdict",
+  sweepsFor: "scales the counted knobs to the interval in force (#442) — the threshold of "
+    + "provider-down-counted, degraded-notice, flapping-notice and silence-counted, which the "
+    + "scenarios with a chosen sweep_interval show at it",
   monitorLegCodes: "which codes a rule asks for, and which a watch sample keeps; every outcome that fetches asks",
   positionLegCodes: "which codes a holding asks for; every sample outcome asks",
   daysToExpiry: "arithmetic inside recordSamples, recordWatchSamples and noticeManageBy",

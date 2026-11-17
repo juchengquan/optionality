@@ -14,30 +14,32 @@
  *  failed sweep, which is what makes it visible on /health and, at the threshold, on Telegram.
  */
 export interface SweepWatchdog {
-  /** how long a single sweep may be unfinished before the loop stops waiting for it */
-  stallAfterSeconds: number;
+  /** how long a single sweep may be unfinished before the loop stops waiting for it; asked at each
+   *  tick when it is a function, because it follows the interval and the interval may change */
+  stallAfterSeconds: number | (() => number);
   /** told the abandoned sweep's age in seconds, for the record it leaves */
   onStall: (ageSeconds: number) => void;
 }
 
 export class Scheduler {
-  private sweepTimer: ReturnType<typeof setInterval> | null = null;
+  private sweepTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** The sweep, on a plain interval.
    *
-   *  setInterval rather than a cron expression, because an interval is what this is: the Python uses
-   *  APScheduler's "interval" trigger, and a cron pattern cannot express it anyway — the seconds
-   *  field tops out at 60, so a step of 60 in that position is a syntax error — and 60 is the real
-   *  setting.
+   *  An interval rather than a cron expression, because an interval is what this is: a cron pattern
+   *  cannot express it anyway — the seconds field tops out at 60, so a step of 60 in that position
+   *  is a syntax error — and 60 is a real setting. A chain of timeouts rather than setInterval since
+   *  #442, so each tick can arm the next at the interval in force.
    *
    *  Fires immediately as well as on the interval. Without that every restart left the alarm engine
    *  quiet and the dashboard's cache empty for a whole MONITOR_INTERVAL_SECONDS — and restarts happen
    *  after every merge.
    */
   startSweep(
-    everySeconds: number, sweep: () => Promise<void>, watchdog: SweepWatchdog,
+    everySeconds: number | (() => number), sweep: () => Promise<void>, watchdog: SweepWatchdog,
   ): void {
     this.stopSweep();
+    const seconds = (x: number | (() => number)) => (typeof x === "function" ? x() : x);
     let running = false;
     let startedAt = 0;
     // which sweep the flag belongs to. Bumped when one is abandoned, so the abandoned promise's
@@ -48,7 +50,7 @@ export class Scheduler {
       // second one started on top of it
       if (running) {
         const age = (Date.now() - startedAt) / 1000;
-        if (age < watchdog.stallAfterSeconds) return;
+        if (age < seconds(watchdog.stallAfterSeconds)) return;
         // Give up on it. Coalescing forever is indistinguishable from a stopped engine, and the
         // promise cannot be cancelled — only disowned.
         generation += 1;
@@ -62,12 +64,19 @@ export class Scheduler {
         .catch((err: unknown) => { console.error("monitor sweep failed:", err); })
         .finally(() => { if (mine === generation) running = false; });
     };
-    this.sweepTimer = setInterval(run, everySeconds * 1000);
+    // Each tick arms the next, at the interval in force THEN (#442): the page may change it, and a
+    // timer armed once at boot would sweep at the old one until a restart. Asked before the sweep
+    // starts, so a sweep that overruns does not push the next tick later.
+    const tick = () => {
+      this.sweepTimer = setTimeout(tick, seconds(everySeconds) * 1000);
+      run();
+    };
+    this.sweepTimer = setTimeout(tick, seconds(everySeconds) * 1000);
     run();
   }
 
   stopSweep(): void {
-    if (this.sweepTimer !== null) clearInterval(this.sweepTimer);
+    if (this.sweepTimer !== null) clearTimeout(this.sweepTimer);
     this.sweepTimer = null;
   }
 }

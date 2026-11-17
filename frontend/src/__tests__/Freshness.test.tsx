@@ -47,6 +47,14 @@ describe("the freshness line", () => {
     expect(line.textContent).toContain("sweeps every 15s");
   });
 
+  it("says both cadences: how often this page refreshes, and how often the service sweeps (#442)", () => {
+    // the owner's 5s page beside the service's 15s sweep — two knobs, set in two places
+    render(<Freshness fetchedAt="2026-10-21 21:47:23+08:00" polledAt="21:48:14 SGT" sweepSeconds={15}
+                      refreshSeconds={5} />);
+    expect(screen.getByText(/fetched at/).textContent)
+      .toMatch(/ · screen updated 21:48:14 SGT · refreshes every 5s · service sweeps every 15s$/);
+  });
+
   it("says it is waiting before the first sweep, and claims no session time", () => {
     render(<Freshness fetchedAt={null} polledAt={null} sweepSeconds={null} />);
 

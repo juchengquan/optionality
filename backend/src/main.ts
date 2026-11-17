@@ -14,7 +14,8 @@ import { migrate } from "./db/migrate.ts";
 import { openDatabase } from "./db/open.ts";
 import { settingsFromEnv } from "./env.ts";
 import { openVendors } from "./vendors/index.ts";
-import { MonitorSweeper, STALE_AFTER_SWEEPS, Scheduler } from "./engine/index.ts";
+import { MonitorSweeper, Scheduler, staleAfterSeconds } from "./engine/index.ts";
+import { sweepInterval } from "./sweep-interval.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";
 import { TelegramBot } from "./entrypoints/bot/bot.ts";
 
@@ -50,6 +51,17 @@ const send = telegramSender(settings.telegramBotToken, settings.telegramChatId);
 const vendors = openVendors(settings);
 const provider = vendors.provider;
 
+/** The sweep's interval as the page set it, or `.env`'s (#442, ADR 0025). A stored value that is
+ *  not a preset got in by hand: said here, once, and swept past at `.env`'s interval — never a
+ *  crash, since the knob is the owner's to fix from the page. Read again at every tick. */
+const interval = sweepInterval(db, settings);
+if (interval.refused !== null) {
+  console.error(
+    `sweep_interval in the database is ${interval.refused}, not one of the presets: `
+    + `sweeping every ${interval.seconds}s, MONITOR_INTERVAL_SECONDS, until it is set from the page`,
+  );
+}
+
 const scheduler = new Scheduler();
 const sweeper = new MonitorSweeper({
   db, settings, fetchQuotes: provider.fetchQuotes, send,
@@ -81,12 +93,13 @@ const bot = new TelegramBot({
 // sweep at once as well as on the interval. Without that every restart left the alarm engine quiet
 // and the dashboard's cache empty for a whole MONITOR_INTERVAL_SECONDS — and restarts happen after
 // every merge.
-scheduler.startSweep(settings.monitorIntervalSeconds, () => sweeper.sweep(), {
+// the interval is ASKED at every tick, so a choice made on the page is in force at the next sweep
+scheduler.startSweep(() => sweeper.everySeconds(), () => sweeper.sweep(), {
   // the same age at which the engine calls itself stalled, so the two agree: /health says it, and
   // the next tick does something about it rather than coalescing behind a sweep that is not coming
   // back. The request timeout in opend/client.ts should mean this never fires; it fired on
   // 2026-10-16 because nothing bounded the ask.
-  stallAfterSeconds: settings.monitorIntervalSeconds * STALE_AFTER_SWEEPS,
+  stallAfterSeconds: () => staleAfterSeconds(settings, sweeper.everySeconds()),
   onStall: (age) => { void sweeper.health.recordStall(age); },
 });
 
@@ -100,7 +113,8 @@ if (botWanted) {
 
 console.log(
   `optionality backend on 127.0.0.1:${held.port} — `
-  + `reading ${provider.name}, sweeping every ${settings.monitorIntervalSeconds}s, `
+  + `reading ${provider.name}, sweeping every ${interval.seconds}s `
+  + `(${interval.source === "settings" ? "set from the page" : "MONITOR_INTERVAL_SECONDS"}), `
   // every vendor that opened, so the log says which Reference sources this build actually has
   + `references from ${Object.keys(vendors.sources).sort().join(", ")}, `
   + `bot ${botWanted ? "polling" : "not started (set OPTIONALITY_BOT=1)"}`,

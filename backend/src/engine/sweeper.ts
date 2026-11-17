@@ -58,6 +58,7 @@ import { fromSqlDatetime, toSqlDatetime } from "../db/time.ts";
 import { toSqliteBool, } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import type { DisabledReason } from "../schemas/monitor.ts";
+import { atInterval, sweepInterval } from "../sweep-interval.ts";
 import { toMonitor, toPosition } from "../hydrate.ts";
 import type { QuoteFetcher, QuoteRecord } from "optionality/quotes";
 
@@ -129,7 +130,15 @@ export class MonitorSweeper {
     this.notify = notifier(deps.settings, deps.send);
     this.health = new SweepHealth({
       settings: deps.settings, notify: this.notify, now: () => this.now(),
+      everySeconds: () => this.everySeconds(),
     });
+  }
+
+  /** The interval the sweep runs at now: the page's choice, or `.env`'s (#442, ADR 0025). Read from
+   *  the database every time it is asked — by the scheduler at every tick, and by the counts below
+   *  — so a choice made on the page is in force at the next sweep with no restart. */
+  everySeconds(): number {
+    return sweepInterval(this.deps.db, this.deps.settings).seconds;
   }
 
   private now(): Date {
@@ -400,7 +409,8 @@ export class MonitorSweeper {
     const now = this.now();
     const stamp = toSqlDatetime(now);
     const notices: string[] = [];
-    const limit = settings.quarantineAfterSilentSweeps;
+    // sized at .env's interval and kept as that TIME at the one in force (#442)
+    const limit = atInterval(settings, this.everySeconds()).quarantineAfterSilentSweeps;
     /** the rules this sweep could not evaluate at all, named for the record the caller leaves */
     const refused: string[] = [];
 

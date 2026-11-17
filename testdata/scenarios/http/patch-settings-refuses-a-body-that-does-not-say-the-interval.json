@@ -1,0 +1,57 @@
+{
+  "name": "PATCH /settings refuses a body that does not say the interval",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": [
+        {
+          "id": 1,
+          "seconds": 60,
+          "set_at": "2026-11-09 14:00:00.000000"
+        }
+      ]
+    }
+  },
+  "request": {
+    "method": "PATCH",
+    "path": "/settings",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {}
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "✖ Invalid option: expected one of 5|10|15|30|60\n  → at sweep_seconds"
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

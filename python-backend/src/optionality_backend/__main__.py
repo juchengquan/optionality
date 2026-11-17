@@ -83,10 +83,11 @@ from optionality.js import number
 
 from .db.migrate import migrate
 from .db.open import open_database
-from .engine import STALE_AFTER_SWEEPS, MonitorSweeper, Scheduler, SweeperDeps, SweepWatchdog
+from .engine import MonitorSweeper, Scheduler, SweeperDeps, SweepWatchdog, stale_after_seconds
 from .entrypoints.bot.bot import BotDeps, TelegramBot
 from .entrypoints.http import Deps, create_app, take_port
 from .env import load_env_file, settings_from_env
+from .sweep_interval import sweep_interval
 from .telegram import telegram_api, telegram_sender
 from .vendors import open_vendors
 
@@ -217,6 +218,18 @@ async def _run() -> NoReturn:
     vendors = open_vendors(settings)
     provider = vendors.provider
 
+    # The sweep's interval as the page set it, or `.env`'s (#442, ADR 0025). A stored value that is not a
+    # preset got in by hand: said here, once, and swept past at `.env`'s interval — never a crash, since
+    # the knob is the owner's to fix from the page. Read again at every tick.
+    interval = sweep_interval(db, settings)
+    if interval.refused is not None:
+        log.error(
+            "sweep_interval in the database is %s, not one of the presets: "
+            "sweeping every %ss, MONITOR_INTERVAL_SECONDS, until it is set from the page",
+            interval.refused,
+            interval.seconds,
+        )
+
     scheduler = Scheduler()
     sweeper = MonitorSweeper(SweeperDeps(db=db, settings=settings, fetch_quotes=provider.fetch_quotes, send=send))
 
@@ -247,15 +260,16 @@ async def _run() -> NoReturn:
 
     # Sweep at once as well as on the interval. Without that every restart left the alarm engine quiet
     # for a whole MONITOR_INTERVAL_SECONDS — and restarts happen after every merge.
+    # the interval is ASKED at every tick, so a choice made on the page is in force at the next sweep
     scheduler.start_sweep(
-        settings.monitor_interval_seconds,
+        sweeper.every_seconds,
         sweeper.sweep,
         SweepWatchdog(
             # the same age at which the engine calls itself stalled, so the two agree: /health says it,
             # and the next tick does something about it rather than coalescing behind a sweep that is
             # not coming back. The vendor's request deadline should mean this never fires; it fired on
             # 2026-10-16 because nothing bounded the ask.
-            stall_after_seconds=settings.monitor_interval_seconds * STALE_AFTER_SWEEPS,
+            stall_after_seconds=lambda: stale_after_seconds(settings, sweeper.every_seconds()),
             on_stall=lambda age: unawaited(sweeper.health.record_stall(age)),
         ),
     )
@@ -269,10 +283,11 @@ async def _run() -> NoReturn:
         unawaited(bot.run())
 
     log.info(
-        "optionality backend on 127.0.0.1:%d — reading %s, sweeping every %ss, references from %s, bot %s",
+        "optionality backend on 127.0.0.1:%d — reading %s, sweeping every %ss (%s), references from %s, bot %s",
         held.port,
         provider.name,
-        settings.monitor_interval_seconds,
+        interval.seconds,
+        "set from the page" if interval.source == "settings" else "MONITOR_INTERVAL_SECONDS",
         # every vendor that opened, so the log says which Reference sources this build actually has
         ", ".join(sorted(vendors.sources)),
         "polling" if bot_wanted else "not started (set OPTIONALITY_BOT=1)",

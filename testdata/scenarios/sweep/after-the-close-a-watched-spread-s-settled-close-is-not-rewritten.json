@@ -139,7 +139,8 @@
           "contract_size": 100
         }
       ],
-      "reference_securities": []
+      "reference_securities": [],
+      "sweep_interval": []
     }
   },
   "expect": {

@@ -91,6 +91,7 @@ from ..hydrate import to_monitor, to_position
 from ..notify import Notifier, NotifySender, notifier
 from ..ports import QuoteFetcher
 from ..schemas.monitor import DisabledReason
+from ..sweep_interval import at_interval, sweep_interval
 from .health import SweepHealth, SweepHealthDeps
 from .positions import PositionSweepDeps, notice_manage_by, record_samples
 from .watching import record_watch_samples
@@ -193,7 +194,17 @@ class MonitorSweeper:
         #: The engine's account of itself, and the `SweeperPort` the HTTP layer reads (health.py). It
         #: is the sweep's own, rather than a dependency, because nothing else may write to it: a sweep
         #: is the only thing that knows whether a sweep succeeded.
-        self.health = SweepHealth(SweepHealthDeps(settings=deps.settings, notify=self._notify, now=self._now))
+        self.health = SweepHealth(
+            SweepHealthDeps(
+                settings=deps.settings, notify=self._notify, now=self._now, every_seconds=self.every_seconds
+            )
+        )
+
+    def every_seconds(self) -> int:
+        """The interval the sweep runs at now: the page's choice, or `.env`'s (#442, ADR 0025). Read from
+        the database every time it is asked — by the scheduler at every tick, and by the counts below —
+        so a choice made on the page is in force at the next sweep with no restart."""
+        return sweep_interval(self._deps.db, self._deps.settings).seconds
 
     def _now(self) -> datetime:
         return self._deps.now() if self._deps.now is not None else datetime.now(UTC)
@@ -450,7 +461,8 @@ class MonitorSweeper:
         now = self._now()
         stamp = to_sql_datetime(now)
         notices: list[str] = []
-        limit = settings.quarantine_after_silent_sweeps
+        # sized at .env's interval and kept as that TIME at the one in force (#442)
+        limit = at_interval(settings, self.every_seconds()).quarantine_after_silent_sweeps
         refused: list[str] = []
 
         def apply() -> None:

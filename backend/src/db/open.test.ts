@@ -39,12 +39,12 @@ describe("the schema", () => {
   it("creates the tables the alarm engine and the holdings use, and no others", () => {
     // the run pipeline's four tables and alembic's bookkeeping went in phase 10 (ADR 0014);
     // `reference_securities` arrived with ADR 0018, and is not called `references` because that
-    // is a SQLite keyword
+    // is a SQLite keyword; `sweep_interval` with ADR 0025, the one knob kept in the database
     const names = db.prepare("select name from sqlite_master where type='table' order by name")
       .all().map((r) => (r as { name: string }).name);
     expect(names).toEqual([
       "monitor_positions", "monitors", "position_samples", "positions", "reference_securities",
-      "schema_migrations", "watch_samples",
+      "schema_migrations", "sweep_interval", "watch_samples",
     ]);
   });
 

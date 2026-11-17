@@ -8,7 +8,8 @@
 import { buildSpxCode } from "optionality/domain/contract";
 import type { Row, World } from "../format.ts";
 import {
-  BOOK, C7300, C7350, C7500, EXPIRED, EXPIRY, P6350, P6400, PREMIUM_BOOK, at, combo, except, link, monitor, position, quote,
+  BOOK, C7300, C7350, C7500, EXPIRED, EXPIRY, P6350, P6400, PREMIUM_BOOK, at, chosenInterval, combo, except, link,
+  monitor, position, quote,
   sample, stored, watchDay, world,
 } from "./fixtures.ts";
 
@@ -387,6 +388,72 @@ export const SWEEP: readonly SweepInput[] = [
       tables: { monitors: [monitor({ id: "mon-1" })] },
       provider: { quotes: delta(0.25) },
       sweeps: earlier([DOWN, DOWN, DOWN, DOWN, DOWN]),
+    }),
+  },
+
+  // --- at the interval the page chose (#442, ADR 0025) ---------------------------------------
+  // Every count was sized at .env's 15s and keeps that TIME: at 5s, five failures (75s) are
+  // fifteen and ten silent sweeps (150s) are thirty — a faster sweep checks more often and never
+  // judges sooner.
+  {
+    name: "at 5s the fifth consecutive failure is only counted, being 25s and not 75s",
+    outcomes: ["provider-down-counted"],
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })], sweep_interval: [chosenInterval(5)] },
+      provider: { down: DOWN },
+      sweeps: earlier([DOWN, DOWN, DOWN, DOWN], 5),
+    }),
+  },
+  {
+    name: "at 5s the fifteenth consecutive failure says monitoring is degraded",
+    outcomes: ["degraded-notice"],
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })], sweep_interval: [chosenInterval(5)] },
+      provider: { down: DOWN },
+      sweeps: earlier(Array.from({ length: 14 }, () => DOWN), 5),
+    }),
+  },
+  {
+    // a value no route writes, put in by hand: refused, and .env's interval and count hold
+    name: "an interval stored by hand that is not a preset is refused, and the fifth failure speaks",
+    outcomes: ["degraded-notice"],
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1" })], sweep_interval: [chosenInterval(2)] },
+      provider: { down: DOWN },
+      sweeps: earlier([DOWN, DOWN, DOWN, DOWN]),
+    }),
+  },
+  {
+    // .env's limit is three silent sweeps (45s); at 5s that is nine
+    name: "at 5s a figure silent for the .env limit's count is only counted",
+    outcomes: ["silence-counted"],
+    world: world({
+      settings: { QUARANTINE_AFTER_SILENT_SWEEPS: "3" },
+      tables: {
+        monitors: [monitor({ id: "mon-1" })],
+        sweep_interval: [chosenInterval(5)],
+        watch_samples: [watchDay([C7300], {
+          observed_on: "2026-11-09", dte: 39, legs_mid: { [C7300]: 2.75 }, observed_at: stored(at(-10)),
+        })],
+      },
+      provider: { quotes: { [C7300]: { name: "SPXW 261218 7300C", mid_price: 2.75 } } },
+      sweeps: earlier([null, null], 5),
+    }),
+  },
+  {
+    name: "at 5s a figure that never arrives is quarantined after the same 45s",
+    outcomes: ["quarantined-for-a-figure-that-never-arrives"],
+    world: world({
+      settings: { QUARANTINE_AFTER_SILENT_SWEEPS: "3" },
+      tables: {
+        monitors: [monitor({ id: "mon-1" })],
+        sweep_interval: [chosenInterval(5)],
+        watch_samples: [watchDay([C7300], {
+          observed_on: "2026-11-09", dte: 39, legs_mid: { [C7300]: 2.75 }, observed_at: stored(at(-40)),
+        })],
+      },
+      provider: { quotes: { [C7300]: { name: "SPXW 261218 7300C", mid_price: 2.75 } } },
+      sweeps: earlier(Array.from({ length: 8 }, () => null), 5),
     }),
   },
   {

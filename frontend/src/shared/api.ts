@@ -240,6 +240,12 @@ async function sent(
   throw new Error(isRefusal(body) ? body.detail : `${what} → ${response.status}`);
 }
 
+/** The service's sweep interval (#442, ADR 0025): one of the presets `/health` lists, or null for
+ *  `.env`'s MONITOR_INTERVAL_SECONDS. In force at the service's next sweep; `/health` says so after. */
+export type SweepChoice = Parameters<typeof client.settings.$patch>[0]["json"]["sweep_seconds"];
+export const chooseSweep = (seconds: SweepChoice) =>
+  sent(client.settings.$patch({ json: { sweep_seconds: seconds } }), "/settings");
+
 export const patchMonitor = (id: string, body: Record<string, unknown>) =>
   sent(client.monitors[":id"].$patch({ param: { id }, json: body }), `/monitors/${id}`);
 

@@ -36,6 +36,7 @@ export const COLUMNS = {
   ],
   monitor_positions: ["monitor_id", "position_id"],
   reference_securities: ["id", "code", "label", "source", "created_at"],
+  sweep_interval: ["id", "seconds", "set_at"],
   /** bookkeeping: COLUMNS covers every table the schema creates, and a table left out of it is a
    *  table nothing checks (db/migrate.ts) */
   schema_migrations: ["name", "applied_at"],
@@ -63,6 +64,7 @@ export const NULLABLE = {
   watch_samples: ["legs_mid", "legs_iv", "legs_vega", "legs_delta", "spx", "contract_size"],
   monitor_positions: [],
   reference_securities: ["label"],
+  sweep_interval: [],
   schema_migrations: [],
 } as const satisfies Record<TableName, readonly string[]>;
 
@@ -139,6 +141,18 @@ export interface ReferenceRow {
    *  the day OPTIONALITY_PROVIDER does, under the same unchanged label (ADR 0019) */
   source: string;
   created_at: string;
+}
+
+/** The sweep's interval as the page set it (#442, ADR 0025): one row at most, and none means
+ *  `.env`'s MONITOR_INTERVAL_SECONDS. The one behaviour knob kept in the database. */
+export interface SweepIntervalRow {
+  /** always 1: the table holds one row or none */
+  id: number;
+  /** what the page chose. Read through `isSweepPreset`, never trusted: the route writes only a
+   *  preset, and anything else got in by hand (`sweep-interval.ts`). */
+  seconds: number;
+  /** when it was chosen, UTC */
+  set_at: string;
 }
 
 export interface SchemaMigrationRow {
@@ -233,6 +247,9 @@ type _WatchSamples = Checked<
 type _References = Checked<
   Exact<keyof ReferenceRow, (typeof COLUMNS.reference_securities)[number]>
 >;
+type _SweepInterval = Checked<
+  Exact<keyof SweepIntervalRow, (typeof COLUMNS.sweep_interval)[number]>
+>;
 type _SchemaMigrations = Checked<
   Exact<keyof SchemaMigrationRow, (typeof COLUMNS.schema_migrations)[number]>
 >;
@@ -257,6 +274,9 @@ type _WatchSamplesNull = Checked<
 type _ReferencesNull = Checked<
   Exact<NullableKeys<ReferenceRow> & string, (typeof NULLABLE.reference_securities)[number]>
 >;
+type _SweepIntervalNull = Checked<
+  Exact<NullableKeys<SweepIntervalRow> & string, (typeof NULLABLE.sweep_interval)[number]>
+>;
 type _SchemaMigrationsNull = Checked<
   Exact<NullableKeys<SchemaMigrationRow> & string, (typeof NULLABLE.schema_migrations)[number]>
 >;
@@ -270,6 +290,7 @@ type _SchemaMigrationsNull = Checked<
  */
 export type SchemaChecks = [
   _Monitors, _Positions, _MonitorPositions, _PositionSamples, _WatchSamples, _References,
-  _SchemaMigrations, _MonitorsNull, _PositionsNull, _MonitorPositionsNull, _PositionSamplesNull,
-  _WatchSamplesNull, _ReferencesNull, _SchemaMigrationsNull,
+  _SweepInterval, _SchemaMigrations, _MonitorsNull, _PositionsNull, _MonitorPositionsNull,
+  _PositionSamplesNull, _WatchSamplesNull, _ReferencesNull, _SweepIntervalNull,
+  _SchemaMigrationsNull,
 ];

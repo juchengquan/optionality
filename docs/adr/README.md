@@ -30,6 +30,7 @@ still in force. Git holds the full history of each.
 | [22](0022-a-closed-holding-is-kept.md) | A closed holding is kept | built, in both backends |
 | [23](0023-a-terminal-on-the-desk-cards-on-the-phone.md) | A terminal on the desk, cards on the phone | built 2026-11-13 (#301); amends 3, 7, 8 and 12; amended 2026-11-13: one page by the session, Live and Review merged (not yet built) |
 | [24](0024-spx-is-derived-from-the-premiums.md) | SPX's price is derived from the options' premiums | built, in both backends; amends 11 |
+| [25](0025-the-sweep-interval-is-set-from-the-page.md) | The sweep interval is set from the page | built, in both backends (#442); amends the "no DB config layer" invariant for that one knob, and 11's citing it |
 
 2 (server-rendered HTML over a SPA) was deleted once 5 replaced it entirely; nothing of it remained
 in force. A new decision takes the next number, and numbers are never reused.

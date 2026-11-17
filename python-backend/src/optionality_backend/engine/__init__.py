@@ -36,8 +36,14 @@ and here `__main__` builds the record by name. `SweeperDeps` is a record built b
 reason, where the TypeScript exports it as a type.
 """
 
-from .health import STALE_AFTER_SWEEPS
+from .health import stale_after_seconds
 from .scheduler import Scheduler, SweepWatchdog
 from .sweeper import MonitorSweeper, SweeperDeps
 
-__all__ = ["STALE_AFTER_SWEEPS", "MonitorSweeper", "Scheduler", "SweepWatchdog", "SweeperDeps"]
+__all__ = [
+    "MonitorSweeper",
+    "Scheduler",
+    "SweepWatchdog",
+    "SweeperDeps",
+    "stale_after_seconds",
+]

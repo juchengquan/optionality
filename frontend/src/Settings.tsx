@@ -1,4 +1,7 @@
+import { useState } from "react";
+
 import type { Health, Reference } from "./shared/api";
+import { ErrorWords } from "./shared/ErrorWords";
 import type { Source } from "backend/schemas";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -17,6 +20,9 @@ interface SettingsProps {
   privacy: boolean; onPrivacy: (on: boolean) => void;
   choice: ArrangementChoice; onChoice: (choice: ArrangementChoice) => void;
   refresh: number; onRefresh: (seconds: number) => void;
+  /** the service's sweep (#442): a preset, or null for `.env`'s; answers the refusal's raw words, or
+   *  null once `/health` has been read back */
+  onSweep: (seconds: number | null) => Promise<string | null>;
   health: Health | null;
   /** the whole list, holdings included where the page has them valued */
   needs: Need[];
@@ -124,13 +130,57 @@ export function Settings(p: SettingsProps) {
           {REFRESH_PRESETS.map((n) => <option key={n} value={n}>{n}s</option>)}
         </NativeSelect>
         <FieldDescription>
-          Each poll is a live call, so faster is not free (ADR 0010)
-          {p.health ? ` — the service sweeps every ${p.health.settings.sweep_seconds}s` : ""}.
+          How often this page asks, on this device. Each poll is a live call, so faster is not free
+          (ADR 0010).
         </FieldDescription>
       </Field>
+
+      <ServiceSweep health={p.health} onSweep={p.onSweep} />
 
       <References references={p.references} onAdd={p.onAddReference} onRemove={p.onRemoveReference}
                   pending={p.referencesPending} />
     </div>
+  );
+}
+
+/** The service's own sweep (#442, ADR 0025): the one knob the service keeps in its database rather
+ *  than `.env`. Not a viewer preference — every page and the alarms share it — so it is written to
+ *  the service, and what the box shows is what `/health` read back says is in force, never the
+ *  choice itself: a refused choice must not look applied. */
+function ServiceSweep({ health, onSweep }: {
+  health: Health | null; onSweep: (seconds: number | null) => Promise<string | null>;
+}) {
+  const [saving, setSaving] = useState(false);
+  const [refused, setRefused] = useState<string | null>(null);
+  const sweep = health?.settings;
+  // an older service, or a test's, says nothing of presets: the line above still names the sweep
+  if (!sweep?.sweep_presets) return null;
+  const inForce = sweep.sweep_source === "settings" ? String(sweep.sweep_seconds) : "default";
+  const choose = async (value: string) => {
+    setSaving(true);
+    try {
+      setRefused(await onSweep(value === "default" ? null : Number(value)));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Field>
+      <FieldLabel htmlFor="nx-sweep">service sweeps every</FieldLabel>
+      <NativeSelect id="nx-sweep" value={inForce} disabled={saving}
+                    onChange={(e) => void choose(e.target.value)}>
+        <option value="default">{`default (.env, ${sweep.sweep_default_seconds}s)`}</option>
+        {sweep.sweep_presets.map((n) => <option key={n} value={String(n)}>{n}s</option>)}
+      </NativeSelect>
+      <FieldDescription>
+        How often the service itself reads the market and checks every rule, for every page and the
+        alarms alike, from its next sweep. Each sweep is one Provider call, shared with every page's
+        polls, so nothing under 5s. A limit counted in sweeps keeps its time: a faster sweep checks
+        more often and never judges sooner.
+      </FieldDescription>
+      {refused !== null
+        ? <p className="nx-meta" role="alert"><ErrorWords raw={refused} /></p>
+        : null}
+    </Field>
   );
 }

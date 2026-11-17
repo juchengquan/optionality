@@ -18,7 +18,7 @@ export type Row = Record<string, unknown>;
  *  database was made, and no door reads it. */
 export const TABLES = [
   "positions", "monitors", "monitor_positions", "position_samples", "watch_samples",
-  "reference_securities",
+  "reference_securities", "sweep_interval",
 ] as const;
 export type TableName = (typeof TABLES)[number];
 export type Tables = Record<TableName, Row[]>;

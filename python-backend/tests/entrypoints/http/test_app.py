@@ -43,6 +43,8 @@ SURFACE = {
     "GET /references",
     "PATCH /monitors/:id",
     "PATCH /positions/:id",
+    # the sweep's interval, the one knob kept in the database (#442, ADR 0025)
+    "PATCH /settings",
     "POST /monitors",
     "POST /monitors/:id/total-entry",
     "POST /positions",
@@ -145,9 +147,13 @@ class TestHealth:
             # watchlist's pressure reading weighs fill against, and a second copy of 21 in the frontend
             # would drift from EXIT_MANAGE_BY_DTE the first time it moved
             "manage_by_dte": 21,
-            "sweep_seconds": 45,
             "expired_retention_days": 3,
             "display_tz": "Asia/Singapore",
+            # the interval IN FORCE, and where it came from: `.env`'s here, nothing chosen (#442)
+            "sweep_seconds": 45,
+            "sweep_source": "env",
+            "sweep_default_seconds": 45,
+            "sweep_presets": [5, 10, 15, 30, 60],
         }
 
     async def test_says_the_alarm_engine_has_not_swept_yet_rather_than_inventing_a_time(self, start):
@@ -200,7 +206,7 @@ class TestTheBearerToken:
         # GET, each with no body: auth runs before validation too.
         h = start()
         doors = {d for d in served(h.app) if d.split(" ")[1] not in OPEN}
-        assert len(doors) == 22, "the real number of doors"
+        assert len(doors) == 23, "the real number of doors"
         for door in sorted(doors):
             method, path = door.split(" ")
             resp = await h.call(path.replace(":id", "x"), method=method, anonymous=True)

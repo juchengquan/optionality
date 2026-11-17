@@ -5,4 +5,4 @@ package version says when it was cut; this says what it agrees with. `optionalit
 compares it with the running service's own.
 """
 
-GOLDEN_CASES = "c40c81cc8e72"
+GOLDEN_CASES = "17515e59de33"

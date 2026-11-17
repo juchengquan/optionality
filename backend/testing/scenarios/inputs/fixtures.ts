@@ -57,7 +57,7 @@ export const provider = (over: Partial<Provider> = {}): Provider => ({
 
 const EMPTY: Tables = {
   positions: [], monitors: [], monitor_positions: [], position_samples: [], watch_samples: [],
-  reference_securities: [],
+  reference_securities: [], sweep_interval: [],
 };
 
 export interface WorldOver {
@@ -200,6 +200,10 @@ export function request(
     method, path, headers: anonymous ? {} : { Authorization: "Bearer tok" }, body,
   };
 }
+
+/** The sweep's interval as the page chose it (#442): the one row `sweep_interval` may hold. */
+export const chosenInterval = (seconds: unknown, setAt = stored(at(-3600))): Row => (
+  { id: 1, seconds, set_at: setAt });
 
 /** A message typed into the owner's chat, unless another chat is named. */
 export function message(text: string, chat: number = 42): Update {

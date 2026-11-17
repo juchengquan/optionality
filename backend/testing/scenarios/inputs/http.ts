@@ -7,7 +7,8 @@
  */
 import type { HttpRequest, World } from "../format.ts";
 import {
-  BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, PREMIUM_BOOK, at, combo, except, link, monitor,
+  BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, PREMIUM_BOOK, at, chosenInterval, combo, except,
+  link, monitor,
   position, quote,
   reference, request, sample, watchDay, world,
 } from "./fixtures.ts";
@@ -289,6 +290,55 @@ export const HTTP: readonly HttpInput[] = [
       sweeps: [{ at: at(-10), down: DOWN }],
     }),
     request: request("GET", "/health"),
+  },
+
+  {
+    // the interval IN FORCE, and where it came from (#442): the page's choice, .env's beside it
+    name: "GET /health says the sweep interval the page chose",
+    world: world({ tables: { sweep_interval: [chosenInterval(5)] } }),
+    request: request("GET", "/health", null, { anonymous: true }),
+  },
+  {
+    // a value no route writes got in by hand: refused when read, and .env's is in force
+    name: "GET /health sweeps at the .env interval when the stored one is not a preset",
+    world: world({ tables: { sweep_interval: [chosenInterval(2)] } }),
+    request: request("GET", "/health", null, { anonymous: true }),
+  },
+
+  // --- /settings --------------------------------------------------------------------------
+  {
+    name: "PATCH /settings chooses the sweep's interval from the presets",
+    world: world(),
+    request: request("PATCH", "/settings", { sweep_seconds: 5 }),
+  },
+  {
+    // one row at most: a second choice replaces the first
+    name: "PATCH /settings changes a choice already made",
+    world: world({ tables: { sweep_interval: [chosenInterval(60)] } }),
+    request: request("PATCH", "/settings", { sweep_seconds: 30 }),
+  },
+  {
+    // back to MONITOR_INTERVAL_SECONDS by deleting the row, not by storing 15
+    name: "PATCH /settings goes back to the .env interval on null",
+    world: world({ tables: { sweep_interval: [chosenInterval(60)] } }),
+    request: request("PATCH", "/settings", { sweep_seconds: null }),
+  },
+  {
+    // nothing below 5s: each sweep is one moomoo snapshot call, 60 per 30s shared with the pages
+    name: "PATCH /settings refuses an interval that is not a preset",
+    world: world({ tables: { sweep_interval: [chosenInterval(60)] } }),
+    request: request("PATCH", "/settings", { sweep_seconds: 2 }),
+  },
+  {
+    // null is a choice, so a body without the key must not read as one
+    name: "PATCH /settings refuses a body that does not say the interval",
+    world: world({ tables: { sweep_interval: [chosenInterval(60)] } }),
+    request: request("PATCH", "/settings", {}),
+  },
+  {
+    name: "PATCH /settings needs the token",
+    world: world(),
+    request: request("PATCH", "/settings", { sweep_seconds: 5 }, { anonymous: true }),
   },
 
   // --- /quotes ----------------------------------------------------------------------------
