@@ -299,8 +299,8 @@ describe("a held contract", () => {
     }));
     await screen.findByRole("group", { name: /payoff at expiry by SPX price/ });
     expect(screen.getByText("at a credit of 2.40")).toBeTruthy();
-    // "per contract" is every figure's under the chart, not the note's too (2026-11-17)
-    expect(screen.getByText("max profit").nextElementSibling!.textContent).toMatch(/pts per contract$/);
+    // the number alone (the owner, 2026-11-17): points per contract, with no unit after it
+    expect(screen.getByText("max profit").nextElementSibling!.textContent).toMatch(/^[+−]\d+\.\d\d$/);
   });
 
   it("names the watch rule it will replace, before saving", () => {
