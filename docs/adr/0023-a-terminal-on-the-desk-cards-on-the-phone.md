@@ -1154,6 +1154,23 @@ prose — and the bot's `Fri 13 Nov` and ISO.
   by its golden cases.
 
 
+## Amended 2026-11-17: a derived name's date is YYYYMMDD too
+
+The owner, 2026-11-17, after the date format above: the name the add form SUGGESTS — blank name,
+`derivedName` (`add.ts`) and `contractName` (`contract.ts`) — starts with the expiry as `YYYYMMDD`
+(`20261218_P7150`, `20261218_P7150_P7100`, `20261218_+C7300_-2C7350_+C7400`), where it was the month
+and day (`1218_…`). A name the owner typed is still his and untouched. Since the derived name is the
+value rule's CODE, a watch rule saved under an OLD derived name is no longer the one a held spread of
+that shape replaces (#293, #322); the live book held none when this changed (its three combos all
+carry typed names, checked read-only on 2026-11-17). Held by the add, contract and record-as-held
+suites, which state the new names.
+
+The other item raised beside it — the rule editor's `expired` taken from the UTC date — was looked
+at and left: the sweep judges expiry by the same UTC date (`sweeper.ts`, `utcDate`), so the page
+agrees with the service to the minute, and that minute (19:00 New York on the expiry day) is after
+the contract's last trade at the 16:00 close; the evening session trades the next expiry. A New
+York date on the page alone would make the two disagree.
+
 ## Amended 2026-11-17: one book — holdings and watches together, by expiry
 
 The owner, 2026-11-17, from the live page, decided after a grilling: the book read as two books,

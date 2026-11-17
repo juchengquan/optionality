@@ -47,7 +47,7 @@ describe("what a watched contract posts", () => {
     expect(bodyOf(put())).toEqual({
       strike_date: "2026-12-18",
       spreads: [{
-        name: "1218_P7150", held: false, legs: [{ side: "short", option_type: "PUT", strike: 7150 }],
+        name: "20261218_P7150", held: false, legs: [{ side: "short", option_type: "PUT", strike: 7150 }],
         monitors: [{ option_type: "PUT", strike: 7150, field: "option_delta", threshold: 0.15, direction: "above", compare: "abs" }],
       }],
     });
@@ -66,7 +66,7 @@ describe("what a watched contract posts", () => {
 describe("what a held contract posts", () => {
   it("is a one-leg spread, held, with its figures and its Monitor: a short's Entry received, positive", () => {
     expect(bodyOf(put({ held: true, entry: "2.40", contracts: "3" })).spreads[0]).toEqual({
-      name: "1218_P7150", held: true, legs: [{ side: "short", option_type: "PUT", strike: 7150 }],
+      name: "20261218_P7150", held: true, legs: [{ side: "short", option_type: "PUT", strike: 7150 }],
       entry: 2.4, contracts: 3, opened_at: TODAY,
       monitors: [{ option_type: "PUT", strike: 7150, field: "option_delta", threshold: 0.15, direction: "above", compare: "abs" }],
     });
@@ -74,7 +74,7 @@ describe("what a held contract posts", () => {
 
   it("signs a long's Entry as paid, negative, the way a Position's is", () => {
     expect(bodyOf(put({ held: true, side: "long", entry: "5", option_type: "CALL" })).spreads[0])
-      .toMatchObject({ name: "1218_C7150", entry: -5, legs: [{ side: "long", option_type: "CALL", strike: 7150 }] });
+      .toMatchObject({ name: "20261218_C7150", entry: -5, legs: [{ side: "long", option_type: "CALL", strike: 7150 }] });
   });
 
   it("keeps a blank Entry blank and a blank Opened null, never a guessed one", () => {
@@ -96,11 +96,11 @@ describe("what a held contract posts", () => {
 
 describe("the name", () => {
   it("is named as a spread is: the expiry's month and day, its type and the strike as a number", () => {
-    expect(contractName("2026-12-18", "PUT", 7150)).toBe("1218_P7150");
+    expect(contractName("2026-12-18", "PUT", 7150)).toBe("20261218_P7150");
     for (const typed of ["+7150", "7150.0", "07150", " 7150 "]) {
-      expect(bodyOf(put({ strike: typed })).spreads[0]!.name).toBe("1218_P7150");
+      expect(bodyOf(put({ strike: typed })).spreads[0]!.name).toBe("20261218_P7150");
     }
-    expect(bodyOf(put({ strike: "7152.5" })).spreads[0]!.name).toBe("1218_P7152.5");
+    expect(bodyOf(put({ strike: "7152.5" })).spreads[0]!.name).toBe("20261218_P7152.5");
   });
 });
 
@@ -154,7 +154,7 @@ describe("the threshold's fault, said beside the box as it is typed", () => {
 
 describe("where the route's refusal is said", () => {
   it("beside the box it is about, in `POST /spreads`'s own words", () => {
-    expect(refusalSpot("position '1218_P7150' already exists")).toBe("name");
+    expect(refusalSpot("position '20261218_P7150' already exists")).toBe("name");
     expect(refusalSpot("monitor for (US.SPXW261218P7150000, option_delta) already exists")).toBe("field");
     expect(refusalSpot("signed threshold cannot be 0 (zero-width hysteresis band); use e.g. ±0.01")).toBe("threshold");
     expect(refusalSpot("contract does not exist: US.SPXW261218P7150000 — check strike and expiry")).toBe("form");
