@@ -97,12 +97,12 @@ describe("the add form", () => {
   });
 
   it("says a refusal from the service IN the form, and keeps what was typed", async () => {
-    answer = { status: 409, body: { detail: "position '1218_P7150_P7100' already exists" } };
+    answer = { status: 409, body: { detail: "position '20261218_P7150_P7100' already exists" } };
     const { form, onSaved } = open();
     enterCondor();
     fireEvent.click(screen.getByRole("button", { name: /^Record/ }));
     const alert = await within(form).findByRole("alert");
-    expect(alert.textContent).toBe("position '1218_P7150_P7100' already exists");
+    expect(alert.textContent).toBe("position '20261218_P7150_P7100' already exists");
     expect(onSaved).not.toHaveBeenCalled();
     expect((screen.getByLabelText("spread 1, leg 1 strike") as HTMLInputElement).value).toBe("7150");
   });
@@ -128,7 +128,7 @@ describe("the add form", () => {
     fireEvent.click(screen.getByRole("button", { name: "Watch it + 2 rules" }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
     expect((posted()[0]!.body as { spreads: unknown[] }).spreads[0]).toEqual({
-      name: "1218_P7150_P7100", held: false,
+      name: "20261218_P7150_P7100", held: false,
       legs: [
         { side: "short", option_type: "PUT", strike: 7150 },
         { side: "long", option_type: "PUT", strike: 7100 },
@@ -204,7 +204,7 @@ describe("the add form", () => {
 describe("a watch rule saved under #293's name (#351)", () => {
   it("is still the one a held 1×1 spread replaces: the form derives that name exactly", async () => {
     const watching: Monitor = {
-      id: "w1", code: "1218_P7150_P7100", strike_date: "2026-12-18", option_type: "CMB", strike: 0,
+      id: "w1", code: "20261218_P7150_P7100", strike_date: "2026-12-18", option_type: "CMB", strike: 0,
       field: "mid_price", threshold: 1.8, direction: "above", compare: "abs", enabled: true,
       legs: [{ sign: -1, option_type: "PUT", strike: 7150 }, { sign: 1, option_type: "PUT", strike: 7100 }],
       scope: null, positions: [], disabled_reason: null, triggered: false, last_value: null,
@@ -215,10 +215,10 @@ describe("a watch rule saved under #293's name (#351)", () => {
     type("spread 1, leg 1 strike", "7150");
     type("spread 1, leg 2 strike", "7100");
     type("spread 1 entry", "1.50");
-    expect(screen.getByText(/^Replaces the watch rules: 1218_P7150_P7100 \|value\| ≥ 1\.80/)).toBeTruthy();
+    expect(screen.getByText(/^Replaces the watch rules: 20261218_P7150_P7100 \|value\| ≥ 1\.80/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^Record/ }));
     await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
-    expect((posted()[0]!.body as { spreads: { name: string }[] }).spreads[0]!.name).toBe("1218_P7150_P7100");
+    expect((posted()[0]!.body as { spreads: { name: string }[] }).spreads[0]!.name).toBe("20261218_P7150_P7100");
   });
 });
 
@@ -334,7 +334,7 @@ describe("a quantity per leg (#351)", () => {
       { side: "long", option_type: "PUT", strike: 7100 }, { side: "short", option_type: "PUT", strike: 7150, qty: 2 },
       { side: "long", option_type: "PUT", strike: 7200 },
     ]);
-    expect(body.spreads[0]!.name).toBe("1218_+P7100_-2P7150_+P7200");
+    expect(body.spreads[0]!.name).toBe("20261218_+P7100_-2P7150_+P7200");
     expect(body.spreads[0]!.monitors).toEqual([{ option_type: "PUT", strike: 7150, threshold: 0.3 }]);
   });
 
@@ -719,7 +719,7 @@ describe("switching Watch and Hold (#408)", () => {
         ],
       },
       {
-        name: "1218_C7700_C7750", held: true, entry: 1.25, contracts: 2, opened_at: "2026-11-09",
+        name: "20261218_C7700_C7750", held: true, entry: 1.25, contracts: 2, opened_at: "2026-11-09",
         legs: [{ side: "short", option_type: "CALL", strike: 7700 }, { side: "long", option_type: "CALL", strike: 7750 }],
         monitors: [{ threshold: -2.5, direction: "below", compare: "signed" }],
       },
