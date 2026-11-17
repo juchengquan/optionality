@@ -31,7 +31,7 @@ const darwin = process.platform === "darwin";
 const FAKE = `#!/bin/sh
 echo "$$ $FAKE_OPEND_MODE" >> "$FAKE_ROOT/started"
 exec python3 -c '
-import signal, socket, sys, time
+import os, signal, socket, sys, time
 signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))
 held = []
 if sys.argv[2] == "serve":
@@ -39,6 +39,9 @@ if sys.argv[2] == "serve":
         if p:
             s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind(("127.0.0.1", int(p))); s.listen(8); held.append(s)
+# ready: the last exec is behind it, so its command line will not change again
+with open(os.environ["FAKE_ROOT"] + "/ready", "a") as f:
+    f.write("%d\\n" % os.getpid())
 time.sleep(600)
 ' "$0" "\${FAKE_OPEND_MODE:-serve}" "\${FAKE_OPEND_PORTS:-}"
 `;
@@ -102,6 +105,10 @@ function fakes() {
   return out.split("\n").filter(Boolean).map(Number);
 }
 
+/** Every fake that has reached its last exec and said so. */
+const readied = () => existsSync(join(dir, "ready"))
+  ? readFileSync(join(dir, "ready"), "utf8").split("\n").filter(Boolean).map(Number) : [];
+
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
 function env(extra = {}) {
@@ -132,7 +139,11 @@ async function byHand(mode, ports = mode === "serve" ? `${api},${ws}` : "") {
     encoding: "utf8", env: env({ FAKE_OPEND_MODE: mode, FAKE_OPEND_PORTS: ports }),
   });
   const pid = Number(r.stdout.trim());
-  await settle(() => fakes().includes(pid) && (mode !== "serve" || listening()));
+  // READY, not merely visible: `exec python3` (and macOS's /usr/bin/python3 shim, which execs
+  // again) leaves a moment in which the process is neither the shell it was nor the fake it will
+  // be, and the stub pgrep cannot see it. A test that ran `ensure` in that moment read "not
+  // running" and started a second OpenD (a `make py-tag` run, 2026-11-17).
+  await settle(() => readied().includes(pid) && fakes().includes(pid) && (mode !== "serve" || listening()));
   return pid;
 }
 
