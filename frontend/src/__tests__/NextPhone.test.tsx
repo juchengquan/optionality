@@ -213,6 +213,25 @@ describe("the cards say what the desk's rows say (part K)", () => {
     expect(onCard).toBe(table);
   });
 
+  it("draws a card's rules last, under its strip, held or watched alike (the owner, 2026-11-17)", () => {
+    draw();
+    const cards = [...region("Book").querySelectorAll<HTMLElement>("article.nxp-card[data-ref]")];
+    const watched = cards.filter((c) => c.matches(".nxp-watch") && c.querySelector(".nxs"));
+    const held = cards.filter((c) => c.matches(".nxp-holding") && c.querySelector(".nxp-rules"));
+    expect(watched.length).toBeGreaterThan(0);
+    expect(held.length).toBeGreaterThan(0);
+    for (const c of [...watched, ...held]) {
+      const parts = [...c.children].filter((el) => !el.matches(".nxp-also"));
+      const rules = c.querySelector(":scope > .nxp-rules");
+      expect(rules, c.dataset.ref).toBeTruthy();
+      expect(parts.at(-1), c.dataset.ref).toBe(rules);
+      // the sentence is said once, in the list, and nowhere above it
+      expect(c.querySelectorAll(".nxp-sentence").length, c.dataset.ref).toBe(rules!.querySelectorAll(".nxp-sentence").length);
+    }
+    // a watched card's line carries no banner target of its own: the card is the rule's one place
+    for (const c of watched) expect(c.querySelector(".nxp-rules [data-ref]"), c.dataset.ref).toBeNull();
+  });
+
   it("says a holding's DTE once, on its expiry's heading and not on its card", () => {
     draw();
     for (const c of region("Book").querySelectorAll<HTMLElement>("article.nxp-holding[data-ref]")) {
