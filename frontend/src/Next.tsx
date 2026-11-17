@@ -40,7 +40,7 @@ import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
 import { marketPhase, servedWhen, sessionEdge, useSessionClock } from "./session";
-import { withCloses, withLastKnown } from "./lastknown";
+import { valueCell, withCloses, withLastKnown } from "./lastknown";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
 import { UnreadableHoldings } from "./UnreadableHoldings";
@@ -270,14 +270,14 @@ export function Next() {
   const [desk, setDesk] = deskSelection;
   const [paletteOpen, setPaletteOpen] = useState(false);
   const requests = useRef(0);
-  // out of the session a price rule has no figure; its last known one, read in the session, is said
-  // beside the dash (#380, lastknown.ts)
-  // and each row's last close (#402), which is its value wherever there is no live one: out of the
-  // session, and while /quotes is failing, whose rows are then the last ones read
+  // a price rule with no two-sided quote has no figure; its last known one, read while SPX options
+  // traded, is said beside the dash (#380, lastknown.ts), and the newer of it and the row's last
+  // close (#402) is its value wherever there is no live one — at any hour (`valueCell`), and while
+  // /quotes is failing, whose rows are then the last ones read
   const quotes = useMemo(
     () => withLastKnown(withCloses(book.quotes, book.closes), book.monitors,
-      book.quotesFailed || !session ? "close" : phase === "regular" ? "live" : "live-or-close"),
-    [book.quotes, book.closes, book.monitors, session, phase, book.quotesFailed],
+      valueCell(phase, book.quotesFailed)),
+    [book.quotes, book.closes, book.monitors, phase, book.quotesFailed],
   );
   const placed = useMemo(() => placeBook(quotes, holdings, book.monitors), [quotes, holdings, book.monitors]);
   const found = useMemo(() => findables(placed), [placed]);

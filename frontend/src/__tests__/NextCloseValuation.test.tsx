@@ -110,12 +110,21 @@ describe("a watched rule out of hours (F8)", () => {
     expect(sentence(e!)).toBe("|value| ≥ 6.01 — no figure out of session; last 3.05 at Fri 20261113 16:14 ET");
   });
 
-  it("never presents a reading taken out of the session — the 0 a bid 0 / ask 0 once stored", () => {
+  it("never presents a reading taken while nothing trades — the 0 a bid 0 / ask 0 once stored", () => {
     // what three live price rules hold until the first sweep in the session: 0.0 read at 01:47
     // New York on a Saturday
     expect(lastKnown(rule, stored(0, "2026-11-14 14:47:28+08:00"), false)).toBeNull();
     const [e] = withLastKnown([rule], [stored(0, "2026-11-14 14:47:28+08:00")], "close");
     expect(sentence(e!)).toBe("|value| ≥ 6.01 — no figure");
+  });
+
+  it("presents a reading taken while SPX options trade out of the session, in the Curb or overnight (2026-11-17)", () => {
+    // since #380 the sweep holds a price rule with no two-sided book rather than storing its 0, so a
+    // reading from the hours moomoo quotes them live is a price: 09:24 New York, the overnight's last minute
+    const overnight = "2026-11-13 22:24:00+08:00";
+    expect(lastKnown(rule, stored(2.9, overnight), false)).toEqual({ value: 2.9, at: overnight });
+    // the Curb: 16:50 New York on Friday
+    expect(lastKnown(rule, stored(3.1, "2026-11-14 05:50:00+08:00"), false)).not.toBeNull();
   });
 
   it("adds nothing in the session, to a row with its own figure, or where nothing was read", () => {

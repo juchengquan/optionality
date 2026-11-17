@@ -3,7 +3,8 @@
  *  While nothing trades moomoo quotes every option bid 0 / ask 0, which is no price (`midPrice`), so
  *  `/quotes` serves a price rule no figure and the page draws a dash. In the Curb and overnight (GTH)
  *  SPX options trade and are quoted live, so a row with a quote says it, and only one without says
- *  its last close (#416, `ValueCell`). The value cell says the row's last close
+ *  its last price (#416, `ValueCell`) — and since 2026-11-17 so does one while nothing trades, by the
+ *  batch rather than by the clock. The value cell says the row's last close
  *  where the service stored one (`last_close`, #402); for the rest, and for the sentence, the page
  *  says what the sweep last read for the rule —
  *  `/monitors`' `last_value` — and when (`last_checked_at`), beside the dash and never in its place:
@@ -11,18 +12,20 @@
  *  market-closed line names the close. The bell is the service's
  *  and is not drawn from it.
  *
- *  **Only a reading taken IN the session is shown.** Before #380's first part the sweep took a 0/0
- *  quote for a mid of 0 and stored it, and three price rules still hold that 0.0 until the first
- *  sweep in the session reads them again (the sweep now holds a price rule with no book, leaving its
- *  last value alone). A 0 read at 01:47 on a Saturday is not a figure, and nothing tells it from
- *  a real 0 but when it was read, so a reading from outside the session — the only hours that 0 can
- *  have come from — is not presented at all. A real figure read out of hours is still on the row:
+ *  **Only a reading taken while SPX options trade is shown**: in the session, the Curb or overnight
+ *  (GTH) — never while nothing trades. Before #380's first part the sweep took a 0/0 quote for a mid
+ *  of 0 and stored it; it now holds a price rule with no book, leaving its last value alone, so a
+ *  reading from hours moomoo quotes live is a price. A 0 read at 01:47 on a Saturday is not a figure,
+ *  and nothing tells it from a real 0 but when it was read, so a reading from the hours nothing
+ *  trades — the only hours that 0 can have come from — is not presented at all (the Curb and GTH
+ *  joined the session here on 2026-11-17, so the 09:25–09:30 gap says the overnight's last price
+ *  rather than the day before's close). A real figure read out of hours is still on the row:
  *  a rule on a greek has one, since moomoo serves greeks out of hours, and needs nothing from here.
  */
 import { points } from "./shared/numbers";
 import type { Entry, LastClose, Monitor } from "./shared/api";
 import { DASH } from "./shared/format";
-import { inSession, newYorkWeekdayWhen, servedInstant } from "./session";
+import { marketPhase, newYorkWeekdayWhen, servedInstant, type MarketPhase } from "./session";
 
 interface LastKnown {
   value: number;
@@ -31,13 +34,13 @@ interface LastKnown {
 }
 
 /** The rule's last known figure, or null: in the session, where the row has its own figure, where
- *  the sweep never read one, or where it was read out of the session. */
+ *  the sweep never read one, or where it was read while nothing traded. */
 export function lastKnown(entry: Entry, monitor: Monitor | undefined, session: boolean): LastKnown | null {
   if (session || entry.watched !== null || monitor === undefined) return null;
   const value = monitor.last_value;
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   const at = servedInstant(monitor.last_checked_at);
-  if (at === null || !inSession(at)) return null;
+  if (at === null || marketPhase(at) === "closed") return null;
   return { value, at: monitor.last_checked_at! };
 }
 
@@ -48,15 +51,24 @@ export function withCloses(quotes: readonly Entry[], closes: readonly { id: stri
   return quotes.map((e) => ({ ...e, last_close: byId.get(e.id) ?? null }));
 }
 
-/** What a watchlist row's value cell says (#400, #416): the live price in the regular session; in
- *  the Curb and GTH the live price where the poll quotes one, and the last close where it does not;
- *  and while nothing trades — or while `/quotes` is failing — the last close. */
+/** What a watchlist row's value cell says (#400, #416): the live price; the live price where the
+ *  poll quotes one and the last price where it does not; or the last price, while `/quotes` fails. */
 type ValueCell = "live" | "live-or-close" | "close";
+
+/** Which the value cell says at an hour (2026-11-17): the live price in the regular session; at every
+ *  other hour the live price where the poll quotes one, and the last one where it does not — the
+ *  Curb and GTH, and the hours nothing trades too, where a bid 0 / ask 0 is no price, so a row has
+ *  none by the batch rather than by the clock (the 09:25–09:30 gap was the clock's, and said the day
+ *  before's close beside a live quote); and while `/quotes` fails, the last ones read. */
+export function valueCell(phase: MarketPhase, quotesFailed: boolean): ValueCell {
+  if (quotesFailed) return "close";
+  return phase === "regular" ? "live" : "live-or-close";
+}
 
 /** The watchlist's rows with each one's last known figure beside it (`lastKnown`), and the price
  *  its value cell says (#400): `price`, at every hour, and `last_price` wherever the cell says the
- *  last close instead — always out of the session, and in the Curb and GTH only for a row the poll
- *  has no price for (#416). */
+ *  last price instead — for a row the poll has no price for outside the regular session (#416,
+ *  2026-11-17), and for every row while `/quotes` fails. */
 export function withLastKnown(quotes: readonly Entry[], monitors: readonly Monitor[], cell: ValueCell): Entry[] {
   const byId = new Map(monitors.map((m) => [m.id, m]));
   const read = quotes.map((e) => ({ ...e, last_reading: lastKnown(e, byId.get(e.id), cell === "live") }));
@@ -100,20 +112,28 @@ function priceIn(e: Entry, rows: readonly Entry[]): number | null {
   return twin ? ownPrice(twin) : null;
 }
 
-/** Out of the session, the row's last close where the service has one (#402): the stored history of
- *  the contracts it watches, its price under the rule's own signs (`last_close`) — the same close a
- *  watched spread's payoff is drawn at, and a figure a delta rule's spread has as well as its price
- *  rule's. Where none is stored, the last price read IN the session (#400): the price rule's on these
- *  contracts — the row's own, or another rule's on the same contracts — as `lastKnown` keeps it, so a
- *  reading taken out of the session is never one. Null where neither has one. */
+/** A row's last price: the newer of its last close where the service has one (#402) — the stored
+ *  history of the contracts it watches, its price under the rule's own signs (`last_close`), the same
+ *  close a watched spread's payoff is drawn at, and a figure a delta rule's spread has as well as its
+ *  price rule's — and the sweep's last reading (#400): the price rule's on these contracts — the row's
+ *  own, or another rule's on the same contracts — as `lastKnown` keeps it, so one read while nothing
+ *  traded is never one. A reading from the Curb or overnight after the close is the newer
+ *  (2026-11-17): in the 09:25–09:30 gap, the overnight's last price. Null where neither has one. */
 function lastPriceIn(e: Entry, rows: readonly Entry[]): LastKnown | null {
   const close = e.last_close ?? null;
-  if (close !== null) return { value: close.price, at: close.observed_at ?? "" };
   const key = contractsKey(e);
   const own = e.field === "mid_price" ? e.last_reading ?? null : null;
-  if (own) return own;
-  return rows.find((r) => r.field === "mid_price" && contractsKey(r) === key && r.last_reading)?.last_reading ?? null;
+  const reading = own ?? rows.find((r) => r.field === "mid_price" && contractsKey(r) === key && r.last_reading)?.last_reading ?? null;
+  if (close === null) return reading;
+  const stored = { value: close.price, at: close.observed_at ?? "" };
+  // a reading from the Curb or overnight after that close is the newer price (2026-11-17)
+  return reading !== null && newer(reading.at, stored.at) ? reading : stored;
 }
+
+const newer = (a: string, b: string) => {
+  const [x, y] = [servedInstant(a), servedInstant(b)];
+  return x !== null && (y === null || x.getTime() > y.getTime());
+};
 
 /** "4.12 (Fri 16:14)": a last in-session price with its time on New York's clock, as the page states
  *  times; a dash where there is none. */
