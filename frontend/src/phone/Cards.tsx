@@ -92,7 +92,7 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
       {/* "held" in its name, to a reader as on screen: the one book draws watches beside it (2026-11-17) */}
       <OpenCard name={`${holding.name} ${HELD}`} onOpen={onOpen} />
       <header className="nxp-head">
-        <span className="nxp-name">{holding.name}{" "}<span className="nxp-held" data-held="">{HELD}</span></span>
+        <span className="nxp-name">{holding.name}{" "}<span className="nx-held" data-held="">{HELD}</span></span>
         <span className="nxp-legs"><Legs legs={holding.legs.map(heldLeg)} /></span>
         {/* no DTE here: its expiry's heading says it, once (part K) */}
       </header>

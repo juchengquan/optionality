@@ -53,7 +53,6 @@
 .nxp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
 .nxp-name { font-weight: 650; font-size: 1rem; }
 /* "held" after a holding's name (2026-11-17): a quiet tag, not a word of the name */
-.nxp-held { font-weight: 400; font-size: 0.75rem; color: var(--muted-foreground); }
 .nxp-legs {
   color: var(--muted-foreground); font-size: 0.8125rem;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;

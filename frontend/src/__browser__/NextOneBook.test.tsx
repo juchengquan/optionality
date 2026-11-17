@@ -8,7 +8,7 @@ import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
-import { overflowsSideways, settle } from "./nextBook";
+import { notAChip, overflowsSideways, settle } from "./nextBook";
 import { placed, serveOneBook } from "../testing/oneBookServe";
 
 afterEach(async () => {
@@ -42,6 +42,7 @@ describe.each([900, 1024, 1280, 1440])("at %ipx", (width) => {
       const tags = [...document.querySelectorAll(".nxd-row [data-held]")];
       expect(tags).toHaveLength(3);
       for (const tag of tags) expect(placed(tag, tag.closest("[data-col]")!), tag.closest<HTMLElement>(".nxd-row")!.dataset.ref).toBeNull();
+      for (const tag of tags) expect(notAChip(tag), tag.closest<HTMLElement>(".nxd-row")!.dataset.ref).toBeNull();
       const label = document.querySelector("[data-sub=contracts]")!;
       expect(placed(label, table())).toBeNull();
       // one heading per expiry

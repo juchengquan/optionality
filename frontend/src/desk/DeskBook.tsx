@@ -427,7 +427,7 @@ function NameCell({ row, ctx, distance }: { row: DeskRow; ctx: Ctx; distance: bo
               onClick={(e) => { e.stopPropagation(); ctx.select(rowId(row)); }}>
         {rowName(row)}
         {/* what tells a holding from a watch in the one book, heard in its name (2026-11-17) */}
-        {row.kind === "holding" ? <>{" "}<span className="nxd-held" data-held="">{HELD}</span></> : null}
+        {row.kind === "holding" ? <>{" "}<span className="nx-held" data-held="">{HELD}</span></> : null}
       </button>
       {a ? <AttentionChip kind={a} words={chipWords(row, ctx.session)} /> : null}
       {/* a holding's own rule, ringing or at fault, on the row that now draws it */}

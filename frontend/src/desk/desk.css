@@ -85,12 +85,8 @@
   margin: 0; padding: 0.1rem 0.75ch 0.3rem 2.75ch; border-bottom: 1px solid var(--nxd-line);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; overflow-wrap: anywhere;
 }
-/* "held" after a holding's name (2026-11-17): small and muted, a tag rather than a word of the name */
-.nxd-held {
-  font-size: 0.6875rem; font-weight: 400;
-  color: var(--muted-foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-}
+/* the desk's chips are a size down, the held one with them (next.css: .nx-held) */
+.nxd-row .nx-held { font-size: 0.6875rem; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
 
 /* what a spread in the watchlist shares with a holding (#346): under its row, in the row's indent,
    wrapping rather than widening the table */

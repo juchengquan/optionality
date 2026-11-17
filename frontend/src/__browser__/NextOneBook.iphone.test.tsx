@@ -5,7 +5,7 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
-import { overflowsSideways, settle } from "./nextBook";
+import { notAChip, overflowsSideways, settle } from "./nextBook";
 import { placed, serveOneBook } from "../testing/oneBookServe";
 
 afterEach(cleanup);
@@ -28,6 +28,7 @@ describe("under the iPhone profile", () => {
       // the card's own button lies over its text by design (Cards.tsx: OpenCard): a tag under it is
       // still drawn, inside its card
       expect(where === null || where.startsWith("covered by nxp-open"), where ?? "").toBe(true);
+      expect(notAChip(tag), tag.closest<HTMLElement>("article")!.dataset.ref).toBeNull();
     }
     const label = document.querySelector("[data-sub=contracts]")!;
     expect(placed(label, document.querySelector(".nxp-book")!)).toBeNull();
