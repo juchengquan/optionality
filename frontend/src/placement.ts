@@ -11,7 +11,7 @@
  *    2026-11-17): a short leg's delta is not drawn under the spread it is a leg of, watched
  *    (`in_combos`) or held. One on a leg of a held spread (`heldLeg`) comes first, before the watched
  *    contracts. On a holding of ONE contract it stays under that holding, itself in Contracts. So a
- *    watched spread has nothing under it, and its `under` is always empty;
+ *    watched spread has nothing under it;
  *  - a rule on something held whose holding is not drawn — the valuation failed or has not arrived,
  *    or two holdings share its contract, as on a roll day — is still shown, unplaced;
  *  - a condor held as two spreads on one expiry is BRACKETED: one call vertical and one put
@@ -60,14 +60,10 @@ interface HoldingGroup {
   rows: PlacedHolding[][];
 }
 
-/** A watched rule. */
+/** A watched rule: nothing is drawn under it, since every single-contract rule became a row of its
+ *  own in Contracts (2026-11-17). */
 export interface PlacedRule {
   entry: Entry;
-  /** the rules drawn under it: none since 2026-11-17, when every single-contract rule became a row
-   *  of its own in Contracts. Kept, empty, because every surface still draws what is here */
-  under: Entry[];
-  /** those of `under` drawn under an earlier watched spread (a leg in two spreads) */
-  elsewhere?: Elsewhere[];
   /** for a combo that only partly overlaps a holding, what it shares and with whom
    *  (`overlapOf`): "shares C8100 with 1231_8050"; null for everything else */
   overlap: string | null;
@@ -146,7 +142,7 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
   // a held leg's rule first among its expiry's contracts: the held rows first (2026-11-17)
   const heldFirst = (rows: Entry[]) => [...rows.filter(heldLeg), ...rows.filter((e) => !heldLeg(e))];
   const watchGroups: WatchGroup[] = byExpiry(watched).map(([expiry, group]) => ({
-    expiry, items: heldFirst(group).map((entry) => ({ entry, under: [], overlap: overlap(entry) })),
+    expiry, items: heldFirst(group).map((entry) => ({ entry, overlap: overlap(entry) })),
   }));
 
   const sections = twoSections(holdingGroups, watchGroups);
@@ -207,7 +203,6 @@ function drawOnce(book: ExpiryBook[]): void {
   };
   for (const g of book) {
     for (const p of g.held.flat()) p.elsewhere = place(p.rules, p.holding.name, ownRule(p.holding, p.rules));
-    for (const i of [...g.spreads, ...g.contracts]) i.elsewhere = place(i.under, entryName(i.entry), null);
   }
 }
 

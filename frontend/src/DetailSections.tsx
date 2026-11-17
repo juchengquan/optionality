@@ -166,12 +166,10 @@ export function HoldingSections({
 }
 
 export function RuleSections({
-  surface, entry, under, overlap, privacy, session, ruleLine,
+  surface, entry, overlap, privacy, session, ruleLine,
 }: {
   surface: Surface;
   entry: Entry;
-  /** the rules on its legs, drawn under it */
-  under: Entry[];
   /** what a watchlist spread shares with a holding it partly overlaps (#346) */
   overlap: string | null;
   privacy: boolean;
@@ -210,7 +208,7 @@ export function RuleSections({
     rules: (
       <>
         <Heading surface={surface} of="rules" />
-        <ul className={c.rules}>{[entry, ...under].map((r) => ruleLine(r, r.id === entry.id))}</ul>
+        <ul className={c.rules}>{ruleLine(entry, true)}</ul>
       </>
     ),
     // a watched row's daily closes (#402), opened as a holding's history is (#372)

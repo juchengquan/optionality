@@ -71,7 +71,7 @@ export function PhoneBook({
       </p>
       <ul className="nxp-cards">
         {placed.unplaced.map((e) => (
-          <li key={e.id}><RuleCard entry={e} under={[]} onOpen={() => setOpenId(e.id)} spxSaid={spxSaid} /></li>
+          <li key={e.id}><RuleCard entry={e} onOpen={() => setOpenId(e.id)} spxSaid={spxSaid} /></li>
         ))}
       </ul>
     </section>
@@ -105,9 +105,9 @@ export function PhoneBook({
                       ))}
                     </li>
                   ))}
-                  {[...g.spreads, ...g.contracts].map(({ entry, under, overlap, elsewhere }) => (
+                  {[...g.spreads, ...g.contracts].map(({ entry, overlap }) => (
                     <li key={entry.id}>
-                      <RuleCard entry={entry} under={under} overlap={overlap} elsewhere={elsewhere} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
+                      <RuleCard entry={entry} overlap={overlap} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
                     </li>
                   ))}
                 </ul>
@@ -167,5 +167,5 @@ function find(placed: BookModel, id: string): Subject | null {
     for (const item of [...g.spreads, ...g.contracts]) if (item.entry.id === id) return { kind: "rule", ...item };
   }
   const lone = placed.unplaced.find((e) => e.id === id);
-  return lone ? { kind: "rule", entry: lone, under: [] } : null;
+  return lone ? { kind: "rule", entry: lone } : null;
 }
