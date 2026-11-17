@@ -1,5 +1,5 @@
 /** A watched row's history, and the days a holding was watched before it was entered (#402), as the
- *  history's charts read them: the burndown, the IV chart and "SPX against the strikes" draw a
+ *  history's charts read them: the burndown and the IV chart draw a
  *  `Samples` answer, so each is put in that shape here and the charts take no second kind of day.
  *
  *  - **A watched rule's days** (`/monitors/{id}/samples`) carry each day's PRICE under the rule's own

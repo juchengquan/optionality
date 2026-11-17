@@ -8,9 +8,9 @@
  *    the line over a hatched column.
  *  - **The value axis is the days', not the Stop's** (`valueAxis`): a Stop above it is marked at
  *    the top edge, with an arrow and its figure, rather than stretching the scale.
- *  - **The crosshair** is the history's, shared with the IV chart and SPX's path (`Crosshair.tsx`,
- *    #395): it stops at every recorded day and at today's valuation after them, and a day pointed at
- *    in any of the three panels is crossed in all three. How a mouse, a finger and the keys move it
+ *  - **The crosshair** is the history's, shared with the IV chart (`Crosshair.tsx`, #395): it stops
+ *    at every recorded day and at today's valuation after them, and a day pointed at in either panel
+ *    is crossed in both. How a mouse, a finger and the keys move it
  *    is `usePanel`'s, the same in each. On a day with no Cost to close (#380) it is a rule down the
  *    day and the readout says there is none. The tooltip is for the eye and is hidden from a screen
  *    reader; the status line beneath says the same stop in full, and is what is announced.
@@ -140,7 +140,7 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
     ? null : { dte: s.dte, cost: s.cost_to_close, pace: s.on_pace })));
   const corrected = correctionDte(served);
 
-  // the stop the three panels share: a priced day, a day with no Cost to close, or today's valuation
+  // the stop both panels share: a priced day, a day with no Cost to close, or today's valuation
   const pointed = pointedStop(cross);
   const at = pointed?.sample && hasCost(pointed.sample) ? pointed.sample : null;
   const bare = pointed?.sample && !hasCost(pointed.sample) ? pointed.sample : null;

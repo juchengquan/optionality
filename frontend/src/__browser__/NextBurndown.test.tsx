@@ -2,7 +2,7 @@
  *  272px inspector, 400px, and 900px across a journal's closed trade — the phone's 390 is
  *  `NextBurndown.iphone.test.tsx`'s. Nothing cut by its SVG, no label on another, nothing pushed
  *  sideways, the crosshair's tooltip inside the chart and off the point it describes for EVERY day,
- *  the three charts still putting a day at one x, and the colours the tokens', light and dark.
+ *  the two charts still putting a day at one x, and the colours the tokens', light and dark.
  *  What the chart says and when is the jsdom suite's (`NextHistory.test.tsx`). */
 import { cleanup, render } from "@testing-library/react";
 import { commands, page, userEvent } from "@vitest/browser/context";
@@ -162,7 +162,7 @@ describe("the tooltip's measured height", () => {
   });
 });
 
-describe("the three charts put a day at one x (#327)", () => {
+describe("the two charts put a day at one x (#327)", () => {
   for (const width of [272, 400, 900]) for (const privacy of [false, true]) {
     it(`at ${width}px${privacy ? ", privacy on" : ""}`, async () => {
       await draw("h-puts", width, { privacy });
@@ -173,9 +173,8 @@ describe("the three charts put a day at one x (#327)", () => {
       for (const [on, dte] of [["2026-11-03", 45], ["2026-11-06", 42], ["2026-11-09", 39]] as const) {
         const burndown = centre(document.querySelector(`[data-sample="${on}"] circle`));
         const iv = [...document.querySelectorAll(`[aria-label="IV by leg"] circle[data-dte="${dte}"]`)].map(centre);
-        const spx = centre(document.querySelector(`circle[data-spx-day="${on}"]`));
         expect(iv.length).toBeGreaterThan(0);
-        for (const x of [...iv, spx]) expect(Math.abs(x - burndown)).toBeLessThan(0.75);
+        for (const x of iv) expect(Math.abs(x - burndown)).toBeLessThan(0.75);
       }
     });
   }

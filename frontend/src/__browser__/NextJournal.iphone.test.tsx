@@ -147,8 +147,8 @@ describe("the closed trades on the phone", () => {
     const { journal } = await review();
     const sheet = await openTrade(journal, "1120_P6000");
     const charts = [...sheet.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
-    // the burndown, the IV and where SPX was (#298)
-    expect(charts).toHaveLength(3);
+    // the burndown and the IV
+    expect(charts).toHaveLength(2);
     for (const svg of charts) {
       const r = svg.getBoundingClientRect();
       expect(r.left).toBeGreaterThanOrEqual(0);

@@ -1,8 +1,8 @@
-/** The holding's three history panels — the burndown, the IV chart and SPX's path — on ONE crosshair
- *  (#395), measured in a real layout engine at the desk's widths (272px inspector, 400px, a 900px
- *  journal trade): the three plot areas aligned to the pixel, a mouse or the keys in any panel
- *  crossing the same x in all three with each readout inside its own panel and off its point, and
- *  the IV and SPX panels' colours the tokens', light and dark. The phone's 390 is
+/** The holding's two history panels — the burndown and the IV chart — on ONE crosshair (#395),
+ *  measured in a real layout engine at the desk's widths (272px inspector, 400px, a 900px journal
+ *  trade): the two plot areas aligned to the pixel, a mouse or the keys in either panel crossing the
+ *  same x in both with each readout inside its own panel and off its point, and the IV panel's
+ *  colours the tokens', light and dark. The phone's 390 is
  *  `NextHistoryCross.iphone.test.tsx`'s; what each readout SAYS is the jsdom suite's
  *  (`NextHistory.test.tsx`). */
 import { cleanup, render, waitFor } from "@testing-library/react";
@@ -29,7 +29,7 @@ function serve(id: string, samples: Samples = SAMPLES[id]!) {
   }) as unknown as typeof fetch;
 }
 
-/** The three panels, in order: the burndown, the IV chart, SPX's path. */
+/** The two panels, in order: the burndown, the IV chart. */
 async function draw(id: string, width: number, privacy = false) {
   // tall enough that no panel is ever scrolled to: a hover that scrolls the page moves the panels
   // under a mouse already placed, and Chrome's catch-up boundary events then let go of the day
@@ -37,8 +37,9 @@ async function draw(id: string, width: number, privacy = false) {
   serve(id);
   render(<div className="nx" style={{ width, padding: 0 }}><HoldingHistory holding={holdingOf(id)} privacy={privacy} /></div>);
   await settle();
-  const panels = [".nx-bd", ".nx-iv", ".nx-spxp"].map((sel) => document.querySelector<HTMLElement>(sel)!);
-  expect(panels.every(Boolean), "all three panels drawn").toBe(true);
+  const panels = [".nx-bd", ".nx-iv"].map((sel) => document.querySelector<HTMLElement>(sel)!);
+  expect(panels.every(Boolean), "both panels drawn").toBe(true);
+  expect(document.querySelector(".nx-spxp"), "no SPX panel").toBeNull();
   return panels;
 }
 
@@ -50,7 +51,7 @@ const ruleX = (panel: HTMLElement) => {
 const inside = (r: DOMRect, box: DOMRect) =>
   r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5;
 
-describe("the three plot areas line up to the pixel", () => {
+describe("the two plot areas line up to the pixel", () => {
   for (const width of [272, 400, 900]) for (const id of ["h-calls", "h-puts", "h-ic"]) for (const privacy of [false, true]) {
     it(`at ${width}px: ${id}${privacy ? ", privacy on" : ""}`, async () => {
       const panels = await draw(id, width, privacy);
@@ -64,7 +65,7 @@ describe("the three plot areas line up to the pixel", () => {
   }
 });
 
-describe("a mouse in any panel crosses the day in all three", () => {
+describe("a mouse in either panel crosses the day in both", () => {
   for (const width of [272, 900]) {
     it(`at ${width}px, every day from every panel, each readout inside its panel and off its point`, async () => {
       const panels = await draw("h-calls", width);
@@ -104,14 +105,14 @@ describe("a mouse in any panel crosses the day in all three", () => {
         }
       }
       expect(faults.join("; ")).toBe("");
-      // leaving for the page lets go in all three
+      // leaving for the page lets go in both
       await userEvent.hover(document.querySelector(".nx-hist-h")!);
-      expect(panels.map((p) => p.querySelector("[data-crosshair]"))).toEqual([null, null, null]);
+      expect(panels.map((p) => p.querySelector("[data-crosshair]"))).toEqual([null, null]);
     });
   }
 });
 
-describe("the keys in any panel step the crosshair in all three", () => {
+describe("the keys in either panel step the crosshair in both", () => {
   it("from each panel's one tab stop", async () => {
     const panels = await draw("h-puts", 400);
     for (const panel of panels) {
@@ -120,24 +121,22 @@ describe("the keys in any panel step the crosshair in all three", () => {
       await userEvent.keyboard("{Home}{ArrowRight}{ArrowRight}");
       const xs = panels.map(ruleX);
       expect(panels.map((p) => p.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")))
-        .toEqual(["2026-11-05", "2026-11-05", "2026-11-05"]);
+        .toEqual(["2026-11-05", "2026-11-05"]);
       for (const x of xs) expect(Math.abs(x - xs[0]!)).toBeLessThan(0.75);
       await userEvent.keyboard("{Escape}");
     }
-    // the tab order runs through the three in turn
+    // the tab order runs through the two in turn
     panels[0]!.focus();
     await userEvent.tab();
     expect(document.activeElement).toBe(panels[1]);
-    await userEvent.tab();
-    expect(document.activeElement).toBe(panels[2]);
   });
 });
 
-describe("the IV and SPX panels' colours are the tokens', light and dark", () => {
+describe("the IV panel's colours are the tokens', light and dark", () => {
   for (const scheme of ["light", "dark"] as const) {
     it(`in the ${scheme} scheme`, async () => {
       await commands.colorScheme(scheme);
-      const [, iv, spx] = await draw("h-calls", 400);
+      const [, iv] = await draw("h-calls", 400);
       const nx = document.querySelector(".nx")!;
       const resolved = (name: string) => {
         const probe = document.createElement("span");
@@ -153,10 +152,8 @@ describe("the IV and SPX panels' colours are the tokens', light and dark", () =>
       expect(style(iv!, ".nx-bd-grid").stroke).toBe(resolved("--border"));
       // a day that is not the close is hollow here too
       expect(style(iv!, "circle[data-mark='off-close']").fill).toBe(resolved("--background"));
-      expect(style(spx!, "[data-spx-day][data-mark='off-close']").fill).toBe(resolved("--background"));
-      expect(style(spx!, "[data-spx-run]").stroke).toBe(resolved("--foreground"));
       // the crosshair and the readouts, as the burndown's
-      for (const panel of [iv!, spx!]) {
+      for (const panel of [iv!]) {
         const svg = panel.querySelector("svg")!;
         const box = svg.getBoundingClientRect();
         await userEvent.hover(svg, { position: { x: box.width - 30, y: 6 } });
@@ -165,7 +162,11 @@ describe("the IV and SPX panels' colours are the tokens', light and dark", () =>
         expect(style(panel, "[data-tip]").color).toBe(resolved("--popover-foreground"));
         expect(style(panel, "[data-tip]").pointerEvents).toBe("none");
       }
-      expect(style(spx!, "[data-tip] .nx-leg-t[data-type='CALL']").color).toBe(resolved("--call"));
+      // a recorded day, whose readout names each leg (today's valuation has no IV to name them by)
+      const svg = iv!.querySelector("svg")!, box = svg.getBoundingClientRect();
+      const day = iv!.querySelector("circle[data-dte='39']")!.getBoundingClientRect();
+      await userEvent.hover(svg, { position: { x: day.left + day.width / 2 - box.left, y: box.height / 2 } });
+      expect(style(iv!, "[data-tip] .nx-leg-t[data-type='CALL']").color).toBe(resolved("--call"));
     });
   }
 });

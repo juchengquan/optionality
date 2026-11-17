@@ -1,7 +1,7 @@
 /** A watched row's history (#402) and a holding's days before entry, measured in a real layout
- *  engine at the desk's widths (272px inspector, 400px): the three plot areas aligned to the pixel,
+ *  engine at the desk's widths (272px inspector, 400px): the two plot areas aligned to the pixel,
  *  the threshold and the "entered" rule inside the plot with their labels, nothing overflowing, and
- *  the keys in any panel crossing the same day in all three. The phone's 390 is
+ *  the keys in either panel crossing the same day in both. The phone's 390 is
  *  `NextWatchHistory.iphone.test.tsx`'s; what each readout SAYS is the jsdom suite's
  *  (`NextWatchHistory.test.tsx`). */
 import { cleanup, render } from "@testing-library/react";
@@ -27,8 +27,8 @@ function serve(samples: Samples | null = null) {
 
 async function panelsOf(): Promise<HTMLElement[]> {
   await settle();
-  const panels = [".nx-bd", ".nx-iv", ".nx-spxp"].map((sel) => document.querySelector<HTMLElement>(sel)!);
-  expect(panels.every(Boolean), "all three panels drawn").toBe(true);
+  const panels = [".nx-bd", ".nx-iv"].map((sel) => document.querySelector<HTMLElement>(sel)!);
+  expect(panels.every(Boolean), "both panels drawn").toBe(true);
   return panels;
 }
 
@@ -58,11 +58,11 @@ describe("a watched spread's history at the desk's widths", () => {
       expect(within(threshold.querySelector("line")!.getBoundingClientRect(), plotOf(bd))).toBe(true);
       expect(within(threshold.querySelector("text")!.getBoundingClientRect(), bd.getBoundingClientRect())).toBe(true);
       expect(overflowsSideways()).toBe(false);
-      // the keys in the value panel cross the same day in all three
+      // the keys in the value panel cross the same day in both
       bd.focus();
       await userEvent.keyboard("{End}");
       expect(panels.map((p) => p.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")))
-        .toEqual(["2026-11-09", "2026-11-09", "2026-11-09"]);
+        .toEqual(["2026-11-09", "2026-11-09"]);
     });
   }
 });
