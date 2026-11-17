@@ -108,9 +108,9 @@ describe("the cards", () => {
 
   it("are one target each: a tap on a card's figures opens it", async () => {
     await show();
-    // its large P&L, the part of the card a thumb lands on: what is under the thumb there is the
+    // its P&L, the part of the card a thumb lands on: what is under the thumb there is the
     // card's button, and a tap at that point (forced, since the figure itself takes no taps) opens it
-    const figure = card("h-calls").querySelector<HTMLElement>(".nxp-hero [data-money]")!;
+    const figure = card("h-calls").querySelector<HTMLElement>(".nxp-facts [data-money]")!;
     figure.scrollIntoView({ block: "center" });
     const r = figure.getBoundingClientRect();
     const under = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -385,7 +385,33 @@ describe("the market-closed line on the phone", () => {
 /** Outside the session the Level chips say when the holding was valued (#354, #371), and got longer
  *  for it: measured on the cards, in the sheet and with the longest of the three Levels, at the
  *  iPhone's 390px. */
-describe("a Level's chip outside the session, with its valuation's time", () => {
+/** The card's three figures (the owner, 2026-11-17): the P&L and its share, the Cost to close and
+ *  the short Δ in one row at the iPhone's 390px for a two-leg spread, with a wide P&L (a 50-wide
+ *  spread's whole loss on one contract, and a share far below nothing) — and a condor's two short
+ *  legs' Δ, too wide for what is left, whole on the next, as a wider P&L's Δ would be. */
+describe("a held card's three figures", () => {
+  it("fit inside the card, each on one line, a two-leg spread's in one row, pushing nothing sideways", async () => {
+    const wide = HOLDINGS.map((h) => ({ ...h, pnl: -4528, captured: -2.5 }));
+    await show(QUOTES, wide);
+    for (const ref of ["h-calls", "h-puts", "h-ic"]) {
+      const figs = [...card(ref).querySelectorAll<HTMLElement>(".nxp-facts > div")];
+      expect(figs).toHaveLength(3);
+      const box = card(ref).getBoundingClientRect();
+      const tops = new Set(figs.map((f) => Math.round(f.getBoundingClientRect().top)));
+      expect(tops.size, `${ref}'s figures' rows`).toBe(ref === "h-ic" ? 2 : 1);
+      for (const f of figs) {
+        const dd = f.querySelector("dd")!;
+        const r = dd.getBoundingClientRect();
+        expect(r.left >= box.left && r.right <= box.right, `${ref}: ${dd.textContent} inside its card`).toBe(true);
+        // one line each: a figure wrapped over two is a row that reads as two
+        expect(r.height, `${ref}: ${dd.textContent} on one line`).toBeLessThan(parseFloat(getComputedStyle(dd).lineHeight) * 1.5);
+      }
+    }
+    expect(overflowsSideways()).toBe(false);
+  });
+});
+
+describe("a Level's chip outside the session: short on the card, its valuation's time in the sheet", () => {
   const levelled = HOLDINGS.map((h) => ({
     ...h, fetched_at: "2026-11-16 00:59:05+08:00",
     schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4, target_dte: 11,
@@ -395,8 +421,8 @@ describe("a Level's chip outside the session, with its valuation's time", () => 
     outsideTheSession();
     await show(QUOTES, levelled);
     for (const ref of ["h-calls", "h-puts", "h-ic"]) {
-      const chip = card(ref).querySelector<HTMLElement>(".nx-chip")!;
-      expect(chip.textContent).toMatch(/^at (stop|target) · as valued at 00:59 SGT$/);
+      const chip = card(ref).querySelector<HTMLElement>(".nxp-head .nx-chip")!;
+      expect(chip.textContent).toMatch(/^at (stop|target)$/);
       const box = card(ref).getBoundingClientRect();
       const r = chip.getBoundingClientRect();
       expect(r.left >= box.left && r.right <= box.right, `${ref}'s chip inside its card`).toBe(true);
