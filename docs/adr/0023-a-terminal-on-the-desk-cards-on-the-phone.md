@@ -1219,7 +1219,8 @@ not linked: a watch rule is no holding's, and `placeBook` decides what sits wher
   (`legRules`). On a holding of ONE contract, itself in Contracts, the rule stays under it.)*
   *(And again the same day, by the owner's decision: EVERY single-contract rule is a row of its own
   in Contracts — a leg of a WATCHED spread too — so a spread's card or row draws nothing under it
-  (its `under` is always empty) and a leg rule in two watched spreads needs no "also in" note. The
+  (a watched rule carries no list of rules under it in the model, `PlacedRule`) and a leg rule in
+  two watched spreads needs no "also in" note. The
   spread keeps its short strike's Δ on its strike strip. A sheet opened from a rule's own card,
   closed because the rule was muted or deleted there, hands the focus to the book's heading rather
   than the body.)*

@@ -20,7 +20,7 @@ import { costAndPace, paceOutcome } from "../pace";
 import type { HoldingWrites } from "../HoldingActions";
 import { DetailBoundary } from "../DetailBoundary";
 import { keptHolding, STALE_WORDS } from "../kept";
-import { alsoWords, drawnUnder, NOTHING, placeBook, type BookModel, type Elsewhere, type ExpiryBook, type PlacedRule } from "../placement";
+import { alsoWords, NOTHING, placeBook, type BookModel, type Elsewhere, type ExpiryBook, type PlacedRule } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
@@ -204,7 +204,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
         <Muted monitors={placed.muted} />
       </div>
 
-      {current ? <Inspector id={inspectorId} row={current} session={session} privacy={privacy} rows={rows} partners={partners}
+      {current ? <Inspector id={inspectorId} row={current} session={session} privacy={privacy} partners={partners}
                             onSelect={setSelected} onClose={close} quotes={quotes} monitors={monitors} writes={props.writes}
                             stale={kept !== null} /> : null}
       {/* the closed trades' fold (#373): the last thing in the book, across the whole width */}
@@ -342,15 +342,13 @@ function Expiry({ g, ctx }: { g: ExpiryBook; ctx: Ctx }) {
   );
 }
 
-/** A watched spread or contract and the leg rules under it. A spread that partly overlaps a holding
- *  (#346) says what it shares in its inspector, not under its row: with spreads and contracts in
- *  sections of their own the line was noise (the owner, 2026-11-17). */
-function Watched({ item: { entry, under, overlap, elsewhere }, ctx }: { item: PlacedRule; ctx: Ctx }) {
+/** A watched spread or contract, nothing under it (2026-11-17). A spread that partly overlaps a
+ *  holding (#346) says what it shares in its inspector, not under its row: with spreads and contracts
+ *  in sections of their own the line was noise (the owner, 2026-11-17). */
+function Watched({ item: { entry, overlap }, ctx }: { item: PlacedRule; ctx: Ctx }) {
   return (
     <li>
       <Row row={{ kind: "rule", entry, nested: false, overlap }} ctx={ctx} />
-      {drawnUnder(under, elsewhere).map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
-      <AlsoNotes elsewhere={elsewhere} />
     </li>
   );
 }
@@ -514,8 +512,8 @@ function outcomeOf(row: DeskRow, column: DeskColumn): "loss" | "gain" | undefine
 
 // ---- the inspector
 
-function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClose, quotes, monitors, writes, stale = false }: {
-  id: string; row: DeskRow; session: boolean; privacy: boolean; rows: DeskRow[]; partners: Map<string, Holding>;
+function Inspector({ id, row, session, privacy, partners, onSelect, onClose, quotes, monitors, writes, stale = false }: {
+  id: string; row: DeskRow; session: boolean; privacy: boolean; partners: Map<string, Holding>;
   onSelect: (id: string) => void; onClose: () => void; quotes: Entry[]; monitors: Monitor[]; writes?: HoldingWrites;
   /** drawn from the last valuation that succeeded, the ones since having failed (`kept.ts`) */
   stale?: boolean;
@@ -546,7 +544,7 @@ function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClos
         {/* stale, its Level says which valuation it is from, as outside the session */}
         {row.kind === "holding" ? <HoldingDetail row={row} session={session && !stale} privacy={privacy} partners={partners}
                                                  onSelect={onSelect} quotes={quotes} monitors={monitors} writes={writes} />
-          : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null}
+          : row.kind === "rule" ? <RuleDetail entry={row.entry} overlap={row.overlap ?? null}
                                               session={session} privacy={privacy} />
             : <QuarantinedDetail row={row} />}
       </DetailBoundary>
@@ -583,13 +581,11 @@ function InspectorStrip({ holding, partner }: { holding: Holding; partner: Holdi
   return strip ? <StrikeStrip strip={strip} /> : null;
 }
 
-function RuleDetail({ entry, rows, overlap, session, privacy }: {
-  entry: Entry; rows: DeskRow[]; overlap: string | null; session: boolean; privacy: boolean;
+function RuleDetail({ entry, overlap, session, privacy }: {
+  entry: Entry; overlap: string | null; session: boolean; privacy: boolean;
 }) {
-  const under = rows.filter((r): r is Extract<DeskRow, { kind: "rule" }> =>
-    r.kind === "rule" && r.nested && !r.entry.legs && r.entry.in_combos.includes(entry.id) && !r.entry.held);
   return (
-    <RuleSections surface="desk" entry={entry} under={under.map((r) => r.entry)} overlap={overlap}
+    <RuleSections surface="desk" entry={entry} overlap={overlap}
                   privacy={privacy} session={session}
                   ruleLine={(e, own) => <RuleItem key={e.id} entry={e} own={own} />} />
   );

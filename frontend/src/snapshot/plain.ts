@@ -26,7 +26,7 @@ import { drawnReadings, referenceWords } from "../shared/readings";
 import { HELD, PINNED, PLAIN_COLUMNS, rowName, rowStrip, ruleOfRow, subRules, type DeskColumn, type DeskRow } from "../desk/columns";
 import { closedLineText, levelWords } from "../levels";
 import { monitorName, sentence, storedRuleWords, type Need } from "../needs";
-import { drawnUnder, NOTHING, placeBook, type ExpiryBook, type PlacedHolding } from "../placement";
+import { NOTHING, placeBook, type ExpiryBook, type PlacedHolding } from "../placement";
 import { servedWhen, type MarketPhase } from "../session";
 import { ET, weekdayDate, writtenDate, zoneName } from "../shared/times";
 import { compactWords, nearest, strikeName } from "../strip";
@@ -179,11 +179,7 @@ export function plainView(input: PlainInput): PlainView {
         row({ kind: "holding", holding: p.holding, rules: p.rules, legRules: p.legRules }),
         ...subRules(p).map((e) => row({ kind: "rule", entry: e, nested: true })),
       ]),
-      // each rule once (2026-11-17): a leg rule met under a second spread is not written again
-      ...[...g.spreads, ...g.contracts].flatMap(({ entry, under, overlap, elsewhere }) => [
-        row({ kind: "rule", entry, nested: false, overlap }),
-        ...drawnUnder(under, elsewhere).map((e) => row({ kind: "rule", entry: e, nested: true })),
-      ]),
+      ...[...g.spreads, ...g.contracts].map(({ entry, overlap }) => row({ kind: "rule", entry, nested: false, overlap })),
     ],
   }));
   const trailing: PlainGroup[] = [];
