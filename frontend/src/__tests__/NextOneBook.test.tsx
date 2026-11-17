@@ -107,6 +107,8 @@ describe("1–2. two sections (2026-11-17): Spreads, then Contracts, each by exp
     expect(screen.getByRole("region", { name: "Contracts" })).toBeTruthy();
     // no quiet label any more: the section's heading says it
     expect(document.querySelectorAll("[data-sub]")).toHaveLength(0);
+    // the first column names a spread and a contract alike, so it is "name", not "spread"
+    expect(document.querySelector('.nxd-head [data-col="name"]')!.textContent).toBe("name");
   });
 
   it("on the phone, each holding's rules inside its card", () => {

@@ -221,7 +221,7 @@ export function chipWords(row: DeskRow, session: boolean): string | null {
 const holdingOnly = (f: (h: Holding, rules: Entry[], privacy: boolean) => string) =>
   (row: DeskRow, privacy: boolean) => (row.kind === "holding" ? f(row.holding, row.rules, privacy) : "");
 
-const NAME: DeskColumn = { key: "name", label: "spread", align: "left", text: (r) => rowName(r) };
+const NAME: DeskColumn = { key: "name", label: "name", align: "left", text: (r) => rowName(r) };
 
 const LEGS: DeskColumn = {
   key: "legs", label: "legs", align: "left",
