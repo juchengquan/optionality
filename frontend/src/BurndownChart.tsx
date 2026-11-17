@@ -124,7 +124,7 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
   const xs = cross.stops.map((s) => x(s.dte));
   const { svg: hands, onKeyDown, onFocus } = usePanel(cross, "burndown", box, xs, W);
 
-  const level = (kind: "target" | "stop" | "entry", v: number) => `${kind} ${say(v, unit)}`;
+  const level = (kind: "target" | "stop" | "entry", v: number) => `${kind} ${say(v)}`;
   const stop = axis.stop;
   const target = levels?.target ?? null;
   // Manage-by is named on the bottom line between the window's two ends, and never over either:
@@ -237,7 +237,7 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
           {threshold === null ? null : (
             <g data-level="threshold" className="nx-hist-threshold">
               <line x1={L} x2={W - R} y1={y(threshold)} y2={y(threshold)} />
-              <text x={W - R} y={y(threshold) - 4} textAnchor="end">{`threshold ${say(threshold, unit)}`}</text>
+              <text x={W - R} y={y(threshold) - 4} textAnchor="end">{`threshold ${say(threshold)}`}</text>
             </g>
           )}
           {enteredDte === null || enteredDte < 0 || enteredDte > span ? null : (

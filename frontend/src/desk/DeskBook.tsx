@@ -545,7 +545,7 @@ function Inspector({ id, row, session, privacy, partners, onSelect, onClose, quo
         {row.kind === "holding" ? <HoldingDetail row={row} session={session && !stale} privacy={privacy} partners={partners}
                                                  onSelect={onSelect} quotes={quotes} monitors={monitors} writes={writes} />
           : row.kind === "rule" ? <RuleDetail entry={row.entry} overlap={row.overlap ?? null}
-                                              session={session} privacy={privacy} />
+                                              session={session} />
             : <QuarantinedDetail row={row} />}
       </DetailBoundary>
     </aside>
@@ -581,12 +581,12 @@ function InspectorStrip({ holding, partner }: { holding: Holding; partner: Holdi
   return strip ? <StrikeStrip strip={strip} /> : null;
 }
 
-function RuleDetail({ entry, overlap, session, privacy }: {
-  entry: Entry; overlap: string | null; session: boolean; privacy: boolean;
+function RuleDetail({ entry, overlap, session }: {
+  entry: Entry; overlap: string | null; session: boolean;
 }) {
   return (
     <RuleSections surface="desk" entry={entry} overlap={overlap}
-                  privacy={privacy} session={session}
+                  session={session}
                   ruleLine={(e, own) => <RuleItem key={e.id} entry={e} own={own} />} />
   );
 }

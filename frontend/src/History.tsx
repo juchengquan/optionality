@@ -19,9 +19,9 @@
  *    tooltip and in the status line beneath the chart (`BurndownChart.tsx`, #360). A row written before
  *    observation times were kept is drawn faint: nothing says whether it was the close, so it is
  *    claimed neither way.
- *  - **Privacy** keeps the shape and drops every $ figure and everything across the contracts held:
- *    the burndown says points per contract instead (#395). The IV chart is in %, which privacy
- *    keeps.
+ *  - **Points per contract**, the spread's own value, never money or anything across the contracts
+ *    held (the owner, 2026-11-17) — so privacy, which hid exactly those (#395), changes nothing here.
+ *    The IV chart is in %.
  *
  *  Both are drawn on visx at their measured width — the burndown (`BurndownChart.tsx`, #360) and the
  *  IV chart here — and share ONE crosshair (`Crosshair.tsx`): hovering, tapping or stepping a day in
@@ -39,7 +39,7 @@ import { LinePath } from "@visx/shape";
 import { fetchSamples, fetchWatchSamples, type Entry, type Holding, type Samples } from "./shared/api";
 import { heldLeg, legText } from "./shared/format";
 import { Leg, SvgLeg } from "./shared/Legs";
-import { hasCost, scopeWords, textWidth, valueAxis, type Unit } from "./burndown";
+import { hasCost, SCOPE_WORDS, textWidth, valueAxis, type Unit } from "./burndown";
 import { Burndown, runsOf, useWidth } from "./BurndownChart";
 import { CrossTip, dayScale, liveOf, pointedStop, stepped, usePanel, type Cross, type Gutters, type Panel } from "./Crosshair";
 import { ivLines, ivWords, MARK, nowDte, stopsOf, type IvLeg } from "./historyDays";
@@ -90,7 +90,7 @@ function isSamples(body: unknown): boolean {
 
 /** What the charts draw a holding from: its legs and its count, and — only while it is held and
  *  valued — today's figures. A closed holding (#296) is drawn from `GET /positions`, which carries
- *  none of them: no contract size, so its money is points per contract, and no "now". A watched row
+ *  none of them: no contract size, and no "now". A watched row
  *  (#402) is drawn as a holding of one, with no valuation (`watchedCharted`). */
 export type Charted = Pick<Holding, "id" | "contracts" | "legs" | "strike_date" | "closed_on">
   & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "valued_from" | "entry">>;
@@ -119,12 +119,10 @@ function useCross(id: string, served: Samples | undefined, holding: Charted): Cr
   };
 }
 
-export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy: boolean }) {
+export function HoldingHistory({ holding }: { holding: Charted }) {
   const state = useAnswer(holding.id, fetchSamples, askedFor(holding));
-  const size = holding.contract_size ?? null;
-  const unit: Unit = {
-    size: size ?? 1, contracts: holding.contracts, money: size !== null, hidden: privacy,
-  };
+  // the spread's own value, per contract, as the inspector says its Entry (2026-11-17)
+  const unit: Unit = {};
   // the days its contracts were watched before it was entered, drawn first and faint (#402)
   const served = state?.samples ? withBeforeEntry(state.samples) : undefined;
   const blank: React.ReactNode = state?.error !== undefined
@@ -137,7 +135,7 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
         : "no daily samples for this trade: it closed before its first sample, or its close was backdated before all of them")
         : null;
   return (
-    <HistoryPanels id={holding.id} holding={holding} served={served} blank={blank} unit={unit} privacy={privacy}
+    <HistoryPanels id={holding.id} holding={holding} served={served} blank={blank} unit={unit}
                    entry={holding.entry ?? null}
                    title="Burndown" noCost="no day with a Cost to close yet: each was recorded out of hours, with no two-sided quote to price it" />
   );
@@ -147,10 +145,10 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
  *  IV — the holding's two panels and their crosshair, from the watch
  *  history of the contracts it watches (`/monitors/{id}/samples`). In points per contract: a watched
  *  row has no count and no money of its own. */
-export function WatchedHistory({ entry, privacy }: { entry: Entry; privacy: boolean }) {
+export function WatchedHistory({ entry }: { entry: Entry }) {
   const state = useAnswer(entry.id, fetchWatchSamples);
   const holding = watchedCharted(entry);
-  const unit: Unit = { size: 1, contracts: 1, money: false, hidden: privacy, what: "value" };
+  const unit: Unit = { what: "value" };
   const served = state?.samples ? watchedSamples(state.samples) : undefined;
   const threshold = state?.samples ? thresholdOf(state.samples) : null;
   const blank: React.ReactNode = state?.error !== undefined
@@ -160,7 +158,7 @@ export function WatchedHistory({ entry, privacy }: { entry: Entry; privacy: bool
         ? "no daily closes recorded yet: the sweep writes one a day while it is watched"
         : null;
   return (
-    <HistoryPanels id={entry.id} holding={holding} served={served} blank={blank} unit={unit} privacy={privacy}
+    <HistoryPanels id={entry.id} holding={holding} served={served} blank={blank} unit={unit}
                    threshold={threshold}
                    title={threshold === null ? "Value" : "Value against the threshold"}
                    noCost="no day with a price yet: each was recorded out of hours, with no two-sided quote to price it" />
@@ -169,8 +167,8 @@ export function WatchedHistory({ entry, privacy }: { entry: Entry; privacy: bool
 
 /** The two panels of a history — the value by day and each leg's IV — on one DTE axis with one
  *  crosshair, for a holding or a watched row. */
-function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCost, threshold = null, entry = null }: {
-  id: string; holding: Charted; served: Samples | undefined; blank: React.ReactNode; unit: Unit; privacy: boolean;
+function HistoryPanels({ id, holding, served, blank, unit, title, noCost, threshold = null, entry = null }: {
+  id: string; holding: Charted; served: Samples | undefined; blank: React.ReactNode; unit: Unit;
   title: string; noCost: string; threshold?: number | null;
   /** a holding's Entry, per contract, drawn across the burndown (2026-11-17); null for a watched row */
   entry?: number | null;
@@ -178,7 +176,7 @@ function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCos
   const cross = useCross(id, served, holding);
   const before = served ? beforeEntryDays(served) : new Set<string>();
   // one pair of margins for both charts, so a DTE is at the same x in each (#298)
-  const axis = blank !== null || !served ? null : valueAxis(served, holding, unit,
+  const axis = blank !== null || !served ? null : valueAxis(served, holding,
     [...(threshold === null ? [] : [threshold]), ...(entry === null ? [] : [entry])]);
   const gutters: Gutters | null = axis === null || !served ? null : (() => {
     const iv = ivAxis(served, holding);
@@ -194,7 +192,7 @@ function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCos
       <section className="nx-hist" role="group" aria-label={title === "Burndown" ? "burndown" : title.toLowerCase()}>
         <h4 className="nx-hist-h">
           {title}
-          <span className="nx-hist-unit">{`${unit.money && !privacy ? "$" : "points"} ${unit.what ?? "to close"}, ${scopeWords(unit)}`}</span>
+          <span className="nx-hist-unit">{`points ${unit.what ?? "to close"}, ${SCOPE_WORDS}`}</span>
         </h4>
         {blank !== null || !served ? <div className="nx-meta">{blank}</div>
           : (

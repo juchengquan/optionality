@@ -50,7 +50,7 @@ describe("a watched spread's history at the desk's widths", () => {
       await page.viewport(width + 40, 1400);
       serve();
       const entry = QUOTES.find((q) => q.id === "w-dec18")!;
-      render(<div className="nx" style={{ width, padding: 0 }}><WatchedHistory entry={entry} privacy={false} /></div>);
+      render(<div className="nx" style={{ width, padding: 0 }}><WatchedHistory entry={entry} /></div>);
       const panels = await panelsOf();
       aligned(panels);
       const bd = panels[0]!;
@@ -73,7 +73,7 @@ describe("a holding's days before entry at the desk's widths", () => {
       await page.viewport(width + 40, 1400);
       serve(watchedFirst(SAMPLES["h-calls"]!));
       const holding = HOLDINGS.find((h) => h.id === "h-calls")! as Holding;
-      render(<div className="nx" style={{ width, padding: 0 }}><HoldingHistory holding={holding} privacy={false} /></div>);
+      render(<div className="nx" style={{ width, padding: 0 }}><HoldingHistory holding={holding} /></div>);
       const panels = await panelsOf();
       aligned(panels);
       const bd = panels[0]!;

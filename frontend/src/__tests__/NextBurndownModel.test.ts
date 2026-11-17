@@ -1,6 +1,6 @@
 /** The burndown's arithmetic and words (#360), with no chart drawn: which day a pointer means, which
  *  day a key moves to, the value axis and where it puts a Stop it does not reach, where the tooltip
- *  goes, and what the tooltip and the status line say — with privacy on and off. What is DRAWN
+ *  goes, and what the tooltip and the status line say — in points per contract. What is DRAWN
  *  from these is `NextHistory.test.tsx`'s, and that it fits is the browser suite's. */
 import { describe, expect, it } from "vitest";
 
@@ -10,9 +10,8 @@ import {
   type PricedSample, type Unit,
 } from "../burndown";
 
-const money: Unit = { size: 100, contracts: 2, money: true, hidden: false };
-const points: Unit = { size: 1, contracts: 2, money: false, hidden: false };
-const hidden: Unit = { ...money, hidden: true };
+// every burndown is said in points per contract, the spread's own value (2026-11-17): never money
+const points: Unit = {};
 
 const day = (over: Partial<PricedSample> = {}): PricedSample => ({
   observed_on: "2026-11-03", dte: 45, cost_to_close: 2.3, on_pace: 2.02, timing: "close",
@@ -76,7 +75,7 @@ describe("which day a key moves to", () => {
 
 describe("the value axis", () => {
   it("fits the days, the plan and the Target, and leaves a Stop beyond them off the scale, marked", () => {
-    const axis = valueAxis(served([2.1, 1.9, 1.7]), held, money);
+    const axis = valueAxis(served([2.1, 1.9, 1.7]), held);
     // the costs and the plan run 0 to 2.1: the Stop at 4 would have put them in the bottom half
     expect(axis.hi).toBeLessThan(4);
     expect(axis.hi).toBeGreaterThanOrEqual(2.1);
@@ -85,7 +84,7 @@ describe("the value axis", () => {
   });
 
   it("draws a Stop the days reach on the scale", () => {
-    const axis = valueAxis(served([2.1, 3.2, 4.4]), held, money);
+    const axis = valueAxis(served([2.1, 3.2, 4.4]), held);
     expect(axis.hi).toBeGreaterThanOrEqual(4.4);
     expect(axis.stop).toEqual({ value: 4, off: null });
   });
@@ -94,17 +93,17 @@ describe("the value axis", () => {
     const flat = served([0, 0], null);
     flat.levels = { ...flat.levels!, target: null };
     flat.plan = flat.plan.map((p) => ({ ...p, on_pace: 0 }));
-    const axis = valueAxis(flat, held, money);
+    const axis = valueAxis(flat, held);
     expect(axis.hi).toBeGreaterThan(axis.lo);
     expect(axis.ticks.length).toBeGreaterThan(1);
   });
 
   it("has no Stop to mark when there is none", () => {
-    expect(valueAxis(served([2.1], null), held, money).stop).toBeNull();
+    expect(valueAxis(served([2.1], null), held).stop).toBeNull();
   });
 
   it("names every tick once, from the bottom of the scale to its top, and includes today", () => {
-    const axis = valueAxis(served([2.1, 1.9]), { closed_on: null, cost_to_close: 2.6, dte: 43 }, money);
+    const axis = valueAxis(served([2.1, 1.9]), { closed_on: null, cost_to_close: 2.6, dte: 43 });
     expect(axis.hi).toBeGreaterThanOrEqual(2.6);
     expect(new Set(axis.ticks).size).toBe(axis.ticks.length);
     expect(axis.ticks[0]).toBe(axis.lo);
@@ -112,20 +111,15 @@ describe("the value axis", () => {
     expect(axis.now).toEqual({ dte: 43, cost: 2.6 });
   });
 
-  it("takes a gutter as wide as its widest label, in points per contract under privacy", () => {
-    const shown = valueAxis(served([2.1, 1.9]), held, money);
-    expect(shown.labels).toContain("$0");
-    expect(shown.L).toBeGreaterThan(Math.max(...shown.labels.map((l) => l.length)) * 6);
-    // the owner's call: privacy hides dollars and the count, never the per-contract points (#395)
-    const pts = valueAxis(served([2.1, 1.9]), held, hidden);
-    expect(pts.labels).toEqual(valueAxis(served([2.1, 1.9]), held, { ...points, contracts: 2 }).labels);
-    expect(pts.labels.join(" ")).not.toMatch(/\$/);
-    expect(pts.ticks).toEqual(shown.ticks);
+  it("takes a gutter as wide as its widest label", () => {
+    const pts = valueAxis(served([2.1, 1.9]), held);
     expect(pts.L).toBeGreaterThan(Math.max(...pts.labels.map((l) => l.length)) * 6);
   });
 
-  it("says points without money: a tick is the figure itself", () => {
-    expect(valueAxis(served([2.1, 1.9]), held, points).labels).toContain("0.5");
+  it("says points, never money: a tick is the figure itself", () => {
+    const labels = valueAxis(served([2.1, 1.9]), held).labels;
+    expect(labels).toContain("0.5");
+    expect(labels.join(" ")).not.toMatch(/\$/);
   });
 });
 
@@ -161,61 +155,47 @@ describe("where the tooltip goes", () => {
 });
 
 describe("what a day says", () => {
-  it("in the tooltip: the day, money across the contracts, on pace, the gap and why it is off-close", () => {
-    const lines = tipLines(day({ timing: "after-close", observed_at: "2026-11-04 09:30:00+08:00" }), money);
+  it("in the tooltip: the day, points per contract, on pace, the gap and why it is off-close", () => {
+    const lines = tipLines(day({ timing: "after-close", observed_at: "2026-11-04 09:30:00+08:00" }), points);
     expect(lines.day).toBe("20261103 · 45 DTE");
-    expect(lines.cost).toBe("to close, 2 contracts: $460");
-    expect(lines.pace).toBe("on pace $404");
+    expect(lines.cost).toBe("to close: 2.30");
+    expect(lines.pace).toBe("on pace 2.02");
     // the gap in points, as every Pace gap on the page is said: 2.30 against 2.02
     expect(lines.gap).toEqual({ words: "behind by 0.28", outcome: "loss" });
     expect(lines.why).toBe("not the close: 20:30 ET, after the 16:15 ET close");
   });
 
-  it("in points per contract without a contract size, and nothing about the close for a close", () => {
+  it("nothing about the close for a close", () => {
     const lines = tipLines(day({ cost_to_close: 1.5, on_pace: 1.8 }), points);
-    expect(lines.cost).toBe("to close, per contract: 1.50 pts");
-    expect(lines.pace).toBe("on pace 1.80 pts");
+    expect(lines.cost).toBe("to close: 1.50");
+    expect(lines.pace).toBe("on pace 1.80");
     expect(lines.gap).toEqual({ words: "ahead by 0.30", outcome: "gain" });
     expect(lines.why).toBeNull();
   });
 
-  it("no money and nothing across the contracts under privacy: points per contract, and the gap", () => {
-    // 2.30 per contract, held twice over at a size of 100: never $460, and never 4.60
-    const lines = tipLines(day(), hidden);
-    expect(lines.cost).toBe("to close, per contract: 2.30 pts");
-    expect(lines.pace).toBe("on pace 2.02 pts");
-    expect(lines.gap?.words).toBe("behind by 0.28");
-    expect(sampleWords(day(), hidden))
-      .toBe("20261103 · 45 DTE · to close, per contract: 2.30 pts · on pace 2.02 pts · behind by 0.28"
-        + " — in hours (observed 16:00 ET)");
-  });
-
   it("no pace and no gap for a day with no plan", () => {
-    const lines = tipLines(day({ on_pace: null }), money);
+    const lines = tipLines(day({ on_pace: null }), points);
     expect(lines.pace).toBeNull();
     expect(lines.gap).toBeNull();
   });
 
   it("before the open, and before times were kept", () => {
-    expect(tipLines(day({ timing: "before-open", observed_at: "2026-11-04 13:05:00+08:00" }), money).why)
+    expect(tipLines(day({ timing: "before-open", observed_at: "2026-11-04 13:05:00+08:00" }), points).why)
       .toBe("not the close: 00:05 ET, before the 09:30 ET open");
-    expect(tipLines(day({ timing: "unrecorded", observed_at: null }), money).why)
+    expect(tipLines(day({ timing: "unrecorded", observed_at: null }), points).why)
       .toBe("not timed: whether it was the close is not known");
   });
 
   it("in the status line, everything the tooltip says and the whole reason", () => {
-    expect(sampleWords(day(), money))
-      .toBe("20261103 · 45 DTE · to close, 2 contracts: $460 · on pace $404 · behind by 0.28"
+    expect(sampleWords(day(), points))
+      .toBe("20261103 · 45 DTE · to close: 2.30 · on pace 2.02 · behind by 0.28"
         + " — in hours (observed 16:00 ET)");
   });
 });
 
 describe("what today's valuation says", () => {
-  it("its DTE and its cost to close, in the chart's money, or per contract in points under privacy", () => {
-    const now = { dte: 38, cost: 4.4 };
-    expect(nowLines(now, money)).toEqual({ day: "valued now · 38 DTE", cost: "to close, 2 contracts: $880" });
-    expect(nowLines(now, points).cost).toBe("to close, per contract: 4.40 pts");
-    expect(nowLines(now, hidden)).toEqual({ day: "valued now · 38 DTE", cost: "to close, per contract: 4.40 pts" });
+  it("its DTE and its cost to close, per contract in points", () => {
+    expect(nowLines({ dte: 38, cost: 4.4 }, points)).toEqual({ day: "valued now · 38 DTE", cost: "to close: 4.40" });
   });
 });
 
@@ -223,15 +203,15 @@ describe("a day summed before a leg's quantity was corrected (#359)", () => {
   const before = day({ before_correction: true });
 
   it("says so in the tooltip, and measures no gap from it: its Cost to close is another structure's", () => {
-    const lines = tipLines(before, money);
+    const lines = tipLines(before, points);
     expect(lines.corrected).toBe("summed before a leg's quantity was corrected");
     expect(lines.gap).toBeNull();
-    expect(tipLines(day(), money).corrected).toBeNull();
+    expect(tipLines(day(), points).corrected).toBeNull();
   });
 
   it("says so in the status line", () => {
-    expect(sampleWords(before, money))
-      .toBe("20261103 · 45 DTE · to close, 2 contracts: $460 · on pace $404"
+    expect(sampleWords(before, points))
+      .toBe("20261103 · 45 DTE · to close: 2.30 · on pace 2.02"
         + " — in hours (observed 16:00 ET) — summed before a leg's quantity was corrected");
   });
 

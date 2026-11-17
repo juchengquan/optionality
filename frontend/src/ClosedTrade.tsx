@@ -79,7 +79,7 @@ export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, 
           : madeSaid ? "A closed holding has no quote to give it a dollar size."
             : "Points, Entry less Exit across the contracts held: a closed holding has no quote to give it a dollar size."}
       </p>
-      <HoldingHistory key={`${trade.id}:${trade.closed_on}`} holding={trade} privacy={privacy} />
+      <HoldingHistory key={`${trade.id}:${trade.closed_on}`} holding={trade} />
       <Correction key={trade.id} id={trade.id} name={trade.name} closedOn={trade.closed_on} exit={trade.exit}
                   onSaved={onCorrected} />
       <DeleteTrade key={`delete-${trade.id}`} trade={trade} onDeleted={() => onDeleted(trade.id)} />

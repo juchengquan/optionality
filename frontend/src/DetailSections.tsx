@@ -160,19 +160,18 @@ export function HoldingSections({
     ) : null,
     // open from the start outside the session and shut in it (#372, #374): read when the detail
     // opens, which is keyed by the holding, so the session decides how the NEXT one opens
-    history: <HistoryOnDemand holding={holding} privacy={privacy} defaultOpen={!session} />,
+    history: <HistoryOnDemand holding={holding} defaultOpen={!session} />,
   };
   return <>{inOrder(HOLDING_SECTIONS, drawn)}</>;
 }
 
 export function RuleSections({
-  surface, entry, overlap, privacy, session, ruleLine,
+  surface, entry, overlap, session, ruleLine,
 }: {
   surface: Surface;
   entry: Entry;
   /** what a watchlist spread shares with a holding it partly overlaps (#346) */
   overlap: string | null;
-  privacy: boolean;
   session: boolean;
   ruleLine: (e: Entry, own: boolean) => ReactNode;
 }) {
@@ -212,7 +211,7 @@ export function RuleSections({
       </>
     ),
     // a watched row's daily closes (#402), opened as a holding's history is (#372)
-    history: watched ? <HistoryOnDemand watched={entry} privacy={privacy} defaultOpen={!session} /> : null,
+    history: watched ? <HistoryOnDemand watched={entry} defaultOpen={!session} /> : null,
   };
   return <>{inOrder(RULE_SECTIONS, drawn)}</>;
 }
