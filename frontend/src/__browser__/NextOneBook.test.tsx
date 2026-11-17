@@ -49,7 +49,7 @@ describe.each([900, 1024, 1280, 1440])("at %ipx", (width) => {
       for (const h of parts) expect(placed(h, table()), h.textContent!).toBeNull();
       // one heading per expiry in each section
       expect([...document.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent!.slice(0, 8)))
-        .toEqual(["20261204", "20261218", "20261231", "20261231"]);
+        .toEqual(["20261204", "20261218", "20261231", "20261218", "20261231"]);
     });
   }
 });

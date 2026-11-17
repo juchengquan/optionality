@@ -242,9 +242,9 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   it("is found where the table draws it, in the watchlist after the holdings, and jumps there", () => {
     // in the table's order: Spreads, then Contracts, where the holding of one call is (2026-11-17)
     expect(refs(found)).toEqual([
-      "h-8050", "r-8050-delta", "h-ic", "r-ic-calls", "h-7200",
+      "h-8050", "h-ic", "r-ic-calls", "h-7200",
       "r-8100", "w-8150-delta", "w-7700", "r-ratio",
-      "h-7700",
+      "h-7700", "r-8050-delta",
     ]);
   });
 

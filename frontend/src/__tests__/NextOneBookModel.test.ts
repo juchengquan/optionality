@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ownRule, placeBook } from "../placement";
-import { entry, holding, HOLDINGS, MONITORS, QUOTES, side } from "../testing/ownerBook";
+import { call, entry, holding, HOLDINGS, MONITORS, QUOTES, side } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 const ids = <T extends { id: string }>(rows: readonly T[]) => rows.map((r) => r.id);
@@ -74,6 +74,55 @@ describe("the book in two sections (the owner, 2026-11-17)", () => {
   });
 });
 
+describe("a single-contract rule on a leg of a held spread (the owner, 2026-11-17)", () => {
+  // the held call spread's short leg, its delta watched: a leg of h-calls, and of the watched
+  // 1218_P7150 too, as a held leg can be when a candidate spread shares it
+  const legRule = entry("r-calls-delta", {
+    code: "US.SPXW261218C7300000", strike_date: "2026-12-18", option_type: "CALL",
+    field: "option_delta", threshold: 0.3, watched: 0.33, distance: -0.03, held: true, scope: "leg",
+    positions: [{ id: "h-calls", name: "1218_C7300" }], in_combos: ["r-calls", "w-dec18"],
+    quote: { name: "SPXW 261218 7300.00C", option_delta: 0.33 },
+  });
+  const quotes = [...QUOTES, legRule];
+  const { sections, book } = placeBook(quotes, HOLDINGS, MONITORS);
+  const contracts = sections.find((x) => x.kind === "contracts")!;
+
+  it("is a row of its own in Contracts, at its expiry, not a rule under the holding", () => {
+    const calls = book.flatMap((g) => g.held.flat()).find((p) => p.holding.id === "h-calls")!;
+    expect(ids(calls.rules)).toEqual(["r-calls"]);
+    expect(contracts.expiries.map((g) => g.expiry)).toEqual(["2026-12-18", "2026-12-31"]);
+    expect(contracts.expiries[0]!.contracts.map((i) => [i.entry.id, i.under])).toEqual([["r-calls-delta", []]]);
+  });
+
+  it("sits under no watched spread it is also a leg of", () => {
+    const spreads = sections.find((x) => x.kind === "spreads")!;
+    expect(spreads.expiries.flatMap((g) => g.spreads.flatMap((i) => ids(i.under)))).toEqual(["w-dec18-delta"]);
+  });
+
+  it("comes before the watched contracts of its expiry: the held rows first", () => {
+    const lone = entry("w-lone-dec18", {
+      code: "US.SPXW261218C8000000", strike_date: "2026-12-18", option_type: "CALL", field: "option_delta",
+      quote: { name: "SPXW 261218 8000.00C", option_delta: 0.04 },
+    });
+    const b = placeBook([...QUOTES, lone, legRule], HOLDINGS, MONITORS);
+    const dec18 = b.sections.find((x) => x.kind === "contracts")!.expiries[0]!;
+    expect(dec18.contracts.map((i) => i.entry.id)).toEqual(["r-calls-delta", "w-lone-dec18"]);
+  });
+
+  it("stays under a holding of one contract, which is itself in Contracts", () => {
+    const one = holding("h-7300", { name: "1218_C7300s", strike_date: "2026-12-18", legs: [side("short", "CALL", 7300)] });
+    const onOne = { ...legRule, positions: [{ id: "h-7300", name: "1218_C7300s" }] };
+    const b = placeBook([...QUOTES, onOne], [...HOLDINGS, one], MONITORS);
+    const placed = b.book.flatMap((g) => g.held.flat()).find((p) => p.holding.id === "h-7300")!;
+    expect(ids(placed.rules)).toContain("r-calls-delta");
+    expect(b.book.flatMap((g) => g.contracts.map((i) => i.entry.id))).not.toContain("r-calls-delta");
+  });
+
+  it("is unplaced, as before, while the holdings are not valued", () => {
+    expect(ids(placeBook(quotes, null, MONITORS).unplaced)).toContain("r-calls-delta");
+  });
+});
+
 describe("a holding's own rule", () => {
   const to = (id: string, name: string) => [{ id, name }];
 
@@ -91,10 +140,10 @@ describe("a holding's own rule", () => {
   });
 
   it("is first even where a second rule arrived before it", () => {
+    // the spread's delta, over all of it: a rule under it, though it arrived first
     const second = entry("r-calls-delta", {
-      code: "US.SPXW261218C7300000", strike_date: "2026-12-18", option_type: "CALL", field: "option_delta",
-      threshold: 0.3, held: true, scope: "leg", positions: to("h-calls", "1218_C7300"),
-      quote: { name: "SPXW 261218 7300.00C", option_delta: 0.33 },
+      code: "1218_C7300 delta", strike_date: "2026-12-18", legs: call(7300, 7350), field: "option_delta",
+      threshold: 0.3, held: true, scope: "all", positions: to("h-calls", "1218_C7300"),
     });
     const { book } = placeBook([second, ...QUOTES], HOLDINGS, MONITORS);
     expect(ids(book[1]!.held[0]![0]!.rules)).toEqual(["r-calls", "r-calls-delta"]);
@@ -130,7 +179,9 @@ describe("a holding's own rule", () => {
     const held = book.flatMap((g) => g.held.flat());
     const h8050 = held.find((p) => p.holding.id === "h-8050")!;
     expect(ownRule(h8050.holding, h8050.rules)?.id).toBe("r-8050");
-    expect(ids(h8050.rules)).toEqual(["r-8050", "r-8050-delta"]);
+    // the delta on its short leg is a contract row of its own (2026-11-17), not one of its rules
+    expect(ids(h8050.rules)).toEqual(["r-8050"]);
+    expect(book.flatMap((g) => g.contracts.map((i) => i.entry.id))).toContain("r-8050-delta");
     const h7700 = held.find((p) => p.holding.id === "h-7700")!;
     expect(ownRule(h7700.holding, h7700.rules)?.id).toBe("r-7700");
     // a wing of a held condor watches part of it (scope leg): a rule under it
@@ -139,7 +190,7 @@ describe("a holding's own rule", () => {
   });
 });
 
-describe("a contract rule on a held leg, as the service serves it", () => {
+describe("a contract rule on a held leg, as the service serves it (in Contracts since 2026-11-17)", () => {
   // held, linked to the holding with scope leg (`holdsAnyOf`, `adoptOrphanMonitors`)
   const onLeg = entry("r-p6400", {
     code: "US.SPXW261218P6400000", strike_date: "2026-12-18", option_type: "PUT", field: "option_delta",
@@ -147,17 +198,19 @@ describe("a contract rule on a held leg, as the service serves it", () => {
     quote: { name: "SPXW 261218 6400.00P", option_delta: -0.21 },
   });
 
-  it("sits under its holding", () => {
-    const { book } = placeBook([...QUOTES, onLeg], HOLDINGS, MONITORS);
-    expect(ids(book[1]!.held[0]![1]!.rules)).toEqual(["r-p6400"]);
-    expect(book[1]!.contracts).toEqual([]);
+  const contractsOf = (b: ReturnType<typeof placeBook>) => b.book.flatMap((g) => g.contracts.map((i) => i.entry.id));
+
+  it("is a contract row of its own, not a rule under its holding", () => {
+    const b = placeBook([...QUOTES, onLeg], HOLDINGS, MONITORS);
+    expect(ids(b.book[1]!.held[0]![1]!.rules)).toEqual([]);
+    expect(contractsOf(b)).toEqual(["r-p6400", "w-lone"]);
   });
 
-  it("sits under its holding though a watched spread names that leg too", () => {
+  it("is a contract row though a watched spread names that leg too, and not under it", () => {
     const both = { ...onLeg, in_combos: ["w-dec18"] };
-    const { book } = placeBook([...QUOTES, both], HOLDINGS, MONITORS);
-    expect(ids(book[1]!.held[0]![1]!.rules)).toEqual(["r-p6400"]);
-    expect(ids(book[1]!.spreads[0]!.under)).toEqual(["w-dec18-delta"]);
+    const b = placeBook([...QUOTES, both], HOLDINGS, MONITORS);
+    expect(contractsOf(b)).toContain("r-p6400");
+    expect(ids(b.book[1]!.spreads[0]!.under)).toEqual(["w-dec18-delta"]);
   });
 
   it("is a rule on held contracts while the holdings are not valued", () => {

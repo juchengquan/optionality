@@ -20,7 +20,7 @@ describe("under the iPhone profile", () => {
     expect(document.documentElement.clientWidth).toBe(390);
     expect(overflowsSideways()).toBe(false);
     expect([...document.querySelectorAll(".nxp-expiry h3")].map((h) => h.textContent!.slice(0, 8)))
-      .toEqual(["20261204", "20261218", "20261231", "20261231"]);
+      .toEqual(["20261204", "20261218", "20261231", "20261218", "20261231"]);
     const tags = [...document.querySelectorAll("article [data-held]")];
     expect(tags).toHaveLength(3);
     for (const tag of tags) {

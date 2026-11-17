@@ -180,8 +180,8 @@ describe("what each row says", () => {
     expect(cellText("h-calls", "delta")).toBe("0.214");
     // the position's own greeks are a signed sum over its legs, not the short leg's delta
     expect(cellText("h-puts", "delta")).toBe("—");
-    // and the leg rule sits under its holding
-    expect(row("h-calls").closest("li")!.contains(row("r-leg"))).toBe(true);
+    // and the leg rule is a contract row of its own, not under its holding (2026-11-17)
+    expect(row("h-calls").closest("li")!.contains(row("r-leg"))).toBe(false);
   });
 
   it("gives a 4-leg holding the larger of its two short legs' deltas, in size", () => {
@@ -691,16 +691,18 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     render(<DeskBook {...overlap()} />);
     // Spreads: the held spreads first, each with the rules under it but its own value rule, on its
     // row; then the watched spreads, the three that name a contract no holding holds among them.
-    // Contracts: 1231_7700, a holding of one call (2026-11-17), its own mid rule its row's
+    // Contracts: 1231_7700, a holding of one call (2026-11-17), its own mid rule its row's; then the
+    // delta on 1231_8050's short leg, a contract row of its own (2026-11-17)
     expect(order()).toEqual([
-      "h-8050", "r-8050-delta", "h-ic", "r-ic-calls", "h-7200",
+      "h-8050", "h-ic", "r-ic-calls", "h-7200",
       "r-8100", "w-8150-delta", "w-7700", "r-ratio",
-      "h-7700",
+      "h-7700", "r-8050-delta",
     ]);
     // each names a contract its holding does not hold: C8150, C7750, a second C7250
     for (const id of ["r-8100", "w-7700", "r-ratio"]) expect(row(id).dataset.nested).toBeUndefined();
-    // a single contract on its leg, and a wing of a held condor, under the holding
-    expect(row("h-8050").closest("li")!.contains(row("r-8050-delta"))).toBe(true);
+    // a wing of a held condor under the holding; a single contract on its leg a row of its own
+    // in Contracts (2026-11-17)
+    expect(row("h-8050").closest("li")!.contains(row("r-8050-delta"))).toBe(false);
     expect(row("h-ic").closest("li")!.contains(row("r-ic-calls"))).toBe(true);
     // what each shares is said in its inspector, not under its row (the owner, 2026-11-17)
     for (const id of ["r-8100", "w-7700", "r-ratio", "r-ic-calls"]) expect(note(id), id).toBeNull();
@@ -740,7 +742,8 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     fireEvent.click(within(row("h-8050")).getByRole("button", { name: "1231_8050 held" }));
     const insp = screen.getByRole("complementary", { name: "inspector: 1231_8050" });
     const monitors = within(insp).getByRole("heading", { name: "Rules" }).parentElement!;
-    expect(monitors.querySelectorAll(".nxd-monitor")).toHaveLength(2);
+    // its own value rule alone: the delta on its short leg is a contract row (2026-11-17)
+    expect(monitors.querySelectorAll(".nxd-monitor")).toHaveLength(1);
     expect(monitors.textContent).not.toContain("now −0.60");
   });
 });

@@ -84,14 +84,15 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   const items = () => book.watchlist.flatMap((g) => g.items);
 
   it("is drawn in the watchlist when it names a contract its holdings do not hold", () => {
-    expect(under("h-8050")).toEqual(["r-8050", "r-8050-delta"]);
-    expect(items().map((i) => i.entry.id)).toEqual(["r-8100", "w-7700", "r-ratio"]);
+    expect(under("h-8050")).toEqual(["r-8050"]);
+    // the delta on its short leg is a contract row of its own (2026-11-17), its expiry's held one first
+    expect(items().map((i) => i.entry.id)).toEqual(["r-8050-delta", "r-8100", "w-7700", "r-ratio"]);
   });
 
   it("keeps under the holding every rule on nothing but what it holds", () => {
-    // its own value rule, and a single contract on its short leg
+    // its own value rule; a single contract on its short leg is a contract row since 2026-11-17
     expect(under("h-8050")).toContain("r-8050");
-    expect(under("h-8050")).toContain("r-8050-delta");
+    expect(under("h-8050")).not.toContain("r-8050-delta");
     expect(under("h-7700")).toEqual(["r-7700"]);
     // a wing of a held condor watches risk on something held: scope leg, and it stays
     expect(under("h-ic")).toEqual(["r-ic-calls"]);

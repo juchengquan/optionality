@@ -1189,6 +1189,12 @@ not linked: a watch rule is no holding's, and `placeBook` decides what sits wher
 - **A leg's rule sits under its spread**, as before; a contract rule on a held leg already sits
   under its holding, since the service marks it held and links it (`holdsAnyOf`,
   `adoptOrphanMonitors`), and on a roll day, unlinked but held, among the rules on held contracts.
+  *(Amended later on 2026-11-17, by the owner's decision: a single-contract rule on a leg of a held
+  SPREAD — a short leg's delta — is a row of its own in Contracts, at its expiry and before the
+  watched contracts, not a rule under the holding nor under a watched spread naming the same leg
+  (`heldLeg`, `placement.ts`). The service's link is untouched: only where the rule is drawn
+  changes, and the holding's Δ still falls back to that rule's figure where the service sent none
+  (`legRules`). On a holding of ONE contract, itself in Contracts, the rule stays under it.)*
 - **Every rule is drawn once** (the owner, 2026-11-17; on main a leg rule in two watched spreads,
   and a combo linked to two drawn holdings — a condor rule over a condor held as two spreads — were
   drawn under both): under the first place by the book's order, and at the other a short muted
