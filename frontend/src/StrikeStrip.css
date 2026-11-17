@@ -56,3 +56,27 @@
 }
 .nxs-words > span { overflow-wrap: anywhere; min-width: 0; }
 .nxs-spx-words { color: var(--foreground); font-weight: 600; }
+
+/* each short strike's distance from SPX (2026-11-17): a measure under the axis across the gap from
+   SPX's dot to the strike, its end ticks at both, and the points over the σ centred under it, as a
+   strike's label is its strike over its Δ. Below the axis, where the long strikes' labels sit — at
+   the far side of their short strike, outside the gap, for a credit spread; where one is not, the
+   strip finds the clash and says the distance under the scale instead (`useUnfit`), hiding this one
+   rather than removing it so it can be measured again when the strip widens */
+.nxs[data-gaps] .nxs-scale { height: 5rem; }
+.nxs-gap {
+  position: absolute; top: calc(var(--axis) + 0.75rem); height: 0;
+  border-top: 1px solid var(--muted-foreground);
+}
+.nxs-gap::before, .nxs-gap::after {
+  content: ""; position: absolute; top: -0.2rem; width: 1px; height: 0.4rem; background: var(--muted-foreground);
+}
+.nxs-gap::before { left: 0; }
+.nxs-gap::after { right: 0; }
+.nxs-gap[data-unfit] { visibility: hidden; }
+.nxs-gap-l {
+  position: absolute; top: 0.25rem; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
+  font-size: 0.72rem; line-height: 1.15; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.nxs-gap-l > i { font-style: normal; color: var(--muted-foreground); }

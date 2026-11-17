@@ -98,6 +98,15 @@ export function distanceWords(k: ShortStrike): string {
   return `${pts(k.points)} pts${sigma} ${where}`;
 }
 
+/** A short strike's distance as the strip draws it on its scale, under the gap from SPX's dot to the
+ *  strike (2026-11-17): the points over the σ, signed where SPX is past it, as a row's cell is.
+ *  Null with no distance to draw. */
+export function gapWords(k: ShortStrike): { points: string; sigma: string | null } | null {
+  if (k.points === null) return null;
+  const signed = (n: number) => `${n < 0 ? "−" : ""}${pts(n)}`;
+  return { points: `${signed(k.points)} pts`, sigma: k.sigma === null ? null : `${signed(k.sigma)}σ` };
+}
+
 /** What a row says beside its strip: the nearest short strike's distance, or a dash. */
 export function cellWords(strip: Strip): string {
   const k = nearest(strip);

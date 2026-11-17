@@ -6,7 +6,7 @@
  */
 import { userEvent } from "@vitest/browser/context";
 import { cleanup, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Holding } from "../shared/api";
 import { Next } from "../Next";
@@ -85,7 +85,8 @@ function faults(fig: HTMLElement, box: HTMLElement): string[] {
   const f = fig.getBoundingClientRect();
   if (!inside(f, box.getBoundingClientRect())) out.push(`strip ${f.left}–${f.right} outside its box`);
   if (f.left < 0 || f.right > edge + 0.5) out.push(`strip ${f.left}–${f.right} past the screen`);
-  const labels = [...fig.querySelectorAll<HTMLElement>(".nxs-l")];
+  // a strike's label, and each distance drawn on the scale (2026-11-17): the same rules hold for both
+  const labels = [...fig.querySelectorAll<HTMLElement>(".nxs-l, .nxs-gap:not([data-unfit]) .nxs-gap-l")];
   if (labels.length === 0) out.push("no labels drawn");
   for (const l of labels) {
     if (!inside(l.getBoundingClientRect(), f)) out.push(`label ${l.textContent} outside the strip`);
@@ -212,6 +213,42 @@ describe("two short strikes close together (review of #423)", () => {
       });
     }
   }
+
+  it("a distance with room is drawn on the scale, between SPX's dot and the strike, and said under it to a reader only", () => {
+    // a call spread, 8050/8100, SPX far below
+    const calls: Strip = { ...FAR, shorts: [FAR.shorts[1]!], longs: [FAR.longs[1]!] };
+    render(<div style={{ width: "358px" }} data-testid="box"><StrikeStrip strip={calls} /></div>);
+    const fig = screen.getByRole("figure", { name: "strike strip" });
+    const gap = fig.querySelector<HTMLElement>(".nxs-gap")!;
+    expect(gap.hasAttribute("data-unfit")).toBe(false);
+    expect(getComputedStyle(gap).visibility).toBe("visible");
+    expect(gap.textContent).toMatch(/^633\.38 pts[\d.]+σ$/);
+    // it runs from SPX's dot to the short strike's tick
+    const dot = fig.querySelector(".nxs-spx")!.getBoundingClientRect();
+    const tick = fig.querySelector(".nxs-k[data-side=short]")!.getBoundingClientRect();
+    const g = gap.getBoundingClientRect();
+    expect(Math.abs(g.left - (dot.left + dot.width / 2))).toBeLessThan(1.5);
+    expect(Math.abs(g.right - tick.left)).toBeLessThan(1.5);
+    expect(faults(fig, screen.getByTestId("box"))).toEqual([]);
+    expect(fig.querySelector("[data-short-words]")!.className).toContain("sr-only");
+  });
+
+  it("a distance with no room — SPX close to the strike — is said under the scale instead, and comes back when the strip widens", async () => {
+    const near: Strip = { ...FAR, shorts: [served("2026-12-18", "CALL", 8050, 0.4, 38, 8035)], spx: 8035 };
+    render(<div style={{ width: "358px" }} data-testid="box"><StrikeStrip strip={near} /></div>);
+    const fig = screen.getByRole("figure", { name: "strike strip" });
+    const gap = fig.querySelector<HTMLElement>(".nxs-gap")!;
+    expect(gap.hasAttribute("data-unfit")).toBe(true);
+    expect(getComputedStyle(gap).visibility).toBe("hidden");
+    const line = fig.querySelector<HTMLElement>("[data-short-words]")!;
+    expect(line.className).not.toContain("sr-only");
+    expect(line.textContent).toMatch(/15\.00 pts/);
+    expect(faults(fig, screen.getByTestId("box"))).toEqual([]);
+    // only the spread's own long strike is beside it: widened, a strip far wider than its label
+    // has the room again
+    screen.getByTestId("box").style.width = "3000px";
+    await vi.waitFor(() => expect(gap.hasAttribute("data-unfit")).toBe(false));
+  });
 
   it("a short strike with room keeps its Δ on the scale, and the line under it says it to a reader only", () => {
     render(<div style={{ width: "358px" }}><StrikeStrip strip={{ ...FAR, shorts: [FAR.shorts[1]!] }} /></div>);
