@@ -117,14 +117,12 @@ export function expandSpxShort(short: string): string | null {
   }
 }
 
-/** A vendor's name for an SPXW contract, `SPXW 261030 8100.00C` (moomoo's), with its date written as
- *  every other date the owner reads is, YYYYMMDD: `SPXW 20261030 8100.00C`. The name the bot's alarms
- *  and `/snapshot` say a contract by. Strict, as `shortSpxCode` is: a name in any other shape — a
- *  rule's own name, a code — is returned untouched rather than rewritten into something else. */
-const VENDOR_NAME = /^SPXW (\d{2})(\d{2})(\d{2}) (?=[^ ])/;
-
-export function datedName(name: string): string {
-  const m = VENDOR_NAME.exec(name);
-  if (!m) return name;
-  return `SPXW 20${m[1]}${m[2]}${m[3]} ${name.slice(m[0].length)}`;
+/** The name the owner reads a contract by, in an alarm, a clear, a quarantine notice and
+ *  `/snapshot`: an SPXW contract as `shortSpxCode` writes it, `20261218 P6800` — the one spelling it
+ *  has on the page and in `/monitors` too (2026-11-17) — and anything else by `name`, the
+ *  provider's name for it or the caller's fallback (a combo's code IS its name). Until then these
+ *  said moomoo's own name, `SPXW 20261218 6800.00P`: a third spelling of one contract, and another
+ *  vendor's name would have been a fourth. */
+export function contractName(code: string, name: string): string {
+  return parseSpxCode(code) ? shortSpxCode(code) : name;
 }

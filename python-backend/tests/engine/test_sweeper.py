@@ -1325,9 +1325,10 @@ class TestWhatOnlyThePythonCanGetWrong:
         assert asked == [["X\U0001f600", "X～"]]
 
     async def test_names_the_rule_by_the_providers_name_as_javascript_would_print_it(self, t: Sweeps) -> None:
-        # the record's `name` is whatever the Provider sent; a number is interpolated as `String` does
-        t.monitor(threshold=0.6)
-        await t.sweeper(lambda codes: [{"code": CODE, "name": 8050.0, "option_delta": 0.7}]).sweep()
+        # the record's `name` is whatever the Provider sent; a number is interpolated as `String` does.
+        # Said only for a code that is not SPXW, which is named as `short_spx_code` writes it
+        t.monitor(code="US.AAPL", threshold=0.6)
+        await t.sweeper(lambda codes: [{"code": "US.AAPL", "name": 8050.0, "option_delta": 0.7}]).sweep()
         assert t.sent == ["⚠️ 8050: |Δ| crossed ≥ 0.60 — 0.700  ▲ past 0.100"]
 
     async def test_takes_back_a_refused_rows_messages_and_logs_it_with_its_stack(

@@ -69,7 +69,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ SPXW 20261218 6400P: |Δ| crossed ≥ 0.20 — −0.220  ▲ past 0.020"
+      "⚠️ 20261218 P6400: |Δ| crossed ≥ 0.20 — −0.220  ▲ past 0.020"
     ],
     "rows": {
       "monitors": {

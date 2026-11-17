@@ -24,7 +24,7 @@ disagree about a cost, a P&L or a Level.
   name the owner types.
 """
 
-from optionality.contract import build_spx_code, dated_name
+from optionality.contract import build_spx_code, contract_name
 from optionality.expiry import market_phase
 from optionality.js import js_string, math_round, truthy
 from optionality.timefmt import display_time_short
@@ -101,7 +101,7 @@ async def snapshot(ctx: BotContext, args: list[str]) -> str:
     if not records:
         return f"No data for {code}."
     r = records[0]
-    name = dated_name(js_text(r.get("name")) if truthy(r.get("name")) else code)
+    name = contract_name(code, js_text(r.get("name")) if truthy(r.get("name")) else code)
     fields = [
         "option_delta",
         "option_implied_volatility",

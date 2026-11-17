@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildSpxCode, compactStrikeDate, datedName, expandSpxShort, normalizeStrikeDate, parseSpxCode, shortSpxCode,
+  buildSpxCode, compactStrikeDate, contractName, expandSpxShort, normalizeStrikeDate, parseSpxCode, shortSpxCode,
 } from "./contract.ts";
 
 describe("strike dates", () => {
@@ -150,16 +150,18 @@ describe("the short form", () => {
   });
 });
 
-describe("a vendor's name for a contract", () => {
-  it("writes its date as every date the owner reads is, YYYYMMDD", () => {
-    expect(datedName("SPXW 261030 8100.00C")).toBe("SPXW 20261030 8100.00C");
-    expect(datedName("SPXW 261218 7300C")).toBe("SPXW 20261218 7300C");
+describe("the name a contract is said by", () => {
+  // one spelling of a contract everywhere the owner reads one (2026-11-17): the letter before the
+  // strike, as a leg is written (`−P6800`), and no SPXW. Alarms said moomoo's own name until then,
+  // `SPXW 20261218 6800.00P`, beside `/monitors`' `20261218 P6800` for the same contract
+  it("says an SPXW contract as shortSpxCode writes it, whatever the provider calls it", () => {
+    expect(contractName("US.SPXW261030C8100000", "SPXW 261030 8100.00C")).toBe("20261030 C8100");
+    expect(contractName("US.SPXW261218P6800000", "anything at all")).toBe("20261218 P6800");
   });
 
-  it("leaves any other name alone — a rule's own, a code, one already written whole", () => {
-    for (const name of ["sep-condor", "1218-6800", "US.SPXW261030C8100000", "SPXW 20261030 8100.00C",
-      "SPXW 261030", "XSPXW 261030 8100C", "SPX 261030 8100C"]) {
-      expect(datedName(name), name).toBe(name);
-    }
+  it("says anything else by the name it was given — a rule's own, a code from elsewhere", () => {
+    expect(contractName("1218-6800", "1218-6800")).toBe("1218-6800");
+    expect(contractName("US.AAPL", "Apple")).toBe("Apple");
+    expect(contractName("US.SPXW261030C8100", "SPXW 261030 8100.00C")).toBe("SPXW 261030 8100.00C");
   });
 });
