@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { ET, zoneOfStamp } from "./shared/times";
+import { ET, weekdayDate, writtenDate, zoneOfStamp } from "./shared/times";
 
 /** New York's session, which decides what the page fetches and what the needs-you line says (ADR
  *  0023, amended 2026-11-13: one page, by the session; #371).
@@ -135,10 +135,9 @@ export function useSessionClock(): Date {
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY_MS = 86_400_000;
 
-/** "21:04", or "Fri 21:04", or "13 Nov 21:04": the time the service wrote on something it served
+/** "21:04", or "Fri 21:04", or "Fri 20261106 21:04": the time the service wrote on something it served
  *  (a valuation's or a Reference reading's `fetched_at`, `2026-11-13 21:04:37+08:00`, in
  *  DISPLAY_TZ), to the minute — with its DATE wherever the time alone would mislead (#371's
  *  review). That is when it is not from today in the zone it was written in, or when it predates
@@ -163,7 +162,7 @@ export function servedWhen(served: string | null | undefined, now: Date = new Da
   const date = new Date(day);
   return ago >= 0 && ago <= 6
     ? `${WEEKDAYS[date.getUTCDay()]} ${clock}`
-    : `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]} ${clock}`;
+    : `${weekdayDate(`${m[1]}-${m[2]}-${m[3]}`)} ${clock}`;
 }
 
 const NEW_YORK_WALL = new Intl.DateTimeFormat("en-US", {
@@ -171,17 +170,15 @@ const NEW_YORK_WALL = new Intl.DateTimeFormat("en-US", {
   hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
 
-/** "Fri 13 Nov": a market day (YYYY-MM-DD), its names written out here, as the bot writes them. */
+/** "20261113": a market day (YYYY-MM-DD) as every date is written (`times.writtenDate`), as the bot
+ *  writes it too; null for anything that is not one. */
 export function marketDayWords(day: string): string | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
-  if (!m) return null;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? writtenDate(day) : null;
 }
 
 /** "Fri 16:14": `newYorkWhen` without the date, for the short form of a rule's last reading (#388)
  *  and the watchlist's last price (#400), where the weekday is enough — the reading is the last
- *  session's, within the week. One older than six days says its date, "Fri 6 Nov 16:14"
+ *  session's, within the week. One older than six days says its date, "Fri 20261106 16:14 ET"
  *  (`newYorkWhen`), since a weekday alone would name the wrong week.
  *  @param now the clock that decides how old it is */
 export function newYorkWeekdayWhen(served: string | null | undefined, now: Date = new Date()): string | null {
@@ -193,14 +190,14 @@ export function newYorkWeekdayWhen(served: string | null | undefined, now: Date 
   return `${WEEKDAYS[day.getUTCDay()]} ${parts.hour}:${parts.minute} ${ET}`;
 }
 
-/** "Fri 13 Nov 16:14": a stamp the service served (`2026-11-14 05:14:59+08:00`, in DISPLAY_TZ)
+/** "Fri 20261113 16:14 ET": a stamp the service served (`2026-11-14 05:14:59+08:00`, in DISPLAY_TZ)
  *  on NEW YORK's clock, with its date always — what a close is named by, since the close is New
  *  York's (#380), on the page as in the bot's `/holdings`. Null for a stamp with no zone or no time. */
 export function newYorkWhen(served: string | null | undefined): string | null {
   const instant = servedInstant(served);
   if (instant === null) return null;
   const parts = Object.fromEntries(NEW_YORK_WALL.formatToParts(instant).map((p) => [p.type, p.value]));
-  return `${marketDayWords(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute} ${ET}`;
+  return `${weekdayDate(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute} ${ET}`;
 }
 
 /** "16:14 ET": an instant on New York's clock to the minute, marked as the market's. */

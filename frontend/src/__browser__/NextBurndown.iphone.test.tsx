@@ -159,7 +159,7 @@ describe("the burndown in a holding's sheet on the phone", () => {
     const across = sheet.scrollLeft;
     await drag({ x: first.x, y }, { x: last.x, y });
     expect(crossed(chart)).toBe(days.at(-1)!.dataset.sample);
-    expect(sheet.querySelector(".nx-hist-said")!.textContent).toMatch(/^9 Nov · 39 DTE/);
+    expect(sheet.querySelector(".nx-hist-said")!.textContent).toMatch(/^20261109 · 39 DTE/);
     // a sideways drag is the chart's: neither the page nor the sheet moved under it
     expect(window.scrollY).toBe(before);
     expect(sheet.scrollTop).toBe(down);

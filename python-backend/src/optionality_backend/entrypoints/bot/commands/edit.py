@@ -30,7 +30,7 @@ from .context import BotContext, require_number
 
 def _matches(db: sqlite3.Connection, args: list[str]) -> list[MonitorRow]:
     """Every monitor the words might mean: the exact code, the joined-and-upcased form, an id prefix,
-    or a short contract like `260918 C8100`."""
+    or a short contract like `20260918 C8100`."""
     token = args[0] if args else ""
     joined = "".join(args).upper()
     return find_monitors_by_identifier(db, token, joined, expand_spx_short(joined))
@@ -82,7 +82,7 @@ def rename(ctx: BotContext, args: list[str]) -> str:
 
 async def unwatch(ctx: BotContext, args: list[str]) -> str:
     if not args:
-        return "Usage: /unwatch <name, code, id prefix, or contract like 260918 C8100>"
+        return "Usage: /unwatch <name, code, id prefix, or contract like 20260918 C8100>"
     found = _matches(ctx.db, args)
     if not found:
         return f"No monitor matches '{' '.join(args)}'."

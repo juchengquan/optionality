@@ -15,7 +15,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { ruleText, thresholdError } from "../format.ts";
 
 /** Every monitor the words might mean: the exact code, the joined-and-upcased form, an id prefix,
- *  or a short contract like `260918 C8100`. */
+ *  or a short contract like `20260918 C8100`. */
 function matches(db: DatabaseSync, args: string[]): MonitorRow[] {
   const token = args[0] ?? "";
   const joined = args.join("").toUpperCase();
@@ -59,7 +59,7 @@ export const rename: Command = (ctx, args) => {
 
 export const unwatch: Command = async (ctx, args) => {
   if (args.length === 0) {
-    return "Usage: /unwatch <name, code, id prefix, or contract like 260918 C8100>";
+    return "Usage: /unwatch <name, code, id prefix, or contract like 20260918 C8100>";
   }
   const found = matches(ctx.db, args);
   if (found.length === 0) return `No monitor matches '${args.join(" ")}'.`;

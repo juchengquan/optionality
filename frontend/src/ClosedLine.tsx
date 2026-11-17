@@ -9,7 +9,7 @@ import type { MarketPhase } from "./session";
  *  chip states "as valued at" (#354), so the line and the chips cannot disagree. None is said
  *  while nothing is valued, or after a valuation failed: the page says why beside it. Where the
  *  service valued a holding from its latest close (#380), the line names that close on New York's
- *  clock instead — "market closed — as of the close, Fri 13 Nov 16:14" — as `/holdings` does.
+ *  clock instead — "market closed — as of the close, Fri 20261113 16:14 ET" — as `/holdings` does.
  *
  *  Words only since #410: the line had a refresh button of its own, which was the header's refresh
  *  under another name — one valuation, one read of the References and the closes, then the poll as
@@ -23,7 +23,7 @@ export function ClosedLine({ at, served, holdings = null, className, phase = "cl
    *  "valued at Fri 16:15" (`servedWhen`, #371's review); `at` alone where it is not given */
   served?: string | null;
   /** the holdings drawn: where any was valued from a stored close (#380), the line names that close
-   *  instead — "market closed — as of the close, Fri 13 Nov 16:14" (`closeLineWords`) */
+   *  instead — "market closed — as of the close, Fri 20261113 16:14 ET" (`closeLineWords`) */
   holdings?: readonly Holding[] | null;
   className: string;
   /** which session it is outside the regular one (#416): in the Curb and GTH the line says the

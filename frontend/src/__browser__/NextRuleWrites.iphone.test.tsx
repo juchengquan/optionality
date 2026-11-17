@@ -149,7 +149,7 @@ describe("Record as held from a watch rule's sheet (#408)", () => {
     .map((el) => el.className || el.tagName);
 
   for (const [card, label, kind] of [
-    ["1218_P7150", "1218_P7150 value", "add a spread"], ["261231 8000C", "261231 8000C Δ", "add one contract"],
+    ["1218_P7150", "1218_P7150 value", "add a spread"], ["20261231 8000C", "20261231 8000C Δ", "add one contract"],
   ] as const) {
     it(`opens the add sheet over ${card}'s, prefilled, 44pt and inside the screen, and records it`, async () => {
       const writes = await show();

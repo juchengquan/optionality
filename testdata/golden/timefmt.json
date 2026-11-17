@@ -31,7 +31,7 @@
           "$date": "2026-10-17T05:26:06.000Z"
         }
       ],
-      "expect": "2026-10-17 05:26 UTC"
+      "expect": "Sat 20261017 05:26 UTC"
     },
     {
       "fn": "displayTime",
@@ -84,7 +84,7 @@
         },
         "Asia/Singapore"
       ],
-      "expect": "2026-10-17 13:26 +08"
+      "expect": "Sat 20261017 13:26 +08"
     },
     {
       "fn": "displayTimeShort",
@@ -95,7 +95,7 @@
         },
         "America/New_York"
       ],
-      "expect": "2026-01-15 07:00 EST"
+      "expect": "Thu 20260115 07:00 EST"
     },
     {
       "fn": "displayTimeShort",
@@ -106,7 +106,7 @@
         },
         "America/New_York"
       ],
-      "expect": "2026-07-15 08:00 EDT"
+      "expect": "Wed 20260715 08:00 EDT"
     },
     {
       "fn": "displayTimeShort",
@@ -117,7 +117,7 @@
         },
         "UTC"
       ],
-      "expect": "2026-01-15 12:00 UTC"
+      "expect": "Thu 20260115 12:00 UTC"
     },
     {
       "fn": "displayTimeShort",
@@ -128,7 +128,7 @@
         },
         "Asia/Kathmandu"
       ],
-      "expect": "2026-01-15 17:45 +0545"
+      "expect": "Thu 20260115 17:45 +0545"
     },
     {
       "fn": "displayTimeShort",
@@ -139,7 +139,7 @@
         },
         "Europe/London"
       ],
-      "expect": "2026-01-15 12:00 GMT"
+      "expect": "Thu 20260115 12:00 GMT"
     },
     {
       "fn": "displayTimeShort",
@@ -149,6 +149,65 @@
         "Asia/Singapore"
       ],
       "expect": null
+    },
+    {
+      "fn": "displayTimeShort",
+      "name": "short, the zone's weekday and not UTC's",
+      "args": [
+        {
+          "$date": "2026-11-15T23:00:00.000Z"
+        },
+        "Asia/Singapore"
+      ],
+      "expect": "Mon 20261116 07:00 +08"
+    },
+    {
+      "fn": "displayDate",
+      "name": "a market day",
+      "args": [
+        "2026-11-13"
+      ],
+      "expect": "20261113"
+    },
+    {
+      "fn": "displayDate",
+      "name": "the first of a month",
+      "args": [
+        "2026-01-02"
+      ],
+      "expect": "20260102"
+    },
+    {
+      "fn": "displayDate",
+      "name": "already written whole",
+      "args": [
+        "20261113"
+      ],
+      "expect": "20261113"
+    },
+    {
+      "fn": "displayDate",
+      "name": "a stamp, not a date",
+      "args": [
+        "2026-11-13 16:14"
+      ],
+      "expect": "2026-11-13 16:14"
+    },
+    {
+      "fn": "displayDate",
+      "name": "nothing",
+      "args": [
+        ""
+      ],
+      "expect": ""
+    },
+    {
+      "fn": "displayDate",
+      "name": "non-ASCII digits are not a date",
+      "args": [
+        "٢٠٢٦-١١-١٣"
+      ],
+      "expect": "٢٠٢٦-١١-١٣"
     },
     {
       "fn": "marketTimeToDisplay",

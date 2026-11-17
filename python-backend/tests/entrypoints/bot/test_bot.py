@@ -39,7 +39,7 @@ FAR = "2026-11-11"
 MONITORS_TABLE = (
     "<pre>contract      rule             last   state\n"
     "bear-cs       close ≥ 4.05     3.05   armed\n"
-    "261101 C8100  |value| ≥ 30.00  26.41  armed</pre>"
+    "20261101…100  |value| ≥ 30.00  26.41  armed</pre>"
 )
 
 
@@ -753,7 +753,7 @@ class TestHealth:
         sweeper.label = "active"
         b = chat.bot(echo, {"display_tz": "Asia/Singapore"}, sweeper=sweeper)
         await b.handle_update(update("/health"))
-        assert chat.last() == "Service is up.\nalarms: active — last sweep 2026-08-10 11:35 +08"
+        assert chat.last() == "Service is up.\nalarms: active — last sweep Mon 20260810 11:35 +08"
 
     async def test_says_only_that_it_is_up_when_nothing_else_is_wired(self, chat):
         await chat.bot().handle_update(update("/health"))

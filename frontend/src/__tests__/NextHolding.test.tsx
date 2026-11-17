@@ -266,7 +266,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
       await waitFor(() => expect(within(result).getByTestId("realized").textContent).toBe("7.8 pts"));
       expect(s.writes().at(-1)).toEqual({ method: "PATCH", path: "/positions/h-ic", body: { exit: 1.1, closed_on: "2026-11-11" } });
-      expect(within(result).getByText(/closed on Wed 11 Nov/)).toBeTruthy();
+      expect(within(result).getByText(/closed on 20261111/)).toBeTruthy();
     });
 
     it("asks before deleting, says the samples go with it, and offers closing instead", async () => {
@@ -305,7 +305,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       const exit = within(d).getByLabelText("exit, per contract");
       const hint = document.getElementById(exit.getAttribute("aria-describedby") ?? "")!;
       expect(hint.textContent).toMatch(/signed like the Cost to close/);
-      expect(hint.textContent).toMatch(/Starts at the Cost to close as last valued, at Thu 12 Nov 23:14:05 SGT/);
+      expect(hint.textContent).toMatch(/Starts at the Cost to close as last valued, at Thu 20261112 23:14:05 SGT/);
       expect(hint.textContent).not.toMatch(/Cost to close now/);
     });
 

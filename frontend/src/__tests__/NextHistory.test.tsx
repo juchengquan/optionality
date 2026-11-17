@@ -133,7 +133,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
       .toBe("close");
     pointAt(chart, evening);
     const said = within(chart).getByRole("status");
-    expect(said.textContent).toMatch(/3 Nov · 45 DTE/);
+    expect(said.textContent).toMatch(/20261103 · 45 DTE/);
     // the rule is New York's, so the time is said on New York's clock: 09:30 in Singapore is 20:30
     expect(said.textContent).toMatch(/not the close: observed 20:30 ET, after the 16:15 ET close/);
     // and in the crosshair's tooltip, shorter
@@ -174,8 +174,8 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(chart.textContent).not.toMatch(/\$/);
     expect(within(chart).getByText("points to close, per contract")).toBeTruthy();
     pointAt(chart, dayOf(chart, "[data-sample='2026-11-09']"));
-    // h-calls on 9 Nov: 4.10 per contract — never $410
-    expect(within(chart).getByRole("status").textContent).toMatch(/^9 Nov · 39 DTE · to close, per contract: 4\.10 pts · on pace \d\.\d\d pts · behind by/);
+    // h-calls on 20261109: 4.10 per contract — never $410
+    expect(within(chart).getByRole("status").textContent).toMatch(/^20261109 · 39 DTE · to close, per contract: 4\.10 pts · on pace \d\.\d\d pts · behind by/);
     expect(tipOf(chart)?.textContent).toMatch(/to close, per contract: 4\.10 pts/);
     expect(tipOf(chart)?.textContent).not.toMatch(/\$/);
     expect(tipOf(chart)?.querySelector("[data-outcome]")?.textContent).toMatch(/^(behind|ahead) by \d\.\d\d$/);
@@ -267,22 +267,22 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(chart.querySelectorAll("[tabindex]")).toHaveLength(1);
     const said = () => within(chart).getByRole("status").textContent;
     fireEvent.keyDown(days, { key: "ArrowRight" });
-    expect(said()).toMatch(/^3 Nov · 45 DTE/);
+    expect(said()).toMatch(/^20261103 · 45 DTE/);
     fireEvent.keyDown(days, { key: "ArrowRight" });
-    expect(said()).toMatch(/^4 Nov · 44 DTE/);
+    expect(said()).toMatch(/^20261104 · 44 DTE/);
     fireEvent.keyDown(days, { key: "ArrowLeft" });
-    expect(said()).toMatch(/^3 Nov/);
+    expect(said()).toMatch(/^20261103/);
     fireEvent.keyDown(days, { key: "ArrowLeft" });
-    expect(said()).toMatch(/^3 Nov/);
+    expect(said()).toMatch(/^20261103/);
     fireEvent.keyDown(days, { key: "End" });
     // the last stop is today's valuation (#360), and the day before it the last sample
     expect(said()).toMatch(/^valued now, 38 DTE/);
     fireEvent.keyDown(days, { key: "ArrowRight" });
     expect(said()).toMatch(/^valued now/);
     fireEvent.keyDown(days, { key: "ArrowLeft" });
-    expect(said()).toMatch(/^9 Nov · 39 DTE/);
+    expect(said()).toMatch(/^20261109 · 39 DTE/);
     fireEvent.keyDown(days, { key: "Home" });
-    expect(said()).toMatch(/^3 Nov/);
+    expect(said()).toMatch(/^20261103/);
   });
 
   it("names each tick on its axis once, for a debit whose every figure is below zero", async () => {
@@ -307,21 +307,21 @@ describe("the burndown, in the desk's inspector outside the session", () => {
   });
 
   it("breaks the line across a missed session rather than joining the days either side", async () => {
-    // no row at all for 5 Nov: the service was down that whole New York day
+    // no row at all for 20261105: the service was down that whole New York day
     const days = SAMPLES["h-calls"]!.samples.filter((s) => s.observed_on !== "2026-11-05");
     serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
     const { insp } = await inspect("h-calls", "1218_C7300");
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]")).toHaveLength(6));
     expect([...chart.querySelectorAll("[data-costs]")].map((r) => corners(r).length)).toEqual([2, 4]);
-    // and the IV, which also has 6 Nov's row without a reading: [3 Nov, 4 Nov] | [7, 8, 9 Nov]
+    // and the IV, which also has 20261106's row without a reading: [20261103, 20261104] | [7, 8, 20261109]
     const iv = await ivOf(insp);
     const runs = [...iv.querySelectorAll("[data-leg]")][0]!.querySelectorAll("[data-iv-run]");
     expect([...runs].map((r) => corners(r).length)).toEqual([2, 3]);
   });
 
   it("draws no point for a day kept with no Cost to close, and does not call it missed (#380)", async () => {
-    // 5 Nov's row is there for its vol readings, with no price: a leg had no two-sided quote
+    // 20261105's row is there for its vol readings, with no price: a leg had no two-sided quote
     const days = SAMPLES["h-calls"]!.samples.map((s) => (s.observed_on === "2026-11-05" ? { ...s, cost_to_close: null } : s));
     serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
     const { insp } = await inspect("h-calls", "1218_C7300");
@@ -343,7 +343,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
   });
 
   it("draws the days summed before a leg's quantity was corrected apart, and says so (#359)", async () => {
-    // corrected at 13:00 in Singapore on 6 Nov, which is midnight on the 6th in New York: the 3rd,
+    // corrected at 13:00 in Singapore on 20261106, which is midnight on the 6th in New York: the 3rd,
     // 4th and 5th were summed under the quantities as first recorded
     const days = SAMPLES["h-calls"]!.samples.map((s) => ({ ...s, before_correction: s.observed_on < "2026-11-06" }));
     serveSamples({ ...SAMPLES["h-calls"]!, samples: days, qty_corrected_at: "2026-11-06 13:00:00+08:00" });
@@ -428,8 +428,8 @@ describe("the crosshair (#360)", () => {
     expect(crossed(chart)).toBe("2026-11-05");
     // the day crossed is the day marked, the day said and the day the tooltip says
     expect(chart.querySelector("[data-pointed]")?.getAttribute("data-sample")).toBe("2026-11-05");
-    expect(said(chart)).toMatch(/^5 Nov · 43 DTE/);
-    expect(tipOf(chart)?.textContent).toMatch(/^5 Nov · 43 DTE/);
+    expect(said(chart)).toMatch(/^20261105 · 43 DTE/);
+    expect(tipOf(chart)?.textContent).toMatch(/^20261105 · 43 DTE/);
   });
 
   it("says the day's cost, on pace and the gap in the outcome colour, in the tooltip", async () => {
@@ -439,7 +439,7 @@ describe("the crosshair (#360)", () => {
     expect(tip.getAttribute("aria-hidden")).toBe("true");
     const lines = [...tip.children].map((l) => l.textContent);
     // h-calls is a single call spread with a contract size of 100, behind pace
-    expect(lines[0]).toBe("9 Nov · 39 DTE");
+    expect(lines[0]).toBe("20261109 · 39 DTE");
     expect(lines[1]).toMatch(/^to close, 1 contract: \$410$/);
     expect(lines[2]).toMatch(/^on pace \$\d+ · behind by \d\.\d\d$/);
     const gap = tip.querySelector("[data-outcome]")!;
@@ -515,7 +515,7 @@ describe("the crosshair (#360)", () => {
     const days = within(chart).getByRole("group", { name: /cost to close by day/ });
     fireEvent.keyDown(days, { key: "ArrowRight" });
     expect(crossed(chart)).toBe("2026-11-03");
-    expect(tipOf(chart)?.textContent).toMatch(/^3 Nov/);
+    expect(tipOf(chart)?.textContent).toMatch(/^20261103/);
     fireEvent.keyDown(days, { key: "End" });
     expect(crossed(chart)).toBe("now");
     fireEvent.keyDown(days, { key: "Escape" });
@@ -940,15 +940,15 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
       expect(all.map(crossed)).toEqual(["2026-11-04", "2026-11-04", "2026-11-04"]);
     }
     hover(iv, xOf(iv, 39));
-    expect(tipText(burndown)[0]).toBe("9 Nov · 39 DTE");
+    expect(tipText(burndown)[0]).toBe("20261109 · 39 DTE");
     expect(tipText(burndown)[1]).toBe("to close, 1 contract: $410");
     // each leg's IV that day, named as the chart names it, with its type's colour (#391)
-    expect(tipText(iv)).toEqual(["9 Nov · 39 DTE", "−C7300 14.00%", "+C7350 13.25%"]);
+    expect(tipText(iv)).toEqual(["20261109 · 39 DTE", "−C7300 14.00%", "+C7350 13.25%"]);
     expect(legMarks(tipOf(iv)!)).toEqual(["−C7300 short CALL", "+C7350 long CALL"]);
-    expect(said(iv)).toBe("9 Nov · 39 DTE: −C7300 14.00%, +C7350 13.25%");
+    expect(said(iv)).toBe("20261109 · 39 DTE: −C7300 14.00%, +C7350 13.25%");
     // SPX that day and the short strike's distance from it, in points and σ, as the service placed it
-    expect(tipText(spx)).toEqual(["9 Nov · 39 DTE", "SPX 6895.75", "C7300 404.25 pts · 1.28σ away"]);
-    expect(said(spx)).toBe("9 Nov · 39 DTE: SPX 6895.75 · C7300 404.25 pts · 1.28σ away");
+    expect(tipText(spx)).toEqual(["20261109 · 39 DTE", "SPX 6895.75", "C7300 404.25 pts · 1.28σ away"]);
+    expect(said(spx)).toBe("20261109 · 39 DTE: SPX 6895.75 · C7300 404.25 pts · 1.28σ away");
     // a mouse leaving any panel lets go in all three
     fireEvent.pointerLeave(svgOf(spx), { pointerType: "mouse" });
     expect(all.map(crossed)).toEqual([undefined, undefined, undefined]);
@@ -966,9 +966,9 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
       fireEvent.keyDown(keysOf(panel), { key: "ArrowRight" });
       expect(all.map(crossed)).toEqual(["2026-11-04", "2026-11-04", "2026-11-04"]);
     }
-    expect(said(burndown)).toMatch(/^4 Nov · 44 DTE/);
-    expect(said(iv)).toBe("4 Nov · 44 DTE: −C7300 12.00%, +C7350 11.50%");
-    expect(said(spx)).toBe("4 Nov · 44 DTE: SPX 6840.10 · C7300 459.90 pts · 1.61σ away");
+    expect(said(burndown)).toMatch(/^20261104 · 44 DTE/);
+    expect(said(iv)).toBe("20261104 · 44 DTE: −C7300 12.00%, +C7350 11.50%");
+    expect(said(spx)).toBe("20261104 · 44 DTE: SPX 6840.10 · C7300 459.90 pts · 1.61σ away");
     // the last stop is today's valuation, in all three
     fireEvent.keyDown(keysOf(iv), { key: "End" });
     expect(all.map(crossed)).toEqual(["now", "now", "now"]);
@@ -983,7 +983,7 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
 
   it("marks a day that is not the close in every panel, and says why in each readout", async () => {
     const { iv, spx, all } = await panelsOf();
-    // 3 Nov was recorded that evening: hollow in the IV chart and on SPX's path, as on the burndown
+    // 20261103 was recorded that evening: hollow in the IV chart and on SPX's path, as on the burndown
     expect(iv.querySelector("circle[data-dte='45']")!.getAttribute("data-mark")).toBe("off-close");
     expect(spx.querySelector("[data-spx-day='2026-11-03']")!.getAttribute("data-mark")).toBe("off-close");
     expect(spx.querySelector("[data-spx-day='2026-11-04']")!.getAttribute("data-mark")).toBe("close");
@@ -996,12 +996,12 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
   });
 
   it("says so in a panel with no figure for the day, rather than drawing nothing", async () => {
-    // the call spread's 6 Nov has no IV; the put spread's 5 Nov has no SPX
+    // the call spread's 20261106 has no IV; the put spread's 20261105 has no SPX
     const calls = await panelsOf();
     fireEvent.keyDown(keysOf(calls.iv), { key: "Home" });
     for (let i = 0; i < 3; i++) fireEvent.keyDown(keysOf(calls.iv), { key: "ArrowRight" });
     expect(calls.all.map(crossed)).toEqual(["2026-11-06", "2026-11-06", "2026-11-06"]);
-    expect(tipText(calls.iv)).toEqual(["6 Nov · 42 DTE", "no IV recorded this day",
+    expect(tipText(calls.iv)).toEqual(["20261106 · 42 DTE", "no IV recorded this day",
       "not timed: whether it was the close is not known"]);
     // SPX that day, and points with no σ to put them in: the service had no IV to measure by
     expect(tipText(calls.spx)[2]).toBe("C7300 428.75 pts away · no σ: no IV that day");
@@ -1011,7 +1011,7 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
     fireEvent.keyDown(keysOf(puts.spx), { key: "ArrowRight" });
     fireEvent.keyDown(keysOf(puts.spx), { key: "ArrowRight" });
     expect(puts.all.map(crossed)).toEqual(["2026-11-05", "2026-11-05", "2026-11-05"]);
-    expect(tipText(puts.spx)).toEqual(["5 Nov · 43 DTE",
+    expect(tipText(puts.spx)).toEqual(["20261105 · 43 DTE",
       "no SPX this day: stored before it was recorded, or its batch could not give it", "P6400 — no SPX that day"]);
     // the rule down the day, and nothing across: there is no price to cross at
     expect(puts.spx.querySelectorAll("[data-crosshair] line")).toHaveLength(1);
@@ -1024,8 +1024,8 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
     hover(iv, xOf(iv, 43));
     expect(all.map(crossed)).toEqual(["2026-11-05", "2026-11-05", "2026-11-05"]);
     expect(burndown.querySelector("[data-crosshair]")!.hasAttribute("data-bare")).toBe(true);
-    expect(tipText(burndown)).toEqual(["5 Nov · 43 DTE", "no Cost to close: no two-sided quote to price it"]);
-    expect(said(burndown)).toBe("5 Nov · 43 DTE · no Cost to close: no two-sided quote to price it");
+    expect(tipText(burndown)).toEqual(["20261105 · 43 DTE", "no Cost to close: no two-sided quote to price it"]);
+    expect(said(burndown)).toBe("20261105 · 43 DTE · no Cost to close: no two-sided quote to price it");
     expect(tipText(iv)[1]).toBe("−C7300 12.75%");
   });
 
@@ -1035,7 +1035,7 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
     serveSamples({ ...SAMPLES["h-calls"]!, samples: days });
     const { iv } = await panelsOf();
     hover(iv, xOf(iv, 39));
-    expect(tipText(iv)).toEqual(["9 Nov · 39 DTE", "−C7300 14.00%", "+C7350 no IV"]);
+    expect(tipText(iv)).toEqual(["20261109 · 39 DTE", "−C7300 14.00%", "+C7350 no IV"]);
   });
 
   it("keeps privacy's promise: no $ in any readout, the burndown's in points per contract", async () => {
@@ -1101,8 +1101,8 @@ describe("one crosshair across the burndown, the IV chart and SPX's path (#395)"
     const { burndown, iv, all } = await panelsOf();
     hover(iv, xOf(iv, 41));
     expect(all.map(crossed)).toEqual(["2026-11-07", "2026-11-07", "2026-11-07"]);
-    expect(said(burndown)).toBe("7 Nov · 41 DTE · no Cost to close: no two-sided quote to price it");
-    expect(tipText(burndown)).toEqual(["7 Nov · 41 DTE", "no Cost to close: no two-sided quote to price it"]);
+    expect(said(burndown)).toBe("20261107 · 41 DTE · no Cost to close: no two-sided quote to price it");
+    expect(tipText(burndown)).toEqual(["20261107 · 41 DTE", "no Cost to close: no two-sided quote to price it"]);
     expect(burndown.textContent).not.toMatch(/hours/);
   });
 

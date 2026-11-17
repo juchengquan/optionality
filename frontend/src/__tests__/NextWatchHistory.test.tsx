@@ -218,7 +218,7 @@ describe("a watched row's history, drawn", () => {
     fireEvent.keyDown(chart.querySelector(".nx-bd")!, { key: "End" });
     await waitFor(() => expect(iv.querySelector("[data-crosshair='2026-11-12']")).toBeTruthy());
     expect(spx.querySelector("[data-crosshair='2026-11-12']")).toBeTruthy();
-    expect(within(chart).getByRole("status").textContent).toMatch(/^12 Nov · 36 DTE · value, per contract: 2\.75 pts/);
+    expect(within(chart).getByRole("status").textContent).toMatch(/^20261112 · 36 DTE · value, per contract: 2\.75 pts/);
   });
 
   it("says so when nothing has been recorded yet", async () => {

@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildSpxCode, compactStrikeDate, expandSpxShort, normalizeStrikeDate, parseSpxCode, shortSpxCode,
+  buildSpxCode, compactStrikeDate, datedName, expandSpxShort, normalizeStrikeDate, parseSpxCode, shortSpxCode,
 } from "./contract.ts";
 
 describe("strike dates", () => {
@@ -104,17 +104,17 @@ describe("reading a code back", () => {
     expect(parseSpxCode("US.SPXW261120P06500000")).toBeNull();
   });
 
-  it("writes the six digits a code and the bot's short form share", () => {
-    expect(compactStrikeDate("2026-10-16")).toBe("261016");
-    expect(compactStrikeDate("20261016")).toBe("261016");
+  it("writes a date as the owner reads one, YYYYMMDD (2026-11-17)", () => {
+    expect(compactStrikeDate("2026-10-16")).toBe("20261016");
+    expect(compactStrikeDate("20261016")).toBe("20261016");
     expect(() => compactStrikeDate("2026-02-30")).toThrow(/invalid strike_date/);
   });
 });
 
 describe("the short form", () => {
   it("drops the SPXW and the trailing 000, which every contract has", () => {
-    expect(shortSpxCode("US.SPXW260918C8100000")).toBe("260918 C8100");
-    expect(shortSpxCode("US.SPXW261218P6425000")).toBe("261218 P6425");
+    expect(shortSpxCode("US.SPXW260918C8100000")).toBe("20260918 C8100");
+    expect(shortSpxCode("US.SPXW261218P6425000")).toBe("20261218 P6425");
   });
 
   it("leaves a name that is not one of our codes alone", () => {
@@ -123,7 +123,7 @@ describe("the short form", () => {
   });
 
   it("reads back what it printed, which is what /unwatch is given", () => {
-    // the bot prints "260918 C8100" and accepts it typed back, and before these were one pair
+    // the bot prints "20260918 C8100" and accepts it typed back, and before these were one pair
     // nothing said so: two regexes in two files, each correct on its own
     const code = "US.SPXW260918C8100000";
     expect(expandSpxShort(shortSpxCode(code))).toBe(code);
@@ -135,9 +135,31 @@ describe("the short form", () => {
     expect(expandSpxShort("  260918   c8100 ")).toBe("US.SPXW260918C8100000");
   });
 
+  it("takes the date as it is written now, YYYYMMDD, as well as the six digits it was", () => {
+    expect(expandSpxShort("20260918 C8100")).toBe("US.SPXW260918C8100000");
+    expect(expandSpxShort("20260918c8100")).toBe("US.SPXW260918C8100000");
+    // a year the code's two digits cannot carry is no SPXW contract
+    expect(expandSpxShort("19260918 C8100")).toBeNull();
+    expect(expandSpxShort("2026091 C8100")).toBeNull();
+  });
+
   it("answers null for anything else, including a day that does not exist", () => {
-    for (const bad of ["260918", "C8100", "sep-condor", "", "26091C8100", "260230C8100"]) {
+    for (const bad of ["260918", "C8100", "sep-condor", "", "26091C8100", "260230C8100", "20260230C8100"]) {
       expect(expandSpxShort(bad), bad).toBeNull();
+    }
+  });
+});
+
+describe("a vendor's name for a contract", () => {
+  it("writes its date as every date the owner reads is, YYYYMMDD", () => {
+    expect(datedName("SPXW 261030 8100.00C")).toBe("SPXW 20261030 8100.00C");
+    expect(datedName("SPXW 261218 7300C")).toBe("SPXW 20261218 7300C");
+  });
+
+  it("leaves any other name alone — a rule's own, a code, one already written whole", () => {
+    for (const name of ["sep-condor", "1218-6800", "US.SPXW261030C8100000", "SPXW 20261030 8100.00C",
+      "SPXW 261030", "XSPXW 261030 8100C", "SPX 261030 8100C"]) {
+      expect(datedName(name), name).toBe(name);
     }
   });
 });

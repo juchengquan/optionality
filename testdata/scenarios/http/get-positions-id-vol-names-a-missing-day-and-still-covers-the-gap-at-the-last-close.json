@@ -127,7 +127,7 @@
         "from": null,
         "to": null,
         "days": null,
-        "reason": "the record skips from 6 Nov to 9 Nov: a day is missing",
+        "reason": "the record skips from 20261106 to 20261109: a day is missing",
         "at": "2026-11-09",
         "timing": "close",
         "gap": 0.08280568537963795,

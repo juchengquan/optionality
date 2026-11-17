@@ -15,7 +15,7 @@ import { setDisplayZone } from "../shared/times";
  */
 describe("the market clock", () => {
   it("names the session time for a summer evening in Singapore", () => {
-    // 21:47 on 21 Oct in Singapore is 09:47 in New York — a quarter hour before the open
+    // 21:47 on 20261021 in Singapore is 09:47 in New York — a quarter hour before the open
     // marked ET, the market's clock, all year (part F)
     expect(marketClock("2026-10-21 21:47:23+08:00")).toBe("09:47:23 ET");
   });
@@ -40,7 +40,7 @@ describe("the freshness line", () => {
 
     const line = screen.getByText(/fetched at/);
     // the service's stamp by its zone's name, and dated, being from another day — never "+08:00"
-    expect(line.textContent).toContain("fetched at Wed 21 Oct 21:47:23 SGT");
+    expect(line.textContent).toContain("fetched at Wed 20261021 21:47:23 SGT");
     expect(line.textContent).not.toContain("+08:00");
     expect(line.textContent, "the session time is missing").toContain("09:47:23 ET");
     expect(line.textContent).toContain("screen updated 21:48:14 SGT");

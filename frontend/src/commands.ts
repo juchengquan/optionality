@@ -9,7 +9,8 @@
  *    threshold or a P&L is the table's to say, live, not a list's to freeze at the moment it opened.
  */
 import type { Monitor } from "./shared/api";
-import { heldLeg, legText, shortDate, shortFirst, signedLeg, type WrittenLeg } from "./shared/format";
+import { heldLeg, legText, shortFirst, signedLeg, type WrittenLeg } from "./shared/format";
+import { writtenDate } from "./shared/times";
 import type { ArrangementChoice } from "./shared/prefs";
 import { rowName, tableRows, type DeskRow } from "./desk/columns";
 import { fieldWords, monitorName } from "./needs";
@@ -51,11 +52,12 @@ export function tokens(text: string): string[] {
   return text.replaceAll("\u2212", "-").toLowerCase().replace(/[^a-z0-9_.\-]+/g, " ").split(" ").filter(Boolean);
 }
 
-/** Every way the owner writes an expiry: `261218`, `2026-12-18`, and `dec 18` (or `dec 04`). */
+/** Every way the owner writes an expiry: `20261218` as the page writes it (2026-11-17), `261218` as
+ *  a contract's code and his older names carry it, `2026-12-18`, and `dec 18` (or `dec 04`). */
 function dateWords(iso: string): string[] {
-  const m = /^\d{4}-(\d{2})-(\d{2})$/.exec(iso);
+  const m = /^\d{2}(\d{2})-(\d{2})-(\d{2})$/.exec(iso);
   if (!m) return [iso];
-  return [shortDate(iso), iso, MONTHS[Number(m[1]) - 1] ?? "", m[2]!, String(Number(m[2]))];
+  return [writtenDate(iso), `${m[1]}${m[2]}${m[3]}`, iso, MONTHS[Number(m[2]) - 1] ?? "", m[3]!, String(Number(m[3]))];
 }
 
 /** A strike alone and with its side, `7150` and `p7150`. */
@@ -84,7 +86,7 @@ function findable(
 ): Findable {
   const field = storedField === null ? null : fieldWords(storedField);
   // the legs apart, for the palette to draw; the detail is the same parts as one text
-  const before = [kind, shortDate(date)].filter(Boolean).join(" · ");
+  const before = [kind, writtenDate(date)].filter(Boolean).join(" · ");
   const parts = { before: legs.length > 0 ? `${before} · ` : before, legs, after: field ? ` · ${field}` : "" };
   const detail = `${parts.before}${legWords(legs)}${parts.after}`;
   const words = [name, ...tokens(name), ...tokens(kind), ...(kind.endsWith("rule") ? RULE_SYNONYMS : []), ...dateWords(date), ...strikeWords(legs),

@@ -192,7 +192,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "<pre>contract      mid   bid/ask\n261218 C7300  2.75  2.7/2.8</pre>",
+      "text": "<pre>contract        mid   bid/ask\n20261218 C7300  2.75  2.7/2.8</pre>",
       "parse_mode": "HTML"
     },
     "rows": {},

@@ -38,7 +38,7 @@ import {
 import { fieldWords } from "./needs";
 import { ShortWords } from "./RuleWords";
 import { DirectionPair } from "./DirectionPair";
-import { dateWords } from "./shared/times";
+import { writtenDate } from "./shared/times";
 import "./monitor-edit.css";
 import { rawError } from "./shared/errors";
 import { ErrorWords } from "./shared/ErrorWords";
@@ -149,8 +149,8 @@ function Controls({ actions, rule, served, expiredSaid }: { actions: MonitorActi
     <div className="nx-mon" ref={root}>
       {state === "expired" ? (
         <p className="nx-meta nx-mon-note">
-          {`${expiredSaid ? "" : "expired "}${dateWords(rule.strike_date)} — the service deletes it ${actions.retentionDays === null
-            ? "after its retention window" : `on ${dateWords(deletesOn(rule.strike_date, actions.retentionDays))}`}`}
+          {`${expiredSaid ? "" : "expired "}${writtenDate(rule.strike_date)} — the service deletes it ${actions.retentionDays === null
+            ? "after its retention window" : `on ${writtenDate(deletesOn(rule.strike_date, actions.retentionDays))}`}`}
         </p>
       ) : null}
       {/* what the service found, under the rule's own line, which already ends in the clause */}

@@ -106,7 +106,7 @@
       "args": [
         "2026-11-20"
       ],
-      "expect": "261120"
+      "expect": "20261120"
     },
     {
       "fn": "compactStrikeDate",
@@ -114,7 +114,7 @@
       "args": [
         "20261120"
       ],
-      "expect": "261120"
+      "expect": "20261120"
     },
     {
       "fn": "compactStrikeDate",
@@ -212,7 +212,7 @@
       "args": [
         "US.SPXW260918C8100000"
       ],
-      "expect": "260918 C8100"
+      "expect": "20260918 C8100"
     },
     {
       "fn": "shortSpxCode",
@@ -223,12 +223,100 @@
       "expect": "sep-condor"
     },
     {
+      "fn": "datedName",
+      "name": "moomoo's name for a call",
+      "args": [
+        "SPXW 261030 8100.00C"
+      ],
+      "expect": "SPXW 20261030 8100.00C"
+    },
+    {
+      "fn": "datedName",
+      "name": "a name with no cents on the strike",
+      "args": [
+        "SPXW 261218 7300C"
+      ],
+      "expect": "SPXW 20261218 7300C"
+    },
+    {
+      "fn": "datedName",
+      "name": "a rule's own name",
+      "args": [
+        "1218-6800"
+      ],
+      "expect": "1218-6800"
+    },
+    {
+      "fn": "datedName",
+      "name": "a code",
+      "args": [
+        "US.SPXW261030C8100000"
+      ],
+      "expect": "US.SPXW261030C8100000"
+    },
+    {
+      "fn": "datedName",
+      "name": "a name already written whole",
+      "args": [
+        "SPXW 20261030 8100.00C"
+      ],
+      "expect": "SPXW 20261030 8100.00C"
+    },
+    {
+      "fn": "datedName",
+      "name": "a date with nothing after it",
+      "args": [
+        "SPXW 261030"
+      ],
+      "expect": "SPXW 261030"
+    },
+    {
+      "fn": "datedName",
+      "name": "text before it",
+      "args": [
+        "XSPXW 261030 8100C"
+      ],
+      "expect": "XSPXW 261030 8100C"
+    },
+    {
+      "fn": "datedName",
+      "name": "non-ASCII digits are not a date",
+      "args": [
+        "SPXW ٢٦١٠٣٠ 8100C"
+      ],
+      "expect": "SPXW ٢٦١٠٣٠ 8100C"
+    },
+    {
       "fn": "expandSpxShort",
       "name": "as the bot prints it",
+      "args": [
+        "20260918 C8100"
+      ],
+      "expect": "US.SPXW260918C8100000"
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "as the bot printed it before 2026-11-17",
       "args": [
         "260918 C8100"
       ],
       "expect": "US.SPXW260918C8100000"
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "a year the code's two digits cannot carry",
+      "args": [
+        "19260918 C8100"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "expandSpxShort",
+      "name": "a whole year on a day that does not exist",
+      "args": [
+        "20260230C8100"
+      ],
+      "expect": null
     },
     {
       "fn": "expandSpxShort",

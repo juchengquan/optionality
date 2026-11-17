@@ -62,7 +62,7 @@ describe("the cards, on the owner's book", () => {
     expect(headings("Holdings")).toEqual(book.holdings.map((g) => g.expiry));
     expect(headings("Watchlist")).toEqual(book.watchlist.map((g) => g.expiry));
     // the expiry in prose, never ISO, and its DTE said once, here (parts F and K)
-    expect(within(region("Holdings")).getByRole("heading", { name: /Fri 18 Dec/ })).toBeTruthy();
+    expect(within(region("Holdings")).getByRole("heading", { name: /20261218/ })).toBeTruthy();
   });
 
   it("sit a condor's two cards together, the calls first", () => {

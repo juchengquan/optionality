@@ -163,7 +163,7 @@ describe("where the tooltip goes", () => {
 describe("what a day says", () => {
   it("in the tooltip: the day, money across the contracts, on pace, the gap and why it is off-close", () => {
     const lines = tipLines(day({ timing: "after-close", observed_at: "2026-11-04 09:30:00+08:00" }), money);
-    expect(lines.day).toBe("3 Nov · 45 DTE");
+    expect(lines.day).toBe("20261103 · 45 DTE");
     expect(lines.cost).toBe("to close, 2 contracts: $460");
     expect(lines.pace).toBe("on pace $404");
     // the gap in points, as every Pace gap on the page is said: 2.30 against 2.02
@@ -186,7 +186,7 @@ describe("what a day says", () => {
     expect(lines.pace).toBe("on pace 2.02 pts");
     expect(lines.gap?.words).toBe("behind by 0.28");
     expect(sampleWords(day(), hidden))
-      .toBe("3 Nov · 45 DTE · to close, per contract: 2.30 pts · on pace 2.02 pts · behind by 0.28"
+      .toBe("20261103 · 45 DTE · to close, per contract: 2.30 pts · on pace 2.02 pts · behind by 0.28"
         + " — in hours (observed 16:00 ET)");
   });
 
@@ -205,7 +205,7 @@ describe("what a day says", () => {
 
   it("in the status line, everything the tooltip says and the whole reason", () => {
     expect(sampleWords(day(), money))
-      .toBe("3 Nov · 45 DTE · to close, 2 contracts: $460 · on pace $404 · behind by 0.28"
+      .toBe("20261103 · 45 DTE · to close, 2 contracts: $460 · on pace $404 · behind by 0.28"
         + " — in hours (observed 16:00 ET)");
   });
 });
@@ -231,7 +231,7 @@ describe("a day summed before a leg's quantity was corrected (#359)", () => {
 
   it("says so in the status line", () => {
     expect(sampleWords(before, money))
-      .toBe("3 Nov · 45 DTE · to close, 2 contracts: $460 · on pace $404"
+      .toBe("20261103 · 45 DTE · to close, 2 contracts: $460 · on pace $404"
         + " — in hours (observed 16:00 ET) — summed before a leg's quantity was corrected");
   });
 

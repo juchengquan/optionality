@@ -73,8 +73,8 @@ describe.each(arrangements)("on the %s, the poll", (arrangement) => {
   it("waits while a rule's edit form is open, and goes on once it is cancelled", async () => {
     const svc = await open(arrangement);
     const home = await openSpread(arrangement);
-    fireEvent.click(within(home).getByRole("button", { name: "edit 261218 7150P Δ" }));
-    const form = await within(home).findByRole("form", { name: "editing 261218 7150P Δ" });
+    fireEvent.click(within(home).getByRole("button", { name: "edit 20261218 7150P Δ" }));
+    const form = await within(home).findByRole("form", { name: "editing 20261218 7150P Δ" });
     // the form puts the focus in its threshold, where the owner types
     await until(() => expect(form.contains(document.activeElement)).toBe(true));
     expect(await twoPolls(svc), "a poll landed on an open edit").toBe(0);

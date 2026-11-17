@@ -94,7 +94,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "SPXW 261218 7350C\noption_delta: 0.150\noption_implied_volatility: 14.500\nmid_price: 1.75\nbid_price: 1.7\nask_price: 1.8\nlast_price: 1.75\noption_theta: -0.85",
+      "text": "SPXW 20261218 7350C\noption_delta: 0.150\noption_implied_volatility: 14.500\nmid_price: 1.75\nbid_price: 1.7\nask_price: 1.8\nlast_price: 1.75\noption_theta: -0.85",
       "parse_mode": null
     },
     "rows": {},

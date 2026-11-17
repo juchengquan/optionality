@@ -18,6 +18,7 @@
 import { spx as spxText } from "./shared/numbers";
 import type { Holding, Sample } from "./shared/api";
 import type { WrittenLeg } from "./shared/format";
+import { writtenDate } from "./shared/times";
 import { whyShort } from "./burndown";
 import { distanceWords } from "./strip";
 
@@ -57,11 +58,11 @@ export function stopsOf(samples: Sample[], now: number | null): Stop[] {
   ];
 }
 
-const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
-/** "3 Nov": a market date as a day to read, read in UTC so the device's zone cannot move it. */
-export const dayWords = (iso: string) => DAY.format(new Date(`${iso}T00:00:00Z`));
+/** "20261103": a market date as every date is written (`times.writtenDate`), by string, so no zone
+ *  can move it — the way the service writes the days in its reasons. */
+export const dayWords = writtenDate;
 
-/** A stop's heading, as the burndown's tooltip says a day: "9 Nov · 39 DTE", "valued now · 38 DTE". */
+/** A stop's heading, as the burndown's tooltip says a day: "20261109 · 39 DTE", "valued now · 38 DTE". */
 export const stopDay = (stop: Stop) =>
   stop.on === null ? `valued now · ${stop.dte} DTE` : `${dayWords(stop.on)} · ${stop.dte} DTE`;
 

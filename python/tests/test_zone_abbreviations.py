@@ -61,9 +61,9 @@ def test_london_parts_from_the_typescript_only_in_summer():
     assert summer["ts"] != summer["py"]
     assert (
         display_time_short(datetime.fromisoformat("2026-01-15T12:00:00+00:00"), "Europe/London")
-        == "2026-01-15 12:00 GMT"
+        == "Thu 20260115 12:00 GMT"
     )
     assert (
         display_time_short(datetime.fromisoformat("2026-07-15T12:00:00+00:00"), "Europe/London")
-        == "2026-07-15 13:00 BST"
+        == "Wed 20260715 13:00 BST"
     )

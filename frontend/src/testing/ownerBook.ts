@@ -295,7 +295,7 @@ export function samplesAnswer(path: string): Samples | null {
 }
 
 /** `/positions/{id}/vol` for each holding (#333), as the service's `paceExplained` serves it: the
- *  put spread's split whole, the call spread's declined — its 6 Nov row has no IV, as its samples
+ *  put spread's split whole, the call spread's declined — its 20261106 row has no IV, as its samples
  *  above say — with what would cover its gap, and the 4-leg condor's on the day after it opened.
  *  Each gap is at its LAST close, so none is the schedule's live `pace_gap` a test gives it: a
  *  page that split the live gap would say other figures than these. */
@@ -304,7 +304,7 @@ export const VOLS: Record<string, Vol> = {
     at: "2026-11-09", timing: "close", gap: -0.42, gap_reason: null, rest: -0.73, vega: -0.86,
     cover: 0.4883720930232558, cover_reason: null },
   "h-calls": { vol: null, from: null, to: null, days: null,
-    reason: "6 Nov has no vol reading for every leg",
+    reason: "20261106 has no vol reading for every leg",
     at: "2026-11-09", timing: "close", gap: 2.27, gap_reason: null, rest: null, vega: -1.25,
     cover: 1.816, cover_reason: null },
   "h-ic": { vol: -0.05, from: "2026-11-03", to: "2026-11-04", days: 1, reason: null,

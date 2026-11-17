@@ -18,7 +18,7 @@ import { settle } from "./nextBook";
 beforeEach(() => { vi.setSystemTime(new Date("2026-11-10T15:00:00Z")); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-const DELTA = "261218 7150P Δ";
+const DELTA = "20261218 7150P Δ";
 
 async function openDesk(refuse?: Parameters<typeof serveEditing>[0]) {
   await page.viewport(1440, 900);
@@ -32,7 +32,7 @@ const inspector = () => screen.getByRole("complementary", { name: /^inspector/ }
 
 /** The delta rule under the 12-18 put spread, opened in the inspector. */
 async function inspectDelta() {
-  await userEvent.click(screen.getByRole("button", { name: "261218 7150P" }));
+  await userEvent.click(screen.getByRole("button", { name: "20261218 7150P" }));
   return inspector();
 }
 
@@ -140,15 +140,15 @@ describe("mute, unmute and delete from the desk", () => {
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes).toEqual([{ what: "DELETE /monitors/w-dec18-delta", body: null }]));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "261218 7150P" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: "20261218 7150P" })).toBeNull());
   });
 
   it("switches a quarantined rule back on only after saying why it was switched off", async () => {
     const writes = await openDesk();
-    await userEvent.click(screen.getByRole("button", { name: "261211 8000C" }));
+    await userEvent.click(screen.getByRole("button", { name: "20261211 8000C" }));
     const panel = inspector();
-    await userEvent.click(within(panel).getByRole("button", { name: "switch 261211 8000C Δ back on" }));
-    const ask = within(panel).getByRole("group", { name: "switch 261211 8000C Δ back on?" });
+    await userEvent.click(within(panel).getByRole("button", { name: "switch 20261211 8000C Δ back on" }));
+    const ask = within(panel).getByRole("group", { name: "switch 20261211 8000C Δ back on?" });
     expect(ask.textContent).toMatch(/the provider does not know its contract — US\.SPXW261211C8300000/);
     expect(writes).toEqual([]);
     await userEvent.click(within(ask).getByRole("button", { name: "switch it on" }));
@@ -159,7 +159,7 @@ describe("mute, unmute and delete from the desk", () => {
     await openDesk();
     await userEvent.click(await screen.findByText(/^Muted and expired · /));
     // beside its reason's label "expired", the note says the day without the word again (2026-11-17)
-    const note = screen.getByText("Fri 6 Nov — the service deletes it on Thu 12 Nov");
+    const note = screen.getByText("20261106 — the service deletes it on 20261112");
     expect(note.closest("li")!.textContent!.match(/expired/g)).toHaveLength(1);
   });
 });

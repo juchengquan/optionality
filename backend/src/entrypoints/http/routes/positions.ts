@@ -42,7 +42,7 @@ import {
   ClosePositionIn, DEFAULT_CONTRACTS, PayoffIn, PositionIn, PositionPatch, storedQty,
 } from "../../../schemas/position.ts";
 import { displayStored } from "../../../db/time.ts";
-import { displayTime } from "optionality/domain/timefmt";
+import { displayDate, displayTime } from "optionality/domain/timefmt";
 import { documented } from "../openapi.ts";
 import { valid } from "../validate.ts";
 import { StrikeDistanceOut } from "./monitors.ts";
@@ -301,10 +301,12 @@ function closedOnFault(
   row: PositionRow, closedOn: string, openedAt: string | null, today: string,
 ): string | null {
   if (openedAt !== null && closedOn < openedAt) {
-    return `closed on ${closedOn}, before it was opened on ${openedAt}`;
+    return `closed on ${displayDate(closedOn)}, before it was opened on ${displayDate(openedAt)}`;
   }
-  if (closedOn > row.strike_date) return `closed on ${closedOn}, after its expiry on ${row.strike_date}`;
-  if (closedOn > today) return `closed on ${closedOn}, after today (${today} in New York)`;
+  if (closedOn > row.strike_date) {
+    return `closed on ${displayDate(closedOn)}, after its expiry on ${displayDate(row.strike_date)}`;
+  }
+  if (closedOn > today) return `closed on ${displayDate(closedOn)}, after today (${displayDate(today)} in New York)`;
   return null;
 }
 
@@ -547,7 +549,7 @@ export function positionRoutes(deps: Deps) {
       if (explained.gap === null || !last || !beforeCorrection(last.observed_at, row.qty_corrected_at)) {
         return vol.reply(c, 200, explained);
       }
-      const why = `the Cost to close of ${last.observed_on} was summed before a leg's quantity was corrected`;
+      const why = `the Cost to close of ${displayDate(last.observed_on)} was summed before a leg's quantity was corrected`;
       return vol.reply(c, 200, {
         ...explained, gap: null, gap_reason: why, rest: null, cover: null, cover_reason: why,
       });

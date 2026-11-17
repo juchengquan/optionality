@@ -27,7 +27,7 @@ import { ruleOfMonitor } from "./edit";
 import { fieldWords, monitorName } from "./needs";
 import "./holding.css";
 import { rawError } from "./shared/errors";
-import { dateWords } from "./shared/times";
+import { writtenDate } from "./shared/times";
 import { ErrorWords } from "./shared/ErrorWords";
 
 /** What a close answered, for the page to say. */
@@ -222,7 +222,7 @@ function EditForm({ id, holding: served, watching, privacy, now, monitors, onCan
           <small className="nx-meta">
             {"the New York trading day · "}
             <button type="button" className="nx-hold-link" onClick={() => change({ opened: trading })}>
-              {`today's: ${dateWords(trading)}`}
+              {`today's: ${writtenDate(trading)}`}
             </button>
           </small>
         </label>

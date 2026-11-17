@@ -218,7 +218,7 @@
         "from": null,
         "to": null,
         "days": null,
-        "reason": "its samples begin on 12 Nov, not on 12 Oct when it was Opened: the vol it was sold at was never recorded",
+        "reason": "its samples begin on 20261112, not on 20261012 when it was Opened: the vol it was sold at was never recorded",
         "at": "2026-11-13",
         "timing": "close",
         "gap": -1.3756907511606453,

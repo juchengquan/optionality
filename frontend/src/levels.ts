@@ -63,7 +63,7 @@ export function levelWords(level: Level, holding: Holding, session: boolean, now
   return `${words} · ${at ? `as valued at ${at}` : "as last valued"}`;
 }
 
-/** Which stored row a holding was valued from, in words: "as of the close, Fri 13 Nov 16:14", on New
+/** Which stored row a holding was valued from, in words: "as of the close, Fri 20261113 16:14 ET", on New
  *  York's clock — or, where no row with a cost was taken in a session, that reading's own timing, so
  *  it is never passed off as a close (#380): a weekend's by its time alone (#387). The bot's
  *  `/holdings` says the same words. */
@@ -79,7 +79,7 @@ export function closeWords(h: Holding): string {
 }
 
 /** The market-closed line's words where any holding was valued from a stored close (#380):
- *  "market closed — as of the close, Fri 13 Nov 16:14", then how many holdings were valued from
+ *  "market closed — as of the close, Fri 20261113 16:14 ET", then how many holdings were valued from
  *  another row and how many had none and were valued live — or, where the Provider could not be
  *  asked for them (`valued_reason`), were not valued at all (#387). Null where every holding was
  *  valued live — the line then says when, as it did (`valuedStamp`). The bot's `closedLine`, word

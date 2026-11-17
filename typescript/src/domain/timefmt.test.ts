@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { displayTime, marketTimeToDisplay } from "./timefmt.ts";
+import { displayDate, displayTime, displayTimeShort, marketTimeToDisplay } from "./timefmt.ts";
 
 const TZ = "Asia/Singapore";
 
@@ -98,5 +98,23 @@ describe("marketTimeToDisplay", () => {
     // feeding its own output back in would read the offset as part of a new naive time
     const once = marketTimeToDisplay("2026-08-09 20:15:00", TZ);
     expect(marketTimeToDisplay(once, TZ)).toBe(once); // refused, because it no longer parses
+  });
+});
+
+describe("a date as the owner reads one (2026-11-17)", () => {
+  it("is YYYYMMDD", () => {
+    expect(displayDate("2026-11-13")).toBe("20261113");
+    expect(displayDate("2026-01-02")).toBe("20260102");
+  });
+
+  it("leaves anything that is not a date as it is", () => {
+    for (const x of ["", "13 Nov", "20261113", "2026-11-13 16:14", "x"]) expect(displayDate(x), x).toBe(x);
+  });
+
+  it("keeps its weekday beside a time, in the bot's short stamp", () => {
+    expect(displayTimeShort(new Date("2026-11-09T14:59:50Z"), "Asia/Singapore")).toBe("Mon 20261109 22:59 +08");
+    expect(displayTimeShort(new Date("2026-11-13T21:14:00Z"), "America/New_York")).toBe("Fri 20261113 16:14 EST");
+    // the weekday is the zone's day, not UTC's: 23:00 UTC on a Sunday is Monday in Singapore
+    expect(displayTimeShort(new Date("2026-11-15T23:00:00Z"), "Asia/Singapore")).toBe("Mon 20261116 07:00 +08");
   });
 });

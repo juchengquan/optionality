@@ -17,6 +17,7 @@
 import { ruleShape, ruleShort, type RuleShape } from "./alarm.ts";
 import { monitorLegCodes, type Monitor } from "./monitor.ts";
 import type { ByCode } from "./quote.ts";
+import { displayDate } from "./timefmt.ts";
 
 /** Why a figure did not arrive, in the words the notice uses. Sorted, so the sentence a rule
  *  produces does not depend on the order a provider happened to answer in. */
@@ -166,14 +167,14 @@ export function expiryVerdict(
   if (expiry < cutoff) {
     return {
       action: "remove",
-      notice: monitor.enabled ? `ℹ️ monitor ${code} expired (${expiry}) — removed` : null,
+      notice: monitor.enabled ? `ℹ️ monitor ${code} expired (${displayDate(expiry)}) — removed` : null,
     };
   }
   if (expiry < today) {
     if (!monitor.enabled) return { action: "keep", notice: null };
     return {
       action: "mute",
-      notice: `ℹ️ monitor ${code} expired (${expiry}) — muted; auto-removes in ${retentionDays} days`,
+      notice: `ℹ️ monitor ${code} expired (${displayDate(expiry)}) — muted; auto-removes in ${retentionDays} days`,
     };
   }
   return { action: "keep", notice: null };

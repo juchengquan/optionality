@@ -15,7 +15,7 @@ import { correctClose } from "./shared/api";
 import { correctionBody, exitPrefill, type CloseDraft } from "./holding";
 import { madeWords, storedWords } from "./journal";
 import { DayField, ExitField, type ClosedOutcome } from "./HoldingActions";
-import { dateWords } from "./shared/times";
+import { writtenDate } from "./shared/times";
 import { rawError } from "./shared/errors";
 import { ErrorWords } from "./shared/ErrorWords";
 
@@ -81,7 +81,7 @@ export function ClosedResult({ outcome, privacy, onDone, onCorrected, served }: 
     <section ref={section} className="nx-closed" aria-label={`closed ${holding.name}`}>
       <h2 ref={heading} tabIndex={-1}>{`Closed ${holding.name}`}</h2>
       <p>
-        {`closed on ${now.closed_on ? dateWords(now.closed_on) : "—"} · entry ${stored(holding.entry) ?? "—"} → exit ${stored(now.exit) ?? "—"} · made `}
+        {`closed on ${now.closed_on ? writtenDate(now.closed_on) : "—"} · entry ${stored(holding.entry) ?? "—"} → exit ${stored(now.exit) ?? "—"} · made `}
         <strong data-testid="realized">{made}</strong>
       </p>
       <p className="nx-meta">Points, Entry less Exit across the contracts held: a closed holding has no quote to give it a dollar size.</p>

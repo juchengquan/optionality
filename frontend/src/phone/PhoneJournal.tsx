@@ -12,7 +12,7 @@ import { readUp, type EntryStyle } from "../shared/prefs";
 import { useDismissOnBack } from "../shared/useDismissOnBack";
 import { ClosedTradeDetail, TradeLegs } from "../ClosedTrade";
 import { madeWords, storedWords, type ClosedTrade, type Journal } from "../journal";
-import { dateWords } from "../shared/times";
+import { writtenDate } from "../shared/times";
 import { ErrorWords } from "../shared/ErrorWords";
 
 export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDeleted }: {
@@ -55,8 +55,8 @@ export function PhoneJournal({ journal, privacy, entryStyle, onCorrected, onDele
                         <span className="nxp-meta">made</span>
                       </div>
                       <dl className="nxp-facts">
-                        <div><dt>opened</dt><dd data-fig="opened">{t.opened_at ? dateWords(t.opened_at) : "not recorded"}</dd></div>
-                        <div><dt>closed</dt><dd data-fig="closed">{dateWords(t.closed_on)}</dd></div>
+                        <div><dt>opened</dt><dd data-fig="opened">{t.opened_at ? writtenDate(t.opened_at) : "not recorded"}</dd></div>
+                        <div><dt>closed</dt><dd data-fig="closed">{writtenDate(t.closed_on)}</dd></div>
                         <div><dt>entry</dt><dd data-fig="entry">{storedWords(t.entry)}</dd></div>
                         <div><dt>exit</dt><dd data-fig="exit">{storedWords(t.exit)}</dd></div>
                       </dl>
@@ -98,7 +98,7 @@ function TradeSheet({ trade, privacy, entryStyle, onClose, onCorrected, onDelete
                     initialFocus={title}>
         <SheetHeader>
           <SheetTitle ref={title} tabIndex={-1}>{shown?.name ?? ""}</SheetTitle>
-          <SheetDescription>{shown ? <>{`closed on ${dateWords(shown.closed_on)} · `}<TradeLegs trade={shown} /></> : ""}</SheetDescription>
+          <SheetDescription>{shown ? <>{`closed on ${writtenDate(shown.closed_on)} · `}<TradeLegs trade={shown} /></> : ""}</SheetDescription>
         </SheetHeader>
         <div className="nxp-sheet-body">
           {shown ? <ClosedTradeDetail trade={shown} privacy={privacy} onCorrected={onCorrected}

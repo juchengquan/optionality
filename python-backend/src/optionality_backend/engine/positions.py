@@ -43,6 +43,7 @@ from optionality.expiry import (
 from optionality.js import js_string, to_fixed
 from optionality.position import contract_size, cost_to_close, leg_readings
 from optionality.quote import ByCode, derived_spx
+from optionality.timefmt import display_date
 
 from ..db.queries import find_position_sample, record_position_sample, stamp_manage_notified
 from ..db.rows import PositionRow, PositionSampleRow
@@ -165,16 +166,16 @@ def _thin_words(at: datetime) -> str:
 
 
 def _close_words(close: PositionSampleRow) -> str:
-    """Which stored row a figure is from, after the figure: "at the 2026-11-13 close", or the reading's
+    """Which stored row a figure is from, after the figure: "at the 20261113 close", or the reading's
     own timing where no close had a cost — never passed off as a close, a weekend's included (#387)."""
     timing = valued_timing(close["observed_at"])
     if timing == "close":
-        return f"at the {close['observed_on']} close"
+        return f"at the {display_date(close['observed_on'])} close"
     if timing == "after-close":
-        return f"on {close['observed_on']}, after the close"
+        return f"on {display_date(close['observed_on'])}, after the close"
     if timing == "before-open":
-        return f"on {close['observed_on']}, before the open"
-    return f"on {close['observed_on']}"
+        return f"on {display_date(close['observed_on'])}, before the open"
+    return f"on {display_date(close['observed_on'])}"
 
 
 def record_samples(db: sqlite3.Connection, rows: list[PositionRow], by_code: ByCode, at: datetime) -> None:

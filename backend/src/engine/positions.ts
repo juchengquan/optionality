@@ -20,6 +20,7 @@ import { normalizeStrikeDate } from "optionality/domain/contract";
 import { dteAtOpen, onPace } from "optionality/domain/exit";
 import { contractSize, costToClose, legReadings } from "optionality/domain/position";
 import { derivedSpx } from "optionality/domain/quote";
+import { displayDate } from "optionality/domain/timefmt";
 import {
   findPositionSample, recordPositionSample, stampManageNotified,
 } from "../db/queries/index.ts";
@@ -137,15 +138,15 @@ function thinWords(at: Date): string {
   }
 }
 
-/** Which stored row a figure is from, after the figure: "at the 2026-11-13 close", or the reading's
+/** Which stored row a figure is from, after the figure: "at the 20261113 close", or the reading's
  *  own timing where no close had a cost (`closeSample`'s fallback) — never passed off as a close,
  *  a weekend's reading included (`valuedTiming`, #387). */
 function closeWords(close: { observed_on: string; observed_at: string | null }): string {
   switch (valuedTiming(close.observed_at)) {
-    case "close": return `at the ${close.observed_on} close`;
-    case "after-close": return `on ${close.observed_on}, after the close`;
-    case "before-open": return `on ${close.observed_on}, before the open`;
-    default: return `on ${close.observed_on}`;
+    case "close": return `at the ${displayDate(close.observed_on)} close`;
+    case "after-close": return `on ${displayDate(close.observed_on)}, after the close`;
+    case "before-open": return `on ${displayDate(close.observed_on)}, before the open`;
+    default: return `on ${displayDate(close.observed_on)}`;
   }
 }
 

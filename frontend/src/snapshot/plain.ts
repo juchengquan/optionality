@@ -19,7 +19,7 @@
  *  so "$•••" here is "$•••" on the screen.
  */
 import type { Entry, Health, Holding, Monitor, Reference } from "../shared/api";
-import { DASH, freshnessWords, shortDate } from "../shared/format";
+import { DASH, freshnessWords } from "../shared/format";
 import { GROUPS, headingOf, reasonLabel } from "../shared/groups";
 import { drawnReadings, referenceWords } from "../shared/readings";
 
@@ -28,7 +28,7 @@ import { closedLineText, levelWords } from "../levels";
 import { monitorName, storedRuleWords, type Need } from "../needs";
 import { placeBook, type PlacedHolding } from "../placement";
 import { servedWhen, type MarketPhase } from "../session";
-import { ET, zoneName } from "../shared/times";
+import { ET, weekdayDate, writtenDate, zoneName } from "../shared/times";
 import { compactWords, nearest, strikeName } from "../strip";
 import { plainWords } from "../shared/errors";
 
@@ -58,11 +58,11 @@ export interface PlainInput {
   takenAt: Date;
 }
 
-/** A line of the header block: "session: market closed — as of the close, Fri 13 Nov 16:14" — or a
+/** A line of the header block: "session: market closed — as of the close, Fri 20261113 16:14 ET" — or a
  *  list, one item a line under its label, as the References are (#400). */
 export interface PlainLine { label: string; text: string; items?: string[] }
 
-/** An expiry's rows under its heading ("261218 · 38 DTE"), or a section's rows with none. */
+/** An expiry's rows under its heading ("20261218 · 38 DTE"), or a section's rows with none. */
 export interface PlainGroup { heading: string | null; rows: string[][] }
 
 export interface PlainSection {
@@ -165,7 +165,7 @@ export function plainView(input: PlainInput): PlainView {
   else if (input.holdings === null) holdingNotes.push("valuing…");
   else if (input.holdings.length === 0) holdingNotes.push("nothing held");
   const holdingGroups: PlainGroup[] = placed.holdings.map(({ expiry, rows }) => ({
-    heading: `${shortDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`,
+    heading: `${writtenDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`,
     rows: rows.flat().flatMap((p: PlacedHolding) => [
       row({ kind: "holding", holding: p.holding, rules: p.rules }),
       ...p.rules.map((e) => row({ kind: "rule", entry: e, nested: true })),
@@ -182,7 +182,7 @@ export function plainView(input: PlainInput): PlainView {
 
   // ---- Watchlist
   const watchGroups: PlainGroup[] = placed.watchlist.map(({ expiry, items }) => ({
-    heading: `${shortDate(expiry)} · ${items[0]!.entry.dte} DTE`,
+    heading: `${writtenDate(expiry)} · ${items[0]!.entry.dte} DTE`,
     rows: items.flatMap(({ entry, under, overlap }) => [
       watchRow({ kind: "rule", entry, nested: false, overlap }),
       ...under.map((e) => watchRow({ kind: "rule", entry: e, nested: true })),
@@ -251,16 +251,16 @@ function tidy(view: PlainView): PlainView {
 // ---- the header block
 
 const WALL = (timeZone: string) => new Intl.DateTimeFormat("en-US", {
-  timeZone, weekday: "short", day: "numeric", month: "short", year: "numeric",
+  timeZone, day: "2-digit", month: "2-digit", year: "numeric",
   hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
 
-/** "Sun 15 Nov 2026 12:00", in a zone, its name said by the caller; null for a zone the browser
- *  does not know. */
+/** "Sun 20261115 12:00", in a zone, its name said by the caller — a date beside a time, with its
+ *  weekday (`times.weekdayDate`); null for a zone the browser does not know. */
 function wallTime(at: Date, timeZone: string): string | null {
   try {
     const p = Object.fromEntries(WALL(timeZone).formatToParts(at).map((x) => [x.type, x.value]));
-    return `${p.weekday} ${p.day} ${p.month} ${p.year} ${p.hour}:${p.minute}`;
+    return `${weekdayDate(`${p.year}-${p.month}-${p.day}`)} ${p.hour}:${p.minute}`;
   } catch {
     return null;
   }

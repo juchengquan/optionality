@@ -42,6 +42,7 @@ import { type NotifySender, type Notifier, notifier } from "../notify.ts";
 import { noticeManageBy, recordSamples } from "./positions.ts";
 import { recordWatchSamples } from "./watching.ts";
 import { alarmPolicy, alarmTransition } from "optionality/domain/alarm";
+import { datedName } from "optionality/domain/contract";
 import {
   expiryVerdict, holdsWithoutQuote, silenceVerdict, unknownContractVerdict, unreadableNotice,
 } from "optionality/domain/lifecycle";
@@ -474,7 +475,8 @@ export class MonitorSweeper {
           const changes: Partial<MonitorRow> = { last_value: value, last_checked_at: stamp };
           // the Provider's name for the contract where it has one: a combo's code IS its name,
           // and a single's code is machine-readable rather than something to read on a phone
-          const name = (byCode[monitor.code]?.name as string | undefined) || monitor.code;
+          // — its date written YYYYMMDD, as every date the owner reads is (`datedName`)
+          const name = datedName((byCode[monitor.code]?.name as string | undefined) || monitor.code);
           // the decision is alarm.ts's; what is left here is turning it into a row and a message
           const decision = alarmTransition(
             monitor, value, name,

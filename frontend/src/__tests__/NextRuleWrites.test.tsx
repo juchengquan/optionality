@@ -72,7 +72,7 @@ describe("renaming a combo from its editor", () => {
 
   it("has no name box for a single contract", async () => {
     controls(DELTA);
-    const form = await openEditor("261218 7150P Δ");
+    const form = await openEditor("20261218 7150P Δ");
     expect(within(form).queryByLabelText("name")).toBeNull();
   });
 
@@ -182,7 +182,7 @@ describe("splitting a total entry", () => {
 describe("Record as held (#408)", () => {
   it("is offered on a watched spread and a watched contract, and not on a rule on something held", () => {
     controls(LONE);
-    expect(screen.getByRole("button", { name: "record 261231 8000C Δ as held" }).textContent).toBe("record as held");
+    expect(screen.getByRole("button", { name: "record 20261231 8000C Δ as held" }).textContent).toBe("record as held");
     cleanup();
     controls(SPREAD);
     expect(screen.getByRole("button", { name: "record 1218_P7150 value as held" })).toBeTruthy();
@@ -276,9 +276,9 @@ describe("from both arrangements", () => {
     fireEvent.click(within(panel).getByRole("button", { name: "save" }));
     await waitFor(() => expect(sent).toHaveLength(2));
 
-    fireEvent.click(screen.getByRole("button", { name: "261231 8000C" }));
+    fireEvent.click(screen.getByRole("button", { name: "20261231 8000C" }));
     panel = screen.getByRole("complementary", { name: /^inspector/ });
-    fireEvent.click(within(panel).getByRole("button", { name: "record 261231 8000C Δ as held" }));
+    fireEvent.click(within(panel).getByRole("button", { name: "record 20261231 8000C Δ as held" }));
     expect(sent.map((s) => s.what)).toEqual(["TOTAL", "PATCH", "RECORD"]);
   });
 
@@ -312,9 +312,9 @@ describe("from both arrangements", () => {
     fireEvent.keyDown(sheet, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
-    fireEvent.click(screen.getByRole("button", { name: "details of 261231 8000C" }));
+    fireEvent.click(screen.getByRole("button", { name: "details of 20261231 8000C" }));
     sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "record 261231 8000C Δ as held" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "record 20261231 8000C Δ as held" }));
     expect(sent.map((s) => s.what)).toEqual(["TOTAL", "PATCH", "RECORD"]);
   });
 });
@@ -393,9 +393,9 @@ describe("through the page, against a service that writes", () => {
     NOW();
     const writes = serveRuleEdits();
     render(<Next />);
-    fireEvent.click(await screen.findByRole("button", { name: "details of 261231 8000C" }));
+    fireEvent.click(await screen.findByRole("button", { name: "details of 20261231 8000C" }));
     const detail = await screen.findByRole("dialog");
-    fireEvent.click(within(detail).getByRole("button", { name: "record 261231 8000C Δ as held" }));
+    fireEvent.click(within(detail).getByRole("button", { name: "record 20261231 8000C Δ as held" }));
     const form = within(await addSheet()).getByRole("form", { name: "add one contract" });
     expect(within(form).getByRole("button", { name: "I hold it" }).getAttribute("aria-pressed")).toBe("true");
     expect([value(form, "expiry"), value(form, "strike"), value(form, "what it watches"), value(form, "compare"),
@@ -501,8 +501,8 @@ describe("through the page, against a service that writes", () => {
     NOW();
     serveRuleEdits({}, [CS]);
     render(<Next />);
-    fireEvent.click(await screen.findByRole("button", { name: "details of 261231 8000C" }));
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 261231 8000C Δ as held" }));
+    fireEvent.click(await screen.findByRole("button", { name: "details of 20261231 8000C" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 20261231 8000C Δ as held" }));
     const form = within(await addSheet()).getByRole("form", { name: "add one contract" });
     expect(within(form).getByText(/^Also links to this holding: cs \|value\| ≥ /)).toBeTruthy();
     fireEvent.change(within(form).getByLabelText("entry"), { target: { value: "0.8" } });
@@ -528,8 +528,8 @@ describe("through the page, against a service that writes", () => {
     NOW();
     const writes = serveRuleEdits({}, [], { names: ["1231_C8000"] });
     render(<Next />);
-    fireEvent.click(await screen.findByRole("button", { name: "details of 261231 8000C" }));
-    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 261231 8000C Δ as held" }));
+    fireEvent.click(await screen.findByRole("button", { name: "details of 20261231 8000C" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 20261231 8000C Δ as held" }));
     const form = within(await addSheet()).getByRole("form", { name: "add one contract" });
     expect(value(form, "name")).toBe("1231_C8000-2");
     fireEvent.change(within(form).getByLabelText("entry"), { target: { value: "0.8" } });

@@ -345,41 +345,43 @@ class TestClosedLine:
     FRI: ClassVar[dict[str, str]] = {"observed_on": "2026-11-13", "observed_at": "2026-11-13 21:14:59.000000"}
 
     def test_names_the_close_on_new_york_s_clock(self):
-        assert close_words(self.FRI) == "as of the close, Fri 13 Nov 16:14"
-        assert close_words(self.row("2026-09-30", "2026-09-30 20:14:00.000000")) == "as of the close, Wed 30 Sep 16:14"
+        assert close_words(self.FRI) == "as of the close, Fri 20261113 16:14"
+        assert (
+            close_words(self.row("2026-09-30", "2026-09-30 20:14:00.000000")) == "as of the close, Wed 20260930 16:14"
+        )
 
     def test_never_passes_a_reading_off_as_a_close(self):
         assert (
             close_words(self.row("2026-11-13", "2026-11-14 01:30:00.000000"))
-            == "as of Fri 13 Nov 20:30, after the close"
+            == "as of Fri 20261113 20:30, after the close"
         )
         assert (
             close_words(self.row("2026-11-13", "2026-11-13 10:00:00.000000"))
-            == "as of Fri 13 Nov 05:00, before the open"
+            == "as of Fri 20261113 05:00, before the open"
         )
-        assert close_words(self.row("2026-11-13", None)) == "as of Fri 13 Nov, at a time not recorded"
+        assert close_words(self.row("2026-11-13", None)) == "as of 20261113, at a time not recorded"
 
     def test_says_the_latest_close_and_how_many_holdings_were_valued_otherwise(self):
         fri, v = self.FRI, self.valued
-        assert closed_line([v(fri), v(fri)]) == "market closed — as of the close, Fri 13 Nov 16:14"
+        assert closed_line([v(fri), v(fri)]) == "market closed — as of the close, Fri 20261113 16:14"
         assert (
             closed_line([v(self.row("2026-11-13", "2026-11-13 21:10:00.000000")), v(fri)])
-            == "market closed — as of the close, Fri 13 Nov 16:14"
+            == "market closed — as of the close, Fri 20261113 16:14"
         )
         assert (
             closed_line([v(fri), v(self.row("2026-11-13", "2026-11-14 01:30:00.000000")), v(None)])
-            == "market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading; 1 with no close, valued live"
+            == "market closed — as of the close, Fri 20261113 16:14; 1 as of another reading; 1 with no close, valued live"
         )
         assert closed_line([v(None)]) == "market closed — no close recorded yet; valued live"
 
     def test_names_a_weekend_reading_by_its_time_never_as_a_close(self):
         # #387
         sat = self.row("2026-11-14", "2026-11-14 16:00:00.000000")  # Saturday 11:00 New York
-        assert close_words(sat) == "as of Sat 14 Nov 11:00"
+        assert close_words(sat) == "as of Sat 20261114 11:00"
         # and it is no close to name before a weekday's, though it is in the hours and later
         assert (
             closed_line([self.valued(self.FRI), self.valued(sat)])
-            == "market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading"
+            == "market closed — as of the close, Fri 20261113 16:14; 1 as of another reading"
         )
 
     def test_in_the_curb_and_gth_says_live_and_thin_and_the_failure_whichever_way_each_was_valued(self):
@@ -388,12 +390,12 @@ class TestClosedLine:
         assert closed_line([self.valued(None)], "curb") == "Curb — live quotes, thin"
         assert (
             closed_line([self.valued(None), self.valued(self.FRI)], "overnight")
-            == "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14"
+            == "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 20261113 16:14"
         )
         down_from_close = SimpleNamespace(close=self.FRI, unpriced="OpenD down")
         assert (
             closed_line([down_from_close], "overnight")
-            == "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14;"
+            == "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 20261113 16:14;"
             " the Provider could not be asked"
         )
 
@@ -402,7 +404,7 @@ class TestClosedLine:
         failed = SimpleNamespace(close=None, unpriced="OpenD down")
         assert (
             closed_line([self.valued(self.FRI), failed])
-            == "market closed — as of the close, Fri 13 Nov 16:14; 1 with no close, and the Provider could not be asked"
+            == "market closed — as of the close, Fri 20261113 16:14; 1 with no close, and the Provider could not be asked"
         )
         assert (
             closed_line([failed, failed])

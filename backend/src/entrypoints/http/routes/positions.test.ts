@@ -107,7 +107,7 @@ describe("what vol did to a holding, over its own samples", () => {
     expect(await body(resp)).toMatchObject({
       vol: null, from: null, to: null, days: null, rest: null,
       // and says why, in the service's words, for the dashboard to say as they are (#333)
-      reason: "its samples begin on 12 Oct, not on 6 Oct when it was Opened: "
+      reason: "its samples begin on 20261012, not on 20261006 when it was Opened: "
         + "the vol it was sold at was never recorded",
       at: "2026-10-13",
     });
@@ -2039,7 +2039,7 @@ describe("correcting a held leg's quantity (#359)", () => {
     expect(before.gap).not.toBeNull();
     expect((await patch(id, { legs: MEANT })).status).toBe(200);
     const after = await body(await h.call(`/positions/${id}/vol`));
-    const why = "the Cost to close of 2026-10-01 was summed before a leg's quantity was corrected";
+    const why = "the Cost to close of 20261001 was summed before a leg's quantity was corrected";
     expect([after.gap, after.gap_reason, after.rest, after.cover, after.cover_reason]).toEqual([null, why, null, null, why]);
   });
 });

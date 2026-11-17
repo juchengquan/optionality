@@ -94,7 +94,7 @@ export function setMonitorScope(db: DatabaseSync, id: string, scope: string | nu
 }
 
 /** Monitors a bot identifier might mean: the exact code, the joined-and-upcased form, an id
- *  prefix, or a short contract like `260918 C8100`.
+ *  prefix, or a short contract like `20260918 C8100`.
  *
  *  Deliberately returns every match rather than the first. "Ambiguous" is an answer the owner can
  *  act on; silently picking one is how the wrong alarm gets deleted. */

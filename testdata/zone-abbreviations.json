@@ -13,18 +13,18 @@
     "escape hatch inside it is precisely the hole that would hide a rounding divergence that matters."
   ],
   "rows": [
-    { "zone": "Asia/Singapore", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 20:00 +08", "py": "2026-01-15 20:00 +08", "note": "the owner's own zone: an offset either way, which is why the bot has never shown the difference" },
-    { "zone": "America/New_York", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 07:00 EST", "py": "2026-01-15 07:00 EST", "note": "the market's zone, standard time; both libraries have the name" },
-    { "zone": "America/New_York", "at": "2026-07-15T12:00:00Z", "ts": "2026-07-15 08:00 EDT", "py": "2026-07-15 08:00 EDT", "note": "the market's zone, daylight time" },
-    { "zone": "UTC", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 12:00 UTC", "py": "2026-01-15 12:00 UTC", "note": "storage's own zone" },
-    { "zone": "Asia/Kathmandu", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 17:45 +0545", "py": "2026-01-15 17:45 +0545", "note": "a 45-minute offset: both print +0545, which is what pins tzAbbreviation's four-digit spelling" },
-    { "zone": "Europe/London", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 12:00 GMT", "py": "2026-01-15 12:00 GMT", "note": "winter: ICU has GMT, so this half of London agrees" },
-    { "zone": "Europe/London", "at": "2026-07-15T12:00:00Z", "ts": "2026-07-15 13:00 +01", "py": "2026-07-15 13:00 BST", "note": "summer: the same zone diverges, which is the sharpest case here — a zone is not agreeing or disagreeing, an INSTANT is" },
-    { "zone": "Asia/Kolkata", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 17:30 +0530", "py": "2026-01-15 17:30 IST", "note": "IST is also Irish and Israel Standard Time; the offset is the unambiguous one" },
-    { "zone": "Asia/Shanghai", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 20:00 +08", "py": "2026-01-15 20:00 CST", "note": "CST collides with America/Chicago's; note the TypeScript prints the same +08 as Singapore" },
-    { "zone": "Europe/Paris", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 13:00 +01", "py": "2026-01-15 13:00 CET", "note": "standard time" },
-    { "zone": "Europe/Paris", "at": "2026-07-15T12:00:00Z", "ts": "2026-07-15 14:00 +02", "py": "2026-07-15 14:00 CEST", "note": "daylight time: both the name and the offset move" },
-    { "zone": "America/St_Johns", "at": "2026-01-15T12:00:00Z", "ts": "2026-01-15 08:30 -0330", "py": "2026-01-15 08:30 NST", "note": "a negative half-hour offset, standard time" },
-    { "zone": "America/St_Johns", "at": "2026-07-15T12:00:00Z", "ts": "2026-07-15 09:30 -0230", "py": "2026-07-15 09:30 NDT", "note": "daylight time: -0230, the one case where the four-digit spelling and a minus meet" }
+    { "zone": "Asia/Singapore", "at": "2026-01-15T12:00:00Z", "ts": "Thu 20260115 20:00 +08", "py": "Thu 20260115 20:00 +08", "note": "the owner's own zone: an offset either way, which is why the bot has never shown the difference" },
+    { "zone": "America/New_York", "at": "2026-01-15T12:00:00Z", "ts": "Thu 20260115 07:00 EST", "py": "Thu 20260115 07:00 EST", "note": "the market's zone, standard time; both libraries have the name" },
+    { "zone": "America/New_York", "at": "2026-07-15T12:00:00Z", "ts": "Wed 20260715 08:00 EDT", "py": "Wed 20260715 08:00 EDT", "note": "the market's zone, daylight time" },
+    { "zone": "UTC", "at": "2026-01-15T12:00:00Z", "ts": "Thu 20260115 12:00 UTC", "py": "Thu 20260115 12:00 UTC", "note": "storage's own zone" },
+    { "zone": "Asia/Kathmandu", "at": "2026-01-15T12:00:00Z", "ts": "Thu 20260115 17:45 +0545", "py": "Thu 20260115 17:45 +0545", "note": "a 45-minute offset: both print +0545, which is what pins tzAbbreviation's four-digit spelling" },
+    { "zone": "Europe/London", "at": "2026-01-15T12:00:00Z", "ts": "Thu 20260115 12:00 GMT", "py": "Thu 20260115 12:00 GMT", "note": "winter: ICU has GMT, so this half of London agrees" },
+    { "zone": "Europe/London", "at": "2026-07-15T12:00:00Z", "ts": "Wed 20260715 13:00 +01", "py": "Wed 20260715 13:00 BST", "note": "summer: the same zone diverges, which is the sharpest case here — a zone is not agreeing or disagreeing, an INSTANT is" },
+    { "zone": "Asia/Kolkata", "at": "2026-01-15T12:00:00Z", "ts": "Thu 20260115 17:30 +0530", "py": "Thu 20260115 17:30 IST", "note": "IST is also Irish and Israel Standard Time; the offset is the unambiguous one" },
+    { "zone": "Asia/Shanghai", "at": "2026-01-15T12:00:00Z", "ts": "Thu 20260115 20:00 +08", "py": "Thu 20260115 20:00 CST", "note": "CST collides with America/Chicago's; note the TypeScript prints the same +08 as Singapore" },
+    { "zone": "Europe/Paris", "at": "2026-01-15T12:00:00Z", "ts": "Thu 20260115 13:00 +01", "py": "Thu 20260115 13:00 CET", "note": "standard time" },
+    { "zone": "Europe/Paris", "at": "2026-07-15T12:00:00Z", "ts": "Wed 20260715 14:00 +02", "py": "Wed 20260715 14:00 CEST", "note": "daylight time: both the name and the offset move" },
+    { "zone": "America/St_Johns", "at": "2026-01-15T12:00:00Z", "ts": "Thu 20260115 08:30 -0330", "py": "Thu 20260115 08:30 NST", "note": "a negative half-hour offset, standard time" },
+    { "zone": "America/St_Johns", "at": "2026-07-15T12:00:00Z", "ts": "Wed 20260715 09:30 -0230", "py": "Wed 20260715 09:30 NDT", "note": "daylight time: -0230, the one case where the four-digit spelling and a minus meet" }
   ]
 }

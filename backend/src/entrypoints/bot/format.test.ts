@@ -247,51 +247,51 @@ describe("closedLine — which close /holdings is valued from, out of session (#
   const FRI = row("2026-11-13", "2026-11-13 21:14:59.000000"); // 16:14 New York, EST
 
   it("names the close on New York's clock", () => {
-    expect(closeWords(FRI)).toBe("as of the close, Fri 13 Nov 16:14");
+    expect(closeWords(FRI)).toBe("as of the close, Fri 20261113 16:14");
     // September is "Sep" in both languages, which a locale's "Sept" would not be
-    expect(closeWords(row("2026-09-30", "2026-09-30 20:14:00.000000"))).toBe("as of the close, Wed 30 Sep 16:14");
+    expect(closeWords(row("2026-09-30", "2026-09-30 20:14:00.000000"))).toBe("as of the close, Wed 20260930 16:14");
   });
 
   it("never passes a reading off as a close", () => {
-    expect(closeWords(row("2026-11-13", "2026-11-14 01:30:00.000000"))).toBe("as of Fri 13 Nov 20:30, after the close");
-    expect(closeWords(row("2026-11-13", "2026-11-13 10:00:00.000000"))).toBe("as of Fri 13 Nov 05:00, before the open");
-    expect(closeWords(row("2026-11-13", null))).toBe("as of Fri 13 Nov, at a time not recorded");
+    expect(closeWords(row("2026-11-13", "2026-11-14 01:30:00.000000"))).toBe("as of Fri 20261113 20:30, after the close");
+    expect(closeWords(row("2026-11-13", "2026-11-13 10:00:00.000000"))).toBe("as of Fri 20261113 05:00, before the open");
+    expect(closeWords(row("2026-11-13", null))).toBe("as of 20261113, at a time not recorded");
   });
 
   it("says the latest close, and how many holdings were valued otherwise", () => {
-    expect(closedLine([valued(FRI), valued(FRI)])).toBe("market closed — as of the close, Fri 13 Nov 16:14");
+    expect(closedLine([valued(FRI), valued(FRI)])).toBe("market closed — as of the close, Fri 20261113 16:14");
     // a row rewritten at 16:10 and another at 16:14 are one close: the later is named
     expect(closedLine([valued(row("2026-11-13", "2026-11-13 21:10:00.000000")), valued(FRI)]))
-      .toBe("market closed — as of the close, Fri 13 Nov 16:14");
+      .toBe("market closed — as of the close, Fri 20261113 16:14");
     // a close is named before a later reading after it
     expect(closedLine([valued(FRI), valued(row("2026-11-13", "2026-11-14 01:30:00.000000")), valued(null)]))
-      .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading; 1 with no close, valued live");
+      .toBe("market closed — as of the close, Fri 20261113 16:14; 1 as of another reading; 1 with no close, valued live");
     expect(closedLine([valued(null)])).toBe("market closed — no close recorded yet; valued live");
   });
 
   it("names a weekend reading by its time, never as a close (#387)", () => {
     const sat = row("2026-11-14", "2026-11-14 16:00:00.000000"); // Saturday 11:00 New York
-    expect(closeWords(sat)).toBe("as of Sat 14 Nov 11:00");
+    expect(closeWords(sat)).toBe("as of Sat 20261114 11:00");
     // and it is no close to name before a weekday's, though it is in the hours and later
     expect(closedLine([valued(FRI), valued(sat)]))
-      .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 as of another reading");
+      .toBe("market closed — as of the close, Fri 20261113 16:14; 1 as of another reading");
   });
 
   it("in the Curb and GTH says the quotes are live and thin, and the failure whichever way each was valued (#416)", () => {
     expect(closedLine([valued(null)], "overnight")).toBe("overnight session — live quotes, thin");
     expect(closedLine([valued(null)], "curb")).toBe("Curb — live quotes, thin");
     expect(closedLine([valued(null), valued(FRI)], "overnight"))
-      .toBe("overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14");
+      .toBe("overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 20261113 16:14");
     // the Provider down overnight: the holding valued from its close for want of it carries the failure
     const downFromClose = { close: FRI, unpriced: "OpenD down" } as unknown as HoldingValue;
     expect(closedLine([downFromClose], "overnight")).toBe(
-      "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14; the Provider could not be asked");
+      "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 20261113 16:14; the Provider could not be asked");
   });
 
   it("says a holding with no close was not valued where the Provider could not be asked (#387)", () => {
     const failed = { close: null, unpriced: "OpenD down" } as unknown as HoldingValue;
     expect(closedLine([valued(FRI), failed]))
-      .toBe("market closed — as of the close, Fri 13 Nov 16:14; 1 with no close, and the Provider could not be asked");
+      .toBe("market closed — as of the close, Fri 20261113 16:14; 1 with no close, and the Provider could not be asked");
     expect(closedLine([failed, failed]))
       .toBe("market closed — no close recorded yet, and the Provider could not be asked");
   });

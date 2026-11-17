@@ -16,7 +16,7 @@ import { plainView, toMarkdown } from "../snapshot/plain";
 import { call, entry, holding, monitor, side } from "../testing/ownerBook";
 import { readMarkdown } from "../testing/plainRead";
 
-/** Sunday 15 Nov 2026, 12:00 New York: the clock a reading's age is told by. */
+/** Sunday 20261115 2026, 12:00 New York: the clock a reading's age is told by. */
 const SUNDAY = new Date("2026-11-15T17:00:00Z");
 
 beforeEach(() => {
@@ -35,9 +35,9 @@ const put = (short: number, long: number, longQty?: number): Legs => [
 ];
 const flipped = (short: number, long: number): Legs => put(short, long).map((l) => ({ ...l, sign: -l.sign }));
 
-/** Read at 16:14:59 New York on Friday 13 Nov — in the session; 05:14 on Saturday in DISPLAY_TZ. */
+/** Read at 16:14:59 New York on Friday 20261113 — in the session; 05:14 on Saturday in DISPLAY_TZ. */
 const FRIDAY_CLOSE = "2026-11-14 05:14:59+08:00";
-/** Read at 16:14:59 New York on Friday 6 Nov: in a session, but nine days before Sunday. */
+/** Read at 16:14:59 New York on Friday 20261106: in a session, but nine days before Sunday. */
 const LAST_WEEK = "2026-11-07 05:14:59+08:00";
 /** Read at 01:47 New York on Saturday: the 0 a bid 0 / ask 0 once stored, out of the session. */
 const SATURDAY_NIGHT = "2026-11-14 14:47:28+08:00";
@@ -91,7 +91,7 @@ const EXPECT: Record<string, [string, string]> = {
   "w-delta": ["−4.12 (Fri 16:14 ET)", "−2.40"],
   "w-delta-only": ["—", "—"],
   "w-zero": ["—", "−1.10"],
-  "w-old": ["−0.85 (Fri 6 Nov 16:14 ET)", "−0.90"],
+  "w-old": ["−0.85 (Fri 20261106 16:14 ET)", "−0.90"],
   "w-key": ["—", "—"],
   "w-ratio": ["1.30 (Fri 16:14 ET)", "1.20"],
   "w-flip": ["3.10 (Fri 16:14 ET)", "3.00"],
@@ -216,7 +216,7 @@ describe("in the picture and its Markdown", () => {
 describe("a last price's time", () => {
   it("is a weekday within six days, and a date before that, on New York's clock", () => {
     expect(lastPriceWords({ value: -4.12, at: FRIDAY_CLOSE })).toBe("−4.12 (Fri 16:14 ET)");
-    expect(lastPriceWords({ value: -0.85, at: LAST_WEEK })).toBe("−0.85 (Fri 6 Nov 16:14 ET)");
+    expect(lastPriceWords({ value: -0.85, at: LAST_WEEK })).toBe("−0.85 (Fri 20261106 16:14 ET)");
     expect(lastPriceWords(null)).toBe("—");
   });
 });

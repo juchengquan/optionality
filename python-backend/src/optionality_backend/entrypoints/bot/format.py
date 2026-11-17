@@ -40,6 +40,7 @@ from optionality.alarm import RuleShape, rule_short
 from optionality.expiry import MARKET_TZ, MarketPhase, valued_timing
 from optionality.js import js_string, to_fixed
 from optionality.monitor import threshold_fault
+from optionality.timefmt import display_date
 
 from ...db.rows import PositionSampleRow
 from ...holdings import HoldingValue
@@ -52,7 +53,7 @@ HELP_TEXT = """Commands:
 /vol — live IV/vega for every watched code
 /watch <date> <CALL|PUT> <strike> <threshold> [field] [above|below] [signed] — add a monitor
 /watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below] [signed] — watch a combo
-/unwatch <name, code, id prefix, or contract like 260918 C8100> — remove a monitor
+/unwatch <name, code, id prefix, or contract like 20260918 C8100> — remove a monitor
 /combo <name> — per-leg breakdown of a combo
 /threshold <name or contract> <value> — change a monitor's threshold
 /rename <old> <new> — rename a combo (keeps its alarm state and history)
@@ -245,25 +246,25 @@ def standing_note(v: HoldingValue) -> str:
 
 
 _WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 
-def _day_words(day: date) -> str:
-    """ "Fri 13 Nov": a market day, its names written out here rather than by a locale."""
-    return f"{_WEEKDAYS[day.weekday()]} {day.day} {_MONTHS[day.month - 1]}"
+def _day_with_weekday(day: date) -> str:
+    """ "Fri 20261113": a market day as the date beside a time is written — YYYYMMDD with its weekday
+    (the owner's standard of 2026-11-17), the weekday written out here rather than by a locale."""
+    return f"{_WEEKDAYS[day.weekday()]} {display_date(day.isoformat())}"
 
 
 def _new_york_when(observed_at: str | None) -> str | None:
-    """ "Fri 13 Nov 16:14": a stored UTC stamp on New York's clock, or None where it is unreadable."""
+    """ "Fri 20261113 16:14": a stored UTC stamp on New York's clock, or None where it is unreadable."""
     if observed_at is None or valued_timing(observed_at) == "unrecorded":
         return None
     when = datetime.fromisoformat(f"{observed_at[:10]}T{observed_at[11:23]}").replace(tzinfo=UTC)
     ny = when.astimezone(ZoneInfo(MARKET_TZ))
-    return f"{_day_words(ny.date())} {ny.hour:02d}:{ny.minute:02d}"
+    return f"{_day_with_weekday(ny.date())} {ny.hour:02d}:{ny.minute:02d}"
 
 
 def close_words(close: PositionSampleRow) -> str:
-    """Which stored row a holding was valued from, in words: "as of the close, Fri 13 Nov 16:14" — or,
+    """Which stored row a holding was valued from, in words: "as of the close, Fri 20261113 16:14" — or,
     where no row with a cost was taken in a session, that reading's own timing (#380), a weekend's said by
     its time alone (`valued_timing`, #387)."""
     when = _new_york_when(close["observed_at"])
@@ -276,7 +277,7 @@ def close_words(close: PositionSampleRow) -> str:
         return f"as of {when}, before the open"
     if timing == "weekend":
         return f"as of {when}"
-    return f"as of {_day_words(date.fromisoformat(close['observed_on']))}, at a time not recorded"
+    return f"as of {display_date(close['observed_on'])}, at a time not recorded"
 
 
 def _thin_line(values: list[HoldingValue], phase: Literal["overnight", "curb"]) -> str:

@@ -28,7 +28,7 @@ const health = {
 /** Requests the page made that this suite does not answer: each one is a failure. */
 let unanswered: string[] = [];
 
-/** Watched put spreads crowding the 18 Dec lane: one on the held put spread's very strikes, one
+/** Watched put spreads crowding the 20261218 lane: one on the held put spread's very strikes, one
  *  25 points inside it and one beside the watched 7150, so the lane must slot them into rows. */
 const crowd = (id: string, short: number, long: number, delta: number): Entry => ({
   ...QUOTES.find((q) => q.id === "w-dec18")!, id, code: `1218_P${short}${id}`,
@@ -272,7 +272,7 @@ describe("the history's three charts share their plot", () => {
           const r = el!.getBoundingClientRect();
           return r.left + r.width / 2;
         };
-        // 4 Nov, 44 DTE: a day each of the three charts draws
+        // 20261104, 44 DTE: a day each of the three charts draws
         const burndown = centre(insp.querySelector('[data-sample="2026-11-04"] circle'));
         const iv = [...insp.querySelectorAll('[aria-label="IV by leg"] circle[data-dte="44"]')].map(centre);
         const spx = centre(insp.querySelector('circle[data-spx-day="2026-11-04"]'));

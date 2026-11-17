@@ -811,7 +811,7 @@
       ],
       "expect": {
         "action": "mute",
-        "notice": "ℹ️ monitor 1120_7100 |Δ| ≥ 0.30 expired (2026-11-20) — muted; auto-removes in 7 days"
+        "notice": "ℹ️ monitor 1120_7100 |Δ| ≥ 0.30 expired (20261120) — muted; auto-removes in 7 days"
       }
     },
     {
@@ -883,7 +883,7 @@
       ],
       "expect": {
         "action": "remove",
-        "notice": "ℹ️ monitor 1120_7100 |Δ| ≥ 0.30 expired (2026-11-20) — removed"
+        "notice": "ℹ️ monitor 1120_7100 |Δ| ≥ 0.30 expired (20261120) — removed"
       }
     },
     {

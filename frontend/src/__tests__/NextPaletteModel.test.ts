@@ -193,7 +193,7 @@ describe("its actions", () => {
     const of = (selected: DeskRow) => Object.fromEntries(
       paletteActions({ choice: "auto", selected }).map((a) => [a.key, a.detail]));
     expect(of(row("h-calls"))["close-holding"]).toBe("1218_C7300");
-    expect(of(row("w-dec18-delta"))["edit-monitor"]).toBe("261218 7150P");
+    expect(of(row("w-dec18-delta"))["edit-monitor"]).toBe("20261218 7150P");
   });
 
   it("says which arrangement is in use", () => {

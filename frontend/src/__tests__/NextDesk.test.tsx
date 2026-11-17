@@ -57,9 +57,9 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
     const watchlist = screen.getByRole("region", { name: "Watchlist" });
     expect(holdings.compareDocumentPosition(watchlist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect([...holdings.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent))
-      .toEqual(["261218 · 38 DTE", "261231 · 38 DTE"]);
-    expect([...watchlist.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent?.slice(0, 6)))
-      .toEqual(["261204", "261218", "261231"]);
+      .toEqual(["20261218 · 38 DTE", "20261231 · 38 DTE"]);
+    expect([...watchlist.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent?.slice(0, 8)))
+      .toEqual(["20261204", "20261218", "20261231"]);
   });
 
   it("joins a condor's two spreads with a bracket, and keeps a 4-leg holding one row", () => {

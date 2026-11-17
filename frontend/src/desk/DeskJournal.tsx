@@ -11,7 +11,7 @@ import { useEffect, useId, useState } from "react";
 
 import { ClosedTradeDetail, TradeLegs } from "../ClosedTrade";
 import { madeWords, storedWords, type Journal } from "../journal";
-import { dateWords } from "../shared/times";
+import { writtenDate } from "../shared/times";
 import { ErrorWords } from "../shared/ErrorWords";
 
 export function DeskJournal({ journal, privacy, onCorrected, onDeleted }: {
@@ -53,8 +53,8 @@ export function DeskJournal({ journal, privacy, onCorrected, onDeleted }: {
                                 onClick={() => setSelected((s) => (s === t.id ? null : t.id))}>{t.name}</button>
                       </th>
                       <td><TradeLegs trade={t} /></td>
-                      <td data-fig="opened">{t.opened_at ? dateWords(t.opened_at) : "not recorded"}</td>
-                      <td data-fig="closed">{dateWords(t.closed_on)}</td>
+                      <td data-fig="opened">{t.opened_at ? writtenDate(t.opened_at) : "not recorded"}</td>
+                      <td data-fig="closed">{writtenDate(t.closed_on)}</td>
                       <td data-fig="entry" data-align="end">{storedWords(t.entry)}</td>
                       <td data-fig="exit" data-align="end">{storedWords(t.exit)}</td>
                       <td data-fig="made" data-align="end"

@@ -192,7 +192,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "<pre>contract      IV      vega\n261218 C7300  14.500  4.25</pre>",
+      "text": "<pre>contract        IV      vega\n20261218 C7300  14.500  4.25</pre>",
       "parse_mode": "HTML"
     },
     "rows": {},

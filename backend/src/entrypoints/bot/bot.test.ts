@@ -29,10 +29,13 @@ const FUTURE = "2026-11-01";
 const OPENED = "2026-09-17";
 const YYMMDD = "261101";
 const FAR = "2026-11-11";
-/** `/monitors` for the two rules of "says each rule in the short form", character for character */
+/** `/monitors` for the two rules of "says each rule in the short form", character for character.
+ *  The contract's date is YYYYMMDD since 2026-11-17, two characters wider, and this row is then 45
+ *  of `TABLE_WIDTH`'s 43: `fitCell` shortens the name to `FIT_FLOOR`'s 12, losing its C —
+ *  measured and reported to the owner rather than decided here (a wider table, or another fit). */
 const MONITORS_TABLE = "<pre>contract      rule             last   state\n"
   + "bear-cs       close ≥ 4.05     3.05   armed\n"
-  + "261101 C8100  |value| ≥ 30.00  26.41  armed</pre>";
+  + "20261101…100  |value| ≥ 30.00  26.41  armed</pre>";
 
 let dir: string;
 let db: ReturnType<typeof createDatabase>;
@@ -795,7 +798,7 @@ describe("/health", () => {
       },
     });
     await b.handleUpdate(update("/health"));
-    expect(last()).toBe("Service is up.\nalarms: active — last sweep 2026-08-10 11:35 +08");
+    expect(last()).toBe("Service is up.\nalarms: active — last sweep Mon 20260810 11:35 +08");
   });
 
   it("says only that it is up when nothing else is wired", async () => {

@@ -12,6 +12,7 @@
 import { MARKET_TZ, valuedTiming, type MarketPhase } from "optionality/domain/expiry";
 import { ruleShort, type RuleShape } from "optionality/domain/alarm";
 import { thresholdFault } from "optionality/domain/monitor";
+import { displayDate } from "optionality/domain/timefmt";
 import type { HoldingValue } from "../../holdings.ts";
 
 export const HELP_TEXT = `Commands:
@@ -22,7 +23,7 @@ export const HELP_TEXT = `Commands:
 /vol — live IV/vega for every watched code
 /watch <date> <CALL|PUT> <strike> <threshold> [field] [above|below] [signed] — add a monitor
 /watchcombo <name> <date> <±C|Pstrike ...> <threshold> [field] [above|below] [signed] — watch a combo
-/unwatch <name, code, id prefix, or contract like 260918 C8100> — remove a monitor
+/unwatch <name, code, id prefix, or contract like 20260918 C8100> — remove a monitor
 /combo <name> — per-leg breakdown of a combo
 /threshold <name or contract> <value> — change a monitor's threshold
 /rename <old> <new> — rename a combo (keeps its alarm state and history)
@@ -165,30 +166,30 @@ export function standingNote(v: HoldingValue): string {
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const NEW_YORK = new Intl.DateTimeFormat("en-US", {
   timeZone: MARKET_TZ, year: "numeric", month: "2-digit", day: "2-digit",
   hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
 
-/** "Fri 13 Nov": a market day (YYYY-MM-DD), its names written out here rather than by a locale,
- *  so both backends spell September alike. */
-function dayWords(isoDay: string): string {
+/** "Fri 20261113": a market day (YYYY-MM-DD) as the date beside a time is written — YYYYMMDD with its
+ *  weekday (the owner's standard of 2026-11-17), the weekday spelled here rather than by a locale so
+ *  both backends write it alike. A date alone is `displayDate`'s, with no weekday. */
+function dayWithWeekday(isoDay: string): string {
   const d = new Date(`${isoDay}T00:00:00Z`);
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  return `${WEEKDAYS[d.getUTCDay()]} ${displayDate(isoDay)}`;
 }
 
-/** "Fri 13 Nov 16:14": a stored UTC stamp on New York's clock — the close is New York's, so the
+/** "Fri 20261113 16:14": a stored UTC stamp on New York's clock — the close is New York's, so the
  *  page and the bot both say it in New York's time (#380) — or null where the stamp is unreadable. */
 function newYorkWhen(observedAt: string | null): string | null {
   if (valuedTiming(observedAt) === "unrecorded") return null;
   const parts = Object.fromEntries(NEW_YORK.formatToParts(
     new Date(`${observedAt!.slice(0, 10)}T${observedAt!.slice(11, 23)}Z`),
   ).map((p) => [p.type, p.value]));
-  return `${dayWords(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute}`;
+  return `${dayWithWeekday(`${parts.year}-${parts.month}-${parts.day}`)} ${parts.hour}:${parts.minute}`;
 }
 
-/** Which stored row a holding was valued from, in words: "as of the close, Fri 13 Nov 16:14" — or,
+/** Which stored row a holding was valued from, in words: "as of the close, Fri 20261113 16:14" — or,
  *  where no row with a cost was taken in a session, that reading's own timing, so it is never
  *  passed off as a close (`closeSample`'s fallback, #380) — a weekend's included, which is said by
  *  its time alone (`valuedTiming`, #387). */
@@ -199,7 +200,7 @@ export function closeWords(close: { observed_on: string; observed_at: string | n
     case "after-close": return `as of ${when}, after the close`;
     case "before-open": return `as of ${when}, before the open`;
     case "weekend": return `as of ${when}`;
-    default: return `as of ${dayWords(close.observed_on)}, at a time not recorded`;
+    default: return `as of ${displayDate(close.observed_on)}, at a time not recorded`;
   }
 }
 

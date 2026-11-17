@@ -26,6 +26,7 @@ import { useEffect, useState } from "react";
 import { fetchVol, type Holding, type Vol } from "./shared/api";
 import { askedFor } from "./asked";
 import { DASH } from "./shared/format";
+import { writtenDate } from "./shared/times";
 import { paceOutcome, paceWords } from "./pace";
 import "./pace.css";
 import { rawError } from "./shared/errors";
@@ -81,10 +82,9 @@ function useVol(id: string, ask: string = id): VolState | null {
   return state?.id === ask ? state : null;
 }
 
-const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
-/** "9 Nov": a market date read in UTC, so the device's zone cannot move it — the way the service
- *  writes the days in its reasons. */
-const dayWords = (iso: string) => DAY.format(new Date(`${iso}T00:00:00Z`));
+/** "20261103": a market date as every date is written (`times.writtenDate`), by string, so no zone
+ *  can move it — the way the service writes the days in its reasons. */
+const dayWords = writtenDate;
 
 /** The sample the split is at, as the route says it is: a close only once its hours are over. */
 function atWords(at: string, timing: Vol["timing"]): string {

@@ -142,7 +142,7 @@
     "response": {
       "status": 422,
       "body": {
-        "detail": "closed on 2026-10-11, before it was opened on 2026-10-12"
+        "detail": "closed on 20261011, before it was opened on 20261012"
       }
     },
     "rows": {},

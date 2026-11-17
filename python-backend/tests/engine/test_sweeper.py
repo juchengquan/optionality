@@ -503,7 +503,7 @@ class TestTheExpiryLifecycle:
         await t.sweeper(lambda codes: []).sweep()
         assert len(t.sent) == 1
         assert re.fullmatch(
-            rf"ℹ️ monitor sep-condor \|value\| ≤ 10\.00 expired \({t.past()}\) — muted; auto-removes in \d+ days",
+            rf"ℹ️ monitor sep-condor \|value\| ≤ 10\.00 expired \({t.past().replace('-', '')}\) — muted; auto-removes in \d+ days",
             t.sent[0],
         )
 

@@ -429,7 +429,7 @@ describe("the References strip outside the session (#371)", () => {
     referenceStamp = "2026-11-03 21:04:11+08:00";
     await open();
     await until(() => expect(document.querySelectorAll(".references .reference")).toHaveLength(2));
-    expect(document.querySelector(".references")!.textContent).toContain("read at 3 Nov 21:04");
+    expect(document.querySelector(".references")!.textContent).toContain("read at Tue 20261103 21:04");
   });
 
   it("never draws a reading without its time", async () => {
@@ -950,7 +950,7 @@ describe("the needs-you line", () => {
       at(now);
       await open();
       const line = screen.getByRole("status", { name: "needs you" });
-      expect(line.textContent).toContain("261211 8300C Δ quarantined — the provider does not know its contract");
+      expect(line.textContent).toContain("20261211 8300C Δ quarantined — the provider does not know its contract");
       expect(line.getAttribute("data-tone")).toBe("bad");
     });
   }
@@ -1030,7 +1030,7 @@ describe("a banner leads to its row", () => {
     quotes = [spread, { ...shortLeg, triggered: true }];
     await open();
     const banners = screen.getByRole("status", { name: "needs you" });
-    fireEvent.click(within(banners).getByRole("button", { name: /261218 7150P entry signal/ }));
+    fireEvent.click(within(banners).getByRole("button", { name: /20261218 7150P entry signal/ }));
     await waitFor(() =>
       expect(document.querySelector('[data-ref="w2"]')!.hasAttribute("data-revealed")).toBe(true));
   });

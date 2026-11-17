@@ -126,7 +126,9 @@ export function marketTimeToDisplay(value: string, tzName = ""): string {
   return displayTime(new Date(instantOfWallTime(naive, MARKET_TZ)), tzName)!;
 }
 
-/** The short form the bot prints: `2026-08-10 11:35 +08`.
+/** The short form the bot prints: `Mon 20260810 11:35 +08` — the date as every date the owner reads is
+ *  written, YYYYMMDD, and the weekday a date keeps beside a time (the owner's standard of 2026-11-17,
+ *  `displayDate`).
  *
  *  Ported from display_time_short, and it is the one formatting in this rewrite that cannot be made
  *  exact. Python names the zone with tzdata's own abbreviation; JavaScript names it with ICU's, and
@@ -154,7 +156,21 @@ export function displayTimeShort(when: Date | null | undefined, tzName = ""): st
   const named = new Intl.DateTimeFormat("en-US", {
     timeZone: zone(tzName), timeZoneName: "short",
   }).formatToParts(when).find((x) => x.type === "timeZoneName")?.value ?? "";
-  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute} ${tzAbbreviation(named)}`;
+  const weekday = WEEKDAYS[new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day))).getUTCDay()];
+  return `${weekday} ${p.year}${p.month}${p.day} ${p.hour}:${p.minute} ${tzAbbreviation(named)}`;
+}
+
+/** The weekdays as the bot and the page write them, spelled here rather than by a locale so both
+ *  languages write them alike. */
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** `2026-11-13` → `20261113`: a calendar date as the owner reads one, everywhere it is written for
+ *  him — the bot's messages and tables, the reasons the service gives — and never `13 Nov` or ISO
+ *  (the owner's standard of 2026-11-17). Anything that is not a date is returned untouched, as the
+ *  dashboard's own writer does: a reason must never fail for the day it names. */
+export function displayDate(day: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  return m ? `${m[1]}${m[2]}${m[3]}` : day;
 }
 
 /** ICU's `GMT+8` or `GMT-3:30` in tzdata's spelling: `+08`, `-0330`. An alphabetic name is already

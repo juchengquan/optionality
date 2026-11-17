@@ -194,7 +194,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "<pre>holding     cost  P&amp;L  note\ndec-condor  3.25  315      ahead 1.38</pre>\nmarket closed — as of the close, Fri 13 Nov 16:14",
+      "text": "<pre>holding     cost  P&amp;L  note\ndec-condor  3.25  315      ahead 1.38</pre>\nmarket closed — as of the close, Fri 20261113 16:14",
       "parse_mode": "HTML"
     },
     "rows": {},

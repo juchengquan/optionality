@@ -414,7 +414,7 @@ export const OUTCOMES: readonly Outcome[] = [
     // ...and with a close stored, it is valued from that close, which it names
     name: "manage-by-notice-from-the-close",
     decision: "noticeManageBy",
-    shows: (s) => said(s, /^⏰ [^]* at the \d{4}-\d{2}-\d{2} close/)
+    shows: (s) => said(s, /^⏰ [^]* at the \d{8} close/)
       && changes(s, "positions").some((c) => c.to.manage_notified_at !== undefined),
   },
   {
@@ -454,6 +454,8 @@ export const NOT_A_DECISION: Readonly<Record<string, string>> = {
   costToClose: "arithmetic inside recordSamples and noticeManageBy",
   legReadings: "arithmetic inside recordSamples",
   contractSize: "the size recordSamples stores beside a row's cost (#380)",
+  datedName: "how an alarm writes a vendor's name for a contract; every alarm outcome says one",
+  displayDate: "how noticeManageBy writes the day of a close; the manage-by outcomes say one",
   valuedTiming: "the words noticeManageBy names a close's timing in (#380), a weekend's included (#387)",
   normalizeStrikeDate: "reading the expiry noticeManageBy counts the manage-by window back from",
   marketPhase: "the words noticeManageBy labels a live figure from thin quotes with (#416)",

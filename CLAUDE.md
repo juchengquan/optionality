@@ -742,7 +742,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   are its legs' stored delta and vega (no gamma or theta stored: dashes), its strike distances its
   stored SPX and IVs. The answer says `valued_from`, `valued_on` and `valued_timing`, and its
   `fetched_at` is the row's observed time, so the page's chips and market-closed line ("market
-  closed — as of the close, Fri 13 Nov 16:14", New York's clock) and the bot's one line under its
+  closed — as of the close, Fri 20261113 16:14 ET", New York's clock) and the bot's one line under its
   table say which close. The manage-by notice, sent once, is HELD until it has a cost to say, and
   it is the cost the page and the bot say (#387): the batch's in the session (and in the Curb and GTH
   where it quotes every leg, #416), and otherwise the latest close's, named, even where the batch

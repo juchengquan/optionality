@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { fetchedWords, marketClock } from "../shared/format";
 import {
-  dateWords, offsetName, setDisplayZone, viewerClock, zoneName, zoneOfStamp,
+  offsetName, setDisplayZone, viewerClock, weekdayDate, writtenDate, zoneName, zoneOfStamp,
 } from "../shared/times";
 import { newYorkWhen, servedWhen } from "../session";
 import { manageBy } from "../pace";
@@ -54,14 +54,14 @@ describe("the viewer's clock and the market's", () => {
     setDisplayZone("Asia/Singapore");
     const now = new Date("2026-11-16T15:00:00Z");
     expect(fetchedWords("2026-11-16 23:00:05+08:00", now)).toBe("23:00:05 SGT");
-    expect(fetchedWords("2026-11-12 23:14:05+08:00", now)).toBe("Thu 12 Nov 23:14:05 SGT");
+    expect(fetchedWords("2026-11-12 23:14:05+08:00", now)).toBe("Thu 20261112 23:14:05 SGT");
     expect(fetchedWords("x", now)).toBe("x");
   });
 
   it("marks every New York time ET, all year", () => {
     expect(marketClock("2026-11-16 23:00:05+08:00")).toBe("10:00:05 ET");
-    expect(newYorkWhen("2026-11-14 05:14:59+08:00")).toBe("Fri 13 Nov 16:14 ET");
-    expect(newYorkWhen("2026-07-14 05:14:59+08:00")).toBe("Mon 13 Jul 17:14 ET");
+    expect(newYorkWhen("2026-11-14 05:14:59+08:00")).toBe("Fri 20261113 16:14 ET");
+    expect(newYorkWhen("2026-07-14 05:14:59+08:00")).toBe("Mon 20260713 17:14 ET");
   });
 
   it("puts the zone on a served time the Levels and the References say", () => {
@@ -70,12 +70,18 @@ describe("the viewer's clock and the market's", () => {
   });
 });
 
-describe("a date", () => {
-  it("is prose, never ISO: the weekday, the day and the month", () => {
-    expect(dateWords("2026-12-31")).toBe("Thu 31 Dec");
-    expect(dateWords("2026-11-01")).toBe("Sun 1 Nov");
-    expect(dateWords("not a date")).toBe("not a date");
-    expect(dateWords(null)).toBe("");
+describe("a date (the owner's standard of 2026-11-17)", () => {
+  it("is YYYYMMDD, never ISO and never the day and month in words", () => {
+    expect(writtenDate("2026-12-31")).toBe("20261231");
+    expect(writtenDate("2026-11-01")).toBe("20261101");
+    expect(writtenDate("not a date")).toBe("not a date");
+    expect(writtenDate(null)).toBe("");
+  });
+
+  it("keeps its weekday beside a time", () => {
+    expect(weekdayDate("2026-11-16")).toBe("Mon 20261116");
+    expect(weekdayDate("2026-11-13")).toBe("Fri 20261113");
+    expect(weekdayDate("not a date")).toBe("not a date");
   });
 });
 
