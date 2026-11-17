@@ -154,9 +154,15 @@ export function RuleCard({ entry, overlap = null, onOpen, spxSaid = false }: {
         <div data-value=""><dt>{heldSpreadValue(entry, overlap) ? "cost to close" : "value"}</dt><dd>{cells.value}</dd></div>
         <div data-delta=""><dt>Δ</dt><dd>{cells.delta}</dd></div>
       </dl>
-      <p className="nxp-sentence"><RuleWords entry={entry} /></p>
-      {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} reasonSaid={spxSaid} /> : null}
+      {/* its rule last, under the strip, in the list a holding's card draws its rules in (the owner,
+          2026-11-17): its own, so the chip stays in the head, and unmarked, so a banner still leads
+          to the card, the rule's one place */}
+      <ul className="nxp-rules">
+        <RuleLine entry={entry} own marked={false} within={entryName(entry)}>
+          {entry.error ? <span className="nxp-error">{entry.error}</span> : null}
+        </RuleLine>
+      </ul>
     </article>
   );
 }
