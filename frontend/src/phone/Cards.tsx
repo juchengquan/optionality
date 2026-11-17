@@ -24,7 +24,7 @@ import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfMonitor } from "../edit";
 import { stripOfEntry } from "../strip";
-import { HELD, ruleCells, rowState } from "../desk/columns";
+import { HELD, moreSerious, ruleCells, rowState } from "../desk/columns";
 
 /** Whether a card's value is a held spread's cost to close, as its desk row reads it (`heldSpread`). */
 const heldSpreadValue = (e: Entry, overlap: string | null) => Boolean(e.legs) && e.held && !overlap;
@@ -80,12 +80,13 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
   spxSaid?: boolean;
 }) {
   const { holding, rules } = placed;
-  // the more serious of its Level's and its own rule's, as its desk row (2026-11-17); every other
-  // rule's line carries its own
-  const state = rowState({ kind: "holding", holding, rules });
   // its own rule first, then the rest drawn here: one drawn under an earlier holding is a note
   const own = ownRule(holding, rules);
   const lines = [...(own ? [own] : []), ...drawnUnder(rules, placed.elsewhere, own)];
+  // the most serious of its Level, its own rule and every other rule drawn on the card (the owner,
+  // 2026-11-17): the card is all of them at once, where the desk gives each other rule its own row
+  const state = lines.reduce((worst, r) => moreSerious(worst, ruleState(r) ?? "calm"),
+    rowState({ kind: "holding", holding, rules }));
   return (
     <article className="nxp-card nxp-holding" data-ref={holding.id} data-state={state}>
       {/* "held" in its name, to a reader as on screen: the one book draws watches beside it (2026-11-17) */}

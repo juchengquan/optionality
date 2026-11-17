@@ -329,6 +329,27 @@ describe("the row's colour: the most serious of the holding's Level and its own 
   }
 });
 
+describe("the phone card's colour: the most serious of everything drawn on it (the owner, 2026-11-17)", () => {
+  const atTarget = HOLDINGS.map((h) => (h.id === "h-calls" ? { ...h, schedule: {
+    dte_at_open: 45, on_pace: 1, pace_gap: 0, target: 1, stop: 4, target_dte: 10, manage_by_dte: 21,
+    reached: "target" as const, manage_by_due: false } } as Holding : h));
+  const calmOwn = MORE_QUOTES.map((q) => (q.id === "r-calls" ? { ...q, triggered: false } : q));
+  const second = (over: Partial<Entry>) => calmOwn.map((q) => (q.id === SECOND.id ? { ...q, ...over } : q));
+
+  for (const [what, over, state] of [
+    ["ringing", { triggered: true }, "alarm"], ["faulted", { error: "its figure never arrives" }, "fault"], ["calm", {}, "target"],
+  ] as const) {
+    it(`a holding at target with a second rule ${what}: the card is ${state}, the desk's row stays at target`, () => {
+      render(<PhoneBook {...props({ holdings: atTarget, quotes: second(over) })} />);
+      expect(card("h-calls").dataset.state).toBe(state);
+      cleanup();
+      render(<DeskBook {...props({ holdings: atTarget, quotes: second(over) })} />);
+      expect(deskRow("h-calls")!.dataset.state).toBe("target");
+      expect(deskRow(SECOND.id)!.dataset.state).toBe(state === "target" ? "calm" : state);
+    });
+  }
+});
+
 describe("6. each rule drawn once, its second place a note (the owner, 2026-11-17)", () => {
   const OTHER = { ...QUOTES.find((q) => q.id === "w-dec18")!, id: "w-dec18b", code: "1218_P7150b",
     legs: [{ sign: -1, option_type: "PUT", strike: 7150 }, { sign: 1, option_type: "PUT", strike: 7050 }] } as Entry;

@@ -195,6 +195,11 @@ export function rowState(row: DeskRow): string {
   return SEVERITY[own]! > SEVERITY[level]! ? own : level;
 }
 
+/** The more serious of two states by the same order; on a tie, the first. "calm" is the least. */
+export function moreSerious(a: string, b: string): string {
+  return (SEVERITY[b] ?? 0) > (SEVERITY[a] ?? 0) ? b : a;
+}
+
 /** The chip's words, which are also what the measuring counts. */
 export const ATTENTION_WORDS: Record<Attention, string> = {
   fault: "fault", entry: "entry signal", alarm: "ringing", ...LEVEL_WORDS,

@@ -1183,7 +1183,9 @@ not linked: a watch rule is no holding's, and `placeBook` decides what sits wher
   line without its name (2026-11-17); its own rule is now that card's first line.
 - **The row's colour is the most serious** of the holding's Level and its own rule (the owner,
   2026-11-17): a fault (the name struck through) before ringing or at stop, before manage-by,
-  before at target — on the desk's row and the phone's card alike (`rowState`).
+  before at target — on the desk's row (`rowState`); the phone's card, which draws every rule about
+  the holding on it, takes the most serious of those too (a second rule ringing tints the card), where
+  the desk gives each other rule a tinted row of its own.
 - **A leg's rule sits under its spread**, as before; a contract rule on a held leg already sits
   under its holding, since the service marks it held and links it (`holdsAnyOf`,
   `adoptOrphanMonitors`), and on a roll day, unlinked but held, among the rules on held contracts.
