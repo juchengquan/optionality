@@ -1,8 +1,8 @@
-/** The holding's three history panels on ONE crosshair (#395) on the phone, under Playwright's iPhone
+/** The holding's two history panels on ONE crosshair (#395) on the phone, under Playwright's iPhone
  *  profile — touch, `isMobile`, a 390px screen — in a holding's sheet, whose history is open from
- *  the start outside the session: the three plot areas aligned to the pixel, and a real finger
- *  (Chrome's own touch events, through CDP) tapping or scrubbing any panel crossing the day in all
- *  three, with each readout inside its own panel. The desk's widths are `NextHistoryCross.test.tsx`'s. */
+ *  the start outside the session: the two plot areas aligned to the pixel, and a real finger
+ *  (Chrome's own touch events, through CDP) tapping or scrubbing either panel crossing the day in
+ *  both, with each readout inside its own panel. The desk's widths are `NextHistoryCross.test.tsx`'s. */
 /// <reference types="@vitest/browser/providers/playwright" />
 import { cdp, userEvent } from "@vitest/browser/context";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -36,7 +36,7 @@ function serveOwnerBook(): void {
   }) as unknown as typeof fetch;
 }
 
-/** The call spread's sheet outside the session, its three panels drawn. */
+/** The call spread's sheet outside the session, its two panels drawn. */
 async function review() {
   vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday: outside the session
   serveOwnerBook();
@@ -46,7 +46,7 @@ async function review() {
   const sheet = await screen.findByRole("dialog");
   await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)));
   const panels = await waitFor(() => {
-    const found = [".nx-bd", ".nx-iv", ".nx-spxp"].map((sel) => sheet.querySelector<HTMLElement>(sel));
+    const found = [".nx-bd", ".nx-iv"].map((sel) => sheet.querySelector<HTMLElement>(sel));
     if (!found.every((p) => p?.querySelector("circle"))) throw new Error("not drawn yet");
     return found as HTMLElement[];
   });
@@ -81,7 +81,7 @@ const dayX = (panels: HTMLElement[], on: string) => {
   return r.left + r.width / 2;
 };
 
-describe("the history's three panels on the phone", () => {
+describe("the history's two panels on the phone", () => {
   it("line their plot areas up to the pixel, inside the screen", async () => {
     const { panels } = await review();
     const [b, ...rest] = panels.map((p) => p.querySelector("[data-plot]")!.getBoundingClientRect());
@@ -93,37 +93,37 @@ describe("the history's three panels on the phone", () => {
     expect(overflowsSideways()).toBe(false);
   });
 
-  it("cross the day a finger taps in any panel in all three, each readout inside its panel", async () => {
+  it("cross the day a finger taps in either panel in both, each readout inside its panel", async () => {
     const { sheet, panels } = await review();
-    for (const [i, on] of [[1, "2026-11-05"], [2, "2026-11-08"], [0, "2026-11-04"]] as const) {
+    for (const [i, on] of [[1, "2026-11-05"], [0, "2026-11-08"], [1, "2026-11-04"]] as const) {
       const panel = panels[i]!;
       panel.scrollIntoView({ block: "center" });
       await settle();
       await tap({ x: dayX(panels, on), y: panel.getBoundingClientRect().top + 20 });
-      expect(crossed(panels)).toEqual([on, on, on]);
+      expect(crossed(panels)).toEqual([on, on]);
       for (const p of panels) {
         const t = p.querySelector("[data-tip]")!.getBoundingClientRect(), c = p.getBoundingClientRect();
         expect(t.left >= c.left - 0.5 && t.right <= c.right + 0.5 && t.top >= c.top - 0.5 && t.bottom <= c.bottom + 0.5)
           .toBe(true);
       }
     }
-    // a tap outside every panel lets go in all three
+    // a tap outside every panel lets go in both
     const heading = sheet.querySelector(".nx-hist-h")!;
     heading.scrollIntoView({ block: "center" });
     await settle();
     const h = heading.getBoundingClientRect();
     await tap({ x: h.left + 10, y: h.top + h.height / 2 });
-    expect(crossed(panels)).toEqual([undefined, undefined, undefined]);
+    expect(crossed(panels)).toEqual([undefined, undefined]);
   });
 
-  it("scrub the days under a finger dragged sideways on SPX's path, in all three", async () => {
+  it("scrub the days under a finger dragged sideways on the IV chart, in both", async () => {
     const { panels } = await review();
-    const spx = panels[2]!;
-    spx.scrollIntoView({ block: "center" });
+    const iv = panels[1]!;
+    iv.scrollIntoView({ block: "center" });
     await settle();
-    const y = spx.getBoundingClientRect().top + 40;
+    const y = iv.getBoundingClientRect().top + 40;
     await drag({ x: dayX(panels, "2026-11-03"), y }, { x: dayX(panels, "2026-11-09"), y });
-    expect(crossed(panels)).toEqual(["2026-11-09", "2026-11-09", "2026-11-09"]);
+    expect(crossed(panels)).toEqual(["2026-11-09", "2026-11-09"]);
     expect(overflowsSideways()).toBe(false);
   });
 });

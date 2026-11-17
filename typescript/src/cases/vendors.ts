@@ -29,11 +29,12 @@
  *  suites that asserted them by hand. #204 exists because two fixture values were once invented
  *  under a comment claiming measurement, so the provenance of each is stated.
  */
-import { ibkrFields, yahooFields } from "../vendors/fields.ts";
+import { ibkrFields, opendFields, yahooFields } from "../vendors/fields.ts";
 
 export const VENDOR_MODULES: Record<string, Record<string, unknown>> = {
   "yahoo-fields": yahooFields as unknown as Record<string, unknown>,
   "ibkr-fields": ibkrFields as unknown as Record<string, unknown>,
+  "opend-fields": opendFields as unknown as Record<string, unknown>,
 };
 
 /** `^GSPC` exactly as Yahoo returned it on 2026-11-08 — including the bogus book: a bid 148 points
@@ -123,4 +124,7 @@ export const VENDOR_INPUTS: Record<
     { fn: "hasFigures", name: "true for one figure, however little",
       args: [{ code: "SPX", prev_close_price: 7353.73 }] },
   ],
+  // a list and no function: the record's fields, which the Python's SDK-frame reader is held to
+  // (`vendors/opend/fields.ts` says why it cannot be logic)
+  "opend-fields": [],
 };

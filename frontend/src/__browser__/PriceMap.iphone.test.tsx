@@ -1,15 +1,12 @@
 /** #298 on the phone, MEASURED under Playwright's iPhone profile: there is no price map — the
- *  strike strips carry its facts per card (ADR 0023) — and a holding's sheet carries "where SPX was
- *  against my strikes" in its history, open from the start outside the session (#374), its labels
- *  inside the screen and apart. Every route the page calls
+ *  strike strips carry its facts per card (ADR 0023). Every route the page calls
  *  is answered explicitly. Runs in the suite's `iphone` instance only. */
-import { userEvent } from "@vitest/browser/context";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer, watchSamplesAnswer } from "../testing/ownerBook";
-import { overflowsSideways, settle } from "./nextBook";
+import { settle } from "./nextBook";
 
 const health = {
   db: true, provider: { name: "moomoo", ok: true },
@@ -64,12 +61,6 @@ afterEach(() => {
   expect(unanswered).toEqual([]);
 });
 
-const inside = (inner: DOMRect, outer: DOMRect) =>
-  inner.left >= outer.left - 0.5 && inner.right <= outer.right + 0.5
-  && inner.top >= outer.top - 0.5 && inner.bottom <= outer.bottom + 0.5;
-const overlap = (a: DOMRect, b: DOMRect) =>
-  a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
-
 describe("the phone", () => {
   for (const session of [true, false]) {
     it(`has no price map ${session ? "in" : "out of"} session, even where the desk left it open`, async () => {
@@ -78,35 +69,4 @@ describe("the phone", () => {
       expect(screen.queryByRole("button", { name: "price map" })).toBeNull();
     });
   }
-
-  it("draws where SPX was against the strikes in each holding's sheet, its labels inside and apart", async () => {
-    await show(false);
-    const cards = [...document.querySelectorAll<HTMLElement>("article.nxp-holding")];
-    expect(cards.length).toBeGreaterThan(0);
-    const faults: string[] = [];
-    for (const c of cards) {
-      await userEvent.click(within(c).getByRole("button", { name: /^details of / }));
-      const sheet = await screen.findByRole("dialog");
-      await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)));
-      const chart = await within(sheet).findByRole("group", { name: "SPX against the strikes" });
-      const svg = await waitFor(() => chart.querySelector("svg") ?? Promise.reject(new Error("no chart yet")));
-      svg.scrollIntoView({ block: "center" });
-      const box = svg.getBoundingClientRect();
-      const page = sheet.getBoundingClientRect();
-      if (!inside(box, page)) faults.push(`${c.dataset.ref}: the chart is outside its sheet`);
-      const texts = [...svg.querySelectorAll<SVGTextElement>("text")];
-      for (const t of texts) if (!inside(t.getBoundingClientRect(), box)) faults.push(`${c.dataset.ref}: "${t.textContent}" outside`);
-      for (let i = 0; i < texts.length; i++) {
-        for (let j = i + 1; j < texts.length; j++) {
-          if (overlap(texts[i]!.getBoundingClientRect(), texts[j]!.getBoundingClientRect())) {
-            faults.push(`${c.dataset.ref}: "${texts[i]!.textContent}" over "${texts[j]!.textContent}"`);
-          }
-        }
-      }
-      await userEvent.click(within(sheet).getByRole("button", { name: "close sheet" }));
-      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    }
-    expect(faults).toEqual([]);
-    expect(overflowsSideways()).toBe(false);
-  });
 });

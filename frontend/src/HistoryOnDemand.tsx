@@ -1,6 +1,6 @@
 /** A holding's history on demand (#353, ADR 0023 amended 2026-11-13): a section in the desk's
- *  inspector and the phone's holding sheet that draws `HoldingHistory` — the burndown, the IV chart
- *  and SPX against the strikes — once it is opened.
+ *  inspector and the phone's holding sheet that draws `HoldingHistory` — the burndown and the IV
+ *  chart — once it is opened.
  *
  *  - **Shut, it asks for nothing.** The charts are not mounted until the section is first opened,
  *    so no sample is read for a holding nobody asked about.

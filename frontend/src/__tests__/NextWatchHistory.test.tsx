@@ -1,6 +1,5 @@
 /** The watchlist's history (#402): a watched row's daily closes drawn as a holding's history is — its
- *  value against its price rule's threshold, its legs' IV and SPX against its strikes, on one
- *  crosshair — the days a holding was watched before it was entered drawn faint in its burndown, and
+ *  value against its price rule's threshold and its legs' IV, on one crosshair — the days a holding was watched before it was entered drawn faint in its burndown, and
  *  a watched spread's payoff drawn at its last close where it has no live price.
  *
  *  Behaviour only — what is asked for, what is drawn from what was served, what it is called. That
@@ -207,17 +206,15 @@ describe("a watched row's history, drawn", () => {
     expect(chart.querySelector("[data-level='threshold']")).toBeNull();
   });
 
-  it("draws its legs' IV and SPX against its strikes on the same crosshair", async () => {
+  it("draws its legs' IV on the same crosshair, and no SPX panel", async () => {
     open(watched("w-dec18"));
     const iv = await screen.findByRole("group", { name: "IV by leg" });
-    const spx = await screen.findByRole("group", { name: "SPX against the strikes" });
     expect(iv.querySelectorAll("[data-leg]")).toHaveLength(2);
-    expect(spx.querySelectorAll("[data-spx-day]")).toHaveLength(3);
-    // a day pointed at in one panel is crossed in all three
+    expect(screen.queryByRole("group", { name: "SPX against the strikes" })).toBeNull();
+    // a day pointed at in one panel is crossed in both
     const chart = screen.getByRole("group", { name: "value against the threshold" });
     fireEvent.keyDown(chart.querySelector(".nx-bd")!, { key: "End" });
     await waitFor(() => expect(iv.querySelector("[data-crosshair='2026-11-12']")).toBeTruthy());
-    expect(spx.querySelector("[data-crosshair='2026-11-12']")).toBeTruthy();
     expect(within(chart).getByRole("status").textContent).toMatch(/^20261112 · 36 DTE · value, per contract: 2\.75 pts/);
   });
 

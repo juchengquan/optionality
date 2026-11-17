@@ -87,9 +87,9 @@ describe("the closed trades' fold on the desk", () => {
       expect(document.activeElement).toBe(heading);
       const edge = document.documentElement.clientWidth;
       expect(journal.querySelector("table")!.getBoundingClientRect().right).toBeLessThanOrEqual(edge);
-      // the burndown, the IV and where SPX was (#298): a closed trade reads the same samples
+      // the burndown and the IV: a closed trade reads the same samples
       const charts = [...trade.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
-      expect(charts).toHaveLength(3);
+      expect(charts).toHaveLength(2);
       for (const svg of charts) {
         const r = svg.getBoundingClientRect();
         expect(r.right).toBeLessThanOrEqual(edge);
@@ -105,16 +105,15 @@ describe("the closed trades' fold on the desk", () => {
           }
         }
       }
-      // and one day at the same x in all three, as an open holding's are (#298's shared margins)
+      // and one day at the same x in both charts, as an open holding's are (#298's shared margins)
       const centre = (el: Element | null) => {
         const r = el!.getBoundingClientRect();
         return r.left + r.width / 2;
       };
       const burndown = centre(trade.querySelector('[data-sample="2026-11-03"] circle'));
       const iv = [...trade.querySelectorAll('[aria-label="IV by leg"] circle[data-dte="17"]')].map(centre);
-      const spx = centre(trade.querySelector('circle[data-spx-day="2026-11-03"]'));
       expect(iv.length).toBeGreaterThan(0);
-      for (const x of [...iv, spx]) expect(Math.abs(x - burndown)).toBeLessThan(0.75);
+      for (const x of iv) expect(Math.abs(x - burndown)).toBeLessThan(0.75);
       expect(overflowsSideways()).toBe(false);
     });
   }

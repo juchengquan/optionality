@@ -12,8 +12,9 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { RECORD_FIELDS } from "./fields.ts";
 import { toRecord } from "./snapshot.ts";
-import type { Snapshot } from "./types.ts";
+import type { OptionExData, QotBasic, Snapshot } from "./types.ts";
 
 const basic = (over: Record<string, unknown> = {}) => ({
   security: { market: 11, code: "SPXW261030C8100000" },
@@ -148,7 +149,10 @@ describe("every field the service consumes", () => {
   /** One snapshot with a DISTINCT value in every field, so a mapping that reads the wrong source
    *  cannot coincide with the right one. The live comparison catches these against the Python, but
    *  only while OpenD is up and the market is open — this makes the file stand on its own. */
-  const full: Snapshot = {
+  // EVERY field types.ts declares is filled (`Required`), so a `put` added to snapshot.ts reads a
+  // value here and the RECORD_FIELDS test below sees its key; a field added to types.ts and not
+  // here fails `make typecheck`. Partial, a new mapping of an unfilled field passed every test.
+  const full: Snapshot & { basic: Required<QotBasic>; optionExData: Required<OptionExData> } = {
     basic: {
       security: { market: 11, code: "SPXW261030C8100000" },
       name: "SPXW 261030 8100.00C",
@@ -170,6 +174,9 @@ describe("every field the service consumes", () => {
       amplitude: 13.13,
       avgPrice: 14.14,
       bidAskRatio: 15.15,
+      updateTimestamp: 1790000000.5,
+      priceSpread: 0.05,
+      secStatus: 1,
     },
     optionExData: {
       type: 2,
@@ -232,5 +239,12 @@ describe("every field the service consumes", () => {
       option_area_type: "AMERICAN",
       mid_price: (6.6 + 7.7) / 2,
     });
+  });
+
+  it("is exactly RECORD_FIELDS, the list the Python's record is held to", () => {
+    // the Python SDK hands back a 143-column row; `optionality.opend` keeps these and nothing else,
+    // through `testdata/vendors/opend-fields.json`. A field mapped here and not listed there would
+    // be a `/quotes` key one backend serves and the other does not.
+    expect(Object.keys(toRecord(full)).sort()).toEqual([...RECORD_FIELDS].sort());
   });
 });

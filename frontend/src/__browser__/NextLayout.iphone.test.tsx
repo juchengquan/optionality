@@ -232,19 +232,10 @@ describe("the book", () => {
 });
 
 /** A holding's sheet with its history (#374): open from the start outside the session — the
- *  burndown, the IV and SPX against the strikes — and shut in it. */
+ *  burndown and the IV — and shut in it. */
 describe("a holding's sheet on the book", () => {
   async function sheet(): Promise<HTMLElement> {
     serveBook();
-    // the days with SPX on them, so where it was against the strikes is a chart to measure
-    const served = window.fetch;
-    window.fetch = (async (url: string, init?: RequestInit) => {
-      const answer = await served(url, init);
-      if (!/\/samples$/.test(String(url))) return answer;
-      const days = await answer.json() as { samples: object[] };
-      const spx = { ...days, samples: days.samples.map((d, i) => ({ ...d, spx: 7020 - 15 * i })) };
-      return { ok: true, status: 200, json: () => Promise.resolve(spx) };
-    }) as typeof fetch;
     render(<Next />);
     await settle();
     const card = document.querySelector<HTMLElement>("article.nxp-holding")!;
@@ -261,10 +252,10 @@ describe("a holding's sheet on the book", () => {
     const d = await sheet();
     expect(toggle(d).getAttribute("aria-expanded")).toBe("true");
     const charts = [...d.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
-    // the burndown, the IV by leg, and SPX against the strikes
+    // the burndown and the IV by leg, and no SPX against the strikes (dropped 2026-11-17)
     expect(["burndown", "IV by leg", "SPX against the strikes"]
-      .map((name) => within(d).queryByRole("group", { name }) !== null)).toEqual([true, true, true]);
-    expect(charts).toHaveLength(3);
+      .map((name) => within(d).queryByRole("group", { name }) !== null)).toEqual([true, true, false]);
+    expect(charts).toHaveLength(2);
     const edge = document.documentElement.clientWidth;
     for (const svg of charts) {
       const r = svg.getBoundingClientRect();
