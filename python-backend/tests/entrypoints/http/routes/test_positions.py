@@ -10,12 +10,11 @@ them, because both backends write one file.
 import json
 import math
 from datetime import UTC, datetime
-from unittest.mock import ANY
 
 import pytest
 from harness import json_body, priced_fetcher
 from optionality.contract import build_spx_code, parse_spx_code
-from optionality.quote import Batch, one_sigma, sigma_distance
+from optionality.quote import Batch
 
 from optionality_backend.db.queries import insert_position
 
@@ -263,62 +262,29 @@ class TestAHoldingsDailySamples:
                 "observed_on": "2026-10-06", "observed_at": "2026-10-07 04:00:00+08:00", "timing": "close",
                 "dte": 73, "cost_to_close": 2.9, "on_pace": 3, "spx": 6612.5, "before_correction": False,
                 "legs_iv": flat(14.5), "legs_vega": flat(4.25), "legs_delta": flat(0.2),
-
-                "short_strikes": ANY,
             },
             {
                 "observed_on": "2026-10-07", "observed_at": "2026-10-08 08:30:00+08:00", "timing": "after-close",
                 # a price read outside a regular session is served as none (#416): the burndown plots closes
                 "dte": 72, "cost_to_close": None, "on_pace": 3 * math.sqrt(72 / 73), "spx": None, "before_correction": False,
                 "legs_iv": None, "legs_vega": None, "legs_delta": None,
-
-                "short_strikes": ANY,
             },
             {
                 "observed_on": "2026-10-08", "observed_at": None, "timing": "unrecorded",
                 "dte": 71, "cost_to_close": None, "on_pace": 3 * math.sqrt(71 / 73), "spx": None, "before_correction": False,
                 "legs_iv": None, "legs_vega": None, "legs_delta": None,
-
-                "short_strikes": ANY,
             },
         ]  # fmt: skip
 
-    async def test_places_each_days_short_strikes_against_that_days_spx_in_points_and_sigma(self, start):
-        # the chart's SPX readout shows these and works out none of them (ADR 0005, #395)
+    async def test_places_no_strike_against_a_days_spx_the_strike_strip_reads_todays_from_values(self, start):
         h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
-        c8050, _, p7100, _ = leg_codes()
-        # SPX and every IV: points and σ
         self.sample(
             h, id_, "2026-10-06", 73, 2.9, "2026-10-06 20:00:00.000000",
             iv=json.dumps(flat(14.5)), delta=json.dumps(flat(0.2)), spx=6612.5,
         )  # fmt: skip
-        # SPX, no IV: points, and no σ to measure them in
-        self.sample(h, id_, "2026-10-07", 72, 2.75, "2026-10-07 20:00:00.000000", spx=6650)
-        # IV and no SPX: each strike placed, no distance at all
-        self.sample(h, id_, "2026-10-08", 71, 2.5, "2026-10-08 20:00:00.000000", iv=json.dumps(flat(15)))
         samples = (await h.call(f"/positions/{id_}/samples")).json()["samples"]
-
-        def at(spx, iv, dte, points):
-            return {
-                "points": points,
-                "sigma": sigma_distance(points, spx, iv, dte),
-                "one_sigma": one_sigma(spx, iv, dte),
-            }
-
-        assert samples[0]["short_strikes"] == [
-            {"code": c8050, "option_type": "CALL", "strike": 8050, "delta": 0.2, **at(6612.5, 14.5, 73, 1437.5)},
-            {"code": p7100, "option_type": "PUT", "strike": 7100, "delta": 0.2, **at(6612.5, 14.5, 73, -487.5)},
-        ]
-        assert samples[0]["short_strikes"][0]["sigma"] == pytest.approx(3.35, abs=0.005)
-        none = {"delta": None, "sigma": None, "one_sigma": None}
-        assert samples[1]["short_strikes"] == [
-            {"code": c8050, "option_type": "CALL", "strike": 8050, "points": 1400, **none},
-            {"code": p7100, "option_type": "PUT", "strike": 7100, "points": -450, **none},
-        ]
-        assert samples[2]["short_strikes"] == [
-            {"code": c8050, "option_type": "CALL", "strike": 8050, "points": None, **none},
-            {"code": p7100, "option_type": "PUT", "strike": 7100, "points": None, **none},
-        ]
+        assert samples[0]["spx"] == 6612.5
+        assert "short_strikes" not in samples[0]
 
     async def test_serves_the_planned_decay_at_every_dte_from_the_open_to_expiry(self, start):
         h, id_ = await self.made(start, opened_at="2026-10-06", entry=3)
@@ -434,19 +400,14 @@ class TestTheDaysItsContractsWereWatchedBeforeItWasEntered:
             {
                 "observed_on": "2026-10-02", "observed_at": "2026-10-03 04:14:00+08:00", "timing": "close",
                 "dte": 77, "cost_to_close": 2, "on_pace": None, "legs_iv": dict.fromkeys(codes, 14),
-                "legs_vega": None, "legs_delta": None, "spx": 6600, "before_correction": False, "short_strikes": ANY,
+                "legs_vega": None, "legs_delta": None, "spx": 6600, "before_correction": False,
             },
             {
                 "observed_on": "2026-10-03", "observed_at": "2026-10-03 22:00:00+08:00", "timing": "close",
                 "dte": 76, "cost_to_close": None, "on_pace": None, "legs_iv": None, "legs_vega": None,
-                "legs_delta": None, "spx": None, "before_correction": False, "short_strikes": ANY,
+                "legs_delta": None, "spx": None, "before_correction": False,
             },
         ]  # fmt: skip
-        # the holding's shorts placed against that day's SPX
-        assert [[s["strike"], s["points"]] for s in data["before_entry"][0]["short_strikes"]] == [
-            [8050, 1450],
-            [7100, -500],
-        ]
 
     async def test_reads_them_by_contracts_alone_another_structures_history_is_not_this_holdings(self, start):
         h, id_ = await TestAHoldingsDailySamples.made(start, opened_at="2026-10-06", entry=3)

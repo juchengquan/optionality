@@ -522,26 +522,6 @@
               "US.SPXW261218P6350000": -0.11
             },
             "spx": 6900.5,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": 0.2,
-                "points": 399.5,
-                "sigma": 1.27,
-                "one_sigma": 314.23
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": -0.17,
-                "points": 500.5,
-                "sigma": 1.2,
-                "one_sigma": 417.17
-              }
-            ],
             "before_correction": false
           },
           {
@@ -570,26 +550,6 @@
               "US.SPXW261218P6350000": -0.11
             },
             "spx": 6900.5,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": 0.2,
-                "points": 399.5,
-                "sigma": 1.29,
-                "one_sigma": 309.84
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": -0.17,
-                "points": 500.5,
-                "sigma": 1.22,
-                "one_sigma": 411.34
-              }
-            ],
             "before_correction": false
           },
           {
@@ -618,26 +578,6 @@
               "US.SPXW261218P6350000": -0.11
             },
             "spx": 6900.5,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": 0.2,
-                "points": 399.5,
-                "sigma": 1.31,
-                "one_sigma": 305.38
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": -0.17,
-                "points": 500.5,
-                "sigma": 1.23,
-                "one_sigma": 405.42
-              }
-            ],
             "before_correction": false
           },
           {
@@ -666,26 +606,6 @@
               "US.SPXW261218P6350000": -0.11
             },
             "spx": 6900.5,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": 0.2,
-                "points": 399.5,
-                "sigma": 1.33,
-                "one_sigma": 300.86
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": -0.17,
-                "points": 500.5,
-                "sigma": 1.25,
-                "one_sigma": 399.41
-              }
-            ],
             "before_correction": false
           },
           {
@@ -714,26 +634,6 @@
               "US.SPXW261218P6350000": -0.11
             },
             "spx": 6900.5,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": 0.2,
-                "points": 399.5,
-                "sigma": 1.35,
-                "one_sigma": 296.26
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": -0.17,
-                "points": 500.5,
-                "sigma": 1.27,
-                "one_sigma": 393.31
-              }
-            ],
             "before_correction": false
           }
         ],

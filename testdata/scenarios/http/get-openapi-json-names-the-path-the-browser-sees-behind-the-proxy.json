@@ -1633,60 +1633,6 @@
                                     "number",
                                     "null"
                                   ]
-                                },
-                                "short_strikes": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "object",
-                                    "properties": {
-                                      "code": {
-                                        "type": "string"
-                                      },
-                                      "option_type": {
-                                        "type": "string",
-                                        "enum": [
-                                          "CALL",
-                                          "PUT"
-                                        ]
-                                      },
-                                      "strike": {
-                                        "type": "number"
-                                      },
-                                      "delta": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      },
-                                      "points": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      },
-                                      "sigma": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      },
-                                      "one_sigma": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      }
-                                    },
-                                    "required": [
-                                      "code",
-                                      "option_type",
-                                      "strike",
-                                      "delta",
-                                      "points",
-                                      "sigma",
-                                      "one_sigma"
-                                    ]
-                                  }
                                 }
                               },
                               "required": [
@@ -1698,8 +1644,7 @@
                                 "legs_iv",
                                 "legs_vega",
                                 "legs_delta",
-                                "spx",
-                                "short_strikes"
+                                "spx"
                               ]
                             }
                           }
@@ -2968,60 +2913,6 @@
                                     "null"
                                   ]
                                 },
-                                "short_strikes": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "object",
-                                    "properties": {
-                                      "code": {
-                                        "type": "string"
-                                      },
-                                      "option_type": {
-                                        "type": "string",
-                                        "enum": [
-                                          "CALL",
-                                          "PUT"
-                                        ]
-                                      },
-                                      "strike": {
-                                        "type": "number"
-                                      },
-                                      "delta": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      },
-                                      "points": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      },
-                                      "sigma": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      },
-                                      "one_sigma": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      }
-                                    },
-                                    "required": [
-                                      "code",
-                                      "option_type",
-                                      "strike",
-                                      "delta",
-                                      "points",
-                                      "sigma",
-                                      "one_sigma"
-                                    ]
-                                  }
-                                },
                                 "before_correction": {
                                   "type": "boolean"
                                 }
@@ -3037,7 +2928,6 @@
                                 "legs_vega",
                                 "legs_delta",
                                 "spx",
-                                "short_strikes",
                                 "before_correction"
                               ]
                             }
@@ -3134,60 +3024,6 @@
                                     "null"
                                   ]
                                 },
-                                "short_strikes": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "object",
-                                    "properties": {
-                                      "code": {
-                                        "type": "string"
-                                      },
-                                      "option_type": {
-                                        "type": "string",
-                                        "enum": [
-                                          "CALL",
-                                          "PUT"
-                                        ]
-                                      },
-                                      "strike": {
-                                        "type": "number"
-                                      },
-                                      "delta": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      },
-                                      "points": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      },
-                                      "sigma": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      },
-                                      "one_sigma": {
-                                        "type": [
-                                          "number",
-                                          "null"
-                                        ]
-                                      }
-                                    },
-                                    "required": [
-                                      "code",
-                                      "option_type",
-                                      "strike",
-                                      "delta",
-                                      "points",
-                                      "sigma",
-                                      "one_sigma"
-                                    ]
-                                  }
-                                },
                                 "before_correction": {
                                   "type": "boolean"
                                 }
@@ -3203,7 +3039,6 @@
                                 "legs_vega",
                                 "legs_delta",
                                 "spx",
-                                "short_strikes",
                                 "before_correction"
                               ]
                             }
@@ -3300,60 +3135,6 @@
                                       "null"
                                     ]
                                   },
-                                  "short_strikes": {
-                                    "type": "array",
-                                    "items": {
-                                      "type": "object",
-                                      "properties": {
-                                        "code": {
-                                          "type": "string"
-                                        },
-                                        "option_type": {
-                                          "type": "string",
-                                          "enum": [
-                                            "CALL",
-                                            "PUT"
-                                          ]
-                                        },
-                                        "strike": {
-                                          "type": "number"
-                                        },
-                                        "delta": {
-                                          "type": [
-                                            "number",
-                                            "null"
-                                          ]
-                                        },
-                                        "points": {
-                                          "type": [
-                                            "number",
-                                            "null"
-                                          ]
-                                        },
-                                        "sigma": {
-                                          "type": [
-                                            "number",
-                                            "null"
-                                          ]
-                                        },
-                                        "one_sigma": {
-                                          "type": [
-                                            "number",
-                                            "null"
-                                          ]
-                                        }
-                                      },
-                                      "required": [
-                                        "code",
-                                        "option_type",
-                                        "strike",
-                                        "delta",
-                                        "points",
-                                        "sigma",
-                                        "one_sigma"
-                                      ]
-                                    }
-                                  },
                                   "before_correction": {
                                     "type": "boolean"
                                   }
@@ -3369,7 +3150,6 @@
                                   "legs_vega",
                                   "legs_delta",
                                   "spx",
-                                  "short_strikes",
                                   "before_correction"
                                 ]
                               },

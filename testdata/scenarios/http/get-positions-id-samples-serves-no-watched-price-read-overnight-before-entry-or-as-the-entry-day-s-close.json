@@ -326,26 +326,6 @@
               "US.SPXW261218P6350000": -0.11
             },
             "spx": 6900.5,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": 0.2,
-                "points": 399.5,
-                "sigma": 1.35,
-                "one_sigma": 296.26
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": -0.17,
-                "points": 500.5,
-                "sigma": 1.27,
-                "one_sigma": 393.31
-              }
-            ],
             "before_correction": false
           }
         ],
@@ -361,26 +341,6 @@
             "legs_vega": null,
             "legs_delta": null,
             "spx": null,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              }
-            ],
             "before_correction": false
           },
           {
@@ -394,26 +354,6 @@
             "legs_vega": null,
             "legs_delta": null,
             "spx": null,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              }
-            ],
             "before_correction": false
           }
         ],
