@@ -56,11 +56,12 @@ describe("one table: one book, by expiry (2026-11-17)", () => {
       // the rule the service switched off, after the book
       "q-unknown",
     ]);
-    // one book: no Holdings or Watchlist region, each expiry's heading once
+    // two sections, Spreads then Contracts (2026-11-17): each expiry's heading once in each
     expect(screen.queryByRole("region", { name: "Holdings" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Watchlist" })).toBeNull();
-    expect([...document.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent))
-      .toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"]);
+    expect([...document.querySelectorAll(".nxd-part")].map((x) => [
+      x.querySelector("h2")!.textContent, ...[...x.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent)]))
+      .toEqual([["Spreads", "20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"], ["Contracts", "20261231 · 38 DTE"]]);
   });
 
   it("joins a condor's two spreads with a bracket, and keeps a 4-leg holding one row", () => {
@@ -686,25 +687,23 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   const note = (id: string) =>
     row(id).closest("li")!.querySelector<HTMLElement>("[data-overlap]")?.textContent ?? null;
 
-  it("is drawn among the watched spreads with its note, and the holding keeps its own rules", () => {
+  it("is drawn among the watched spreads with no note under it, and the holding keeps its own rules", () => {
     render(<DeskBook {...overlap()} />);
-    // the held spreads first, each with the rules under it but its own value rule, on its row;
-    // then the watched spreads, the three that name a contract no holding holds among them
+    // Spreads: the held spreads first, each with the rules under it but its own value rule, on its
+    // row; then the watched spreads, the three that name a contract no holding holds among them.
+    // Contracts: 1231_7700, a holding of one call (2026-11-17), its own mid rule its row's
     expect(order()).toEqual([
-      // 1231_7700's own mid rule is its row's, as 1231_8050's value rule is
-      "h-8050", "r-8050-delta", "h-7700", "h-ic", "r-ic-calls", "h-7200",
+      "h-8050", "r-8050-delta", "h-ic", "r-ic-calls", "h-7200",
       "r-8100", "w-8150-delta", "w-7700", "r-ratio",
+      "h-7700",
     ]);
     // each names a contract its holding does not hold: C8150, C7750, a second C7250
     for (const id of ["r-8100", "w-7700", "r-ratio"]) expect(row(id).dataset.nested).toBeUndefined();
     // a single contract on its leg, and a wing of a held condor, under the holding
     expect(row("h-8050").closest("li")!.contains(row("r-8050-delta"))).toBe(true);
     expect(row("h-ic").closest("li")!.contains(row("r-ic-calls"))).toBe(true);
-    expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
-    expect(note("w-7700")).toBe("contains 1231_7700's C7700");
-    expect(note("r-ratio")).toBe("contains 1231_7200's C7200 and C7250");
-    // and no note on a rule that is drawn where it always was
-    expect(note("r-ic-calls")).toBeNull();
+    // what each shares is said in its inspector, not under its row (the owner, 2026-11-17)
+    for (const id of ["r-8100", "w-7700", "r-ratio", "r-ic-calls"]) expect(note(id), id).toBeNull();
     expect(row("r-8100").dataset.nested).toBeUndefined();
   });
 
@@ -729,7 +728,8 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("says it in the inspector too, and the note survives privacy, having no $ and no count in it", () => {
     render(<DeskBook {...overlap({ privacy: true })} />);
-    expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
+    // not under its row (2026-11-17): the inspector says it
+    expect(note("r-8100")).toBeNull();
     fireEvent.click(within(row("r-8100")).getByRole("button", { name: "1231_8100" }));
     const insp = screen.getByRole("complementary", { name: "inspector: 1231_8100" });
     expect(insp.querySelector("[data-overlap]")!.textContent).toBe("shares C8100 with 1231_8050");

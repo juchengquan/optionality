@@ -1,52 +1,76 @@
-/** ONE book (the owner, 2026-11-17): holdings and watches together, by expiry. The model every
- *  surface draws — the desk, the phone, the saved picture and Copy as text — so the order is decided
- *  here once: each expiry once; under it the held spreads, the watched spreads, the lone contracts. */
+/** The book (the owner, 2026-11-17): holdings and watches together, in two sections — Spreads, then
+ *  Contracts — each by expiry. The model every surface draws — the desk, the phone, the saved picture
+ *  and Copy as text — so the order is decided here once. */
 import { describe, expect, it } from "vitest";
 
 import { ownRule, placeBook } from "../placement";
-import { entry, HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
+import { entry, holding, HOLDINGS, MONITORS, QUOTES, side } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 const ids = <T extends { id: string }>(rows: readonly T[]) => rows.map((r) => r.id);
 
-describe("the one book", () => {
-  const { book } = placeBook(QUOTES, HOLDINGS, MONITORS);
+describe("the book in two sections (the owner, 2026-11-17)", () => {
+  const { book, sections } = placeBook(QUOTES, HOLDINGS, MONITORS);
+  const expiries = (k: "spreads" | "contracts") => sections.find((x) => x.kind === k)?.expiries ?? [];
 
-  it("has each expiry once, the earliest first, whether it holds, watches or both", () => {
-    expect(book.map((g) => g.expiry)).toEqual(["2026-12-04", "2026-12-18", "2026-12-31"]);
+  it("is Spreads, then Contracts, each by expiry, the earliest first", () => {
+    expect(sections.map((x) => [x.kind, x.title])).toEqual([["spreads", "Spreads"], ["contracts", "Contracts"]]);
+    expect(expiries("spreads").map((g) => g.expiry)).toEqual(["2026-12-04", "2026-12-18", "2026-12-31"]);
+    expect(expiries("contracts").map((g) => g.expiry)).toEqual(["2026-12-31"]);
   });
 
-  it("puts the held spreads first, then the watched spreads, then the lone contracts", () => {
-    const [dec04, dec18, dec31] = book;
+  it("puts the held spreads first in Spreads, then the watched spreads; no contract among them", () => {
+    const [dec04, dec18, dec31] = expiries("spreads");
     expect(dec04!.held).toEqual([]);
     expect(dec04!.spreads.map((i) => i.entry.id)).toEqual(["w-dec04"]);
     expect(dec18!.held.map((b) => b.map((p) => p.holding.id))).toEqual([["h-calls", "h-puts"]]);
     expect(dec18!.spreads.map((i) => i.entry.id)).toEqual(["w-dec18"]);
     expect(dec31!.held.map((b) => b.map((p) => p.holding.id))).toEqual([["h-ic"]]);
     expect(dec31!.spreads.map((i) => i.entry.id)).toEqual(["w-dec31"]);
-    expect(dec31!.contracts.map((i) => i.entry.id)).toEqual(["w-lone"]);
+    expect(expiries("spreads").flatMap((g) => g.contracts)).toEqual([]);
   });
 
-  it("has lone contracts only where an expiry has some", () => {
-    expect(book.map((g) => g.contracts.length)).toEqual([0, 0, 1]);
+  it("puts the lone contracts in Contracts, and no spread", () => {
+    expect(expiries("contracts").flatMap((g) => g.contracts.map((i) => i.entry.id))).toEqual(["w-lone"]);
+    expect(expiries("contracts").flatMap((g) => g.spreads)).toEqual([]);
+  });
+
+  it("puts a holding of one contract in Contracts, a holding of more in Spreads", () => {
+    const lone = holding("h-7700", { name: "1231_7700", strike_date: "2026-12-31", legs: [side("short", "CALL", 7700)] });
+    const two = placeBook(QUOTES, [...HOLDINGS, lone], MONITORS).sections;
+    const [spreads, contracts] = two;
+    expect(spreads!.expiries.flatMap((g) => g.held.flat().map((p) => p.holding.id))).toEqual(["h-calls", "h-puts", "h-ic"]);
+    expect(contracts!.expiries.flatMap((g) => g.held.flat().map((p) => p.holding.id))).toEqual(["h-7700"]);
+  });
+
+  it("omits a section with nothing in it", () => {
+    const noLone = QUOTES.filter((q) => q.id !== "w-lone");
+    expect(placeBook(noLone, HOLDINGS, MONITORS).sections.map((x) => x.kind)).toEqual(["spreads"]);
+  });
+
+  it("lists every expiry block in drawn order as `book`: Spreads' then Contracts'", () => {
+    expect(book).toEqual([...expiries("spreads"), ...expiries("contracts")]);
   });
 
   it("keeps a leg's rule under its watched spread", () => {
-    expect(ids(book[1]!.spreads[0]!.under)).toEqual(["w-dec18-delta"]);
+    expect(ids(expiries("spreads")[1]!.spreads[0]!.under)).toEqual(["w-dec18-delta"]);
   });
 
   it("says each expiry's DTE from its first row", () => {
-    expect(book.map((g) => g.dte)).toEqual([38, 38, 38]);
+    expect(book.map((g) => g.dte)).toEqual([38, 38, 38, 38]);
   });
 
   it("is the watchlist alone while the holdings are not valued", () => {
     const b = placeBook(QUOTES, null, MONITORS);
     expect(b.book.flatMap((g) => g.held)).toEqual([]);
-    expect(b.book.map((g) => g.expiry)).toEqual(["2026-12-04", "2026-12-18", "2026-12-31"]);
+    expect(b.sections.map((x) => x.expiries.map((g) => g.expiry)))
+      .toEqual([["2026-12-04", "2026-12-18", "2026-12-31"], ["2026-12-31"]]);
   });
 
   it("is empty with nothing held or watched", () => {
-    expect(placeBook([], [], []).book).toEqual([]);
+    const empty = placeBook([], [], []);
+    expect(empty.book).toEqual([]);
+    expect(empty.sections).toEqual([]);
   });
 });
 
@@ -103,13 +127,14 @@ describe("a holding's own rule", () => {
 
   it("is the live book's value rule, and the delta on its short leg is not; a lone call's mid rule is its own", () => {
     const { book } = placeBook(OVERLAP_QUOTES, OVERLAP_HOLDINGS, OVERLAP_MONITORS);
-    const h8050 = book[0]!.held.flat().find((p) => p.holding.id === "h-8050")!;
+    const held = book.flatMap((g) => g.held.flat());
+    const h8050 = held.find((p) => p.holding.id === "h-8050")!;
     expect(ownRule(h8050.holding, h8050.rules)?.id).toBe("r-8050");
     expect(ids(h8050.rules)).toEqual(["r-8050", "r-8050-delta"]);
-    const h7700 = book[0]!.held.flat().find((p) => p.holding.id === "h-7700")!;
+    const h7700 = held.find((p) => p.holding.id === "h-7700")!;
     expect(ownRule(h7700.holding, h7700.rules)?.id).toBe("r-7700");
     // a wing of a held condor watches part of it (scope leg): a rule under it
-    const hIc = book[0]!.held.flat().find((p) => p.holding.id === "h-ic")!;
+    const hIc = held.find((p) => p.holding.id === "h-ic")!;
     expect(ownRule(hIc.holding, hIc.rules)).toBeNull();
   });
 });
@@ -167,11 +192,14 @@ describe("each rule drawn once (2026-11-17)", () => {
 });
 
 describe("the live book's partial overlap (#346)", () => {
-  it("draws the combo that shares a contract among the same expiry's watched spreads, with its note", () => {
-    const { book } = placeBook(OVERLAP_QUOTES, OVERLAP_HOLDINGS, OVERLAP_MONITORS);
-    expect(book).toHaveLength(1);
-    const [g] = book;
-    expect(g!.held.flat().map((p) => p.holding.id)).toEqual(["h-8050", "h-7700", "h-ic", "h-7200"]);
+  it("draws the combo that shares a contract among the same expiry's watched spreads, keeping what it shares", () => {
+    // the note is no longer drawn on its row (2026-11-17), but the inspector and sheet still say it
+    const { sections } = placeBook(OVERLAP_QUOTES, OVERLAP_HOLDINGS, OVERLAP_MONITORS);
+    expect(sections.map((x) => [x.kind, x.expiries.length])).toEqual([["spreads", 1], ["contracts", 1]]);
+    const [g] = sections[0]!.expiries;
+    expect(g!.held.flat().map((p) => p.holding.id)).toEqual(["h-8050", "h-ic", "h-7200"]);
+    // the lone held call is a contract, though a watched spread contains it
+    expect(sections[1]!.expiries[0]!.held.flat().map((p) => p.holding.id)).toEqual(["h-7700"]);
     expect(g!.spreads.map((i) => [i.entry.id, i.overlap])).toEqual([
       ["r-8100", "shares C8100 with 1231_8050"],
       ["w-7700", "contains 1231_7700's C7700"],

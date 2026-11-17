@@ -153,7 +153,7 @@ describe("finding by text", () => {
     const status = within(palette()).getByRole("status");
     expect(status.textContent).toMatch(/^\d+ results$/);
     await user.type(box(), "7150");
-    expect(optionNames()).toEqual(["1218_P7150", "20261218 7150P"]);
+    expect(optionNames()).toEqual(["1218_P7150", "20261218 P7150"]);
     expect(status.textContent).toBe("2 results");
     await user.type(box(), " delta");
     expect(status.textContent).toBe("1 result");
@@ -175,7 +175,7 @@ describe("finding by text", () => {
     await user.keyboard("{ArrowUp}{ArrowUp}{ArrowDown}{Enter}");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "commands" })).toBeNull());
     // selected in the table, and opened in the inspector, which has the focus
-    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 20261218 7150P"));
+    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 20261218 P7150"));
     expect(row("w-dec18-delta").hasAttribute("data-selected")).toBe(true);
     await waitFor(() => expect(inspector()!.contains(document.activeElement)).toBe(true));
   });
@@ -237,7 +237,7 @@ describe("its actions", () => {
     const { user } = await open();
     await run(user, "7150 delta");
     await run(user, "edit the selected");
-    const form = await screen.findByRole("form", { name: "editing 20261218 7150P Δ" });
+    const form = await screen.findByRole("form", { name: "editing 20261218 P7150 Δ" });
     expect(inspector()!.contains(form)).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("threshold")));
   });
@@ -363,7 +363,7 @@ describe("after review (#329)", () => {
     await user.type(box(), " delta");
     const now = box().getAttribute("aria-activedescendant");
     expect(now).not.toBe(first);
-    expect(document.getElementById(now!)!.textContent).toMatch(/20261218 7150P/);
+    expect(document.getElementById(now!)!.textContent).toMatch(/20261218 P7150/);
   });
 
   it("says out loud why a closed action did nothing", async () => {
@@ -384,11 +384,11 @@ describe("after review (#329)", () => {
     const { user } = await open();
     await run(user, "7150 delta");
     await run(user, "edit the selected");
-    const form = await screen.findByRole("form", { name: "editing 20261218 7150P Δ" });
+    const form = await screen.findByRole("form", { name: "editing 20261218 P7150 Δ" });
     (document.activeElement as HTMLElement).blur();
     await run(user, "edit the selected");
     await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("threshold")));
-    expect(screen.getByRole("form", { name: "editing 20261218 7150P Δ" })).toBe(form);
+    expect(screen.getByRole("form", { name: "editing 20261218 P7150 Δ" })).toBe(form);
   });
 
   it("puts the focus in a close form that is already open", async () => {

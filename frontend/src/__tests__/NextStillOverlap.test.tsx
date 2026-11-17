@@ -30,12 +30,14 @@ function namesIn(title: string): string[] {
 describe.each([false, true])("the picture, privacy %s", (privacy) => {
   it("draws the partly overlapping combos among the watched spreads, after the held ones, each by its name alone", () => {
     picture(privacy);
-    const book = namesIn("Book");
-    // the held spreads first, "held" in the name cell, their own rule on their row; then the
-    // combos that name a contract nobody holds, as watched spreads (2026-11-17)
+    const book = [...namesIn("Spreads"), ...namesIn("Contracts")];
+    // Spreads: the held spreads first, "held" in the name cell, their own rule on their row; then
+    // the combos that name a contract nobody holds, as watched spreads. Contracts: the holding of one
+    // call (2026-11-17)
     expect(book).toEqual([
-      "1231_8050 held", nameOf("r-8050-delta"), "1231_7700 held", "1231_IC held", nameOf("r-ic-calls"),
+      "1231_8050 held", nameOf("r-8050-delta"), "1231_IC held", nameOf("r-ic-calls"),
       "1231_7200 held", nameOf("r-8100"), nameOf("w-8150-delta"), nameOf("w-7700"), nameOf("r-ratio"),
+      "1231_7700 held",
     ]);
     // no bracket note anywhere in the table (#400)
     for (const n of book) expect(n).not.toMatch(/[()]|shares|contains/);

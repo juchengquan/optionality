@@ -127,7 +127,7 @@ describe("the cards", () => {
     // worth nothing unless the card starts out of view
     expect(target.getBoundingClientRect().top).toBeGreaterThan(window.innerHeight);
     const banners = screen.getByRole("status", { name: "needs you" });
-    await userEvent.click(within(banners).getByRole("button", { name: /20261231 8000C entry signal/ }));
+    await userEvent.click(within(banners).getByRole("button", { name: /20261231 C8000 entry signal/ }));
     await new Promise((r) => setTimeout(r, 900));
     const r = target.getBoundingClientRect();
     expect(target.hasAttribute("data-revealed")).toBe(true);

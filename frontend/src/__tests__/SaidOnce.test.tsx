@@ -267,7 +267,13 @@ for (const arrangement of ["desk", "phone"] as const) {
         fireEvent.click(document.querySelector<HTMLButtonElement>("[data-ref='h-calls'] .nxp-open")!);
         await settle();
         d = screen.getByRole("dialog");
-      } else d = await detail(arrangement, "1218_C7300");
+      } else {
+        // cut to its short leg it is a contract, drawn under Contracts, and its value rule — which now
+        // names a leg it does not hold — a spread under Spreads, above it: the holding's row, by ref
+        fireEvent.click(document.querySelector<HTMLButtonElement>("[data-ref='h-calls'] .nxd-name")!);
+        await settle();
+        d = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
+      }
       await waitFor(() => expect(d.querySelector("[aria-label='payoff at expiry'] dl")).toBeTruthy());
       expect(d.querySelector("[aria-label='strike strip']")).toBeNull();
       expect(count(seen(d), REASON)).toBe(1);
@@ -298,9 +304,9 @@ for (const arrangement of ["desk", "phone"] as const) {
         expect(card.querySelector("[data-ref='r-condor'] .nxp-rule-name")!.textContent).not.toBe("1218_C7300");
         // a watched spread's leg rule keeps its own name
         const watch = document.querySelector("[data-ref='w-dec18']")!;
-        expect([...watch.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["20261218 7150P"]);
+        expect([...watch.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["20261218 P7150"]);
         const sheet = await detail(arrangement, "1218_P7150");
-        expect([...sheet.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["20261218 7150P"]);
+        expect([...sheet.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["20261218 P7150"]);
       } else {
         // the desk's inspector never drew a rule's name in Rules: held to that
         const d = await detail(arrangement, "1218_P7150");
@@ -340,9 +346,9 @@ for (const arrangement of ["desk", "phone"] as const) {
       const where = arrangement === "phone"
         ? document.querySelector("[data-monitor='q-unknown']")!
         : await (async () => {
-          fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === "20261211 8000C")!);
+          fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === "20261211 C8000")!);
           await settle();
-          return screen.getByRole("complementary", { name: "inspector: 20261211 8000C" });
+          return screen.getByRole("complementary", { name: "inspector: 20261211 C8000" });
         })();
       expect(count(seen(where), clause)).toBe(1);
       expect(seen(where)).not.toMatch(/Switched off by the service/);

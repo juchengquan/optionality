@@ -63,7 +63,6 @@ class SpxContract(BaseModel):
 _SPX_CODE = re.compile(r"US\.SPXW(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)000", re.ASCII)
 # the year written whole (20261030, printed since 2026-11-17) or as the code's two digits (261030)
 _SHORT_CODE = re.compile(r"(?:20)?(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)", re.ASCII)
-_VENDOR_NAME = re.compile(r"SPXW (\d{2})(\d{2})(\d{2}) (?=[^ ])", re.ASCII)
 
 # JavaScript's \s, spelled out: its WhiteSpace and LineTerminator characters. Python's own \s differs
 # at both edges — it takes the file, group, record and unit separators (\x1c-\x1f) and \x85, which
@@ -119,10 +118,9 @@ def expand_spx_short(short: str) -> str | None:
         return None
 
 
-def dated_name(name: str) -> str:
-    """A vendor's name for an SPXW contract, `SPXW 261030 8100.00C`, with its date written YYYYMMDD:
-    `SPXW 20261030 8100.00C`. Any other name is returned untouched."""
-    m = _VENDOR_NAME.match(name)
-    if not m:
-        return name
-    return f"SPXW 20{m[1]}{m[2]}{m[3]} {name[m.end() :]}"
+def contract_name(code: str, name: str) -> str:
+    """The name the owner reads a contract by, in an alarm, a clear, a quarantine notice and
+    `/snapshot`: an SPXW contract as `short_spx_code` writes it, `20261218 P6800` — the one spelling it
+    has on the page and in `/monitors` too (2026-11-17) — and anything else by `name`, the provider's
+    name for it or the caller's fallback (a combo's code IS its name)."""
+    return short_spx_code(code) if parse_spx_code(code) is not None else name

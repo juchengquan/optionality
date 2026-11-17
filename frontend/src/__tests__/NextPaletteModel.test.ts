@@ -202,7 +202,7 @@ describe("its actions", () => {
     const of = (selected: DeskRow) => Object.fromEntries(
       paletteActions({ choice: "auto", selected }).map((a) => [a.key, a.detail]));
     expect(of(row("h-calls"))["close-holding"]).toBe("1218_C7300");
-    expect(of(row("w-dec18-delta"))["edit-monitor"]).toBe("20261218 7150P");
+    expect(of(row("w-dec18-delta"))["edit-monitor"]).toBe("20261218 P7150");
   });
 
   it("says which arrangement is in use", () => {
@@ -240,9 +240,11 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   const found = findables(placeBook(OVERLAP_QUOTES, OVERLAP_HOLDINGS, OVERLAP_MONITORS));
 
   it("is found where the table draws it, in the watchlist after the holdings, and jumps there", () => {
+    // in the table's order: Spreads, then Contracts, where the holding of one call is (2026-11-17)
     expect(refs(found)).toEqual([
-      "h-8050", "r-8050-delta", "h-7700", "h-ic", "r-ic-calls", "h-7200",
+      "h-8050", "r-8050-delta", "h-ic", "r-ic-calls", "h-7200",
       "r-8100", "w-8150-delta", "w-7700", "r-ratio",
+      "h-7700",
     ]);
   });
 

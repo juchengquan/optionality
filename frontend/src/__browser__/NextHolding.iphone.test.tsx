@@ -80,6 +80,21 @@ function pastTheEdge(root: Element): string[] {
     .map((el) => `${el.tagName.toLowerCase()}.${el.className} right=${Math.round(el.getBoundingClientRect().right)}`);
 }
 
+describe("opening a sheet", () => {
+  // on the live book (2026-11-17) a held card's sheet opened 905px down its 1559: Base UI focused the
+  // first control inside, the first rule's "edit", and the sheet scrolled to it. Opened on its title,
+  // as the journal's sheet is — and a box focused would bring the keyboard up over it besides
+  it.each([["a holding with rules", "h-ic", "1231_IC"], ["a watched spread with a leg rule", "w-dec18", "1218_P7150"]])(
+    "starts at the top of %s, its title focused", async (_what, id, title) => {
+      await openPhone(withValueRule());
+      const sheet = await sheetOf(id);
+      expect(sheet.scrollTop).toBe(0);
+      const heading = within(sheet).getAllByRole("heading")[0]!;
+      if (title) expect(heading.textContent).toBe(title);
+      expect(document.activeElement).toBe(heading);
+    });
+});
+
 describe("changing a holding from the phone's sheet", () => {
   it("gives every form 44pt targets and 16px boxes, and pushes nothing past the edge", async () => {
     await openPhone();

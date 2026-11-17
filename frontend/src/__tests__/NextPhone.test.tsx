@@ -55,10 +55,12 @@ describe("the cards, on the owner's book", () => {
     expect(within(spread).getByText(/\|Δ\| ≥ 0\.20 — now/)).toBeTruthy();
   });
 
-  it("group it by expiry, under ONE heading per expiry", () => {
+  it("group it by expiry, under ONE heading per expiry in each of Spreads and Contracts", () => {
     draw();
-    const groups = [...region("Book").querySelectorAll<HTMLElement>("[data-expiry]")].map((g) => g.dataset.expiry);
+    const groups = [...region("Spreads").querySelectorAll<HTMLElement>("[data-expiry]")].map((g) => g.dataset.expiry);
     expect(groups).toEqual(["2026-12-04", "2026-12-18", "2026-12-31"]);
+    expect([...region("Contracts").querySelectorAll<HTMLElement>("[data-expiry]")].map((g) => g.dataset.expiry))
+      .toEqual(["2026-12-31"]);
     // the expiry as the page writes a date, and its DTE said once, here (parts F and K)
     expect(within(region("Book")).getAllByRole("heading", { name: /20261218/ })).toHaveLength(1);
   });
@@ -439,25 +441,28 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   const overlap = (over: Partial<BookProps> = {}) =>
     draw({ quotes: OVERLAP_QUOTES, holdings: OVERLAP_HOLDINGS, monitors: OVERLAP_MONITORS, ...over });
   const note = (ref: string) => card(ref).querySelector<HTMLElement>("[data-overlap]")?.textContent ?? null;
+  const OVERLAP_ORDER = [
+    "h-8050", "r-8050", "r-8050-delta", "h-ic", "r-ic-calls", "h-7200",
+    "r-8100", "w-8150-delta", "w-7700", "r-ratio",
+    "h-7700", "r-7700",
+  ];
 
-  it("is a card among the watched spreads with its note, and the holding's card keeps its own rules", () => {
+  it("is a card among the watched spreads with no note on it, and the holding's card keeps its own rules", () => {
     overlap();
     // a wing of a held condor names nothing unheld, and stays on the condor's card; the combos
-    // that name a contract nobody holds follow the held spreads, under the same expiry
-    expect(refs(region("Book"))).toEqual([
-      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
-      "r-8100", "w-8150-delta", "w-7700", "r-ratio",
-    ]);
-    expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
-    expect(note("w-7700")).toBe("contains 1231_7700's C7700");
-    expect(note("r-ratio")).toBe("contains 1231_7200's C7200 and C7250");
+    // that name a contract nobody holds follow the held spreads, under the same expiry; the holding
+    // of one call is under Contracts (2026-11-17)
+    expect(refs(region("Book"))).toEqual(OVERLAP_ORDER);
+    // what each shares is said in its sheet, not on its card (the owner, 2026-11-17)
+    for (const id of ["r-8100", "w-7700", "r-ratio"]) expect(note(id), id).toBeNull();
     expect(card("h-8050").querySelector("[data-overlap]")).toBeNull();
     expect(card("h-ic").querySelector("[data-overlap]")).toBeNull();
   });
 
   it("says it in the detail sheet too, and under privacy", async () => {
     overlap({ privacy: true });
-    expect(note("w-7700")).toBe("contains 1231_7700's C7700");
+    // not on its card (2026-11-17): the sheet says it
+    expect(note("w-7700")).toBeNull();
     fireEvent.click(within(card("w-7700")).getByRole("button", { name: /details of 1231_C7700/ }));
     const sheet = await screen.findByRole("dialog");
     expect(sheet.querySelector("[data-overlap]")!.textContent).toBe("contains 1231_7700's C7700");
@@ -473,9 +478,6 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("is placed the same outside the session", () => {
     overlap({ session: false });
-    expect(refs(region("Book"))).toEqual([
-      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
-      "r-8100", "w-8150-delta", "w-7700", "r-ratio",
-    ]);
+    expect(refs(region("Book"))).toEqual(OVERLAP_ORDER);
   });
 });

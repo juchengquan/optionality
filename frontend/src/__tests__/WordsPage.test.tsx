@@ -69,7 +69,7 @@ describe("the checks see what they look for (each fails on a planted fault)", ()
       "261231 · 45 DTE", "261218 6800P", "expired 261106", "opened on 261103.", "261103, then"]) {
       expect([...DATE_CHECKS["a date in words"]!(bad), ...DATE_CHECKS["a six-digit date"]!(bad)], bad).toHaveLength(1);
     }
-    for (const ok of ["20261231 · 45 DTE", "20261218 6800P", "Mon 20261116 20:15 ET", "US.SPXW261231C8100000",
+    for (const ok of ["20261231 · 45 DTE", "20261218 P6800", "Mon 20261116 20:15 ET", "US.SPXW261231C8100000",
       "1231_8050", "1218-6800", "261231_8050", "+$261,218", "7416.62", "261103.5 pts", "261,103", "12 DTE", "in 24d", "3 legs", "Dec rules"]) {
       expect([...DATE_CHECKS["a date in words"]!(ok), ...DATE_CHECKS["a six-digit date"]!(ok)], ok).toEqual([]);
     }

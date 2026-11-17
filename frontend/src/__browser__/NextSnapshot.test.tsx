@@ -211,7 +211,7 @@ describe("saving the desk as an image", () => {
     const { root, release } = await take();
     expect([...root.querySelectorAll<HTMLElement>(CONTROLS)].map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
     // the book is in it all the same: holdings, the watched spreads and their leg rules, the quarantine
-    for (const name of ["1218_P6400 held", "1218_C7300 held", "1231_IC held", "1204_P6900", "20261218 7150P", "20261211 8000C"]) {
+    for (const name of ["1218_P6400 held", "1218_C7300 held", "1231_IC held", "1204_P6900", "20261218 P7150", "20261211 C8000"]) {
       expect(rowNamed(root, name), `${name} is not in the picture`).toBeTruthy();
     }
     release();
@@ -247,7 +247,7 @@ describe("saving the desk as an image", () => {
     expect(rowOnScreen("w-dec18-delta").querySelector('[data-col="alarm"]')!.textContent).toContain("|Δ| ≥ 0.20");
     const { root, release } = await take();
     // the book's one table (2026-11-17)
-    const row = rowNamed(root, "20261218 7150P");
+    const row = rowNamed(root, "20261218 P7150");
     const rule = [...row.closest("table")!.querySelector("thead tr")!.children].findIndex((c) => c.textContent === "rule");
     expect(row.children[rule]!.textContent).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
     // no rule is said in the screen's symbols (#388): its arrows; a Δ is a field's own word (#404)

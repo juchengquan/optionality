@@ -53,9 +53,9 @@ describe("a quarantined rule is a fault", () => {
     ], health(), null);
     expect(items.map((n) => n.kind)).toEqual(["fault", "fault", "fault"]);
     expect(items.map((n) => n.text)).toEqual([
-      "20261211 6800P Δ quarantined — its figure never arrives",
+      "20261211 P6800 Δ quarantined — its figure never arrives",
       "1211_8300 Δ quarantined — the provider does not know its contract",
-      "20261211 6800P Δ quarantined — its stored row cannot be read",
+      "20261211 P6800 Δ quarantined — its stored row cannot be read",
     ]);
   });
 
@@ -65,8 +65,8 @@ describe("a quarantined rule is a fault", () => {
       monitor({ id: "b", field: "mid_price" }),
     ], health(), null);
     expect(items.map((n) => n.text)).toEqual([
-      "20261211 6800P Δ quarantined — its figure never arrives",
-      "20261211 6800P value quarantined — its figure never arrives",
+      "20261211 P6800 Δ quarantined — its figure never arrives",
+      "20261211 P6800 value quarantined — its figure never arrives",
     ]);
   });
 

@@ -952,7 +952,7 @@ describe("the needs-you line", () => {
       at(now);
       await open();
       const line = screen.getByRole("status", { name: "needs you" });
-      expect(line.textContent).toContain("20261211 8300C Δ quarantined — the provider does not know its contract");
+      expect(line.textContent).toContain("20261211 C8300 Δ quarantined — the provider does not know its contract");
       expect(line.getAttribute("data-tone")).toBe("bad");
     });
   }
@@ -986,8 +986,9 @@ describe("a combo drawn in the Watchlist because it names a contract its holding
       serve();
       quotes = [spread, shortLeg, moved];
       await open();
-      // the holdings have arrived, and the combo is drawn apart from its holding
-      await screen.findByText("contains 1231_7000P's P7000 and P6950", undefined, { timeout: SLOW });
+      // the holdings have arrived — its row is held — and the combo is drawn apart from it (its
+      // overlap is said in its inspector, no longer under its row: 2026-11-17)
+      await screen.findByRole("button", { name: "1231_7000P held" }, { timeout: SLOW });
       const line = screen.getByRole("status", { name: "needs you" });
       expect(line.textContent).toContain("quarantined");
       expect(line.textContent).not.toContain("1231_7000W at its manage-by");
@@ -1032,7 +1033,7 @@ describe("a banner leads to its row", () => {
     quotes = [spread, { ...shortLeg, triggered: true }];
     await open();
     const banners = screen.getByRole("status", { name: "needs you" });
-    fireEvent.click(within(banners).getByRole("button", { name: /20261218 7150P entry signal/ }));
+    fireEvent.click(within(banners).getByRole("button", { name: /20261218 P7150 entry signal/ }));
     await waitFor(() =>
       expect(document.querySelector('[data-ref="w2"]')!.hasAttribute("data-revealed")).toBe(true));
   });

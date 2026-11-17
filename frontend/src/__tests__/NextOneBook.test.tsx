@@ -68,73 +68,92 @@ function plain(over: Partial<BookProps> = {}, hidden: ReadonlySet<string> = new 
 const deskRows = () => [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")];
 const deskRow = (id: string) => deskRows().find((r) => r.dataset.ref === id) ?? null;
 const deskHeadings = () => [...document.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent);
-/** Each expiry group's rows and labels, in order: a row by its ref, the label as `[contracts]`. */
-const deskGroups = () => [...document.querySelectorAll<HTMLElement>(".nxd-expiry[data-expiry]")].map((g) => [
-  g.dataset.expiry,
-  ...[...g.querySelectorAll<HTMLElement>(".nxd-row[data-ref], [data-sub]")]
-    .map((el) => (el.dataset.sub ? `[${el.dataset.sub}]` : el.dataset.ref!)),
+/** Each section's expiry groups, in order: the section by its kind, each group its rows by ref. */
+const sectionsOf = (rows: string) => [...document.querySelectorAll<HTMLElement>("[data-section]")].map((x) => [
+  x.dataset.section,
+  ...[...x.querySelectorAll<HTMLElement>("[data-expiry]")].map((g) => [
+    g.dataset.expiry, ...[...g.querySelectorAll<HTMLElement>(rows)].map((el) => el.dataset.ref!),
+  ]),
 ]);
-
-const phoneGroups = () => [...document.querySelectorAll<HTMLElement>(".nxp-expiry[data-expiry]")].map((g) => [
-  g.dataset.expiry,
-  ...[...g.querySelectorAll<HTMLElement>("article[data-ref], .nxp-rule[data-ref], [data-sub]")]
-    .map((el) => (el.dataset.sub ? `[${el.dataset.sub}]` : el.dataset.ref!)),
-]);
+const deskGroups = () => sectionsOf(".nxd-row[data-ref]");
+const phoneGroups = () => sectionsOf("article[data-ref], .nxp-rule[data-ref]");
 const card = (id: string) => document.querySelector<HTMLElement>(`article[data-ref="${id}"]`)!;
 
-/** The book's rows in the picture, as their name cells. */
-const plainNames = (view: ReturnType<typeof plain>) => view.sections[0]!.groups.map((g) => [g.heading, ...g.rows.map((r) => r[0])]);
+/** The picture's sections that are the book (2026-11-17): Spreads and Contracts, or Book when empty. */
+const BOOK_PARTS = ["Spreads", "Contracts", "Book"];
+const bookParts = (view: ReturnType<typeof plain>) => view.sections.filter((x) => BOOK_PARTS.includes(x.title));
+const bookRows = (view: ReturnType<typeof plain>) => bookParts(view).flatMap((x) => x.groups.flatMap((g) => g.rows));
+/** The book's rows in the picture, as their name cells, under each section's title. */
+const plainNames = (view: ReturnType<typeof plain>) => bookParts(view)
+  .map((x) => [x.title, ...x.groups.map((g) => [g.heading, ...g.rows.map((r) => r[0])])]);
 
-// the one book's groups, by ref, on the fixture above
+// the book's sections and their groups, by ref, on the fixture above
 const GROUPS = [
-  ["2026-12-04", "w-dec04"],
-  ["2026-12-18", "h-calls", "r-calls-short", "h-puts", "w-p6400", "w-dec18", "w-dec18-delta"],
-  ["2026-12-31", "h-ic", "w-dec31", "[contracts]", "w-lone"],
+  ["spreads",
+    ["2026-12-04", "w-dec04"],
+    ["2026-12-18", "h-calls", "r-calls-short", "h-puts", "w-p6400", "w-dec18", "w-dec18-delta"],
+    ["2026-12-31", "h-ic", "w-dec31"]],
+  ["contracts",
+    ["2026-12-31", "w-lone"]],
 ];
 
-describe("1–2. each expiry once: held spreads, watched spreads, then the lone contracts", () => {
+describe("1–2. two sections (2026-11-17): Spreads, then Contracts, each by expiry, its held rows first", () => {
   it("on the desk", () => {
     render(<DeskBook {...props()} />);
-    expect(deskHeadings()).toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"]);
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(["Book", "Spreads", "Contracts"]);
+    expect(deskHeadings()).toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE", "20261231 · 38 DTE"]);
     expect(deskGroups()).toEqual(GROUPS);
-    expect(screen.queryByRole("region", { name: /Holdings|Watchlist/ })).toBeNull();
-    expect(screen.getByRole("region", { name: "Book" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Spreads" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Contracts" })).toBeTruthy();
+    // no quiet label any more: the section's heading says it
+    expect(document.querySelectorAll("[data-sub]")).toHaveLength(0);
+    // the first column names a spread and a contract alike, so it is "name", not "spread"
+    expect(document.querySelector('.nxd-head [data-col="name"]')!.textContent).toBe("name");
   });
 
   it("on the phone, each holding's rules inside its card", () => {
     render(<PhoneBook {...props()} />);
+    expect([...document.querySelectorAll(".nxp-part > h2")].map((h) => h.textContent)).toEqual(["Spreads", "Contracts"]);
     expect([...document.querySelectorAll(".nxp-expiry h3")].map((h) => h.textContent))
-      .toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"]);
+      .toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE", "20261231 · 38 DTE"]);
     expect(phoneGroups()).toEqual([
-      ["2026-12-04", "w-dec04"],
-      // the own rule is on the card, first, as the desk draws it on the row
-      ["2026-12-18", "h-calls", "r-calls", "r-calls-short", "h-puts", "w-p6400", "w-dec18", "w-dec18-delta"],
-      ["2026-12-31", "h-ic", "r-ic", "w-dec31", "[contracts]", "w-lone"],
+      ["spreads",
+        ["2026-12-04", "w-dec04"],
+        // the own rule is on the card, first, as the desk draws it on the row
+        ["2026-12-18", "h-calls", "r-calls", "r-calls-short", "h-puts", "w-p6400", "w-dec18", "w-dec18-delta"],
+        ["2026-12-31", "h-ic", "r-ic", "w-dec31"]],
+      ["contracts",
+        ["2026-12-31", "w-lone"]],
     ]);
-    expect(screen.queryByRole("region", { name: /Holdings|Watchlist/ })).toBeNull();
+    expect(document.querySelectorAll("[data-sub]")).toHaveLength(0);
   });
 
   it("in the picture and the text", () => {
     const view = plain();
-    expect(view.sections.map((s) => s.title)).toEqual(["Book", "Muted and expired"]);
+    expect(view.sections.map((s) => s.title)).toEqual(["Spreads", "Contracts", "Muted and expired"]);
     expect(plainNames(view)).toEqual([
-      ["20261204 · 38 DTE", "1204_P6900"],
-      ["20261218 · 38 DTE", "1218_C7300 held", "20261218 7300C", "1218_P6400 held", "20261218 6400P", "1218_P7150", "20261218 7150P"],
-      ["20261231 · 38 DTE", "1231_IC held", "1231_C7600", "contracts", "20261231 8000C"],
-      ["Quarantined — switched off by the service", "20261211 8000C"],
+      ["Spreads",
+        ["20261204 · 38 DTE", "1204_P6900"],
+        ["20261218 · 38 DTE", "1218_C7300 held", "20261218 C7300", "1218_P6400 held", "20261218 P6400", "1218_P7150", "20261218 P7150"],
+        ["20261231 · 38 DTE", "1231_IC held", "1231_C7600"]],
+      ["Contracts",
+        ["20261231 · 38 DTE", "20261231 C8000"],
+        // what follows the book on the page follows its last section here
+        ["Quarantined — switched off by the service", "20261211 C8000"]],
     ]);
     const md = toMarkdown(view);
-    for (const day of ["20261204", "20261218", "20261231"]) expect(md.match(new RegExp(`\\n\\| ${day} · `, "g"))).toHaveLength(1);
+    expect(md.match(/\n\| 20261231 · /g)).toHaveLength(2);
+    expect(md).not.toMatch(/\| contracts \|/);
   });
 
-  it("draws no contracts label on an expiry with no lone contract, on any surface", () => {
+  it("leaves Contracts out where nothing is a contract, on any surface", () => {
     const noLone = MORE_QUOTES.filter((q) => q.id !== "w-lone");
     render(<DeskBook {...props({ quotes: noLone })} />);
-    expect(document.querySelectorAll("[data-sub]")).toHaveLength(0);
+    expect(document.querySelector('[data-section="contracts"]')).toBeNull();
     cleanup();
     render(<PhoneBook {...props({ quotes: noLone })} />);
-    expect(document.querySelectorAll("[data-sub]")).toHaveLength(0);
-    expect(plain({ quotes: noLone }).sections[0]!.groups.flatMap((g) => g.rows).some((r) => r[0] === "contracts")).toBe(false);
+    expect(document.querySelector('[data-section="contracts"]')).toBeNull();
+    expect(plain({ quotes: noLone }).sections.map((x) => x.title)).toEqual(["Spreads", "Muted and expired"]);
   });
 });
 
@@ -145,7 +164,7 @@ describe("3. \"held\" after a holding's name, and in what a reader hears", () =>
       expect(within(deskRow(id)!).getByRole("button", { name: `${name} held` })).toBeTruthy();
       expect(deskRow(id)!.querySelector("[data-held]")!.textContent).toBe("held");
     }
-    for (const [id, name] of [["w-dec18", "1218_P7150"], ["w-lone", "20261231 8000C"], ["w-dec18-delta", "20261218 7150P"]] as const) {
+    for (const [id, name] of [["w-dec18", "1218_P7150"], ["w-lone", "20261231 C8000"], ["w-dec18-delta", "20261218 P7150"]] as const) {
       expect(within(deskRow(id)!).getByRole("button", { name })).toBeTruthy();
       expect(deskRow(id)!.querySelector("[data-held]")).toBeNull();
     }
@@ -163,7 +182,7 @@ describe("3. \"held\" after a holding's name, and in what a reader hears", () =>
   });
 
   it("in the picture: in the name cell, and on no watched row", () => {
-    const names = plain().sections[0]!.groups.flatMap((g) => g.rows.map((r) => r[0]!));
+    const names = bookRows(plain()).map((r) => r[0]!);
     expect(names.filter((n) => n.endsWith(" held"))).toEqual(["1218_C7300 held", "1218_P6400 held", "1231_IC held"]);
   });
 });
@@ -213,17 +232,17 @@ describe("4. a holding's own rule on its row, a second rule still a row under it
     const lines = [...card("h-calls").querySelectorAll<HTMLElement>(".nxp-rule")];
     expect(lines.map((l) => l.dataset.ref)).toEqual(["r-calls", "r-calls-short"]);
     expect(lines[0]!.querySelector(".nxp-rule-name")).toBeNull();
-    expect(lines[1]!.querySelector(".nxp-rule-name")!.textContent).toBe("20261218 7300C");
+    expect(lines[1]!.querySelector(".nxp-rule-name")!.textContent).toBe("20261218 C7300");
   });
 
   it("in the picture: the own rule's sentence in the holding's rule cell, the second a row under it", () => {
     const view = plain();
     const s = view.sections[0]!;
-    const rows = s.groups.flatMap((g) => g.rows);
+    const rows = bookRows(view);
     const rule = s.columns.indexOf("rule");
     expect(rows.find((r) => r[0] === "1218_C7300 held")![rule]).toBe("|value| ≥ 4.00 — now 4.40, past it by 0.40");
     expect(rows.filter((r) => r[0] === "1218_C7300")).toEqual([]);
-    expect(rows.find((r) => r[0] === "20261218 7300C")![rule]).toMatch(/^\|Δ\| ≥ 0\.30 — now 0\.330/);
+    expect(rows.find((r) => r[0] === "20261218 C7300")![rule]).toMatch(/^\|Δ\| ≥ 0\.30 — now 0\.330/);
   });
 });
 
@@ -242,23 +261,23 @@ describe("5. a leg's rule under its spread, and a contract rule on a held leg un
   });
 });
 
-describe("6. the overlap note beside the holding it names, in its expiry", () => {
+describe("6. a spread that partly overlaps a holding: in the holding's section and expiry, its overlap said in its inspector, not on its row (2026-11-17)", () => {
   const overlap = { quotes: OVERLAP_QUOTES, holdings: OVERLAP_HOLDINGS, monitors: OVERLAP_MONITORS };
 
-  it("on the desk: under the watched spread, in the same expiry group as 1231_8050", () => {
+  it("on the desk: no note in the book; the inspector says what it shares", () => {
     render(<DeskBook {...props(overlap)} />);
     const group = deskRow("h-8050")!.closest(".nxd-expiry")!;
-    const note = group.querySelector<HTMLElement>("[data-overlap]")!;
-    expect(note.textContent).toBe("shares C8100 with 1231_8050");
-    expect(deskRow("r-8100")!.closest("li")!.contains(note)).toBe(true);
     expect(group.contains(deskRow("r-8100"))).toBe(true);
+    expect(document.querySelector(".nxd-expiry [data-overlap]")).toBeNull();
+    fireEvent.click(within(deskRow("r-8100")!).getAllByRole("button")[0]!);
+    expect(document.querySelector(".nxd-inspector [data-overlap]")!.textContent).toBe("shares C8100 with 1231_8050");
   });
 
-  it("on the phone: on the watched spread's card, in the same expiry as 1231_8050's", () => {
+  it("on the phone: in the same expiry as 1231_8050's card, with no note on its own", () => {
     render(<PhoneBook {...props(overlap)} />);
     const group = card("h-8050").closest(".nxp-expiry")!;
     expect(group.contains(card("r-8100"))).toBe(true);
-    expect(card("r-8100").querySelector("[data-overlap]")!.textContent).toBe("shares C8100 with 1231_8050");
+    expect(card("r-8100").querySelector("[data-overlap]")).toBeNull();
   });
 });
 
@@ -279,6 +298,8 @@ describe("7. one line for an empty book, none for a book with one half", () => {
       render(<PhoneBook {...props(over)} />);
       expect(lines(), "phone").toEqual(said);
       expect(plain(over).sections[0]!.notes, "picture").toEqual(said);
+      // the notes are said once, over the first section
+      expect(plain(over).sections.slice(1).flatMap((x) => x.notes)).toEqual([]);
     });
   }
 });
@@ -286,16 +307,16 @@ describe("7. one line for an empty book, none for a book with one half", () => {
 describe("4. a holding's own rule in the picture, where the rule's column is hidden", () => {
   it("is said in the holding's name cell, in its sentence; with the column shown, in its rule cell alone", () => {
     const hidden = plain({}, new Set(["alarm"]));
-    const rows = hidden.sections[0]!.groups.flatMap((g) => g.rows);
+    const rows = bookRows(hidden);
     expect(hidden.sections[0]!.columns).not.toContain("rule");
     expect(rows.map((r) => r[0])).toContain("1218_C7300 held — |value| ≥ 4.00 — now 4.40, past it by 0.40");
     // a holding with no own rule says its name alone, and a rule's own row is unchanged
     expect(rows.map((r) => r[0])).toContain("1218_P6400 held");
-    expect(rows.map((r) => r[0])).toContain("20261218 7300C");
+    expect(rows.map((r) => r[0])).toContain("20261218 C7300");
     const text = toMarkdown(hidden);
     expect(text).toContain("| 1218_C7300 held — \\|value\\| ≥ 4.00 — now 4.40, past it by 0.40 |");
     // shown, the name is the name
-    expect(plain().sections[0]!.groups.flatMap((g) => g.rows).map((r) => r[0])).toContain("1218_C7300 held");
+    expect(bookRows(plain()).map((r) => r[0])).toContain("1218_C7300 held");
   });
 });
 
@@ -367,7 +388,7 @@ describe("6. each rule drawn once, its second place a note (the owner, 2026-11-1
     expect(deskRow("w-dec18")!.closest("li")!.contains(deskRow("w-dec18-delta"))).toBe(true);
     expect(deskRow("h-calls")!.closest("li")!.contains(deskRow("r-condor"))).toBe(true);
     const notes = [...document.querySelectorAll<HTMLElement>("[data-also]")];
-    expect(notes.map((n) => n.textContent)).toEqual(["1218_IC also in 1218_C7300", "20261218 7150P also in 1218_P7150"]);
+    expect(notes.map((n) => n.textContent)).toEqual(["1218_IC also in 1218_C7300", "20261218 P7150 also in 1218_P7150"]);
     expect(deskRow("h-puts")!.closest("li")!.contains(notes[0]!)).toBe(true);
     expect(deskRow("w-dec18b")!.closest("li")!.contains(notes[1]!)).toBe(true);
     for (const n of notes) {
@@ -382,7 +403,7 @@ describe("6. each rule drawn once, its second place a note (the owner, 2026-11-1
       expect([...document.querySelectorAll<HTMLElement>("[data-ref]")].filter((e) => e.dataset.ref === id)).toHaveLength(1);
     }
     expect(card("h-puts").querySelector("[data-also]")!.textContent).toBe("1218_IC also in 1218_C7300");
-    expect(card("w-dec18b").querySelector("[data-also]")!.textContent).toBe("20261218 7150P also in 1218_P7150");
+    expect(card("w-dec18b").querySelector("[data-also]")!.textContent).toBe("20261218 P7150 also in 1218_P7150");
   });
 
   it("in the inspector, still listed under each: it is a rule about both", () => {
@@ -484,14 +505,16 @@ describe("6. every rule and every holding once, on the desk, the phone, the pict
       expect(new Set(phone)).toEqual(all);
       cleanup();
       const view = plain(b);
-      const rows = view.sections[0]!.groups.flatMap((g) => g.rows).filter((r) => r[0] !== "contracts");
+      const rows = bookRows(view);
       expect(rows.length, "picture").toBe(all.size - own.size);
-      const text = readMarkdown(toMarkdown(view)).sections[0]!.rows;
-      const headings = view.sections[0]!.groups.filter((g) => g.heading !== null).length;
-      const labels = view.sections[0]!.groups.flatMap((g) => g.rows).length - rows.length;
-      // the header row, a row per heading and per label, and the rows
-      const groups = view.sections[0]!.groups.length;
-      expect(text.length, "text").toBe(groups === 0 ? 0 : 1 + headings + labels + rows.length);
+      // each of the book's sections in the text: the header row, a row per heading, and the rows
+      const read = readMarkdown(toMarkdown(view)).sections;
+      for (const [i, part] of bookParts(view).entries()) {
+        const text = read[i]!.rows;
+        const headings = part.groups.filter((g) => g.heading !== null).length;
+        const n = part.groups.flatMap((g) => g.rows).length;
+        expect(text.length, `text: ${part.title}`).toBe(part.groups.length === 0 ? 0 : 1 + headings + n);
+      }
     });
   }
 });

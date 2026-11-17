@@ -58,7 +58,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from optionality.alarm import AlarmPolicy, AlarmState, RuleShape, alarm_transition
-from optionality.contract import dated_name
+from optionality.contract import contract_name
 from optionality.js import js_string
 from optionality.js import truthy as js_truthy
 from optionality.lifecycle import (
@@ -529,13 +529,12 @@ class MonitorSweeper:
                         continue
 
                     changes: dict[str, object] = {"last_value": value, "last_checked_at": stamp}
-                    # the Provider's name for the contract where it has one: a combo's code IS its
-                    # name, and a single's code is machine-readable rather than something to read on a
-                    # phone
+                    # an SPXW contract as the owner reads it everywhere, `20261218 P6800`; anything
+                    # else by the Provider's name where it has one — a combo's code IS its name
+                    # (`contract_name`)
                     record = by_code.get(monitor.code)
                     named = None if record is None else record.get("name")
-                    # — its date written YYYYMMDD, as every date the owner reads is (`dated_name`)
-                    name = dated_name(_js_text(named) if js_truthy(named) else monitor.code)
+                    name = contract_name(monitor.code, _js_text(named) if js_truthy(named) else monitor.code)
                     # the decision is `optionality.alarm`'s; what is left here is turning it into a row
                     # and a message
                     decision = alarm_transition(

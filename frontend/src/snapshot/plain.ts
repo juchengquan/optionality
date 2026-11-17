@@ -26,7 +26,7 @@ import { drawnReadings, referenceWords } from "../shared/readings";
 import { HELD, PINNED, PLAIN_COLUMNS, rowName, rowStrip, ruleOfRow, subRules, type DeskColumn, type DeskRow } from "../desk/columns";
 import { closedLineText, levelWords } from "../levels";
 import { monitorName, sentence, storedRuleWords, type Need } from "../needs";
-import { drawnUnder, NOTHING, placeBook, type PlacedHolding } from "../placement";
+import { drawnUnder, NOTHING, placeBook, type ExpiryBook, type PlacedHolding } from "../placement";
 import { servedWhen, type MarketPhase } from "../session";
 import { ET, weekdayDate, writtenDate, zoneName } from "../shared/times";
 import { compactWords, nearest, strikeName } from "../strip";
@@ -148,7 +148,7 @@ export function plainView(input: PlainInput): PlainView {
   const columns = shownColumns(input.hidden);
   const placed = placeBook(input.quotes, input.holdings, input.monitors);
 
-  // a name with no note beside it (#400): the page keeps its overlap note, the table does not. A
+  // a name with no note beside it (#400), as on the page since 2026-11-17. A
   // holding's name carries its "held" tag, as on the screen (2026-11-17)
   // Where the rule's column is hidden, a holding's own rule — drawn on its row since 2026-11-17, with
   // no row of its own — is said in its name cell, in its sentence, as the desk's name cell says its
@@ -164,16 +164,15 @@ export function plainView(input: PlainInput): PlainView {
     columns: cols.map((c) => LABELS[c.key] ?? c.label),
     align: cols.map((c): "left" | "right" => FIGURE_COLUMNS.has(c.key) ? "right" : "left"),
   });
-  // the quiet "contracts" label over an expiry's lone contracts, as a row of its own
-  const subLabel = (words: string) => columns.map((c) => (c.key === PINNED ? words : ""));
-
-  // ---- the one book (2026-11-17): each expiry once, its held spreads (their own rule in their rule
-  // cell, any other rule a row under them), its watched spreads, then its lone contracts
+  // ---- the book in two sections (2026-11-17): Spreads, then Contracts, each a table of its own as on
+  // the page, each expiry a heading row; a holding's own rule in its rule cell, any other rule a row
+  // under it. What the book says before its rows is said once, over the first; the rules no holding
+  // owns and the quarantined follow the last, as they follow the book on the page
   const notes: string[] = [];
   if (input.holdingsError !== null) notes.push(`the holdings could not be valued — ${plainWords(input.holdingsError, "refresh to try again")}`);
   else if (input.holdings === null) notes.push("valuing…");
   else if (placed.book.length === 0 && placed.unplaced.length === 0 && placed.quarantined.length === 0) notes.push(NOTHING);
-  const groups: PlainGroup[] = placed.book.map((g) => ({
+  const expiryGroups = (expiries: readonly ExpiryBook[]): PlainGroup[] => expiries.map((g) => ({
     heading: `${writtenDate(g.expiry)} · ${g.dte} DTE`,
     rows: [
       ...g.held.flat().flatMap((p: PlacedHolding) => [
@@ -181,19 +180,15 @@ export function plainView(input: PlainInput): PlainView {
         ...subRules(p).map((e) => row({ kind: "rule", entry: e, nested: true })),
       ]),
       // each rule once (2026-11-17): a leg rule met under a second spread is not written again
-      ...g.spreads.flatMap(({ entry, under, overlap, elsewhere }) => [
+      ...[...g.spreads, ...g.contracts].flatMap(({ entry, under, overlap, elsewhere }) => [
         row({ kind: "rule", entry, nested: false, overlap }),
-        ...drawnUnder(under, elsewhere).map((e) => row({ kind: "rule", entry: e, nested: true })),
-      ]),
-      ...(g.contracts.length > 0 ? [subLabel("contracts")] : []),
-      ...g.contracts.flatMap(({ entry, under, elsewhere }) => [
-        row({ kind: "rule", entry, nested: false }),
         ...drawnUnder(under, elsewhere).map((e) => row({ kind: "rule", entry: e, nested: true })),
       ]),
     ],
   }));
+  const trailing: PlainGroup[] = [];
   if (placed.unplaced.length > 0) {
-    groups.push({
+    trailing.push({
       heading: `Rules on held contracts — ${input.holdings === null
         ? "the holdings are not valued, so the rules about them are listed on their own"
         : "each watches a held contract that no single holding owns, as on a roll day"}`,
@@ -201,13 +196,18 @@ export function plainView(input: PlainInput): PlainView {
     });
   }
   if (placed.quarantined.length > 0) {
-    groups.push({
+    trailing.push({
       heading: "Quarantined — switched off by the service",
       rows: placed.quarantined.map((m) => row({ kind: "quarantined", monitor: m })),
     });
   }
-
-  const sections: PlainSection[] = [{ title: "Book", notes, ...header(columns), groups }];
+  const parts = placed.sections.length > 0
+    ? placed.sections.map((s) => ({ title: s.title, groups: expiryGroups(s.expiries) }))
+    : [{ title: "Book", groups: [] as PlainGroup[] }];
+  const sections: PlainSection[] = parts.map((p, i) => ({
+    title: p.title, notes: i === 0 ? notes : [], ...header(columns),
+    groups: i === parts.length - 1 ? [...p.groups, ...trailing] : p.groups,
+  }));
   // the muted rules' table carries none of the columns only a holding fills (2026-11-16)
   const watched = columns.filter((c) => !HOLDING_ONLY.has(c.key));
 

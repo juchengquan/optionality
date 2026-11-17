@@ -798,7 +798,9 @@ describe("/snapshot", () => {
     }]));
     await b.handleUpdate(update(`/snapshot ${FUTURE} CALL 6500`));
     const reply = last();
-    expect(reply.startsWith("SPXW TEST\n")).toBe(true);
+    // the contract as the owner reads it everywhere, never the provider's name for it (2026-11-17)
+    expect(reply).toMatch(/^20\d{6} C6500\n/);
+    expect(reply).not.toContain("SPXW TEST");
     expect(reply).toContain("option_delta: 0.512");
     expect(reply).not.toContain("0.512345");
     expect(reply).toContain("option_implied_volatility: 21.457");

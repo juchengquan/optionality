@@ -356,3 +356,16 @@ export function contrastInSitu(el: Element): number {
   const [hi, lo] = [decodedLuminance(ink), decodedLuminance(ground)].sort((p, q) => q - p);
   return (hi! + 0.05) / (lo! + 0.05);
 }
+
+/** Why `el` is not drawn as a chip — a filled pill whose ink reads on its fill — or null where it is.
+ *  The `held` tag is one (2026-11-17): it was small muted text after the name, and the owner wanted it
+ *  to stand out. */
+export function notAChip(el: Element): string | null {
+  const s = getComputedStyle(el);
+  const r = el.getBoundingClientRect();
+  if (s.backgroundColor === "rgba(0, 0, 0, 0)" || s.backgroundColor === "transparent") return "no fill";
+  if (parseFloat(s.borderTopLeftRadius) < r.height / 2 - 1) return `radius ${s.borderTopLeftRadius} on ${r.height}px`;
+  const c = contrast(s.color, s.backgroundColor);
+  if (c < 4.5) return `ink contrast ${c.toFixed(2)}`;
+  return null;
+}

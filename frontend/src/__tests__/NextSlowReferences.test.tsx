@@ -118,13 +118,13 @@ describe.each(arrangements)("on the %s, a Reference source that never answers", 
     const home = await openSpread(arrangement);
     // pressed as the owner presses it, which focuses it: the desk's inspector starts with the focus
     // on its own heading, where the mute finishing would leave it, and so could not tell
-    const mute = within(home).getByRole("button", { name: "mute 20261218 7150P Δ" });
+    const mute = within(home).getByRole("button", { name: "mute 20261218 P7150 Δ" });
     mute.focus();
     fireEvent.click(mute);
     await waitFor(() =>
       expect(writes).toEqual([{ what: "PATCH /monitors/w-dec18-delta", body: { enabled: false } }]));
     // the save's reload has landed: the rule is off, listed with what is switched off
-    await screen.findByRole("button", { name: "unmute 20261218 7150P Δ", hidden: true });
+    await screen.findByRole("button", { name: "unmute 20261218 P7150 Δ", hidden: true });
     // and the mute has FINISHED: it hands the focus on only once its write and its reads are done,
     // here to the heading of the surface the rule has left. Awaiting the References, it never would.
     await until(() => expect(home.contains(document.activeElement)
@@ -145,13 +145,13 @@ describe.each(arrangements)("on the %s, a Reference source that never answers", 
     const { writes } = serve();
     await open(arrangement);
     const home = await openSpread(arrangement);
-    fireEvent.click(within(home).getByRole("button", { name: "edit 20261218 7150P Δ" }));
-    const form = await within(home).findByRole("form", { name: "editing 20261218 7150P Δ" });
+    fireEvent.click(within(home).getByRole("button", { name: "edit 20261218 P7150 Δ" }));
+    const form = await within(home).findByRole("form", { name: "editing 20261218 P7150 Δ" });
     fireEvent.change(within(form).getByLabelText("threshold"), { target: { value: "0.25" } });
     fireEvent.click(within(form).getByRole("button", { name: "save" }));
     await waitFor(() => expect(writes).toHaveLength(1));
     await waitFor(() =>
-      expect(within(home).queryByRole("form", { name: "editing 20261218 7150P Δ" })).toBeNull());
+      expect(within(home).queryByRole("form", { name: "editing 20261218 P7150 Δ" })).toBeNull());
     expect(screen.queryByText("saving…")).toBeNull();
   });
 });
@@ -161,11 +161,11 @@ describe.each(arrangements)("on the %s, a Reference source that refuses", (arran
     const { writes } = serve(true);
     await open(arrangement);
     const home = await openSpread(arrangement);
-    const mute = within(home).getByRole("button", { name: "mute 20261218 7150P Δ" });
+    const mute = within(home).getByRole("button", { name: "mute 20261218 P7150 Δ" });
     mute.focus();
     fireEvent.click(mute);
     await waitFor(() => expect(writes).toHaveLength(1));
-    await screen.findByRole("button", { name: "unmute 20261218 7150P Δ", hidden: true });
+    await screen.findByRole("button", { name: "unmute 20261218 P7150 Δ", hidden: true });
     await until(() => expect(home.contains(document.activeElement)
       && document.activeElement?.matches("h2, h3, h4")).toBe(true));
     await drain();

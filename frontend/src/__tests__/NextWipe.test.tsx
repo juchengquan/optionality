@@ -53,8 +53,8 @@ describe.each(arrangements)("on the %s, a reload landing mid-edit", (arrangement
     else fireEvent.click(await screen.findByRole("button", { name: "1218_P7150" }));
     const home = arrangement === "phone" ? await screen.findByRole("dialog")
       : await screen.findByRole("complementary", { name: /^inspector/ });
-    fireEvent.click(within(home).getByRole("button", { name: "edit 20261218 7150P Δ" }));
-    const form = await within(home).findByRole("form", { name: "editing 20261218 7150P Δ" });
+    fireEvent.click(within(home).getByRole("button", { name: "edit 20261218 P7150 Δ" }));
+    const form = await within(home).findByRole("form", { name: "editing 20261218 P7150 Δ" });
     const box = within(form).getByLabelText("threshold") as HTMLInputElement;
     expect(box.value).toBe("0.2");
     fireEvent.change(box, { target: { value: "0.9" } });
@@ -64,7 +64,7 @@ describe.each(arrangements)("on the %s, a reload landing mid-edit", (arrangement
     // the reload has landed: the rule's own line, above the form, says what the service now holds
     await waitFor(() => expect(within(home).getByText(/^\|Δ\| ≥ 0\.50 — now/)).toBeTruthy());
 
-    const now = within(home).getByRole("form", { name: "editing 20261218 7150P Δ" });
+    const now = within(home).getByRole("form", { name: "editing 20261218 P7150 Δ" });
     expect((within(now).getByLabelText("threshold") as HTMLInputElement).value, "the typed value survived")
       .toBe("0.9");
   });

@@ -764,7 +764,9 @@ class TestSnapshot:
         )
         await b.handle_update(update(f"/snapshot {FUTURE} CALL 6500"))
         reply = chat.last()
-        assert reply.startswith("SPXW TEST\n")
+        # the contract as the owner reads it everywhere, never the provider's name for it (2026-11-17)
+        assert re.match(r"20\d{6} C6500\n", reply)
+        assert "SPXW TEST" not in reply
         assert "option_delta: 0.512" in reply
         assert "0.512345" not in reply
         assert "option_implied_volatility: 21.457" in reply

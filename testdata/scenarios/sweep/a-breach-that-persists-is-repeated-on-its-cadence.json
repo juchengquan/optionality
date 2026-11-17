@@ -69,7 +69,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ SPXW 20261218 7300C: |Δ| still ≥ 0.30 — 0.360  ▲ past 0.060 (reminder)"
+      "⚠️ 20261218 C7300: |Δ| still ≥ 0.30 — 0.360  ▲ past 0.060 (reminder)"
     ],
     "rows": {
       "monitors": {

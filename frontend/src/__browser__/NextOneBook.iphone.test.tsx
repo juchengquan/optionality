@@ -5,7 +5,7 @@ import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
-import { overflowsSideways, settle } from "./nextBook";
+import { notAChip, overflowsSideways, settle } from "./nextBook";
 import { placed, serveOneBook } from "../testing/oneBookServe";
 
 afterEach(cleanup);
@@ -20,7 +20,7 @@ describe("under the iPhone profile", () => {
     expect(document.documentElement.clientWidth).toBe(390);
     expect(overflowsSideways()).toBe(false);
     expect([...document.querySelectorAll(".nxp-expiry h3")].map((h) => h.textContent!.slice(0, 8)))
-      .toEqual(["20261204", "20261218", "20261231"]);
+      .toEqual(["20261204", "20261218", "20261231", "20261231"]);
     const tags = [...document.querySelectorAll("article [data-held]")];
     expect(tags).toHaveLength(3);
     for (const tag of tags) {
@@ -28,9 +28,12 @@ describe("under the iPhone profile", () => {
       // the card's own button lies over its text by design (Cards.tsx: OpenCard): a tag under it is
       // still drawn, inside its card
       expect(where === null || where.startsWith("covered by nxp-open"), where ?? "").toBe(true);
+      expect(notAChip(tag), tag.closest<HTMLElement>("article")!.dataset.ref).toBeNull();
     }
-    const label = document.querySelector("[data-sub=contracts]")!;
-    expect(placed(label, document.querySelector(".nxp-book")!)).toBeNull();
+    // the two sections' headings, drawn inside the book (2026-11-17)
+    const parts = [...document.querySelectorAll(".nxp-part > h2")];
+    expect(parts.map((h) => h.textContent)).toEqual(["Spreads", "Contracts"]);
+    for (const h of parts) expect(placed(h, document.querySelector(".nxp-book")!), h.textContent!).toBeNull();
     for (const card of document.querySelectorAll<HTMLElement>("article[data-ref]")) {
       expect(card.scrollWidth, card.dataset.ref).toBeLessThanOrEqual(card.clientWidth + 0.5);
     }

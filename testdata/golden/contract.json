@@ -223,68 +223,49 @@
       "expect": "sep-condor"
     },
     {
-      "fn": "datedName",
-      "name": "moomoo's name for a call",
+      "fn": "contractName",
+      "name": "an SPXW call, whatever the provider calls it",
       "args": [
+        "US.SPXW261030C8100000",
         "SPXW 261030 8100.00C"
       ],
-      "expect": "SPXW 20261030 8100.00C"
+      "expect": "20261030 C8100"
     },
     {
-      "fn": "datedName",
-      "name": "a name with no cents on the strike",
+      "fn": "contractName",
+      "name": "an SPXW put",
       "args": [
-        "SPXW 261218 7300C"
+        "US.SPXW261218P6800000",
+        "SPXW 261218 6800.00P"
       ],
-      "expect": "SPXW 20261218 7300C"
+      "expect": "20261218 P6800"
     },
     {
-      "fn": "datedName",
-      "name": "a rule's own name",
+      "fn": "contractName",
+      "name": "a combo, by its own name",
       "args": [
+        "1218-6800",
         "1218-6800"
       ],
       "expect": "1218-6800"
     },
     {
-      "fn": "datedName",
-      "name": "a code",
+      "fn": "contractName",
+      "name": "a code from elsewhere, by the provider's name",
       "args": [
-        "US.SPXW261030C8100000"
+        "US.AAPL",
+        "Apple"
       ],
-      "expect": "US.SPXW261030C8100000"
+      "expect": "Apple"
     },
     {
-      "fn": "datedName",
-      "name": "a name already written whole",
+      "fn": "contractName",
+      "name": "a code nearly SPXW is not shortened",
       "args": [
-        "SPXW 20261030 8100.00C"
+        "US.SPXW261030C8100",
+        "SPXW 261030 8100.00C"
       ],
-      "expect": "SPXW 20261030 8100.00C"
-    },
-    {
-      "fn": "datedName",
-      "name": "a date with nothing after it",
-      "args": [
-        "SPXW 261030"
-      ],
-      "expect": "SPXW 261030"
-    },
-    {
-      "fn": "datedName",
-      "name": "text before it",
-      "args": [
-        "XSPXW 261030 8100C"
-      ],
-      "expect": "XSPXW 261030 8100C"
-    },
-    {
-      "fn": "datedName",
-      "name": "non-ASCII digits are not a date",
-      "args": [
-        "SPXW ٢٦١٠٣٠ 8100C"
-      ],
-      "expect": "SPXW ٢٦١٠٣٠ 8100C"
+      "expect": "SPXW 261030 8100.00C"
     },
     {
       "fn": "expandSpxShort",

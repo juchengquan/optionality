@@ -48,9 +48,9 @@ function input(over: Partial<PlainInput> = {}): PlainInput {
   };
 }
 
-/** The view's rows of a section, by what each row names. */
-function rowsOf(view: ReturnType<typeof plainView>, title: string): string[][] {
-  return view.sections.find((s) => s.title === title)!.groups.flatMap((g) => g.rows);
+/** The book's rows, across its sections (2026-11-17): Spreads, then Contracts — or Book, when empty. */
+function bookRows(view: ReturnType<typeof plainView>): string[][] {
+  return view.sections.filter((s) => ["Spreads", "Contracts", "Book"].includes(s.title)).flatMap((s) => s.groups.flatMap((g) => g.rows));
 }
 /** A section by its title. */
 const sectionOf = (view: ReturnType<typeof plainView>, title: string) => view.sections.find((s) => s.title === title)!;
@@ -67,15 +67,15 @@ describe("the table", () => {
   it("carries every column the viewer ticked, under short headers, and no \"what\" or \"status\" (#400)", () => {
     const view = plainView(input());
     // a unit only where the cells do not say it: "+$177" and "38%" say theirs (2026-11-16)
-    expect(sectionOf(view, "Book").columns).toEqual([
+    expect(sectionOf(view, "Spreads").columns).toEqual([
       "name", "legs", "value", "P&L", "captured", "pace gap (pts)", "Δ", "SPX→short", "DTE", "manage-by", "rule",
     ]);
     for (const s of view.sections) for (const g of s.groups) for (const r of g.rows) expect(r).toHaveLength(s.columns.length);
     const without = plainView(input({ hidden: new Set(["captured", "strip"]) }));
-    expect(sectionOf(without, "Book").columns).not.toContain("captured");
-    expect(sectionOf(without, "Book").columns).not.toContain("SPX→short");
+    expect(sectionOf(without, "Spreads").columns).not.toContain("captured");
+    expect(sectionOf(without, "Spreads").columns).not.toContain("SPX→short");
     // the name is pinned, as on the desk: a cookie that hides it hides nothing
-    expect(sectionOf(plainView(input({ hidden: new Set(["name"]) })), "Book").columns).toContain("name");
+    expect(sectionOf(plainView(input({ hidden: new Set(["name"]) })), "Spreads").columns).toContain("name");
   });
 
   it("gives the muted rules no column only a holding fills (2026-11-16), and a watched row of the book blanks in them", () => {
@@ -86,7 +86,7 @@ describe("the table", () => {
 
   it("sets a figure's column to the right and words to the left, in the picture and the Markdown alike", () => {
     const view = plainView(input());
-    const holdings = sectionOf(view, "Book");
+    const holdings = sectionOf(view, "Spreads");
     const right = holdings.columns.filter((_, i) => holdings.align[i] === "right");
     expect(right).toEqual(["value", "P&L", "captured", "Δ", "DTE", "manage-by"]);
     const md = toMarkdown(view);
@@ -98,7 +98,7 @@ describe("the table", () => {
 
   it("keeps the value and the pace gap apart, the gap ticked with the value it is drawn in on screen (2026-11-16)", () => {
     // hiding the value, the desk's one field, hides both here
-    const noValue = sectionOf(plainView(input({ hidden: new Set(["value"]) })), "Book");
+    const noValue = sectionOf(plainView(input({ hidden: new Set(["value"]) })), "Spreads");
     expect(noValue.columns).not.toContain("value");
     expect(noValue.columns).not.toContain("pace gap (pts)");
     // a cookie from before, when the pace gap had a column of its own on screen, hides nothing
@@ -106,23 +106,22 @@ describe("the table", () => {
       .toEqual(plainView(input()).sections.map((s) => s.columns));
   });
 
-  it("is one book, each expiry once, then the muted and expired (2026-11-17)", () => {
+  it("is the book in two tables, Spreads then Contracts, each by expiry, then the muted and expired (2026-11-17)", () => {
     const view = plainView(input());
-    expect(view.sections.map((s) => s.title)).toEqual(["Book", "Muted and expired"]);
-    expect(view.sections[0]!.groups.map((g) => g.heading)).toEqual([
-      "20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE", "Quarantined — switched off by the service",
-    ]);
-    // each expiry's held spreads ("held" in the name cell, their own rule on their row), its watched
-    // spreads, then its lone contracts under a "contracts" row — only where it has some
-    expect(rowsOf(view, "Book").map((r) => r[0])).toEqual([
+    expect(view.sections.map((s) => s.title)).toEqual(["Spreads", "Contracts", "Muted and expired"]);
+    expect(view.sections[0]!.groups.map((g) => g.heading)).toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"]);
+    // the quarantined follow the book, as on the page: after its last section's expiries
+    expect(view.sections[1]!.groups.map((g) => g.heading)).toEqual(["20261231 · 38 DTE", "Quarantined — switched off by the service"]);
+    // each expiry's held spreads ("held" in the name cell, their own rule on their row), then its
+    // watched spreads; the lone contracts in a table of their own, with no label row
+    expect(bookRows(view).map((r) => r[0])).toEqual([
       "1204_P6900",
-      "1218_C7300 held", "1218_P6400 held", "1218_P7150", "20261218 7150P",
-      "1231_IC held", "1231_C7600", "contracts", "20261231 8000C",
-      "20261211 8000C",
+      "1218_C7300 held", "1218_P6400 held", "1218_P7150", "20261218 P7150",
+      "1231_IC held", "1231_C7600",
+      "20261231 C8000",
+      "20261211 C8000",
     ]);
-    // the label row says nothing but its word
-    const label = rowsOf(view, "Book").find((r) => r[0] === "contracts")!;
-    expect(label.slice(1).every((c) => c === "")).toBe(true);
+    expect(bookRows(view).some((r) => r[0] === "contracts")).toBe(false);
   });
 
   it("says each rule in its full sentence, never the screen's short form", () => {
@@ -130,9 +129,9 @@ describe("the table", () => {
     // a holding's own rule, on its row (2026-11-17)
     expect(cell(view, "1218_C7300 held", "rule")).toBe("|value| ≥ 4.00 — now 4.40, past it by 0.40");
     expect(cell(view, "1218_P6400 held", "rule")).toBe("");
-    expect(cell(view, "20261218 7150P", "rule")).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
+    expect(cell(view, "20261218 P7150", "rule")).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
     expect(cell(view, "1204_P6900", "rule")).toBe("|value| ≥ 6.00 — now 6.20, past it by 0.20");
-    const rules = rowsOf(view, "Book").map((r) => r[sectionOf(view, "Book").columns.indexOf("rule")]!).join(" ");
+    const rules = bookRows(view).map((r) => r[sectionOf(view, "Spreads").columns.indexOf("rule")]!).join(" ");
     // the short form's arrows are the screen's; the field's words are one vocabulary since #404 — Δ
     // for a delta, `value` for a price, never `val` — and its minus is the real one
     expect(rules).not.toMatch(/\bval\b|[↑↓▲▼]|-\d/);
@@ -163,7 +162,7 @@ describe("the table", () => {
       legs: [{ sign: -1, option_type: "CALL", strike: 7300 }, { sign: 1, option_type: "CALL", strike: 7400 }] as never,
       positions: [{ id: "h-calls", name: "1218_C7300" }] });
     const view = plainView(input({ quotes: [...QUOTES, partly] }));
-    const names = rowsOf(view, "Book").map((r) => r[0]);
+    const names = bookRows(view).map((r) => r[0]);
     expect(names).toContain("1218_C7300x");
     expect(names.join(" ")).not.toMatch(/[()]|shares/);
   });
@@ -247,9 +246,9 @@ describe("every state the status column carried is still named, in the header or
     const muted = view.sections.find((s) => s.title === "Muted and expired")!;
     // the desk's fold's order, in the page's one set of words (part I), each a heading (part H)
     expect(muted.groups.map((g) => [g.heading, g.rows.map((r) => r[0])])).toEqual([
-      ["Expired", ["20261218 8003C"]], ["Holding closed", ["20261218 8004C"]],
-      ["Muted by you", ["20261218 8002C", "20261218 8006C"]], ["Reason not recorded", ["20261218 8005C"]],
-      ["Sunset", ["20261218 8007C"]],
+      ["Expired", ["20261218 C8003"]], ["Holding closed", ["20261218 C8004"]],
+      ["Muted by you", ["20261218 C8002", "20261218 C8006"]], ["Reason not recorded", ["20261218 C8005"]],
+      ["Sunset", ["20261218 C8007"]],
     ]);
     // the rule in words, with no figure: nothing watches it
     expect(muted.groups[0]!.rows[0]![muted.columns.indexOf("rule")]).toBe("|Δ| ≥ 0.10");
@@ -304,14 +303,14 @@ describe("the minus, in the picture and in the text (the owner, 2026-11-16)", ()
     render(<Still {...given} />);
     const picture = readPicture(document.querySelector(".nx-still")!);
     const text = readMarkdown(toMarkdown(plainView(given)));
-    const holdings = sectionOf(plainView(given), "Book");
+    const holdings = sectionOf(plainView(given), "Spreads");
     const [pnl, delta, legs] = ["P&L", "Δ", "legs"].map((c) => holdings.columns.indexOf(c));
     const rowIn = (v: typeof text) => v.sections[0]!.rows.find((r) => r[0] === "1218_C7300 held")!;
     // a figure: −$240 and −0.330 drawn, -$240 and -0.330 written
     expect([rowIn(picture)[pnl!], rowIn(picture)[delta!]]).toEqual(["\u2212$240", "0.330"]);
     expect(rowIn(text)[pnl!]).toBe("-$240");
-    const short = sectionOf(plainView(given), "Book");
-    const lone = readMarkdown(toMarkdown(plainView(given))).sections[0]!.rows.find((r) => r[0] === "20261218 7150P")!;
+    const short = sectionOf(plainView(given), "Spreads");
+    const lone = readMarkdown(toMarkdown(plainView(given))).sections[0]!.rows.find((r) => r[0] === "20261218 P7150")!;
     expect(lone[short.columns.indexOf("Δ")]).toBe("-0.170");
     // words keep the true minus in both: a leg, and a rule's sentence
     expect(rowIn(text)[legs!]).toBe("\u2212C7300 +C7350");
@@ -359,12 +358,13 @@ describe("the picture and the text, one builder", () => {
   it("writes the header block as lines above a Markdown table per section", () => {
     const md = toMarkdown(plainView(input()));
     expect(md.split("\n").slice(0, 3)).toEqual(["# optionality", "", "- taken: Mon 20261116 10:00 ET · Mon 20261116 23:00 SGT"]);
-    expect(md).toContain("\n## Book\n\n| name | legs | value |");
+    expect(md).toContain("\n## Spreads\n\n| name | legs | value |");
+    expect(md).toContain("\n## Contracts\n\n| name | legs | value |");
     expect(md).not.toMatch(/## (Holdings|Watchlist)/);
     expect(md).toContain("\n| 20261218 · 38 DTE |  |  |");
-    // each expiry's heading once, and the contracts' quiet label as a row of its own
+    // each expiry's heading once in a table, and no label row: Contracts is a table of its own
     expect(md.match(/\n\| 20261218 · 38 DTE \|/g)).toHaveLength(1);
-    expect(md).toContain("\n| contracts |  |  |");
+    expect(md).not.toContain("\n| contracts |");
     expect(md).toContain("\n| 1231_IC held | ");
     // the References a nested list, one a line (#400)
     const twice = toMarkdown(plainView(input({ references: [SPX_REF, { ...SPX_REF, id: "r2", label: "VIX" } as Reference] })));
