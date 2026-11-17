@@ -42,24 +42,25 @@ afterEach(() => {
   for (const n of ["ui_cols_combo", "ui_arrangement"]) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
-describe("one table: holdings first, then the watchlist, each by expiry", () => {
-  it("draws the holdings, then the watchlist, the earliest expiry first in each", () => {
+describe("one table: one book, by expiry (2026-11-17)", () => {
+  it("draws each expiry once, the earliest first, its held spreads, then its watched spreads, then its contracts", () => {
     render(<DeskBook {...props()} />);
     expect(order()).toEqual([
-      // holdings: the 12-18 condor as two spreads, calls first; then the 4-leg condor on 12-31
-      "h-calls", "r-calls", "h-puts", "h-ic", "r-ic",
-      // the watchlist: 12-04, then 12-18 with its short leg's delta under it, then 12-31
-      "w-dec04", "w-dec18", "w-dec18-delta", "w-dec31", "w-lone",
-      // the rule the service switched off, after the watchlist
+      // 12-04: watched only
+      "w-dec04",
+      // 12-18: the condor held as two spreads, calls first, each rule its own row's; then the
+      // watched spread with its short leg's delta under it
+      "h-calls", "h-puts", "w-dec18", "w-dec18-delta",
+      // 12-31: the 4-leg condor, then the watched spread, then the lone contract
+      "h-ic", "w-dec31", "w-lone",
+      // the rule the service switched off, after the book
       "q-unknown",
     ]);
-    const holdings = screen.getByRole("region", { name: "Holdings" });
-    const watchlist = screen.getByRole("region", { name: "Watchlist" });
-    expect(holdings.compareDocumentPosition(watchlist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect([...holdings.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent))
-      .toEqual(["20261218 · 38 DTE", "20261231 · 38 DTE"]);
-    expect([...watchlist.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent?.slice(0, 8)))
-      .toEqual(["20261204", "20261218", "20261231"]);
+    // one book: no Holdings or Watchlist region, each expiry's heading once
+    expect(screen.queryByRole("region", { name: "Holdings" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Watchlist" })).toBeNull();
+    expect([...document.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent))
+      .toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"]);
   });
 
   it("joins a condor's two spreads with a bracket, and keeps a 4-leg holding one row", () => {
@@ -81,7 +82,8 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
       .toEqual(["−C7400 short CALL", "−P6300 short PUT", "+C7450 long CALL", "+P6250 long PUT"]);
     // a watched spread's, and a rule's on a held spread
     expect(legMarks(cell("w-dec31", "legs")!)).toEqual(["−C7600 short CALL", "+C7650 long CALL"]);
-    expect(legMarks(cell("r-ic", "legs")!)).toHaveLength(4);
+    // a holding's own rule is on its row now: the holding's legs are its legs
+    expect(legMarks(cell("h-calls", "legs")!)).toHaveLength(2);
   });
 
   it("sits a short leg's delta rule under its spread, and a rule matching no spread alone", () => {
@@ -110,7 +112,9 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
 
 describe("what each row says", () => {
   it("gives a held spread's rule its cost to close, positive as its holding's, and never its signed value (2026-11-16)", () => {
-    const held = (cost: number | null) => QUOTES.map((q) => q.id === "r-calls" ? { ...q, combo_value: -4.4, cost_to_close: cost } : q);
+    // a SECOND rule on the held spread, named apart from it, so its row is drawn under the holding
+    const held = (cost: number | null) => QUOTES.map((q) => q.id === "r-calls"
+      ? { ...q, code: "1218_C7300 stop", combo_value: -4.4, cost_to_close: cost } : q);
     render(<DeskBook {...props({ quotes: held(4.4) })} />);
     expect(cellText("r-calls", "value")).toBe("4.40");
     // and is read as what it says, to a reader that does not see the header
@@ -213,8 +217,9 @@ describe("how a rule looks in each state", () => {
     render(<DeskBook {...props()} />);
     expect(row("w-dec04").dataset.state).toBe("entry");
     expect(row("w-dec04").querySelector(".nx-chip")!.getAttribute("data-attention")).toBe("entry");
-    expect(row("r-calls").dataset.state).toBe("alarm");
-    expect(row("r-calls").querySelector(".nx-chip")!.getAttribute("data-attention")).toBe("alarm");
+    // a holding's own rule ringing: on the holding's row, which it now is (2026-11-17)
+    expect(row("h-calls").dataset.state).toBe("alarm");
+    expect(row("h-calls").querySelector(".nx-chip")!.getAttribute("data-attention")).toBe("alarm");
     // calm rows carry no chip at all
     expect(row("w-dec18").dataset.state).toBe("calm");
     expect(row("w-dec18").querySelector(".nx-chip")).toBeNull();
@@ -275,7 +280,7 @@ describe("the inspector", () => {
   it("opens beside the table on selecting a row, with its legs, figures and Monitors", () => {
     render(<DeskBook {...props()} />);
     expect(screen.queryByRole("complementary", { name: /inspector/ })).toBeNull();
-    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     const insp = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
     expect(within(insp).getByRole("heading", { name: "1218_C7300" })).toBeTruthy();
     expect(insp.textContent).toContain("short CALL 7300");
@@ -312,7 +317,7 @@ describe("the inspector", () => {
     document.cookie = "ui_cols_combo=pnl.legs;path=/";
     render(<DeskBook {...props()} />);
     expect(cell("h-calls", "pnl")).toBeNull();
-    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     const insp = screen.getByRole("complementary", { name: /inspector/ });
     // its P&L leads the inspector, as it leads the phone's sheet (part J)
     expect(insp.querySelector("[data-section='level'] [data-money]")!.textContent).toBe("−$240");
@@ -320,14 +325,14 @@ describe("the inspector", () => {
 
   it("closes when its row leaves the book", () => {
     const { rerender } = render(<DeskBook {...props()} />);
-    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     rerender(<DeskBook {...props({ holdings: HOLDINGS.filter((h) => h.id !== "h-calls") })} />);
     expect(screen.queryByRole("complementary", { name: /inspector/ })).toBeNull();
   });
 
   it("stays shut when the row comes back, as after one failed valuation", () => {
     const { rerender } = render(<DeskBook {...props()} />);
-    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     rerender(<DeskBook {...props({ holdings: null, holdingsError: "/positions/values → 502" })} />);
     expect(screen.queryByRole("complementary", { name: /inspector/ })).toBeNull();
     rerender(<DeskBook {...props()} />);
@@ -357,7 +362,7 @@ describe("the inspector", () => {
 
   it("takes the focus when it opens and gives it back to the row when it closes", async () => {
     render(<DeskBook {...props()} />);
-    const name = within(row("h-calls")).getByRole("button", { name: "1218_C7300" });
+    const name = within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" });
     expect(name.getAttribute("aria-controls")).toBeNull();
     await userEvent.click(name);
     const insp = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
@@ -365,7 +370,7 @@ describe("the inspector", () => {
     expect(name.getAttribute("aria-controls")).toBe(insp.id);
     expect(insp.contains(document.activeElement)).toBe(true);
     await userEvent.click(within(insp).getByRole("button", { name: "close the inspector" }));
-    expect(document.activeElement).toBe(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    expect(document.activeElement).toBe(within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     // and by Escape
     await userEvent.click(within(row("w-dec31")).getByRole("button", { name: "1231_C7600" }));
     await userEvent.keyboard("{Escape}");
@@ -374,7 +379,7 @@ describe("the inspector", () => {
 
   it("puts no ARIA state on a row that has no role to carry it", () => {
     render(<DeskBook {...props()} />);
-    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     for (const r of document.querySelectorAll(".nxd-row")) {
       if (!r.getAttribute("role")) expect(r.getAttribute("aria-selected")).toBeNull();
     }
@@ -382,12 +387,12 @@ describe("the inspector", () => {
 
   it("says how many contracts, and hides the count under privacy, which would give the size away", () => {
     render(<DeskBook {...props()} />);
-    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
+    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC held" }));
     let insp = screen.getByRole("complementary", { name: /inspector/ });
     expect(within(insp).getByText("contracts").nextElementSibling!.textContent).toBe("×2");
     cleanup();
     render(<DeskBook {...props({ privacy: true })} />);
-    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
+    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC held" }));
     insp = screen.getByRole("complementary", { name: /inspector/ });
     expect(within(insp).getByText("contracts").nextElementSibling!.textContent).not.toMatch(/\d/);
     expect(document.querySelector(".nxd")!.textContent).not.toMatch(/×\d/);
@@ -397,7 +402,7 @@ describe("the inspector", () => {
 describe("with the inspector open, the table stays live", () => {
   it("updates a figure in the table, and in the inspector, when new figures arrive", () => {
     const { rerender } = render(<DeskBook {...props()} />);
-    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
+    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC held" }));
     const moved = HOLDINGS.map((h) => h.id === "h-calls" ? { ...h, cost_to_close: 5.1, pnl: -310 } : h);
     rerender(<DeskBook {...props({ holdings: moved })} />);
     expect(screen.getByRole("complementary", { name: "inspector: 1231_IC" })).toBeTruthy();
@@ -424,7 +429,7 @@ describe("with the inspector open, the table stays live", () => {
     }) as unknown as typeof fetch;
     render(<Next />);
     await waitFor(() => expect(cellText("h-calls", "value")).toBe("4.40"));
-    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     const insp = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
 
     holdings = HOLDINGS.map((h) => h.id === "h-calls" ? { ...h, cost_to_close: 5.1 } : h);
@@ -500,7 +505,7 @@ describe("one column set, in session and out of it (#372)", () => {
 
   it("says the pace gap in words in the inspector, in the table cell's colour", () => {
     render(<DeskBook {...props({ holdings: scheduled })} />);
-    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     const insp = screen.getByRole("complementary", { name: /inspector/ });
     const dd = within(insp).getByText("pace gap").nextElementSibling!;
     expect(dd.textContent).toBe("behind by 0.47");
@@ -511,7 +516,7 @@ describe("one column set, in session and out of it (#372)", () => {
     it(`says on pace in the inspector ${session ? "in" : "outside"} the session, and no DTE → manage-by`, () => {
       const mixed = scheduled.map((h) => h.id === "h-ic" ? { ...h, schedule: null } : h);
       render(<DeskBook {...props({ session, holdings: mixed })} />);
-      fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300" }));
+      fireEvent.click(within(row("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
       let insp = screen.getByRole("complementary", { name: /inspector/ });
       const terms = () => [...insp.querySelectorAll(".nxd-kv dt")].map((d) => d.textContent);
       expect(within(insp).getByText("on pace").nextElementSibling!.textContent).toBe("1.23");
@@ -525,7 +530,7 @@ describe("one column set, in session and out of it (#372)", () => {
       // manage-by as days left, its threshold as detail (part F)
       expect(within(insp).getByText("manage-by").nextElementSibling!.textContent).toBe("in 17d at 21 DTE");
       // a holding with no schedule says so, in its exit schedule
-      fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
+      fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC held" }));
       insp = screen.getByRole("complementary", { name: /inspector/ });
       expect(insp.querySelector("[data-section='schedule']")!.textContent).toContain("no schedule — Opened not recorded");
     });
@@ -662,12 +667,15 @@ describe("what the holdings section says when there are no figures", () => {
     expect(unplaced.querySelector('[data-ref="r-ic"]')).toBeTruthy();
   });
 
-  it("says it is valuing, and that nothing is held", () => {
+  it("says it is valuing; nothing about a book with nothing held but watches; and one line for an empty book", () => {
     render(<DeskBook {...props({ holdings: null })} />);
     expect(screen.getByText("valuing…")).toBeTruthy();
     cleanup();
     render(<DeskBook {...props({ holdings: [] })} />);
-    expect(screen.getByText("nothing held")).toBeTruthy();
+    expect(screen.queryByText(/^nothing/)).toBeNull();
+    cleanup();
+    render(<DeskBook {...props({ holdings: [], quotes: [], monitors: [] })} />);
+    expect(screen.getAllByText(/^nothing/).map((n) => n.textContent)).toEqual(["nothing held or watched"]);
   });
 });
 
@@ -677,23 +685,23 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   const note = (id: string) =>
     row(id).closest("li")!.querySelector<HTMLElement>("[data-overlap]")?.textContent ?? null;
 
-  it("is drawn in the watchlist with its note, and the holding keeps its own rules", () => {
+  it("is drawn among the watched spreads with its note, and the holding keeps its own rules", () => {
     render(<DeskBook {...overlap()} />);
+    // the held spreads first, each with the rules under it but its own value rule, on its row;
+    // then the watched spreads, the three that name a contract no holding holds among them
     expect(order()).toEqual([
-      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
+      "h-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
       "r-8100", "w-8150-delta", "w-7700", "r-ratio",
     ]);
-    const watchlist = screen.getByRole("region", { name: "Watchlist" });
-    const holdings = screen.getByRole("region", { name: "Holdings" });
     // each names a contract its holding does not hold: C8150, C7750, a second C7250
-    for (const id of ["r-8100", "w-7700", "r-ratio"]) expect(watchlist.contains(row(id))).toBe(true);
-    // the holding's own value rule, a single contract on its leg, and a wing of a held condor
-    for (const id of ["r-8050", "r-8050-delta", "r-ic-calls"]) expect(holdings.contains(row(id))).toBe(true);
+    for (const id of ["r-8100", "w-7700", "r-ratio"]) expect(row(id).dataset.nested).toBeUndefined();
+    // a single contract on its leg, and a wing of a held condor, under the holding
+    expect(row("h-8050").closest("li")!.contains(row("r-8050-delta"))).toBe(true);
+    expect(row("h-ic").closest("li")!.contains(row("r-ic-calls"))).toBe(true);
     expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
     expect(note("w-7700")).toBe("contains 1231_7700's C7700");
     expect(note("r-ratio")).toBe("contains 1231_7200's C7200 and C7250");
     // and no note on a rule that is drawn where it always was
-    expect(note("r-8050")).toBeNull();
     expect(note("r-ic-calls")).toBeNull();
     expect(row("r-8100").dataset.nested).toBeUndefined();
   });
@@ -705,9 +713,7 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     // a ratio IS served a cost to close (its contracts counted once each): drawn as a watched
     // spread, it shows its own value instead
     expect(cellText("r-ratio", "value")).toBe("−0.40");
-    // the holding's own value rule still reads its holding's cost to close, and a wing of a held
-    // condor its own two contracts' cost to close, not its signed value
-    expect(cellText("r-8050", "value")).toBe("1.20");
+    // a wing of a held condor reads its own two contracts' cost to close, not its signed value
     expect(cellText("r-ic-calls", "value")).toBe("1.30");
   });
 
@@ -729,7 +735,7 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("is no longer among the holding's rules in its inspector", () => {
     render(<DeskBook {...overlap()} />);
-    fireEvent.click(within(row("h-8050")).getByRole("button", { name: "1231_8050" }));
+    fireEvent.click(within(row("h-8050")).getByRole("button", { name: "1231_8050 held" }));
     const insp = screen.getByRole("complementary", { name: "inspector: 1231_8050" });
     const monitors = within(insp).getByRole("heading", { name: "Rules" }).parentElement!;
     expect(monitors.querySelectorAll(".nxd-monitor")).toHaveLength(2);

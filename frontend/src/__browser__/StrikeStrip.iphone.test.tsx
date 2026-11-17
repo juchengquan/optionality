@@ -153,7 +153,7 @@ describe("on the cards", () => {
     fig.scrollIntoView({ block: "center" });
     const r = fig.getBoundingClientRect();
     expect(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.getAttribute("aria-label"))
-      .toBe("details of 1218_P6400");
+      .toBe("details of 1218_P6400 held");
   });
 });
 

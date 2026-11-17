@@ -576,7 +576,7 @@ describe("from both arrangements", () => {
   it("hides no control from a holding's rules on the phone, and shows no money under privacy", async () => {
     const { value } = actions();
     wrap(value, <div className="nx"><PhoneBook {...book({ privacy: true })} /></div>);
-    fireEvent.click(screen.getByRole("button", { name: "details of 1218_C7300" }));
+    fireEvent.click(screen.getByRole("button", { name: "details of 1218_C7300 held" }));
     const sheet = await screen.findByRole("dialog");
     const edit = within(sheet).getAllByRole("button", { name: /^edit / })[0]!;
     fireEvent.click(edit);

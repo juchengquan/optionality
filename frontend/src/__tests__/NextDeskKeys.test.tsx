@@ -34,6 +34,10 @@ const press = (key: string, at: Element = document.activeElement ?? document.bod
 describe("moving the selection", () => {
   it("walks every row in the order drawn — across brackets and expiry groups — and stops at the ends", () => {
     render(<DeskBook {...props()} />);
+    // the one book's order (2026-11-17): each expiry's held spreads, watched spreads, contracts
+    expect(order()).toEqual([
+      "w-dec04", "h-calls", "h-puts", "w-dec18", "w-dec18-delta", "h-ic", "w-dec31", "w-lone", "q-unknown",
+    ]);
     const seen: string[] = [];
     for (let i = 0; i < order().length + 2; i++) {
       press("j");
@@ -50,8 +54,9 @@ describe("moving the selection", () => {
 
   it("starts from the top on j and from the bottom on k", () => {
     const { unmount } = render(<DeskBook {...props()} />);
+    // the one book's first row: 12-04's watched spread (2026-11-17)
     press("j");
-    expect(cursor()).toBe("h-calls");
+    expect(cursor()).toBe("w-dec04");
     unmount();
     render(<DeskBook {...props()} />);
     press("k");
@@ -62,20 +67,21 @@ describe("moving the selection", () => {
     render(<DeskBook {...props()} />);
     press("j");
     press("j");
-    expect(cursor()).toBe("r-calls");
+    expect(cursor()).toBe("h-calls");
     expect(inspector()).toBeNull();
-    expect(row("r-calls").hasAttribute("data-selected")).toBe(false);
-    expect(document.activeElement).toBe(row("r-calls").querySelector(".nxd-name"));
+    expect(row("h-calls").hasAttribute("data-selected")).toBe(false);
+    expect(document.activeElement).toBe(row("h-calls").querySelector(".nxd-name"));
   });
 
   it("takes the inspector along when it is open", () => {
     render(<DeskBook {...props()} />);
-    fireEvent.click(within(row("h-puts")).getByRole("button", { name: "1218_P6400" }));
+    fireEvent.click(within(row("h-puts")).getByRole("button", { name: "1218_P6400 held" }));
     expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1218_P6400");
     // the focus is in the inspector, on its heading: j still moves the table
+    // the held spreads first, then the expiry's watched spread
     press("j");
-    expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1231_IC");
-    expect(row("h-ic").hasAttribute("data-selected")).toBe(true);
+    expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1218_P7150");
+    expect(row("w-dec18").hasAttribute("data-selected")).toBe(true);
     press("k");
     expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1218_P6400");
     // and the focus stays in the inspector, where its reader is, rather than going to the row
@@ -97,11 +103,12 @@ describe("Enter and Escape", () => {
     expect(cursor()).toBe("h-puts");
     expect(document.activeElement).toBe(row("h-puts").querySelector(".nxd-name"));
     await user.keyboard("j");
-    expect(cursor()).toBe("h-ic");
+    expect(cursor()).toBe("w-dec18");
   });
 
   it("Enter opens it with the focus nowhere in particular too", () => {
     render(<DeskBook {...props()} />);
+    press("j");
     press("j");
     (document.activeElement as HTMLElement).blur();
     press("Enter", document.body);
@@ -170,7 +177,7 @@ describe("when they do nothing", () => {
   it("does nothing while a form is open in the inspector, so a draft is never carried off", async () => {
     const user = userEvent.setup();
     render(<DeskBook {...props()} />);
-    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
+    fireEvent.click(within(row("h-ic")).getByRole("button", { name: "1231_IC held" }));
     await user.click(within(inspector()!).getByRole("button", { name: "close…" }));
     screen.getByRole("form", { name: "close 1231_IC" });
     // the focus leaves the form's boxes, and still j does not move the inspector from under it
@@ -184,8 +191,8 @@ describe("when they do nothing", () => {
     expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1231_IC");
     // and with the form gone, j moves again
     press("j", document.body);
-    expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1231_IC");
-    expect(cursor()).toBe("r-ic");
+    expect(inspector()!.getAttribute("aria-label")).toBe("inspector: 1231_C7600");
+    expect(cursor()).toBe("w-dec31");
   });
 
   it("does nothing while the add sheet is open", () => {

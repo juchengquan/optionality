@@ -632,7 +632,8 @@ describe("the bracket and the attention colours, as drawn", () => {
   }
 
   it("recolours only the fired entry row when entries are set to look like risk", async () => {
-    const paint = () => Object.fromEntries(["w-dec04", "r-calls", "q-unknown", "w-dec18"].map((id) => {
+    // r-calls rings on its holding's row, which draws it (2026-11-17)
+    const paint = () => Object.fromEntries(["w-dec04", "h-calls", "q-unknown", "w-dec18"].map((id) => {
       const row = rowOf(id);
       const chip = row.querySelector(".nx-chip");
       return [id, `${getComputedStyle(row).backgroundColor} ${chip ? getComputedStyle(chip).backgroundColor : "-"}`];
@@ -645,7 +646,7 @@ describe("the bracket and the attention colours, as drawn", () => {
     const risk = paint();
     expect(risk["w-dec04"]).not.toBe(opportunity["w-dec04"]);
     // and it now looks exactly like the fired risk rule
-    expect(risk["w-dec04"]).toBe(risk["r-calls"]);
-    for (const id of ["r-calls", "q-unknown", "w-dec18"]) expect(risk[id]).toBe(opportunity[id]);
+    expect(risk["w-dec04"]).toBe(risk["h-calls"]);
+    for (const id of ["h-calls", "q-unknown", "w-dec18"]) expect(risk[id]).toBe(opportunity[id]);
   });
 });

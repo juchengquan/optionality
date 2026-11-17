@@ -113,19 +113,21 @@ describe("the cards", () => {
     figure.scrollIntoView({ block: "center" });
     const r = figure.getBoundingClientRect();
     const under = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    expect(under?.getAttribute("aria-label")).toBe("details of 1218_C7300");
+    expect(under?.getAttribute("aria-label")).toBe("details of 1218_C7300 held");
     await userEvent.click(figure, { force: true });
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("heading", { name: "1218_C7300" })).toBeTruthy();
   });
 
   it("are reached from a banner, brought into view and marked", async () => {
-    await show();
-    const target = card("w-dec04");
+    // the one book puts 12-04's watched spread first (2026-11-17): the lone contract on the last
+    // expiry, fired, is the card that starts out of view
+    await show(QUOTES.map((q) => (q.id === "w-lone" ? { ...q, triggered: true } : q)));
+    const target = card("w-lone");
     // worth nothing unless the card starts out of view
     expect(target.getBoundingClientRect().top).toBeGreaterThan(window.innerHeight);
     const banners = screen.getByRole("status", { name: "needs you" });
-    await userEvent.click(within(banners).getByRole("button", { name: /1204_P6900 entry signal/ }));
+    await userEvent.click(within(banners).getByRole("button", { name: /20261231 8000C entry signal/ }));
     await new Promise((r) => setTimeout(r, 900));
     const r = target.getBoundingClientRect();
     expect(target.hasAttribute("data-revealed")).toBe(true);

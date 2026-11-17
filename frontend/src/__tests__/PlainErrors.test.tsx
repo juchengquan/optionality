@@ -12,6 +12,7 @@ import { saidBy } from "../testing/hyphens";
 import { servePage, SPX_REFERENCE } from "../testing/pageService";
 import type { Entry, Reference } from "../shared/api";
 import { CHECKS, wordsOf } from "../testing/words";
+import { heldOrNot } from "../testing/held";
 
 afterEach(() => {
   cleanup();
@@ -94,9 +95,9 @@ describe("a reason the service serves, through the page (the boundary in api.ts)
       const name = "1218_P7150";
       if (arrangement === "desk") {
         const row = [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === "w-dec18")!;
-        fireEvent.click(within(row).getByRole("button", { name }));
+        fireEvent.click(within(row).getByRole("button", { name: heldOrNot(name) }));
       } else {
-        fireEvent.click(screen.getByRole("button", { name: `details of ${name}` }));
+        fireEvent.click(screen.getByRole("button", { name: heldOrNot(`details of ${name}`) }));
       }
       const detail = arrangement === "desk"
         ? screen.getByRole("complementary", { name: `inspector: ${name}` }) : await screen.findByRole("dialog");

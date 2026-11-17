@@ -81,7 +81,7 @@ describe("renaming a combo from the inspector", () => {
 describe("splitting a total entry from a holding's inspector", () => {
   it("shows what each holding gets, sends the total, and the holding's Entry is the service's after", async () => {
     const writes = await openDesk();
-    const panel = await inspect("1218_P6400");
+    const panel = await inspect("1218_P6400 held");
     await userEvent.click(within(panel).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     const form = within(panel).getByRole("form", { name: "split a total entry across 1218_IC value" });
     await userEvent.fill(within(form).getByLabelText("total entry, per contract"), "6.4");
@@ -104,7 +104,7 @@ describe("splitting a total entry from a holding's inspector", () => {
   it("says the service's refusal beside the total, on screen and on top", async () => {
     const refusal = "every wing here has a rule of its own — set them individually";
     await openDesk({ totalEntry: () => [422, refusal] });
-    const panel = await inspect("1218_P6400");
+    const panel = await inspect("1218_P6400 held");
     await userEvent.click(within(panel).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     const form = within(panel).getByRole("form", { name: "split a total entry across 1218_IC value" });
     await userEvent.fill(within(form).getByLabelText("total entry, per contract"), "6.4");

@@ -17,6 +17,8 @@ import { PhoneBook } from "../phone/PhoneBook";
 import { Still } from "../snapshot/Still";
 import { hyphenSigns, saidBy } from "../testing/hyphens";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer, watchSamplesAnswer } from "../testing/ownerBook";
+import { heldOrNot } from "../testing/held";
+import { bareName } from "../testing/held";
 
 /** The owner's book with a negative in every figure a holding has: its greeks, its pace gap (ahead,
  *  so negative) and a gamma too small for its places. */
@@ -68,10 +70,10 @@ describe("no figure signed with a hyphen-minus (the owner, 2026-11-16)", () => {
   it.each([true, false])("on the desk: the table and every inspector, in session %s (its history open outside it)", async (session) => {
     render(<DeskBook {...props({ session })} />);
     const said: string[] = hyphenSigns(saidBy(document.body));
-    const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map((b) => b.textContent!);
+    const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map(bareName);
     let charts = 0;
     for (const name of names) {
-      fireEvent.click(screen.getAllByRole("button", { name }).find((b) => b.classList.contains("nxd-name"))!);
+      fireEvent.click(screen.getAllByRole("button", { name: heldOrNot(name) }).find((b) => b.classList.contains("nxd-name"))!);
       await settle();
       const insp = screen.getByRole("complementary", { name: `inspector: ${name}` });
       charts += insp.querySelectorAll(".nx-hist-chart, .nx-payoff svg").length;

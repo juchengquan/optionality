@@ -24,7 +24,7 @@ import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfMonitor } from "../edit";
 import { stripOfEntry } from "../strip";
-import { ruleCells } from "../desk/columns";
+import { HELD, ruleCells } from "../desk/columns";
 
 /** Whether a card's value is a held spread's cost to close, as its desk row reads it (`heldSpread`). */
 const heldSpreadValue = (e: Entry, overlap: string | null) => Boolean(e.legs) && e.held && !overlap;
@@ -83,9 +83,10 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
   const hot = holding.schedule?.reached === "stop" || rules.some((r) => ruleState(r) === "alarm");
   return (
     <article className="nxp-card nxp-holding" data-ref={holding.id} data-state={hot ? "alarm" : "calm"}>
-      <OpenCard name={holding.name} onOpen={onOpen} />
+      {/* "held" in its name, to a reader as on screen: the one book draws watches beside it (2026-11-17) */}
+      <OpenCard name={`${holding.name} ${HELD}`} onOpen={onOpen} />
       <header className="nxp-head">
-        <span className="nxp-name">{holding.name}</span>
+        <span className="nxp-name">{holding.name}{" "}<span className="nxp-held" data-held="">{HELD}</span></span>
         <span className="nxp-legs"><Legs legs={holding.legs.map(heldLeg)} /></span>
         {/* no DTE here: its expiry's heading says it, once (part K) */}
       </header>

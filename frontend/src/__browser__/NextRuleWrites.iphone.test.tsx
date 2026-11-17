@@ -106,7 +106,7 @@ describe("renaming a combo from the sheet", () => {
 describe("splitting a total entry from a holding's sheet", () => {
   it("shows what each holding gets inside 390px, and the holding's Entry is the service's after", async () => {
     const writes = await show();
-    const sheet = await openSheet("1218_P6400");
+    const sheet = await openSheet("1218_P6400 held");
     await userEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     const form = within(sheet).getByRole("form", { name: "split a total entry across 1218_IC value" });
     await userEvent.fill(within(form).getByLabelText("total entry, per contract"), "6.4");
@@ -127,7 +127,7 @@ describe("splitting a total entry from a holding's sheet", () => {
   it("says the service's refusal in the sheet, on screen and on top", async () => {
     const refusal = "set the other wings' credits first";
     await show({ totalEntry: () => [422, refusal] });
-    const sheet = await openSheet("1218_P6400");
+    const sheet = await openSheet("1218_P6400 held");
     await userEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     const form = within(sheet).getByRole("form", { name: "split a total entry across 1218_IC value" });
     await userEvent.fill(within(form).getByLabelText("total entry, per contract"), "6.4");

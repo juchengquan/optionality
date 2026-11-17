@@ -9,6 +9,7 @@ import { Next } from "../Next";
 import { serveGreeks } from "../testing/greekLabels";
 import { overflowsSideways, settle } from "./nextBook";
 import { inListOrder, sectionsIn } from "./sections";
+import { bareName } from "../testing/held";
 
 afterEach(async () => {
   cleanup();
@@ -21,11 +22,11 @@ describe("one section order, measured on the desk", () => {
     serveGreeks();
     render(<Next />);
     await settle();
-    const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map((b) => b.textContent!);
+    const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map(bareName);
     expect(names.length).toBeGreaterThan(8);
     let holdings = 0;
     for (const name of names) {
-      fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === name)!);
+      fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => bareName(b) === name)!);
       await settle();
       const insp = screen.getByRole("complementary", { name: `inspector: ${name}` });
       const { order, past } = sectionsIn(insp);

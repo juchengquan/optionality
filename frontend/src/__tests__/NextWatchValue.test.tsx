@@ -132,10 +132,12 @@ function props(session: boolean): BookProps {
 const deskValue = (id: string) => document.querySelector(`.nxd-row[data-ref="${id}"] [data-col="value"] .nxd-v`)?.textContent;
 const phoneValue = (id: string) => document.querySelector(`article[data-ref="${id}"] [data-value] dd`)?.textContent ?? null;
 
-it("draws the partly overlapping combo in the watchlist, so the cases below reach it there", () => {
+it("draws the partly overlapping combo as a watched spread, not under the holding, so the cases below reach it there", () => {
   render(<DeskBook {...props(false)} />);
-  expect(screen.getByRole("region", { name: "Watchlist" }).querySelector('[data-ref="w-over"]')).toBeTruthy();
-  expect(screen.getByRole("region", { name: "Holdings" }).querySelector('[data-ref="w-over"]')).toBeNull();
+  const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="w-over"]')!;
+  expect(row.dataset.nested).toBeUndefined();
+  expect(row.closest("[data-bracket]")).toBeNull();
+  expect(document.querySelector('.nxd-row[data-kind="holding"]')!.closest("li")!.contains(row)).toBe(false);
 });
 
 describe("on the desk", () => {
@@ -201,7 +203,7 @@ describe("in the picture and its Markdown", () => {
       session, privacy: false, needs: [], health: null, polledAt: null, error: null, references: [],
       hidden: new Set(), takenAt: session ? new Date("2026-11-16T15:00:00Z") : SUNDAY,
     });
-    const rows = readMarkdown(toMarkdown(view)).sections.find((s) => s.title === "Watchlist")!.rows;
+    const rows = readMarkdown(toMarkdown(view)).sections.find((s) => s.title === "Book")!.rows;
     const at = rows[0]!.indexOf("value");
     // the text writes a figure's minus as the hyphen (MARKDOWN_FIGURE_MINUS); the page, the true one
     return IDS.map((id) => rows.find((r) => r[0] === ROWS.find((x) => x.id === id)!.code)?.[at]?.replace(/^-/, "\u2212"));

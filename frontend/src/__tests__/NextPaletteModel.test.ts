@@ -16,8 +16,8 @@ const find = (q: string) => refs(matching(book, q));
 describe("what it finds", () => {
   it("is every row of the table in the order drawn, then the muted and expired rules", () => {
     expect(refs(book)).toEqual([
-      "h-calls", "r-calls", "h-puts", "h-ic", "r-ic",
-      "w-dec04", "w-dec18", "w-dec18-delta", "w-dec31", "w-lone",
+      // the one book, by expiry (2026-11-17): a holding's own rule is its row's, so not apart
+      "w-dec04", "h-calls", "h-puts", "w-dec18", "w-dec18-delta", "h-ic", "w-dec31", "w-lone",
       // the folded list, as it is drawn: by expiry
       "q-unknown", "m-expired", "m-muted",
     ]);
@@ -26,7 +26,8 @@ describe("what it finds", () => {
   it("says what each is, so a holding and the rule watching it read apart", () => {
     const kind = (ref: string) => book.find((f) => f.ref === ref)!.kind;
     expect(kind("h-calls")).toBe("holding");
-    expect(kind("r-calls")).toBe("rule");
+    // a holding's own rule is drawn on its row (2026-11-17): found as the holding
+    expect(book.some((f) => f.ref === "r-calls")).toBe(false);
     expect(kind("w-dec18")).toBe("watched spread");
     expect(kind("w-dec18-delta")).toBe("rule");
     expect(kind("q-unknown")).toBe("quarantined rule");
@@ -52,9 +53,9 @@ describe("what it finds", () => {
     // a strike reaches the spread, the leg rule on it, and nothing else
     expect(find("7150")).toEqual(["w-dec18", "w-dec18-delta"]);
     // the condor's call side by a long strike, which is in no name
-    expect(find("7350")).toEqual(["h-calls", "r-calls"]);
+    expect(find("7350")).toEqual(["h-calls"]);
     // an expiry, as the table heads its groups and as the service writes it
-    expect(find("261231")).toEqual(["h-ic", "r-ic", "w-dec31", "w-lone"]);
+    expect(find("261231")).toEqual(["h-ic", "w-dec31", "w-lone"]);
     expect(find("2026-12-04")).toEqual(["w-dec04"]);
     expect(find("8300")).toEqual(["q-unknown"]);
     expect(find("delta 7150")).toEqual(["w-dec18-delta"]);
@@ -62,9 +63,11 @@ describe("what it finds", () => {
 
   it("finds a rule by what it watches as spoken, though the page writes it as a symbol (#404)", () => {
     // a held spread's rules, which only "spread value" once named a spread; never a lone contract's
-    expect(find("spread")).toEqual(expect.arrayContaining(["r-calls", "r-ic"]));
+    // and a holding by its own rule's, which its row draws (2026-11-17); one with none is not found
+    expect(find("spread")).toEqual(expect.arrayContaining(["h-calls", "h-ic"]));
+    expect(find("spread")).not.toContain("h-puts");
     expect(find("spread")).not.toContain("w-dec18-delta");
-    expect(find("price")).toEqual(expect.arrayContaining(["r-calls", "w-dec18"]));
+    expect(find("price")).toEqual(expect.arrayContaining(["h-calls", "w-dec18"]));
     expect(find("delta")).toContain("w-dec18-delta");
   });
 
@@ -95,7 +98,7 @@ describe("what it finds", () => {
 
   it("finds a strike with its side, and an expiry three ways", () => {
     expect(find("p7150")).toEqual(["w-dec18", "w-dec18-delta"]);
-    expect(find("c7300")).toEqual(["h-calls", "r-calls"]);
+    expect(find("c7300")).toEqual(["h-calls"]);
     expect(find("p7300")).toEqual([]);
     expect(find("dec 4")).toEqual(["w-dec04"]);
     expect(find("dec 04")).toEqual(["w-dec04"]);
@@ -158,7 +161,9 @@ describe("its actions", () => {
       add: null, "edit-monitor": "nothing is selected", "close-holding": "nothing is selected", "save-image": null,
       "copy-text": null,
     });
-    expect(why(row("h-calls"))).toMatchObject({
+    // a holding's own rule is on its row (2026-11-17): selecting it selects the rule to edit
+    expect(why(row("h-calls"))).toMatchObject({ "edit-monitor": null, "close-holding": null });
+    expect(why(row("h-puts"))).toMatchObject({
       "edit-monitor": "a holding is selected: select one of its rules", "close-holding": null,
     });
     expect(why(row("w-dec18"))).toMatchObject({
@@ -232,7 +237,7 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("is found where the table draws it, in the watchlist after the holdings, and jumps there", () => {
     expect(refs(found)).toEqual([
-      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
+      "h-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
       "r-8100", "w-8150-delta", "w-7700", "r-ratio",
     ]);
   });
@@ -242,9 +247,9 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     expect(kind("r-8100")).toBe("watched spread");
     expect(kind("w-7700")).toBe("watched spread");
     expect(kind("r-ratio")).toBe("watched spread");
-    // the holding's own value rule, and a wing of a held condor, are still its Monitors
-    expect(kind("r-8050")).toBe("rule");
+    // a wing of a held condor is still its rule; its own value rule is its row's
     expect(kind("r-ic-calls")).toBe("rule");
+    expect(found.some((f) => f.ref === "r-8050")).toBe(false);
   });
 });
 

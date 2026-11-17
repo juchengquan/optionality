@@ -167,7 +167,7 @@ describe("on the desk (arrangement A)", () => {
     }
     expect(deskRow("h-puts").querySelector("[data-col=strip]")!.textContent).toContain("500.50 pts · 1.25σ");
     // a single contract is no spread; a rule under a holding is drawn on the holding's own row
-    for (const id of ["w-lone", "w-dec18-delta", "r-calls", "r-ic"]) {
+    for (const id of ["w-lone", "w-dec18-delta"]) {
       expect(deskRow(id).querySelector("[data-col=strip] .nxs"), id).toBeNull();
     }
   });
@@ -177,7 +177,7 @@ describe("on the desk (arrangement A)", () => {
     const cell = deskRow("h-hedge").querySelector<HTMLElement>("[data-col=strip]")!;
     expect(cell.querySelector(".nxs")).toBeNull();
     expect(cell.textContent).toBe("");
-    fireEvent.click(within(deskRow("h-hedge")).getByRole("button", { name: "1218_P6000L" }));
+    fireEvent.click(within(deskRow("h-hedge")).getByRole("button", { name: "1218_P6000L held" }));
     expect(within(screen.getByRole("complementary", { name: /inspector/ })).queryByRole("figure")).toBeNull();
   });
 
@@ -193,7 +193,7 @@ describe("on the desk (arrangement A)", () => {
 
   it("draws the whole strip in the inspector, a bracketed condor's two spreads on one", () => {
     render(<DeskBook {...deskProps()} />);
-    fireEvent.click(within(deskRow("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(deskRow("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     const inspector = screen.getByRole("complementary", { name: /inspector/ });
     const fig = within(inspector).getByRole("figure", { name: "strike strip" });
     expect([...fig.querySelectorAll(".nxs-k[data-side=short] b")].map((k) => k.textContent)).toEqual(["7300", "6400"]);
@@ -225,13 +225,13 @@ describe("on the phone (arrangement B)", () => {
   it("draws no strip on the card or in the sheet of a holding with no short leg", async () => {
     render(<PhoneBook {...deskProps({ holdings: [...HOLDINGS, HEDGE] })} />);
     expect(within(card("h-hedge")).queryByRole("figure")).toBeNull();
-    fireEvent.click(within(card("h-hedge")).getByRole("button", { name: "details of 1218_P6000L" }));
+    fireEvent.click(within(card("h-hedge")).getByRole("button", { name: "details of 1218_P6000L held" }));
     expect(within(await screen.findByRole("dialog")).queryByRole("figure")).toBeNull();
   });
 
   it("draws the strip in the detail sheet", async () => {
     render(<PhoneBook {...deskProps()} />);
-    fireEvent.click(within(card("h-puts")).getByRole("button", { name: "details of 1218_P6400" }));
+    fireEvent.click(within(card("h-puts")).getByRole("button", { name: "details of 1218_P6400 held" }));
     const sheet = await screen.findByRole("dialog");
     const fig = within(sheet).getByRole("figure", { name: "strike strip" });
     expect(said(fig)).toContain("P6400 Δ −0.210 · 500.50 pts · 1.25σ away");

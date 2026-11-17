@@ -20,11 +20,12 @@ import { costAndPace, paceOutcome } from "../pace";
 import type { HoldingWrites } from "../HoldingActions";
 import { DetailBoundary } from "../DetailBoundary";
 import { keptHolding, STALE_WORDS } from "../kept";
-import { placeBook, type BookModel } from "../placement";
+import { NOTHING, placeBook, type BookModel, type PlacedRule } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  attentionOf, chipWords, COLUMNS, distanceShort, heldSpread, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
+  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, distanceShort, HELD, heldSpread, ownAttentionOf, RETIRED_KEYS, rowId, rowLegs,
+  rowName, rowStrip, ruleOfRow, subRules, tableRows,
   type DeskColumn, type DeskRow,
 } from "./columns";
 import { SpxNote, StrikeStrip } from "../StrikeStrip";
@@ -36,8 +37,9 @@ import { priceMapOf, spxOfBook } from "../pricemap";
 import "./desk.css";
 import { ErrorWords } from "../shared/ErrorWords";
 
-/** The desk's book, arrangement A (ADR 0023, #289): ONE dense table, holdings first and then the
- *  watchlist, each grouped by expiry, beside a NON-MODAL inspector.
+/** The desk's book, arrangement A (ADR 0023, #289): ONE dense table — ONE book (2026-11-17), each
+ *  expiry once with its held spreads, its watched spreads and its lone contracts under it — beside a
+ *  NON-MODAL inspector.
  *
  *  - Which rule sits where is `placeBook`'s, shared with the phone's cards; this only draws it.
  *  - A condor held as two spreads is one bracket; a 4-leg holding is one row.
@@ -54,7 +56,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
   const { quotes, monitors, holdings, session, privacy } = props;
   const placed = useMemo(() => placeBook(quotes, holdings, monitors), [quotes, holdings, monitors]);
   const rows = useMemo(() => tableRows(placed), [placed]);
-  const partners = useMemo(() => new Map(placed.holdings.flatMap((g) => g.rows)
+  const partners = useMemo(() => new Map(placed.book.flatMap((g) => g.held)
     .filter((b) => b.length === 2)
     .flatMap(([a, b]) => [[a!.holding.id, b!.holding], [b!.holding.id, a!.holding]] as [string, Holding][])),
   [placed]);
@@ -188,7 +190,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
           ))}
         </div>
 
-        <Holdings {...props} placed={placed} ctx={ctx} picker={
+        <OneBook {...props} placed={placed} ctx={ctx} picker={
           // on the first section's line, at its end: over the header it sat on top of a label
           <>
             <button type="button" className="nxd-maptoggle" aria-expanded={mapOpen}
@@ -199,7 +201,6 @@ export function DeskBook({ selection, ...props }: BookProps & {
                           all={pickable} />
           </>
         } />
-        <Watchlist placed={placed} ctx={ctx} />
         <Muted monitors={placed.muted} />
       </div>
 
@@ -242,19 +243,27 @@ const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
 
 // ---- the sections
 
-function Holdings({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, picker }: BookProps & {
+/** The one book (the owner, 2026-11-17): no Holdings and Watchlist sections, each expiry's heading
+ *  once, and under it its held spreads, its watched spreads, and its lone contracts after a quiet
+ *  "contracts" label. What the book says before its rows — the session line, SPX's reason, a
+ *  valuation's failure or that it is under way, and that there is nothing at all — is said once,
+ *  above them. */
+function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, picker }: BookProps & {
   placed: BookModel; ctx: Ctx; picker: React.ReactNode;
 }) {
+  const empty = placed.book.length === 0 && placed.unplaced.length === 0 && placed.quarantined.length === 0;
   return (
-    <section aria-labelledby="nxd-holdings">
+    <section aria-labelledby="nxd-book">
       <div className="nxd-section">
-        <h2 id="nxd-holdings">Holdings</h2>
+        {/* the book is the page: its heading is for a reader, as the sections' were */}
+        <h2 id="nxd-book" className="sr-only">Book</h2>
         <span className="nxd-picker">{picker}</span>
       </div>
       {holdingsError !== null
         ? <div className="nx-meta nxd-note">{"the holdings could not be valued — "}<ErrorWords raw={holdingsError} again="refresh to try again" /></div> : null}
       {holdings === null && holdingsError === null ? <p className="nx-meta nxd-note">valuing…</p> : null}
-      {holdings !== null && holdings.length === 0 ? <p className="nx-meta nxd-note">nothing held</p> : null}
+      {/* one line for an empty book, whichever half is missing (2026-11-17) */}
+      {holdings !== null && empty ? <p className="nx-meta nxd-note">{NOTHING}</p> : null}
       {/* outside the session (#371): when the service valued what is drawn; the header's refresh
           values it again (#410). In the Curb and GTH, that the quotes are live and thin (#416) */}
       {(phase ?? (session ? "regular" : "closed")) !== "regular"
@@ -262,11 +271,11 @@ function Holdings({ placed, quotes, holdings, holdingsError, holdingsAt, holding
                       phase={phase ?? "closed"} className="nx-meta nxd-note" /> : null}
       {/* why SPX is not current, once for the book: its rows' strips draw the hollow dot (2026-11-17) */}
       <SpxNote reasons={bookSpxReasons(holdings, quotes)} className="nx-meta nxd-note" />
-      {placed.holdings.map(({ expiry, rows }) => (
-        <div key={expiry} className="nxd-expiry">
-          <h3 className="nxd-group">{`${writtenDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`}</h3>
+      {placed.book.map((g) => (
+        <div key={g.expiry} className="nxd-expiry" data-expiry={g.expiry}>
+          <h3 className="nxd-group">{`${writtenDate(g.expiry)} · ${g.dte} DTE`}</h3>
           <ul>
-            {rows.map((bracket) => (
+            {g.held.map((bracket) => (
               <li key={bracket.map((p) => p.holding.id).join("+")}
                   data-bracket={bracket.length === 2 ? "condor" : undefined}>
                 <ul>
@@ -278,15 +287,23 @@ function Holdings({ placed, quotes, holdings, holdingsError, holdingsAt, holding
                       <li key={holding.id}>
                         <Row row={{ kind: "holding", holding, rules }} ctx={ctx}
                              bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} />
-                        {rules.map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx}
-                                               bracket={paired && i === 0 ? "through" : undefined} />)}
+                        {/* its own rule is on its row: only the others are rows under it */}
+                        {subRules(holding, rules).map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx}
+                                                                  bracket={paired && i === 0 ? "through" : undefined} />)}
                       </li>
                     );
                   })}
                 </ul>
               </li>
             ))}
+            {g.spreads.map((item) => <Watched key={item.entry.id} item={item} ctx={ctx} />)}
           </ul>
+          {g.contracts.length > 0 ? (
+            <>
+              <p className="nx-meta nxd-sub" data-sub="contracts">contracts</p>
+              <ul>{g.contracts.map((item) => <Watched key={item.entry.id} item={item} ctx={ctx} />)}</ul>
+            </>
+          ) : null}
         </div>
       ))}
       {placed.unplaced.length > 0 ? (
@@ -304,30 +321,6 @@ function Holdings({ placed, quotes, holdings, holdingsError, holdingsAt, holding
           </ul>
         </div>
       ) : null}
-    </section>
-  );
-}
-
-function Watchlist({ placed, ctx }: { placed: BookModel; ctx: Ctx }) {
-  const empty = placed.watchlist.length === 0 && placed.quarantined.length === 0;
-  return (
-    <section aria-labelledby="nxd-watchlist">
-      <div className="nxd-section"><h2 id="nxd-watchlist">Watchlist</h2></div>
-      {empty ? <p className="nx-meta nxd-note">nothing watched</p> : null}
-      {placed.watchlist.map(({ expiry, items }) => (
-        <div key={expiry} className="nxd-expiry">
-          <h3 className="nxd-group">{`${writtenDate(expiry)} · ${items[0]!.entry.dte} DTE`}</h3>
-          <ul>
-            {items.map(({ entry, under, overlap }) => (
-              <li key={entry.id}>
-                <Row row={{ kind: "rule", entry, nested: false, overlap }} ctx={ctx} />
-                <OverlapNote overlap={overlap} />
-                {under.map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
       {placed.quarantined.length > 0 ? (
         <div className="nxd-quarantined">
           {/* a fault, so never collapsed: nothing watches what these watched (ADR 0023) */}
@@ -340,6 +333,17 @@ function Watchlist({ placed, ctx }: { placed: BookModel; ctx: Ctx }) {
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** A watched spread or contract, its overlap note under it (#346), and the leg rules under it. */
+function Watched({ item: { entry, under, overlap }, ctx }: { item: PlacedRule; ctx: Ctx }) {
+  return (
+    <li>
+      <Row row={{ kind: "rule", entry, nested: false, overlap }} ctx={ctx} />
+      <OverlapNote overlap={overlap} />
+      {under.map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
+    </li>
   );
 }
 
@@ -376,8 +380,8 @@ function Muted({ monitors }: { monitors: Monitor[] }) {
 
 /** The state a row is drawn in, which the row's tint and its chip answer to. */
 function stateOf(row: DeskRow): string {
-  const a = attentionOf(row);
-  return a ?? "calm";
+  // a holding's Level first, then its own rule's ringing or fault, drawn on its row (2026-11-17)
+  return attentionOf(row) ?? ownAttentionOf(row) ?? "calm";
 }
 
 function Row({ row, ctx, bracket }: { row: DeskRow; ctx: Ctx; bracket?: "top" | "through" | "bottom" }) {
@@ -405,19 +409,25 @@ function Row({ row, ctx, bracket }: { row: DeskRow; ctx: Ctx; bracket?: "top" | 
  *  (the owner, 2026-11-17, where the fill bar fell back before) */
 function NameCell({ row, ctx, distance }: { row: DeskRow; ctx: Ctx; distance: boolean }) {
   const a = attentionOf(row);
+  const own = ownAttentionOf(row);
   const short = distance ? distanceShort(row) : "";
+  const rule = ruleOfRow(row);
   return (
     <>
       <button type="button" className="nxd-name" aria-expanded={ctx.selected === rowId(row)}
               aria-controls={ctx.selected === rowId(row) ? ctx.inspectorId : undefined}
               onClick={(e) => { e.stopPropagation(); ctx.select(rowId(row)); }}>
         {rowName(row)}
+        {/* what tells a holding from a watch in the one book, heard in its name (2026-11-17) */}
+        {row.kind === "holding" ? <>{" "}<span className="nxd-held" data-held="">{HELD}</span></> : null}
       </button>
       {a ? <AttentionChip kind={a} words={chipWords(row, ctx.session)} /> : null}
-      {short && row.kind === "rule" ? (
+      {/* a holding's own rule, ringing or at fault, on the row that now draws it */}
+      {own ? <AttentionChip kind={own} words={ATTENTION_WORDS[own]} /> : null}
+      {short && rule ? (
         <span className="nxd-distance" data-distance="">
-          <span className="sr-only">{` rule ${sentence(row.entry)}`}</span>
-          <span aria-hidden="true" title={sentence(row.entry)}>{short}</span>
+          <span className="sr-only">{` rule ${sentence(rule)}`}</span>
+          <span aria-hidden="true" title={sentence(rule)}>{short}</span>
         </span>
       ) : null}
     </>

@@ -83,7 +83,7 @@ async function closeHeld(arrangement: "desk" | "phone", exit?: string): Promise<
     fireEvent.click(row.querySelector(".nxd-name")!);
   } else {
     const card = document.querySelector<HTMLElement>('article[data-ref="h-ic"]')!;
-    fireEvent.click(within(card).getByRole("button", { name: "details of 1231_IC" }));
+    fireEvent.click(within(card).getByRole("button", { name: "details of 1231_IC held" }));
   }
   const d = arrangement === "desk"
     ? screen.getByRole("complementary", { name: /^inspector:/ }) : await screen.findByRole("dialog");
@@ -240,7 +240,7 @@ for (const arrangement of ["desk", "phone"] as const) {
         fireEvent.click(row.querySelector(".nxd-name")!);
       } else {
         const card = document.querySelector<HTMLElement>('article[data-ref="h-ic"]')!;
-        fireEvent.click(within(card).getByRole("button", { name: "details of 1231_IC" }));
+        fireEvent.click(within(card).getByRole("button", { name: "details of 1231_IC held" }));
       }
       const d = arrangement === "desk"
         ? screen.getByRole("complementary", { name: /^inspector:/ }) : await screen.findByRole("dialog");
@@ -455,13 +455,13 @@ describe("folded at the bottom of the book (#373)", () => {
         expect(asked(s, "/positions")).toBe(0);
       });
 
-      it(`is the last thing in the book, ${when} on the ${arrangement}: after the watchlist`, async () => {
+      it(`is the last thing in the book, ${when} on the ${arrangement}: after the one book`, async () => {
         const s = service();
         await open(arrangement, s, { at });
         const region = await screen.findByRole("region", { name: "closed trades" });
         expect(book().lastElementChild).toBe(region);
-        const watchlist = book().querySelector(`[aria-labelledby="${arrangement === "desk" ? "nxd" : "nxp"}-watchlist"]`)!;
-        expect(watchlist.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        const open_ = book().querySelector(`[aria-labelledby="${arrangement === "desk" ? "nxd" : "nxp"}-book"]`)!;
+        expect(open_.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       });
     }
 

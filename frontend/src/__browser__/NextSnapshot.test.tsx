@@ -133,7 +133,7 @@ describe("saving the desk as an image", () => {
     expect(png.at(2, 2)).toBe(PLAIN_GROUND);
     // and words are painted on it: a holding's name, a rule's sentence, the header block
     const ringing = [...root.querySelectorAll("td")].find((td) => td.textContent!.startsWith("|value| ≥ 6.00 — now 6.20"))!;
-    for (const el of [rowNamed(root, "1218_P6400").children[0]!, ringing, root.querySelector(".nx-still-lines dd")!]) {
+    for (const el of [rowNamed(root, "1218_P6400 held").children[0]!, ringing, root.querySelector(".nx-still-lines dd")!]) {
       expect(inkIn(png, root, el), `no words painted where "${el.textContent}" is`).toBe(true);
     }
     expect(png.w / root.scrollWidth).toBeGreaterThan(1);
@@ -210,8 +210,8 @@ describe("saving the desk as an image", () => {
     await settle();
     const { root, release } = await take();
     expect([...root.querySelectorAll<HTMLElement>(CONTROLS)].map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
-    // the book is in it all the same: holdings, the rules under them, the watchlist, the quarantine
-    for (const name of ["1218_P6400", "1218_C7300", "1231_IC", "1204_P6900", "20261218 7150P", "20261211 8000C"]) {
+    // the book is in it all the same: holdings, the watched spreads and their leg rules, the quarantine
+    for (const name of ["1218_P6400 held", "1218_C7300 held", "1231_IC held", "1204_P6900", "20261218 7150P", "20261211 8000C"]) {
       expect(rowNamed(root, name), `${name} is not in the picture`).toBeTruthy();
     }
     release();
@@ -246,12 +246,12 @@ describe("saving the desk as an image", () => {
     // the screen's short form
     expect(rowOnScreen("w-dec18-delta").querySelector('[data-col="alarm"]')!.textContent).toContain("|Δ| ≥ 0.20");
     const { root, release } = await take();
-    // the watchlist's own header: its table carries no holding-only column (2026-11-16)
+    // the book's one table (2026-11-17)
     const row = rowNamed(root, "20261218 7150P");
     const rule = [...row.closest("table")!.querySelector("thead tr")!.children].findIndex((c) => c.textContent === "rule");
     expect(row.children[rule]!.textContent).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
-    // the Δ column's header is the one Δ (#400): no rule is said in symbols
-    expect(root.querySelector("tbody")!.textContent).not.toMatch(/[↑↓▲▼Δ]/);
+    // no rule is said in the screen's symbols (#388): its arrows; a Δ is a field's own word (#404)
+    expect(root.querySelector("tbody")!.textContent).not.toMatch(/[↑↓▲▼]/);
     release();
   });
 

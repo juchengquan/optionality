@@ -262,7 +262,7 @@ describe("from both arrangements", () => {
   it("does all three from the desk's inspector", async () => {
     const { value, sent } = actions();
     wrap(value, <DeskBook {...book()} />);
-    fireEvent.click(screen.getByRole("button", { name: "1218_P6400" }));
+    fireEvent.click(screen.getByRole("button", { name: "1218_P6400 held" }));
     let panel = screen.getByRole("complementary", { name: /^inspector/ });
     fireEvent.click(within(panel).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     fireEvent.change(within(panel).getByLabelText("total entry, per contract"), { target: { value: "6.4" } });
@@ -285,7 +285,7 @@ describe("from both arrangements", () => {
   it("does all three from the phone's sheet, whose Escape stays inside the form", async () => {
     const { value, sent } = actions();
     wrap(value, <div className="nx"><PhoneBook {...book()} /></div>);
-    fireEvent.click(screen.getByRole("button", { name: "details of 1218_P6400" }));
+    fireEvent.click(screen.getByRole("button", { name: "details of 1218_P6400 held" }));
     let sheet = await screen.findByRole("dialog");
     fireEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     // Escape cancels the form and leaves the sheet open: its dismissal does not ask if it was handled
@@ -364,7 +364,7 @@ describe("through the page, against a service that writes", () => {
     // both sheets gone — the watch rule the detail showed is gone with it — and the holding in the book
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
     await waitFor(() => expect(detail.isConnected).toBe(false));
-    await screen.findByRole("button", { name: "details of 1218_P7150" });
+    await screen.findByRole("button", { name: "details of 1218_P7150 held" });
     expect(screen.queryByRole("button", { name: /record 1218_P7150 value as held/ })).toBeNull();
   });
 
@@ -417,7 +417,7 @@ describe("through the page, against a service that writes", () => {
       }],
     });
     expect(await screen.findByText("added 1 holding and 1 rule, replacing 1 watch rule")).toBeTruthy();
-    await screen.findByRole("button", { name: "details of 1231_C8000" });
+    await screen.findByRole("button", { name: "details of 1231_C8000 held" });
   });
 
   it("records a watched ratio from the desk's inspector: its signs and quantities kept, the Entry focused", async () => {
@@ -583,7 +583,7 @@ describe("through the page, against a service that writes", () => {
     onTestFinished(() => { vi.useRealTimers(); });
     const writes = serveRuleEdits();
     render(<Next />);
-    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P6400" }));
+    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P6400 held" }));
     const sheet = await screen.findByRole("dialog");
     fireEvent.click(within(sheet).getByRole("button", { name: "split a total entry across 1218_IC value" }));
     fireEvent.change(within(sheet).getByLabelText("total entry, per contract"), { target: { value: "6.4" } });
