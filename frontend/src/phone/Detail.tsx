@@ -2,7 +2,7 @@
  *  its rules, in the one order the desk's inspector draws (part J, `DetailSections.tsx`). Back
  *  closes it — a history entry, never a route (ADR 0005) — through the same `useDismissOnBack` the
  *  old page's sheet used. */
-import { useRef } from "react";
+import { useRef, type RefObject } from "react";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -49,6 +49,10 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   const last = useRef<Subject | null>(null);
   if (subject) last.current = subject;
   const shown = subject ?? last.current;
+  // opened on its title, as the journal's sheet is: Base UI focuses the first control by default, and
+  // on a holding that is its first rule's "edit", far down — the sheet opened 905px into its 1559 on
+  // the live book (2026-11-17), at "on pace", not at the top
+  const title = useRef<HTMLHeadingElement>(null);
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}
@@ -56,13 +60,13 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
       {/* drawn in a portal OUTSIDE .nx, so it carries the page's colour tokens itself (next.css:
           .nx-tokens) and the two settings they read */}
       <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={readUp()} data-entry={entryStyle}
-                    data-stale={stale ? "" : undefined}>
+                    data-stale={stale ? "" : undefined} initialFocus={title}>
         {shown ? (
           <DetailBoundary key={shown.kind === "holding" ? shown.holding.id : shown.entry.id} what={shown.kind}>
             {shown.kind === "holding" ? (
-              <HoldingDetail holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
+              <HoldingDetail title={title} holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
                              privacy={privacy} session={session && !stale} writes={writes} stale={stale} />
-            ) : <RuleDetail entry={shown.entry} under={shown.under} overlap={shown.overlap ?? null}
+            ) : <RuleDetail title={title} entry={shown.entry} under={shown.under} overlap={shown.overlap ?? null}
                             session={session} privacy={privacy} />}
           </DetailBoundary>
         ) : null}
@@ -71,7 +75,8 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   );
 }
 
-function HoldingDetail({ holding, rules, quotes, monitors, privacy, session, writes, stale = false }: {
+function HoldingDetail({ title, holding, rules, quotes, monitors, privacy, session, writes, stale = false }: {
+  title: RefObject<HTMLHeadingElement | null>;
   holding: Holding; rules: Entry[]; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
   writes?: HoldingWrites;
   /** drawn from the last valuation that succeeded (`kept.ts`): said in the header, over its figures,
@@ -81,7 +86,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session, wri
   return (
     <>
       <SheetHeader>
-        <SheetTitle>{holding.name}</SheetTitle>
+        <SheetTitle ref={title} tabIndex={-1}>{holding.name}</SheetTitle>
         <SheetDescription>{holdingMeta(holding)}</SheetDescription>
         {stale ? <p className="nxp-meta nxp-stale" role="status">{STALE_WORDS}</p> : null}
       </SheetHeader>
@@ -96,13 +101,14 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session, wri
   );
 }
 
-function RuleDetail({ entry, under, overlap = null, session, privacy }: {
+function RuleDetail({ title, entry, under, overlap = null, session, privacy }: {
+  title: RefObject<HTMLHeadingElement | null>;
   entry: Entry; under: Entry[]; overlap?: string | null; session: boolean; privacy: boolean;
 }) {
   return (
     <>
       <SheetHeader>
-        <SheetTitle>{entryName(entry)}</SheetTitle>
+        <SheetTitle ref={title} tabIndex={-1}>{entryName(entry)}</SheetTitle>
         <SheetDescription>{ruleMeta(entry)}</SheetDescription>
       </SheetHeader>
       <div className="nxp-sheet-body">
