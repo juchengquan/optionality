@@ -201,6 +201,10 @@ html[data-nx-arrangement="desk"] { scroll-padding-top: calc(var(--nx-head-h, 0px
    cut short rather than the row pushed past the screen (#410) */
 .nx[data-arrangement="phone"] .nx-head { gap: 0.25rem; }
 .nx[data-arrangement="phone"] .nx-head h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* one Reference a line (the owner, 2026-11-17): SPX (yahoo) above SPX (ibkr), never side by side
+   where a wide phone or a short figure would have let them share one — the same reading, in the
+   same place, card after card */
+.nx[data-arrangement="phone"] .references { flex-direction: column; align-items: flex-start; }
 /* no bar along the bottom since #410: the end of the page clears the home indicator only */
 .nx[data-arrangement="phone"] .nx-main { padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); }
 /* 44pt targets and 16px text in every box, or iOS zooms the page on focus (ADR 0023). On the

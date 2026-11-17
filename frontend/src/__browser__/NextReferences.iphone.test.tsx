@@ -58,6 +58,19 @@ describe("the strip on a phone", () => {
     });
   }
 
+  // the owner, 2026-11-17: on the phone each Reference is a line of its own — SPX (yahoo) above
+  // SPX (ibkr), never two side by side where a wider phone or a short figure would have let them
+  for (const [name, w, h] of [["iPhone 13", 390, 664], ["narrow phone", 320, 568], ["landscape", 844, 390]] as const) {
+    it(`gives each Reference a line of its own, starting at the left edge — ${name}`, async () => {
+      await page.viewport(w, h);
+      await show();
+      const { items, lines } = stripLines();
+      expect(lines, "two References shared a line").toBe(items.length);
+      const lefts = new Set(items.map((i) => Math.round(i.getBoundingClientRect().left)));
+      expect(lefts.size, "each line starts where the strip does").toBe(1);
+    });
+  }
+
   it("sits below the freshness line and above the cards", async () => {
     await show();
     const strip = document.querySelector(".nx .references")!.getBoundingClientRect();
