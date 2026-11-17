@@ -118,6 +118,13 @@ function moneyWords(pnl: number, unit: PayoffUnit): string | null {
   return unit.hidden ? "$•••" : money(pnl * unit.size);
 }
 
+/** A maximum profit or loss under the chart: points per contract, the number alone — "+4.72", not
+ *  "+4.72 pts per contract · +$472" (the owner, 2026-11-17). The crosshair still says it in full. */
+export function extremeWords(pnl: number, unit: PayoffUnit): string {
+  const pts = pnl / unit.contracts;
+  return Math.abs(pts) < 0.005 ? "0.00" : signedPoints(pts);
+}
+
 /** A P&L in full: points per contract, then the money across the contracts held where there is a
  *  contract size — masked under privacy. */
 export function pnlWords(pnl: number, unit: PayoffUnit): string {

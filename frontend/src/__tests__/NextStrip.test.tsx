@@ -124,6 +124,30 @@ describe("the strip as drawn", () => {
     expect(legMarks(fig.querySelector("figcaption")!)).toEqual(["C7400 short CALL", "P6300 short PUT"]);
   });
 
+  it("draws each short strike's distance on the scale, from SPX's dot to the strike, and says it to a reader only below (2026-11-17)", () => {
+    const strip = stripOfHolding(holding("h-ic"))!;
+    render(<StrikeStrip strip={strip} />);
+    const fig = screen.getByRole("figure", { name: "strike strip" });
+    const gaps = [...fig.querySelectorAll<HTMLElement>(".nxs-gap")];
+    // the points over the σ, as a strike's label is its strike over its Δ
+    expect(gaps.map((g) => g.textContent)).toEqual(["499.50 pts1.25σ", "600.50 pts1.50σ"]);
+    // each spans SPX's dot to its own strike, on the strip's scale
+    const at = scaleOf(strip);
+    for (const [g, k] of gaps.map((g, i) => [g, strip.shorts[i]!] as const)) {
+      const [lo, hi] = [at(strip.spx!), at(k.strike)].sort((p, q) => p - q);
+      expect(g.style.left).toBe(`${lo!.toFixed(2)}%`);
+      expect(g.style.width).toBe(`${(hi! - lo!).toFixed(2)}%`);
+    }
+    // the line under the scale is a reader's, still saying every figure in words
+    for (const line of fig.querySelectorAll("[data-short-words]")) expect(line.className).toContain("sr-only");
+    expect(said(fig)).toContain("C7400 Δ 0.120 · 499.50 pts · 1.25σ away");
+  });
+
+  it("draws no distance on the scale without a derived price", () => {
+    render(<StrikeStrip strip={stripOfHolding(bare(holding("h-puts")))!} />);
+    expect(document.querySelector(".nxs-gap")).toBeNull();
+  });
+
   it("with no derived price, still draws the strikes and Δ, and shows a dash with its reason", () => {
     render(<StrikeStrip strip={stripOfHolding(bare(holding("h-puts")))!} />);
     expect(document.querySelector(".nxs-spx")).toBeNull();

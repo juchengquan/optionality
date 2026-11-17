@@ -93,7 +93,7 @@ export function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
  *  panel of the holding shares (#298), so a day is at the same x here as in the IV chart and SPX's
  *  path beneath. `cross` is the crosshair the three share (#395), and `closeDte` a closed
  *  holding's last day (#296). */
-export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, before = NONE, threshold = null, entryDay = null }: {
+export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, before = NONE, threshold = null, entryDay = null, entry = null }: {
   served: Samples; unit: Unit; axis: ReturnType<typeof valueAxis>; span: number;
   gutters: Gutters; closeDte: number | null; cross: Cross;
   /** the days, by market day, that are before entry: watched, not yet held (#402) */
@@ -102,6 +102,9 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
   threshold?: number | null;
   /** the day whose point is the entry day's WATCHED close (#402, `entry_close`), or null */
   entryDay?: string | null;
+  /** a holding's Entry, per contract: the cost to close it started from, drawn across the chart
+   *  (the owner, 2026-11-17). Null for a watched row, which has none */
+  entry?: number | null;
 }) {
   const [box, W] = useWidth();
   const { L, R } = gutters;
@@ -121,7 +124,7 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
   const xs = cross.stops.map((s) => x(s.dte));
   const { svg: hands, onKeyDown, onFocus } = usePanel(cross, "burndown", box, xs, W);
 
-  const level = (kind: "target" | "stop", v: number) => `${kind} ${say(v, unit)}`;
+  const level = (kind: "target" | "stop" | "entry", v: number) => `${kind} ${say(v, unit)}`;
   const stop = axis.stop;
   const target = levels?.target ?? null;
   // Manage-by is named on the bottom line between the window's two ends, and never over either:
@@ -202,6 +205,16 @@ export function Burndown({ served, unit, axis, span, gutters, closeDte, cross, b
                        belowAreaProps={{ className: "nx-bd-ahead" }}
                        aboveAreaProps={{ className: "nx-bd-behind" }} />
           ))}
+          {/* the Entry: where the cost to close started, the credit the target and stop are fractions
+              and multiples of. Labelled at the right, as they are, but UNDER its line: the days start
+              at the left near the Entry, where a label would sit on them, and the Stop — twice the
+              Entry, often off the scale and marked at its top edge — is labelled above its own */}
+          {entry === null ? null : (
+            <g data-level="entry" className="nx-hist-entry">
+              <line x1={L} x2={W - R} y1={y(entry)} y2={y(entry)} />
+              <text x={W - R} y={y(entry) + 12} textAnchor="end">{level("entry", entry)}</text>
+            </g>
+          )}
           {target === null ? null : (
             <g data-level="target" className="nx-hist-target">
               <line x1={L} x2={W - R} y1={y(target)} y2={y(target)} />

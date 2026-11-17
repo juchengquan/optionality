@@ -71,8 +71,8 @@ describe("a holding's payoff, in the desk's inspector", () => {
     expect(within(payoff).getByRole("group", { name: /payoff at expiry by SPX price/ })).toBeTruthy();
     expect(payoff.querySelector("[data-curve]")?.getAttribute("d")).toMatch(/^M/);
     // points per contract, and money across its two contracts at the contract size served (100)
-    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · +$1,000");
-    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("−45.00 pts per contract · −$9,000");
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00");
+    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("−45.00");
     expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295.00 · 7405.00");
     expect(payoff.querySelectorAll("[data-breakeven]")).toHaveLength(2);
   });
@@ -101,8 +101,8 @@ describe("a holding's payoff, in the desk's inspector", () => {
     expect(text).not.toMatch(/\$\d/);
     // points PER CONTRACT say no count; across the contracts held, times 100 they would be the money
     expect(text).not.toMatch(/\b10\.00 pts|-90\.00 pts/);
-    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · $•••");
-    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("−45.00 pts per contract · $•••");
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00");
+    expect(within(payoff).getByText("max loss").nextElementSibling?.textContent).toBe("−45.00");
     expect(within(payoff).getByText("breakevens").nextElementSibling?.textContent).toBe("6295.00 · 7405.00");
     expect(payoff.querySelector("[data-marker='spx']")?.textContent).toBe("SPX 6900.50");
   });
@@ -146,7 +146,7 @@ describe("a watched spread's payoff", () => {
     ]);
     expect(within(payoff).getByText("no Entry: drawn at its current value, 2.40, as the credit")).toBeTruthy();
     // one spread nobody holds, so points rather than money
-    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+2.40 pts per contract");
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+2.40");
     expect(payoff.querySelector("[data-marker='spx']")?.textContent).toBe("SPX 6900.50");
   });
 
@@ -378,7 +378,7 @@ describe("the crosshair readout (#396)", () => {
     expect(said(payoff)).toBe("at expiry with SPX at 6900.50, at SPX now: +5.00 pts per contract · $•••");
     expect(tip(payoff)).toContain("+5.00 pts per contract");
     expect(payoff.textContent).not.toMatch(/\$\d/);
-    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · $•••");
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00");
   });
 
   it("chooses a price by a tap, and lets go of it on a second", async () => {
@@ -448,9 +448,11 @@ describe("the crosshair readout (#396)", () => {
     expect(payoff.querySelector(".nx-payoff-max[data-kind='profit'] line")).toBeTruthy();
     expect(payoff.querySelector(".nx-payoff-max[data-kind='loss'] line")).toBeTruthy();
     expect(payoff.querySelector(".nx-payoff-max text")).toBeNull();
-    expect(payoff.textContent!.match(/\+\$1,000/g)).toHaveLength(1);
-    expect(payoff.textContent!.match(/−\$9,000/g)).toHaveLength(1);
-    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00 pts per contract · +$1,000");
+    // in points alone, once each (the owner, 2026-11-17): no money beside them
+    expect(payoff.textContent!.match(/\+5\.00/g)).toHaveLength(1);
+    expect(payoff.textContent!.match(/−45\.00/g)).toHaveLength(1);
+    expect(payoff.textContent).not.toMatch(/\$1,000|\$9,000/);
+    expect(within(payoff).getByText("max profit").nextElementSibling?.textContent).toBe("+5.00");
   });
 
   it("names each strike's legs, coloured by type", async () => {

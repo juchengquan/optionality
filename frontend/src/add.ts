@@ -218,12 +218,15 @@ export function flipSide(d: AddDraft, key: string, index: number): AddDraft {
   return l ? setLeg(d, key, index, { side: l.side === "short" ? "long" : "short" }) : d;
 }
 
-/** `1218_+P7100_-P7150`: the expiry's month and day, then EVERY leg in strike order — a put before
+/** `20261218_+P7100_-P7150`: the expiry as YYYYMMDD (the page's one date format, #424 — it was the
+ *  month and day, `1218_`, until 2026-11-17), then EVERY leg in strike order — a put before
  *  a call on one strike — each with its side as a sign and its quantity where it is not 1:
- *  `1218_+C7300_-2C7350_+C7400` for a call butterfly. One contract is named as it always was,
- *  `1218_P7150`, its side being the holding's; and a two-leg spread of one each EXACTLY as #293
- *  named it, `1218_P7150_P7100` — type and strike in the order typed, no sign — so the watch rules
- *  saved under that name are still replaced when the spread is held. The old format never carries a
+ *  `20261218_+C7300_-2C7350_+C7400` for a call butterfly. One contract is named as it always was
+ *  but for the date, `20261218_P7150`, its side being the holding's; and a two-leg spread of one
+ *  each in #293's shape, `20261218_P7150_P7100` — type and strike in the order typed, no sign — so
+ *  a watch rule saved under its derived name is replaced when the spread is held. A rule saved under
+ *  the OLD date (`1218_P7150_P7100`) no longer matches; the live book held none when the date
+ *  changed (checked 2026-11-17: its three combos all carry names the owner typed). The old format never carries a
  *  sign and the new one carries one on every leg, so the two cannot collide.
  *
  *  UNIQUE per structure, whatever order its legs were typed in (#351). The name is the value rule's
@@ -237,7 +240,7 @@ export function derivedName(
   expiry: string,
   legs: (Pick<LegDraft, "option_type" | "strike"> & { side?: Side; qty?: string })[],
 ): string {
-  const day = expiry.length >= 10 ? `${expiry.slice(5, 7)}${expiry.slice(8, 10)}` : "spread";
+  const day = expiry.length >= 10 ? `${expiry.slice(0, 4)}${expiry.slice(5, 7)}${expiry.slice(8, 10)}` : "spread";
   const number = (text: string) => {
     const n = typed(text);
     return n === null ? text.trim() : String(n);

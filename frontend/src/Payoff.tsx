@@ -50,7 +50,7 @@ import { SvgLegSpan } from "./shared/Legs";
 import { fieldWords } from "./needs";
 import { textWidth, tipPlace } from "./burndown";
 import {
-  labelRows, level, payoffWindow, pnlAt, pnlWords, priceStops, readout, snapPrice, stepPrice,
+  extremeWords, labelRows, level, payoffWindow, pnlAt, priceStops, readout, snapPrice, stepPrice,
   type PayoffUnit,
 } from "./payoffChart";
 import { newYorkWeekdayWhen } from "./session";
@@ -240,8 +240,8 @@ function PayoffFigure({ state, unit, legs, spx, spxReason, spxSaid = false, blan
               // a price that is not current says so (#416): the marker is the last close's level
               : spxReason ? <p className="nx-meta nx-payoff-spx" data-stale="">{`SPX ${spxText(spx)} (${spxReason})`}</p> : null}
             <dl className="nx-payoff-kv">
-              <div><dt>max profit</dt><dd>{state.payoff.max_profit === null ? "no ceiling" : pnlWords(state.payoff.max_profit, unit)}</dd></div>
-              <div><dt>max loss</dt><dd>{state.payoff.max_loss === null ? "no floor" : pnlWords(state.payoff.max_loss, unit)}</dd></div>
+              <div><dt>max profit</dt><dd>{state.payoff.max_profit === null ? "no ceiling" : extremeWords(state.payoff.max_profit, unit)}</dd></div>
+              <div><dt>max loss</dt><dd>{state.payoff.max_loss === null ? "no floor" : extremeWords(state.payoff.max_loss, unit)}</dd></div>
               <div><dt>breakevens</dt><dd>{state.payoff.breakevens.length === 0 ? "none" : state.payoff.breakevens.map(level).join(" · ")}</dd></div>
             </dl>
           </>

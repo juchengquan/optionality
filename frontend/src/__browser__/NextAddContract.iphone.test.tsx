@@ -80,7 +80,7 @@ describe("a single-contract Monitor on the phone", () => {
         body: {
           strike_date: "2026-12-18",
           spreads: [{
-            name: "1218_P7150", held: false, legs: [{ side: "short", option_type: "PUT", strike: 7150 }],
+            name: "20261218_P7150", held: false, legs: [{ side: "short", option_type: "PUT", strike: 7150 }],
             monitors: [{ option_type: "PUT", strike: 7150, field, threshold: 0.15, direction: "above", compare: "abs" }],
           }],
         },
@@ -129,7 +129,7 @@ describe("a lone contract held, on the phone", () => {
     expect((writes[0]!.body as { spreads: object[] }).spreads[0])
       .toMatchObject({ held: true, entry: -5.2, legs: [{ side: "long", option_type: "PUT", strike: 7150 }] });
     // the book read again: the holding is a card of it, by the name the form gave it
-    const name = await screen.findByText("1218_P7150");
+    const name = await screen.findByText("20261218_P7150");
     expect(name.closest(".nx-main")).not.toBeNull();
   });
 });

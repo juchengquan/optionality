@@ -77,6 +77,16 @@ function labelFaults(svg: SVGSVGElement): string[] {
       out.push(`${what} cut`);
     }
   }
+  // the Entry's label (2026-11-17) sits across the plot, where a day's point could be under it
+  const entry = svg.querySelector("[data-level='entry'] text")?.getBoundingClientRect();
+  if (entry) {
+    for (const c of svg.querySelectorAll("[data-sample] circle")) {
+      const p = c.getBoundingClientRect();
+      if (entry.left < p.right && p.left < entry.right && entry.top < p.bottom && p.top < entry.bottom) {
+        out.push(`the Entry's label over the day ${c.closest<SVGElement>("[data-sample]")!.dataset.sample}`);
+      }
+    }
+  }
   labels.forEach(([a, r], i) => labels.slice(i + 1).forEach(([b, q]) => {
     const over = r.left < q.right - 1 && q.left < r.right - 1 && r.top < q.bottom - 1 && q.top < r.bottom - 1;
     if (over) out.push(`${a} / ${b}`);

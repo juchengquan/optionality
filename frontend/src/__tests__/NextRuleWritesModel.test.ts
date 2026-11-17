@@ -200,10 +200,10 @@ describe("Record as held (#408)", () => {
 
   describe("a watched contract", () => {
     it("opens as held, short, with its contract, its derived name and the watch rule as saved", () => {
-      expect(contractFromWatch(ruleOfEntry(LONE), TODAY, ["1231_C8000"])).toEqual({
+      expect(contractFromWatch(ruleOfEntry(LONE), TODAY, ["20261231_C8000"])).toEqual({
         held: true, rule: true, expiry: "2026-12-31", opened: TODAY, option_type: "CALL", strike: "8000",
         field: "option_delta", direction: "above", compare: "abs", threshold: "0.1", side: "short",
-        entry: "", contracts: "1", name: "1231_C8000-2",
+        entry: "", contracts: "1", name: "20261231_C8000-2",
       });
       expect(contractFromWatch(ruleOfEntry(SPREAD), TODAY, [])).toBeNull();
     });
@@ -225,7 +225,7 @@ describe("Record as held (#408)", () => {
         body: {
           strike_date: "2026-12-31",
           spreads: [{
-            name: "1231_C8000", held: true, legs: [{ side: "long", option_type: "CALL", strike: 8000 }],
+            name: "20261231_C8000", held: true, legs: [{ side: "long", option_type: "CALL", strike: 8000 }],
             entry: -5.2, contracts: 2, opened_at: TODAY,
             monitors: [{ option_type: "CALL", strike: 8000, field: "option_delta", threshold: 0.1,
               direction: "above", compare: "abs" }],
