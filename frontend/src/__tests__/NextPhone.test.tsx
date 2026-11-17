@@ -43,7 +43,7 @@ describe("the cards, on the owner's book", () => {
     draw();
     const expected = book.book.flatMap((g) => [
       ...g.held.flat().flatMap(({ holding, rules }) => [holding.id, ...rules.map((r) => r.id)]),
-      ...[...g.spreads, ...g.contracts].flatMap(({ entry, under }) => [entry.id, ...under.map((u) => u.id)]),
+      ...[...g.spreads, ...g.contracts].map(({ entry }) => entry.id),
     ]);
     expect(refs(region("Book"))).toEqual(expected);
     expect(expected).toEqual([

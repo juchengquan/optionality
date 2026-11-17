@@ -135,10 +135,8 @@ function CostAndPace({ holding }: { holding: Holding }) {
  *  row's value is its last in-session price and when, #400), its rule's sentence with its arrowed
  *  distance and the rules that sit under it. What a spread that partly overlaps a holding shares (#346)
  *  is said in its sheet, not on its card (the owner, 2026-11-17). */
-export function RuleCard({ entry, under, overlap = null, elsewhere, onOpen, spxSaid = false }: {
-  entry: Entry; under: Entry[]; overlap?: string | null; onOpen: () => void;
-  /** leg rules drawn under an earlier spread: a note each, no line (2026-11-17) */
-  elsewhere?: Elsewhere[];
+export function RuleCard({ entry, overlap = null, onOpen, spxSaid = false }: {
+  entry: Entry; overlap?: string | null; onOpen: () => void;
   /** as `HoldingCard`'s */
   spxSaid?: boolean;
 }) {
@@ -159,9 +157,6 @@ export function RuleCard({ entry, under, overlap = null, elsewhere, onOpen, spxS
       <p className="nxp-sentence"><RuleWords entry={entry} /></p>
       {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} reasonSaid={spxSaid} /> : null}
-      {drawnUnder(under, elsewhere).length > 0
-        ? <ul className="nxp-rules">{drawnUnder(under, elsewhere).map((r) => <RuleLine key={r.id} entry={r} within={entryName(entry)} />)}</ul> : null}
-      <AlsoNotes elsewhere={elsewhere} />
     </article>
   );
 }

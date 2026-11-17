@@ -20,7 +20,7 @@ import { ruleOfEntry } from "../edit";
 
 export type Subject =
   | { kind: "holding"; holding: Holding; rules: Entry[] }
-  | { kind: "rule"; entry: Entry; under: Entry[]; overlap?: string | null };
+  | { kind: "rule"; entry: Entry; overlap?: string | null };
 
 export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entryStyle, writes, session, stale = false }: {
   /** what is open, from the figures as they are NOW, or null for nothing */
@@ -70,7 +70,7 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
             {shown.kind === "holding" ? (
               <HoldingDetail title={title} holding={shown.holding} rules={shown.rules} quotes={quotes} monitors={monitors}
                              privacy={privacy} session={session && !stale} writes={writes} stale={stale} />
-            ) : <RuleDetail title={title} entry={shown.entry} under={shown.under} overlap={shown.overlap ?? null}
+            ) : <RuleDetail title={title} entry={shown.entry} overlap={shown.overlap ?? null}
                             session={session} />}
           </DetailBoundary>
         ) : null}
@@ -105,9 +105,9 @@ function HoldingDetail({ title, holding, rules, quotes, monitors, privacy, sessi
   );
 }
 
-function RuleDetail({ title, entry, under, overlap = null, session }: {
+function RuleDetail({ title, entry, overlap = null, session }: {
   title: RefObject<HTMLHeadingElement | null>;
-  entry: Entry; under: Entry[]; overlap?: string | null; session: boolean;
+  entry: Entry; overlap?: string | null; session: boolean;
 }) {
   return (
     <>
@@ -116,7 +116,7 @@ function RuleDetail({ title, entry, under, overlap = null, session }: {
         <SheetDescription>{ruleMeta(entry)}</SheetDescription>
       </SheetHeader>
       <div className="nxp-sheet-body">
-        <RuleSections surface="phone" entry={entry} under={under} overlap={overlap} session={session}
+        <RuleSections surface="phone" entry={entry} overlap={overlap} session={session}
                       ruleLine={(r, own) => <EditableLine key={r.id} entry={r} own={own} within={entryName(entry)} />} />
       </div>
     </>

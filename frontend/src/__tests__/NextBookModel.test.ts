@@ -53,14 +53,13 @@ describe("the watchlist", () => {
 
   it("follows, by expiry, with only rules on nothing held", () => {
     expect(book.watchlist.map((g) => g.expiry)).toEqual(["2026-12-04", "2026-12-18", "2026-12-31"]);
-    const all = book.watchlist.flatMap((g) => g.items.flatMap((i) => [i.entry, ...i.under]));
+    const all = book.watchlist.flatMap((g) => g.items.map((i) => i.entry));
     expect(all.every((e) => !e.held)).toBe(true);
   });
 
   it("draws a short leg's delta rule as a row of its own, not under its spread (2026-11-17)", () => {
     const dec18 = book.watchlist[1]!;
     expect(dec18.items.map((i) => i.entry.id)).toEqual(["w-dec18", "w-dec18-delta"]);
-    expect(dec18.items.every((i) => i.under.length === 0)).toBe(true);
   });
 
   it("lets a rule that matches no spread stand alone", () => {
@@ -109,8 +108,7 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     expect(note("r-ratio")).toBe("contains 1231_7200's C7200 and C7250");
   });
 
-  it("carries no leg rule under a moved combo: a leg's rule is a contract row (2026-11-17)", () => {
-    expect(items().find((i) => i.entry.id === "r-8100")!.under).toEqual([]);
+  it("leaves a moved combo's leg rule a watched row of its own (2026-11-17)", () => {
     expect(items().map((i) => i.entry.id)).toContain("w-8150-delta");
   });
 

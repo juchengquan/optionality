@@ -130,7 +130,6 @@ export function tableRows(placed: BookModel): DeskRow[] {
     }
     for (const i of [...g.spreads, ...g.contracts]) {
       out.push({ kind: "rule", entry: i.entry, nested: false, overlap: i.overlap });
-      for (const entry of drawnUnder(i.under, i.elsewhere)) out.push({ kind: "rule", entry, nested: true });
     }
   }
   for (const entry of placed.unplaced) out.push({ kind: "rule", entry, nested: false });
