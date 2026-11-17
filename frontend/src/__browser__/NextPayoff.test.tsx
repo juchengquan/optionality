@@ -172,7 +172,7 @@ describe("a maximum outside the window", () => {
         // the arrow alone: its figure is the list's, said once (part L)
         expect(label.textContent).toBe(kind === "loss" ? "▼" : "▲");
         expect(within(payoff).getByText(`max ${kind}`).nextElementSibling!.textContent)
-          .toBe(kind === "loss" ? "\u22126470.00 pts per contract" : "+6470.00 pts per contract");
+          .toBe(kind === "loss" ? "\u22126470.00" : "+6470.00");
         expect(payoff.querySelector("[data-marker='spx']")).toBeTruthy();
         expect(chartFaults(payoff).join(" | ")).toBe("");
       });
