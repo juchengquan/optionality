@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
-import { lastPriceWords, withLastKnown } from "../lastknown";
+import { lastPriceWords, valueCell, withLastKnown } from "../lastknown";
 import { PhoneBook } from "../phone/PhoneBook";
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { plainView, toMarkdown } from "../snapshot/plain";
@@ -224,6 +224,16 @@ describe("a last price's time", () => {
   });
 });
 
+describe("which the value cell says, by the hour (2026-11-17)", () => {
+  it("is the live price in the session, the live price or the last reading at every other hour, and the last one read while /quotes fails", () => {
+    expect(valueCell("regular", false)).toBe("live");
+    // the Curb, GTH, and the hours nothing trades — the 09:25–09:30 gap and a weekend — alike: a
+    // bid 0 / ask 0 is no price, so a row with none says its last one
+    for (const phase of ["curb", "overnight", "closed"] as const) expect(valueCell(phase, false)).toBe("live-or-close");
+    for (const phase of ["regular", "curb", "overnight", "closed"] as const) expect(valueCell(phase, true)).toBe("close");
+  });
+});
+
 describe("the last close the service stored (#402)", () => {
   const close = { price: -3.85, observed_on: "2026-11-13", observed_at: FRIDAY_CLOSE, timing: "close" as const };
   const priceRule = entry("w-p", { code: "1218_P7150", strike_date: "2026-12-18", legs: put(7150, 7100),
@@ -240,6 +250,16 @@ describe("the last close the service stored (#402)", () => {
   it("gives a spread watched only on its delta a price out of the session", () => {
     const [d] = withLastKnown([deltaRule], [], "close");
     expect(lastPriceWords(d!.last_price!)).toBe("−3.85 (Fri 16:14 ET)");
+  });
+
+  it("gives way to a newer reading from the Curb or overnight (2026-11-17)", () => {
+    // read at 16:50 New York on Friday, in the Curb, after the close the service stored
+    const m = monitor("w-p", { last_value: -3.6, last_checked_at: "2026-11-14 05:50:00+08:00" });
+    const [p] = withLastKnown([priceRule], [m], "live-or-close");
+    expect(lastPriceWords(p!.last_price!)).toBe("−3.60 (Fri 16:50 ET)");
+    // and a reading older than the close is not newer: the close stands
+    const older = monitor("w-p", { last_value: -3.6, last_checked_at: "2026-11-13 22:24:00+08:00" });
+    expect(lastPriceWords(withLastKnown([priceRule], [older], "live-or-close")[0]!.last_price!)).toBe("−3.85 (Fri 16:14 ET)");
   });
 
   it("changes nothing in the session", () => {
