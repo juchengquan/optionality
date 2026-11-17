@@ -90,7 +90,7 @@ export function needsYou(
   if (health?.monitor.alarms.bad) {
     out.push({ kind: "fault", text: `alarms ${health.monitor.alarms.label}` });
   }
-  // A combo the book draws in the watchlist because it only partly overlaps a holding (#346) does
+  // A combo the book draws in Spreads because it only partly overlaps a holding (#346) does
   // not speak for that holding's Levels: the holding is drawn on its own, and says them itself.
   // Without the holdings nothing is compared, and the rule speaks as before.
   const apart = new Set(placedBy === null ? []
@@ -174,7 +174,7 @@ const PLACES: Record<string, number> = { option_delta: 3, option_gamma: 4 };
  *  negative one, since a combo's value is minus what closing it costs (ADR 0013). That is how the
  *  add form posts a held credit's stop (review of #343), and it is said that way rather than as a
  *  negative value. */
-export function isCostToClose(
+function isCostToClose(
   field: string, combo: boolean, compare: string, direction: string, threshold: number,
 ): boolean {
   return combo && field === "mid_price" && compare === "signed" && direction === "below" && threshold < 0;

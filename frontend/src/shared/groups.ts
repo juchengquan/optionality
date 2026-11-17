@@ -47,11 +47,6 @@ export function reasonWhy(reason: string | null | undefined): string {
   return byReason.get(reason ?? null)?.why ?? String(reason);
 }
 
-/** Whether a reason is a Quarantine. */
-export function isQuarantine(reason: string | null | undefined): boolean {
-  return byReason.get(reason ?? null)?.quarantine ?? false;
-}
-
 /** A label as a heading: its first letter a capital, the rest as written (part H). */
 export const headingOf = (label: string): string => label.charAt(0).toUpperCase() + label.slice(1);
 

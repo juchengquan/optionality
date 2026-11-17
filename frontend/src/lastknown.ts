@@ -24,7 +24,7 @@ import type { Entry, LastClose, Monitor } from "./shared/api";
 import { DASH } from "./shared/format";
 import { inSession, newYorkWeekdayWhen, servedInstant } from "./session";
 
-export interface LastKnown {
+interface LastKnown {
   value: number;
   /** when the sweep read it, as the service served it (DISPLAY_TZ, with its offset) */
   at: string;
@@ -51,7 +51,7 @@ export function withCloses(quotes: readonly Entry[], closes: readonly { id: stri
 /** What a watchlist row's value cell says (#400, #416): the live price in the regular session; in
  *  the Curb and GTH the live price where the poll quotes one, and the last close where it does not;
  *  and while nothing trades — or while `/quotes` is failing — the last close. */
-export type ValueCell = "live" | "live-or-close" | "close";
+type ValueCell = "live" | "live-or-close" | "close";
 
 /** The watchlist's rows with each one's last known figure beside it (`lastKnown`), and the price
  *  its value cell says (#400): `price`, at every hour, and `last_price` wherever the cell says the
@@ -72,7 +72,7 @@ export function withLastKnown(quotes: readonly Entry[], monitors: readonly Monit
 /** The contracts a rule names, as a key two rules on one contract or one spread share: a contract
  *  by its code, a spread by its expiry and its legs, each with its sign and quantity — a price rule
  *  entered under the other leg convention would be the same spread's price negated. */
-export function contractsKey(e: Pick<Entry, "code" | "strike_date" | "legs">): string {
+function contractsKey(e: Pick<Entry, "code" | "strike_date" | "legs">): string {
   if (!e.legs || e.legs.length === 0) return e.code;
   const legs = e.legs.map((l) => `${l.sign}${l.option_type}${l.strike}x${(l as { qty?: number }).qty ?? 1}`).sort();
   return `${e.strike_date} ${legs.join(" ")}`;
@@ -81,7 +81,7 @@ export function contractsKey(e: Pick<Entry, "code" | "strike_date" | "legs">): s
 /** A row's own price, from nothing but itself: a contract's mid; a spread's served value where its
  *  rule watches the value (`combo_value` is the rule's OWN field summed, so a delta rule's is its
  *  delta, which is never a price); and null otherwise. */
-export function ownPrice(e: Entry): number | null {
+function ownPrice(e: Entry): number | null {
   if (!e.legs || e.legs.length === 0) {
     const v = (e.quote as Record<string, unknown> | null)?.mid_price;
     return typeof v === "number" ? v : null;

@@ -30,7 +30,7 @@ export interface Stop {
 }
 
 /** What the panels read of a holding for today's valuation: only while it is held and valued. */
-export type Valued = Pick<Holding, "closed_on">
+type Valued = Pick<Holding, "closed_on">
   & Partial<Pick<Holding, "dte" | "cost_to_close" | "valued_from">>;
 
 /** Today's valuation's DTE, while it is held and valued live with a Cost to close: the burndown's
@@ -55,10 +55,10 @@ export function stopsOf(samples: Sample[], now: number | null): Stop[] {
 
 /** "20261103": a market date as every date is written (`times.writtenDate`), by string, so no zone
  *  can move it — the way the service writes the days in its reasons. */
-export const dayWords = writtenDate;
+const dayWords = writtenDate;
 
 /** A stop's heading, as the burndown's tooltip says a day: "20261109 · 39 DTE", "valued now · 38 DTE". */
-export const stopDay = (stop: Stop) =>
+const stopDay = (stop: Stop) =>
   stop.on === null ? `valued now · ${stop.dte} DTE` : `${dayWords(stop.on)} · ${stop.dte} DTE`;
 
 /** A leg as the IV panel names it: its contract code, how it is written, and whether it is short. */

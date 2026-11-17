@@ -30,7 +30,7 @@ export function pnlAt(p: Payoff, s: number): number {
 export const level = (x: number) => spx(x);
 
 /** The SPX window drawn, and the step the crosshair moves by. */
-export interface PriceWindow {
+interface PriceWindow {
   d0: number;
   d1: number;
   step: number;

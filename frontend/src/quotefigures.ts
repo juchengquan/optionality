@@ -81,7 +81,7 @@ export function wholeMissing(entry: Entry): string | null {
  *    the holding's own value is — then Δ Γ Θ ν, and the signed value after them as detail.
  *
  *  `held` is where the row is drawn: a rule under a holding, or one on held contracts no holding
- *  owns — never a spread drawn in the watchlist because it only partly overlaps one (#346). */
+ *  owns — never a spread drawn in Spreads because it only partly overlaps one (#346). */
 export function ruleFigures(entry: Entry, held = entry.held): RuleFigure[] {
   // out of the session a watchlist row's value is its last in-session price and when, as its table
   // row and its card say it (#400; review of #420): the detail says the same, quote or none

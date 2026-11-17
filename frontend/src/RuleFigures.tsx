@@ -7,8 +7,8 @@ import "./rulefigures.css";
 
 export function RuleFigures({ entry, className, held = entry.held }: {
   entry: Entry; className: string;
-  /** whether the row is drawn as something held (`ruleFigures`): not a spread drawn in the
-   *  watchlist because it only partly overlaps a holding (#346) */
+  /** whether the row is drawn as something held (`ruleFigures`): not a spread drawn in
+   *  Spreads because it only partly overlaps a holding (#346) */
   held?: boolean;
 }) {
   // no quote at all: one reason, rather than ten dashes each repeating it

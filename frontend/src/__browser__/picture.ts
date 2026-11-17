@@ -72,15 +72,6 @@ export async function decode(file: File): Promise<Pixels> {
 /** The tree being photographed, while it is up. */
 export const still = () => document.querySelector<HTMLElement>(".nx-still-stage .nx-still");
 
-/** Where an element of the picture lands in the image: its centre, or a point `dx` in from its
- *  left edge, in the image's own pixels. Read from the tree as it is laid out on the stage. */
-export function placeIn(root: HTMLElement, el: Element, ratio: number, dx?: number): [number, number] {
-  const box = root.getBoundingClientRect();
-  const r = el.getBoundingClientRect();
-  const x = dx === undefined ? r.left + r.width / 2 : r.left + dx;
-  return [(x - box.left) * ratio, (r.top + r.height / 2 - box.top) * ratio];
-}
-
 /** Every control a picture must not carry: nothing in a still image can be pressed. */
 export const CONTROLS = "button, input, select, textarea, a[href], summary, details, [role=button], "
   + "[role=dialog], [tabindex], .nxd-inspector, [data-slot=sheet-content]";

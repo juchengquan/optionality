@@ -155,7 +155,7 @@ export function newDraft(today: string): AddDraft {
 
 /** A watched spread's rule as `/monitors` serves it: its name, its expiry and its legs, each SIGNED —
  *  minus is short (ADR 0013) — with its quantity where it is not 1 (#351). */
-export interface WatchedCombo {
+interface WatchedCombo {
   code: string;
   strike_date: string;
   legs: readonly { sign: number; option_type: string; strike: number; qty?: number }[];

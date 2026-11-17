@@ -32,7 +32,7 @@ import { RawDetails } from "./shared/ErrorWords";
 import { rawReason } from "./shared/errors";
 import { HOLDING_SECTIONS, RULE_SECTIONS, SECTION_HEADINGS, type HoldingSection, type RuleSection } from "./sections";
 
-export type Surface = "desk" | "phone";
+type Surface = "desk" | "phone";
 
 /** The class names each surface draws its parts in, so each looks like the rest of it. */
 const CLASSES: Record<Surface, { facts: string; meta: string; heading: string; hero: string; heroSub: string; rules: string }> = {
@@ -52,7 +52,7 @@ export function ruleMeta(e: Pick<Entry, "strike_date" | "dte">): string {
 }
 
 /** A structure's legs in words, short first, `short 2× CALL 8150`, each type in its colour (#391). */
-export function LegList({ legs }: { legs: WrittenLeg[] }) {
+function LegList({ legs }: { legs: WrittenLeg[] }) {
   return (
     <ul className="nx-leglist" aria-label="legs">
       {shortFirst(legs).map((l, i) => <li key={`${i}:${l.option_type}${l.strike}`}><Leg leg={l} form="words" /></li>)}

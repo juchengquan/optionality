@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { clockTime, contractName, heldLeg, legText, marketDay, shortFirst, shortStamp, signedLeg } from "../shared/format";
+import { contractName, heldLeg, legText, marketDay, shortFirst, shortStamp, signedLeg } from "../shared/format";
 
 describe("legs, short as the true minus (#351, 2026-11-16)", () => {
   it("writes a quantity between the sign and the contract, and a quantity of one not at all", () => {
@@ -95,22 +95,6 @@ describe("the trading day", () => {
   it("rolls when New York's does, not when Singapore's does", () => {
     // 21:00 SGT on the 20th is 09:00 in New York, half an hour before the open
     expect(marketDay(new Date("2026-10-20T13:00:00Z"))).toBe("2026-10-20");
-  });
-});
-
-/** The one clock the SERVICE does not format: "screen updated …". It was `toLocaleTimeString()`
- *  and read `晚上9:39:53` in the owner's Chinese browser, beside the service's 24-hour ISO. */
-describe("the screen's own clock", () => {
-  it("is 24-hour and digits only, whatever locale the device is in", () => {
-    // written in +08 and read in the pinned UTC: 13, not "1:39:05 PM"
-    const time = clockTime(new Date("2026-10-21T21:39:05+08:00"));
-    expect(time).toBe("13:39:05");
-    expect(time, "a language chose part of this line").not.toMatch(/[AP]M|[　-鿿]/);
-  });
-
-  it("pads every field, so the line does not jitter as the seconds tick", () => {
-    // 09:08:07 in +08 is 01:08:07 here, which pads the hour as well as the minute and the second
-    expect(clockTime(new Date("2026-10-21T09:08:07+08:00"))).toBe("01:08:07");
   });
 });
 

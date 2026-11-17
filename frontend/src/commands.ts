@@ -9,7 +9,7 @@
  *    threshold or a P&L is the table's to say, live, not a list's to freeze at the moment it opened.
  */
 import type { Monitor } from "./shared/api";
-import { heldLeg, legText, shortFirst, signedLeg, type WrittenLeg } from "./shared/format";
+import { heldLeg, signedLeg, type WrittenLeg } from "./shared/format";
 import { writtenDate } from "./shared/times";
 import type { ArrangementChoice } from "./shared/prefs";
 import { rowName, tableRows, type DeskRow } from "./desk/columns";
@@ -28,9 +28,8 @@ export interface Findable {
   ref: string;
   kind: FindKind;
   name: string;
-  /** what it is, its expiry and its strikes, in words */
-  detail: string;
-  /** the same, in its parts: the legs apart, so the palette draws each type in its colour (#391) */
+  /** what it is, its expiry and its strikes, in its parts: the legs apart, so the palette draws
+   *  each type in its colour (#391) */
   parts: { before: string; legs: WrittenLeg[]; after: string };
   /** the words typed text is matched against, lower case (`tokens`) */
   words: string[];
@@ -38,10 +37,6 @@ export interface Findable {
 
 /** A leg; `short` unset for the one contract a rule watches, which is not a position. */
 type Leg = WrittenLeg;
-
-/** `−2P7150 +P7100`: legs as the table writes them, short first and as the true minus, and a quantity
- *  where it is not 1 (#351); `P7150` for a rule's contract. */
-const legWords = (legs: Leg[]) => shortFirst(legs).map((l) => legText(l, "signs")).join(" ");
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
@@ -85,15 +80,14 @@ function findable(
   ref: string, kind: FindKind, name: string, date: string, legs: Leg[], storedField: string | null, combo = false,
 ): Findable {
   const field = storedField === null ? null : fieldWords(storedField);
-  // the legs apart, for the palette to draw; the detail is the same parts as one text
+  // the legs apart, for the palette to draw
   const before = [kind, writtenDate(date)].filter(Boolean).join(" · ");
   const parts = { before: legs.length > 0 ? `${before} · ` : before, legs, after: field ? ` · ${field}` : "" };
-  const detail = `${parts.before}${legWords(legs)}${parts.after}`;
   const words = [name, ...tokens(name), ...tokens(kind), ...(kind.endsWith("rule") ? RULE_SYNONYMS : []), ...dateWords(date), ...strikeWords(legs),
     ...tokens(storedField === null ? "" : SPOKEN[storedField] ?? storedField),
     ...(storedField !== null && combo ? ["spread"] : [])]
     .map((w) => w.toLowerCase()).filter(Boolean);
-  return { ref, kind, name, detail, parts, words: [...new Set(words)] };
+  return { ref, kind, name, parts, words: [...new Set(words)] };
 }
 
 function ofRow(row: DeskRow): Findable {
@@ -102,7 +96,7 @@ function ofRow(row: DeskRow): Findable {
     const legs = h.legs.map(heldLeg);
     const found = findable(h.id, "holding", h.name, h.strike_date, legs, null);
     // its own rule is drawn on its row (2026-11-17), so what that rule watches finds the holding
-    // too; its detail stays the holding's
+    // too; its parts stay the holding's
     const own = ownRule(h, row.rules);
     if (!own) return found;
     // and as a rule: "7300 monitor" lands on the row that draws it

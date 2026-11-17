@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { changeText } from "../shared/readings";
 import {
-  delta, figureOf, fixed, gamma, iv, money, moneyPlain, percent, points, signedPoints, spx, theta, tick, trueMinus, vega,
+  delta, figureOf, fixed, iv, money, moneyPlain, percent, points, signedPoints, spx, tick, trueMinus, vega,
 } from "../shared/numbers";
 
 describe("the true minus", () => {
@@ -36,8 +36,7 @@ describe("fixed places", () => {
   it("by what the figure is: points 2, Δ 3, Γ 4, Θ and ν 2, IV 2 and a percent", () => {
     expect(points(3)).toBe("3.00");
     expect(delta(0.2)).toBe("0.200");
-    expect(gamma(0.00021)).toBe("0.0002");
-    expect(theta(-1.349)).toBe("−1.35");
+    expect(figureOf("option_theta", -1.349)).toBe("−1.35");
     expect(vega(3.384)).toBe("3.38");
     expect(iv(27.171)).toBe("27.17%");
     expect(figureOf("option_gamma", 0.00021)).toBe("0.0002");
@@ -46,15 +45,15 @@ describe("fixed places", () => {
   });
 
   it("says a served non-zero that rounds away as a bound, never as zero", () => {
-    expect(gamma(0.00004)).toBe("<0.0001");
-    expect(gamma(-0.00004)).toBe(">−0.0001");
+    expect(figureOf("option_gamma", 0.00004)).toBe("<0.0001");
+    expect(figureOf("option_gamma", -0.00004)).toBe(">−0.0001");
     expect(fixed(-0.001, 2)).toBe(">−0.01");
     expect(fixed(0, 2)).toBe("0.00");
     expect(fixed(-0, 2)).toBe("0.00");
   });
 
   it("dashes a figure that is not there, and never 0", () => {
-    for (const f of [points, delta, gamma, theta, vega, iv, percent, money, spx]) {
+    for (const f of [points, delta, vega, iv, percent, money, spx]) {
       expect(f(null)).toBe("—");
       expect(f(undefined)).toBe("—");
       expect(f(Number.NaN)).toBe("—");

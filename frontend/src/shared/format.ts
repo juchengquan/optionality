@@ -118,22 +118,6 @@ export function servedClock(served: string | null | undefined): string | null {
   return m ? m[1]! : null;
 }
 
-/** A wall clock as `HH:MM:SS`, built from the fields rather than formatted by locale.
- *
- *  `toLocaleTimeString()` with no arguments renders in whatever language the DEVICE is set to:
- *  the owner's browser is Chinese and the page read `screen updated 晚上9:39:53` beside the
- *  service's own `2026-10-21 21:47:23+08:00`, and on an en-US machine the same call gives
- *  `9:39:53 PM` — wrong in the same way and harder to spot. Passing a locale would only move the
- *  decision; this has none to make, pads every field so the line cannot jitter as the seconds
- *  tick, and matches how the service writes a time.
- *
- *  The zone is the DEVICE's, which is what "when this screen last fetched" means.
- */
-export function clockTime(at: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(at.getHours())}:${pad(at.getMinutes())}:${pad(at.getSeconds())}`;
-}
-
 /** The same instant in New York, as `09:47:23 EDT`, or null where there is no instant to show.
  *
  *  The service renders its own timestamps in DISPLAY_TZ and sends them as strings

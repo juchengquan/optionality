@@ -113,7 +113,7 @@ export function nowLines(now: { dte: number; cost: number }, unit: Unit) {
 /** What the burndown says of a day the shared crosshair stops on with no Cost to close (#380,
  *  #395): a row kept for its vol readings out of hours, which is a stop in every panel because the
  *  IV and SPX panels have its figures. */
-export const NO_COST_WORDS = "no Cost to close: no two-sided quote to price it";
+const NO_COST_WORDS = "no Cost to close: no two-sided quote to price it";
 
 /** Such a day, line by line, as `tipLines` says a priced one — and no word about its timing: a
  *  weekend row at 11:00 New York is "in hours" by the sweep's every-day rule (ADR 0011) while no leg

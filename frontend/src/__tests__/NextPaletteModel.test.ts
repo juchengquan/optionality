@@ -6,12 +6,17 @@ import { describe, expect, it } from "vitest";
 import { tableRows, type DeskRow } from "../desk/columns";
 import { findables, isPaletteChord, matching, paletteActions, type Findable } from "../commands";
 import { placeBook } from "../placement";
+import { legText, shortFirst } from "../shared/format";
 import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 const book = findables(placeBook(QUOTES, HOLDINGS, MONITORS));
 const refs = (fs: Findable[]) => fs.map((f) => f.ref);
 const find = (q: string) => refs(matching(book, q));
+/** What the palette says of a thing found, as one text: its parts with the legs written as `Legs`
+ *  draws them, short first, the true minus and a quantity where it is not 1 (#351). */
+const said = (f: Findable) =>
+  `${f.parts.before}${shortFirst(f.parts.legs).map((l) => legText(l, "signs")).join(" ")}${f.parts.after}`;
 
 describe("what it finds", () => {
   it("is every row of the table in the order drawn, then the muted and expired rules", () => {
@@ -45,7 +50,7 @@ describe("what it finds", () => {
     expect(find("monitor")).toEqual(order);
     expect(find("rule")).toEqual(order);
     expect(find("monitor")).not.toContain("h-puts");
-    expect(book.map((f) => f.detail).join(" ")).not.toMatch(/monitor/i);
+    expect(book.map(said).join(" ")).not.toMatch(/monitor/i);
     // and the action that edits one answers to either word
     const edit = paletteActions({ choice: "auto", selected: null }).find((a) => a.key === "edit-monitor")!;
     expect(edit.label).toBe("Edit the selected rule");
@@ -132,12 +137,12 @@ describe("what it finds", () => {
   });
 
   it("carries no money and no count of contracts, whatever the book holds", () => {
-    const said = book.map((f) => `${f.name} ${f.detail}`).join("\n");
-    expect(said).not.toMatch(/\$/);
-    expect(said).not.toMatch(/×/);
-    expect(said).not.toMatch(/contract/i);
+    const text = book.map((f) => `${f.name} ${said(f)}`).join("\n");
+    expect(text).not.toMatch(/\$/);
+    expect(text).not.toMatch(/×/);
+    expect(text).not.toMatch(/contract/i);
     // nor a figure: thresholds and P&L are the table's, not the finder's
-    expect(said).not.toMatch(/\d\.\d/);
+    expect(text).not.toMatch(/\d\.\d/);
   });
 });
 
@@ -264,6 +269,6 @@ describe("a quantity per leg (#351)", () => {
     const ratio = HOLDINGS.map((h) => (h.id === "h-puts"
       ? { ...h, legs: h.legs.map((l) => (l.side === "short" ? { ...l, qty: 2 } : l)) } : h));
     const found = findables(placeBook(QUOTES, ratio, MONITORS)).find((f) => f.ref === "h-puts")!;
-    expect(found.detail).toMatch(/\u22122P\d+ \+P\d+/);
+    expect(said(found)).toMatch(/\u22122P\d+ \+P\d+/);
   });
 });
