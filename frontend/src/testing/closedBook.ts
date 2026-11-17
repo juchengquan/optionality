@@ -47,12 +47,6 @@ const OLD_SAMPLES: Samples = {
     legs_iv: { "US.SPXW261120P6000000": 20 - i, "US.SPXW261120P5950000": 22 - i },
     // SPX as each day's batch implied it (ADR 0024), walking up towards the short put's 6000
     legs_vega: null, legs_delta: null, spx: 6120 - i * 12, before_correction: false,
-    // the short put against that day's SPX, at that day's IV (`strikeDistances`, #395)
-    short_strikes: [{
-      code: "US.SPXW261120P6000000", option_type: "PUT", strike: 6000, delta: null, points: 120 - i * 12,
-      sigma: Number(((120 - i * 12) / ((6120 - i * 12) * ((20 - i) / 100) * Math.sqrt((19 - i) / 365))).toFixed(2)),
-      one_sigma: Number(((6120 - i * 12) * ((20 - i) / 100) * Math.sqrt((19 - i) / 365)).toFixed(2)),
-    }],
   })),
   qty_corrected_at: null,
   before_entry: [],

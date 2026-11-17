@@ -112,9 +112,6 @@ const WatchDayOut = z.object({
   legs_delta: z.record(z.string(), z.number()).nullable(),
   /** SPX as the writing sweep's batch implied it (ADR 0024), or null */
   spx: z.number().nullable(),
-  /** a combo's short legs (minus is short), or a single contract's own strike, against THIS day's
-   *  SPX, worked out here and never in the browser (ADR 0005) */
-  short_strikes: z.array(StrikeDistanceOut),
 });
 
 /** A watched rule's history (#402): every day the sweep stored for the contracts it watches. */

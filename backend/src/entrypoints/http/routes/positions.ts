@@ -236,11 +236,6 @@ const SampleOut = z.object({
   legs_delta: LegMap,
   /** SPX's price as the writing sweep's batch implied it (ADR 0024), or null */
   spx: z.number().nullable(),
-  /** each short strike placed against THIS day's SPX (`strikeDistances`, #395), with that day's
-   *  IV and delta — what the history's SPX readout shows, worked out here and never in the browser
-   *  (ADR 0005). Points are null on a day without SPX, σ on a day without the leg's IV or with no
-   *  day left to expiry, as the domain answers. */
-  short_strikes: z.array(StrikeDistanceOut),
   /** observed before the LATEST correction of a leg's quantity (#359), so its Cost to close may be
    *  another structure's — kept as it was, because nothing stored can re-sum it. Its IV, vega and
    *  delta are one contract's readings and stay true. One stamp per holding, so a correction undone
@@ -574,9 +569,6 @@ export function positionRoutes(deps: Deps) {
       const openedDte = row.opened_at === null ? null : dteAtOpen(row.strike_date, row.opened_at);
       const levels = openedDte === null ? null
         : exitLevels(row.entry, openedDte, openedDte, exitPolicy(settings));
-      // the held shorts, as the strike strip places them (`/positions/values`)
-      const shorts = position.legs.filter((l) => l.side === "short")
-        .map((l) => buildSpxCode(row.strike_date, l.option_type, l.strike));
       const plan: { dte: number; on_pace: number }[] = [];
       for (let dte = openedDte ?? -1; dte >= 0; dte--) {
         const pace = onPace(row.entry, openedDte, dte);
@@ -606,10 +598,6 @@ export function positionRoutes(deps: Deps) {
             legs_vega: legMap(s.legs_vega),
             legs_delta: delta,
             spx: s.spx,
-            // that day's readings as the domain reads a batch's: a leg's IV and delta by its code
-            short_strikes: strikeDistances(shorts, Object.fromEntries(shorts.map((code) => [code, {
-              option_implied_volatility: iv?.[code], option_delta: delta?.[code],
-            }])), s.spx, s.dte),
             before_correction: beforeCorrection(s.observed_at, row.qty_corrected_at),
           };
         }),

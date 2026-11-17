@@ -145,8 +145,7 @@ PRICE_FIELD = "mid_price"
 class WatchDayOut(BaseModel):
     """One stored day of the contracts a rule watches (#402): what its history charts draw. `price` is
     the rule's PRICE that day, under its own signs and quantities, whatever field it watches; None where
-    a contract had no two-sided quote (#380). `short_strikes` are a combo's short legs (minus is short),
-    or a single contract's own strike, against THIS day's SPX."""
+    a contract had no two-sided quote (#380)."""
 
     model_config = _AS_ZOD
 
@@ -159,7 +158,6 @@ class WatchDayOut(BaseModel):
     legs_vega: dict[str, float] | None
     legs_delta: dict[str, float] | None
     spx: float | None
-    short_strikes: list["StrikeDistanceOut"]
 
 
 class PriceRuleOut(BaseModel):
@@ -602,10 +600,6 @@ class EntryOut(BaseModel):
     #: a combo's short legs placed against `spx` (#297); empty for a single contract
     short_strikes: list[StrikeDistanceOut]
 
-
-# a day's strikes are declared below the route that serves them
-WatchDayOut.model_rebuild()
-WatchSamplesOut.model_rebuild()
 
 _ENTRIES = TypeAdapter(list[EntryOut])
 

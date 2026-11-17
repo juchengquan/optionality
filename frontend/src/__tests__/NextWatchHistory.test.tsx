@@ -20,13 +20,11 @@ import {
 const SHORT = "US.SPXW261218P7150000";
 const LONG = "US.SPXW261218P7100000";
 
-/** A watched day as the service serves it: its price under the rule's signs, and the short strike
- *  placed against that day's SPX. */
+/** A watched day as the service serves it: its price under the rule's signs. */
 function day(on: string, dte: number, price: number | null, over: Partial<WatchSamples["samples"][number]> = {}) {
   return {
     observed_on: on, observed_at: `${on} 05:14:00+08:00`, timing: "close" as const, dte, price,
     legs_iv: { [SHORT]: 18.5, [LONG]: 19.25 }, legs_vega: null, legs_delta: null, spx: 7100,
-    short_strikes: [{ code: SHORT, option_type: "PUT" as const, strike: 7150, delta: -0.2, points: -50, sigma: -0.4, one_sigma: 120 }],
     ...over,
   };
 }

@@ -110,18 +110,7 @@
             "legs_iv": null,
             "legs_vega": null,
             "legs_delta": null,
-            "spx": null,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              }
-            ]
+            "spx": null
           },
           {
             "observed_on": "2026-11-15",
@@ -132,18 +121,7 @@
             "legs_iv": null,
             "legs_vega": null,
             "legs_delta": null,
-            "spx": null,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              }
-            ]
+            "spx": null
           }
         ]
       }

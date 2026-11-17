@@ -20,7 +20,6 @@ from collections.abc import Callable, Iterable
 from datetime import datetime
 from typing import Any, TypedDict
 
-from optionality.contract import build_spx_code
 from optionality.expiry import (
     SampleTiming,
     ValuedTiming,
@@ -34,7 +33,7 @@ from optionality.expiry import (
 from optionality.js import js_string
 from optionality.monitor import Monitor, monitor_leg_codes, monitor_value
 from optionality.position import Position, cost_to_close, position_leg_codes
-from optionality.quote import ByCode, strike_distances
+from optionality.quote import ByCode
 
 from .db.queries import find_watch_sample, list_watch_samples, recent_priced_watch_samples
 from .db.rows import PositionRow, WatchSampleRow
@@ -86,8 +85,7 @@ def _day_records(day: WatchSampleRow) -> ByCode:
 
 
 class WatchDay(TypedDict):
-    """One stored day as a chart reads it: its figures, the value its reader gives it, and the shorts
-    placed against that day's SPX."""
+    """One stored day as a chart reads it: its figures and the value its reader gives it."""
 
     observed_on: str
     observed_at: str | None
@@ -99,12 +97,9 @@ class WatchDay(TypedDict):
     legs_vega: dict[str, float] | None
     legs_delta: dict[str, float] | None
     spx: float | None
-    short_strikes: list[dict[str, Any]]
 
 
-def _days(
-    rows: list[WatchSampleRow], value: Callable[[ByCode], float | None], shorts: list[str], tz: str
-) -> list[WatchDay]:
+def _days(rows: list[WatchSampleRow], value: Callable[[ByCode], float | None], tz: str) -> list[WatchDay]:
     out: list[WatchDay] = []
     for s in rows:
         timing = sample_timing(s["observed_at"])
@@ -121,7 +116,6 @@ def _days(
                 "legs_vega": stored_leg_map(s["legs_vega"]),
                 "legs_delta": stored_leg_map(s["legs_delta"]),
                 "spx": s["spx"],
-                "short_strikes": [d.model_dump() for d in strike_distances(shorts, records, s["spx"], s["dte"])],
             }
         )
     return out
@@ -134,19 +128,10 @@ def _rule_price(monitor: Monitor) -> Callable[[ByCode], float | None]:
     return lambda records: monitor_value(priced, records)
 
 
-def _rule_shorts(monitor: Monitor) -> list[str]:
-    """The strikes a rule's history places against SPX: a combo's short legs (minus is short, as the
-    watchlist's own `short_strikes`), and a single contract's own strike."""
-    if not monitor.legs:
-        return [monitor.code]
-    codes = monitor_leg_codes(monitor)
-    return [code for leg, code in zip(monitor.legs, codes, strict=True) if leg.sign < 0]
-
-
 def rule_history(db: sqlite3.Connection, monitor: Monitor, tz: str) -> list[WatchDay]:
     """Every day stored for the contracts a rule watches, oldest first, valued under its signs."""
     rows = list_watch_samples(db, contract_set_key(monitor_leg_codes(monitor)))
-    return _days(rows, _rule_price(monitor), _rule_shorts(monitor), tz)
+    return _days(rows, _rule_price(monitor), tz)
 
 
 class LastClose(TypedDict):
@@ -234,12 +219,7 @@ def before_entry(db: sqlite3.Connection, row: PositionRow, position: Position, t
     rows = [
         s for s in list_watch_samples(db, contract_set_key(position_leg_codes(position))) if s["observed_on"] < before
     ]
-    shorts = [
-        build_spx_code(position.strike_date, leg.option_type, leg.strike)
-        for leg in position.legs
-        if leg.side == "short"
-    ]
-    return _days(rows, lambda records: cost_to_close(position, records), shorts, tz)
+    return _days(rows, lambda records: cost_to_close(position, records), tz)
 
 
 def entry_close(
@@ -257,10 +237,5 @@ def entry_close(
     watched = find_watch_sample(db, contract_set_key(position_leg_codes(position)), on)
     if watched is None:
         return None
-    shorts = [
-        build_spx_code(position.strike_date, leg.option_type, leg.strike)
-        for leg in position.legs
-        if leg.side == "short"
-    ]
-    (day,) = _days([watched], lambda records: cost_to_close(position, records), shorts, tz)
+    (day,) = _days([watched], lambda records: cost_to_close(position, records), tz)
     return None if day["value"] is None else day

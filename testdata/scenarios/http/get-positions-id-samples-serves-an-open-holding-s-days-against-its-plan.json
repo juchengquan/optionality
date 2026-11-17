@@ -329,26 +329,6 @@
             "legs_vega": null,
             "legs_delta": null,
             "spx": null,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              }
-            ],
             "before_correction": false
           },
           {
@@ -371,26 +351,6 @@
               "US.SPXW261218P6400000": -0.18
             },
             "spx": 6812.5,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": 0.21,
-                "points": 487.5,
-                "sigma": 1.45,
-                "one_sigma": 335.08
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": -0.18,
-                "points": 412.5,
-                "sigma": 0.93,
-                "one_sigma": 444.85
-              }
-            ],
             "before_correction": false
           },
           {
@@ -404,26 +364,6 @@
             "legs_vega": null,
             "legs_delta": null,
             "spx": null,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              }
-            ],
             "before_correction": false
           },
           {
@@ -437,26 +377,6 @@
             "legs_vega": null,
             "legs_delta": null,
             "spx": null,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              },
-              {
-                "code": "US.SPXW261218P6400000",
-                "option_type": "PUT",
-                "strike": 6400,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              }
-            ],
             "before_correction": false
           }
         ],
