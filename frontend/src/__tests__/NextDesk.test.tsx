@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Entry, Holding, Monitor } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
-import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, tableRows, type DeskRow } from "../desk/columns";
+import { charsOf, COLUMNS, fitColumns, NAME_WITH_DISTANCE, offerable, PRIORITY, tableRows, type DeskRow } from "../desk/columns";
 import { Next } from "../Next";
 import { placeBook } from "../placement";
 import { readHidden } from "../shared/prefs";
@@ -578,7 +578,9 @@ describe("the columns", () => {
 
   it("drop in exactly the survival order as the room shrinks: the rule first, the value last", () => {
     const rows = ownerRows();
-    const widthOf = (key: string) => Math.ceil(charsOf(COLUMNS.find((c) => c.key === key)!, rows, false, true) * 8);
+    const widthOf = (key: string) => key === NAME_WITH_DISTANCE
+      ? Math.ceil(charsOf(COLUMNS.find((c) => c.key === "name")!, rows, false, true, true) * 8)
+      : Math.ceil(charsOf(COLUMNS.find((c) => c.key === key)!, rows, false, true) * 8);
     const all = COLUMNS.reduce((n, c) => n + widthOf(c.key), 0);
     const dropped: string[] = [];
     let before = COLUMNS.map((c) => c.key);
@@ -590,6 +592,14 @@ describe("the columns", () => {
     // the reverse of value (with its pace gap), P&L, Δ, DTE, manage-by, SPX → short, captured, legs, rule
     expect(dropped).toEqual(["alarm", "legs", "captured", "strip", "manage", "dte", "delta", "pnl", "value"]);
     expect(before).toEqual(["name"]);
+    // and wherever the rule's column has dropped, what is kept leaves the name room for each rule's
+    // distance (the owner, 2026-11-17)
+    for (let room = widthOf(NAME_WITH_DISTANCE); room <= all; room += 7) {
+      const kept = fitColumns(room, new Set(), widthOf).map((c) => c.key);
+      if (kept.includes("alarm")) continue;
+      const used = kept.reduce((n, k) => n + widthOf(k === "name" ? NAME_WITH_DISTANCE : k), 0);
+      expect(used, `${room}px`).toBeLessThanOrEqual(room);
+    }
     expect(PRIORITY).toEqual(["value", "pnl", "delta", "dte", "manage", "strip", "captured", "legs", "alarm"]);
   });
 

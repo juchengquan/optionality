@@ -7,10 +7,12 @@
  *    which said again what the rule's arrowed distance says (`↑1.31`, #388);
  *  - and each repeat that was removed, by name, with the fact it carried that is still said.
  *
- *  A sentence here is an element's OWN visible prose (its text nodes, not a child's), at least 24
- *  characters with a word in it: figures repeat for good reasons — a rule drawn under each holding it
- *  covers — and are not what this holds. What a reader alone hears (`.sr-only`) and a drawn short form
- *  hidden from a reader (`aria-hidden`) are one sentence said two ways, not twice.
+ *  What is compared is what a sighted viewer reads: an element's whole text with what a reader alone
+ *  hears (`.sr-only`) left out — a drawn short form hidden from a reader (`aria-hidden`) included, so
+ *  the rule line drawn twice is caught — each text counted at the innermost element that draws all of
+ *  it, at least 16 characters with a word in it. And a PHRASE: seven words in a row said in two
+ *  places of one screen. A book is read one row or card at a time, and around them: a rule drawn
+ *  under each holding it covers is drawn in two cards, not twice in one.
  */
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -25,34 +27,128 @@ afterEach(() => {
   for (const n of ["ui_arrangement", "ui_price_map", "ui_privacy"]) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
-/** Every element's own visible prose in `root`. */
-export function sentencesOf(root: Element): string[] {
-  const out: string[] = [];
+/** `el`'s text as a sighted viewer reads it: a reader's copies left out. */
+function visible(el: Element): string {
+  const copy = el.cloneNode(true) as Element;
+  for (const x of copy.querySelectorAll(".sr-only, svg, script, style")) x.remove();
+  return (copy.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+/** Words that are a figure's unit, not prose: a text of figures and units says nothing twice when
+ *  two figures happen to agree — a payoff's maximum and its P&L at the axis' end. */
+const UNITS = new Set(["pts", "per", "contract", "contracts", "dte", "unchanged"]);
+const isProse = (text: string) =>
+  text.toLowerCase().split(/[^a-z']+/).some((w) => w.length >= 3 && !UNITS.has(w));
+
+interface Said { el: Element; text: string }
+
+/** Every text drawn in `root`, each at the innermost element that draws all of it. */
+export function sentencesOf(root: Element): Said[] {
+  const out: Said[] = [];
   for (const el of [root, ...root.querySelectorAll("*")]) {
-    if (el.closest(".sr-only, [aria-hidden='true'], svg, script, style")) continue;
-    const own = [...el.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join("")
-      .replace(/\s+/g, " ").trim();
-    if (own.length >= 24 && /[a-z]{3,}/i.test(own)) out.push(own);
+    if (el.closest(".sr-only, svg, script, style")) continue;
+    const text = visible(el);
+    if (text.length < 16 || !isProse(text)) continue;
+    // an element whose one child draws the same text is that child, counted once
+    if ([...el.children].some((c) => visible(c) === text)) continue;
+    // a row of buttons, or the labels of a form's boxes: controls are named for what they act on,
+    // and a rule's "edit · mute · delete…" under each rule is one set of words per rule
+    if (onlyIn(el, "button, label, legend")) continue;
+    out.push({ el, text });
   }
   return out;
 }
 
-/** The sentences said more than once in `root`. */
-export function twice(root: Element): string[] {
-  const seen = new Map<string, number>();
-  for (const s of sentencesOf(root)) seen.set(s, (seen.get(s) ?? 0) + 1);
-  return [...seen].filter(([, n]) => n > 1).map(([s, n]) => `×${n} ${s}`);
+/** Whether every visible word of `el` is inside one of `selector`'s elements. */
+function onlyIn(el: Element, selector: string): boolean {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let any = false;
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (!n.textContent!.trim() || n.parentElement!.closest(".sr-only")) continue;
+    any = true;
+    const holder = n.parentElement!.closest(selector);
+    if (!holder || !el.contains(holder) && holder !== el) return false;
+  }
+  return any;
 }
 
-describe("the check sees a sentence said twice (it fails on a planted fault)", () => {
-  it("in one place, and not across a reader's copy or a drawn short form", () => {
+/** Six words in a row, lower-cased and bare of punctuation, of a text. */
+function phrasesOf(text: string): Set<string> {
+  const words = text.toLowerCase().split(/\s+/).map((w) => w.replace(/^[^\p{L}\p{N}|]+|[^\p{L}\p{N}|]+$/gu, ""))
+    .filter((w) => /[a-z]/.test(w));
+  const out = new Set<string>();
+  for (let k = 0; k + 6 <= words.length; k++) out.add(words.slice(k, k + 6).join(" "));
+  return out;
+}
+
+/** The units a place is read in: each row of the desk's book and each card of the phone's apart,
+ *  and the rest of it around them. */
+const UNIT = ".nxd-row, .nxp-card, .nx-book > section";
+function units(root: Element): Element[] {
+  // each list of the book — Holdings, Watchlist — is read apart: each has its expiries' headings
+  const parts = [...root.querySelectorAll(UNIT)];
+  if (parts.length === 0) return [root];
+  const out: Element[] = [];
+  for (const p of parts) {
+    const own = p.cloneNode(true) as Element;
+    for (const x of own.querySelectorAll(UNIT)) x.remove();
+    out.push(own);
+  }
+  const rest = root.cloneNode(true) as Element;
+  for (const x of rest.querySelectorAll(UNIT)) x.remove();
+  return [...parts.filter((p) => p.matches(".nxd-row, .nxp-card")), ...out.filter((_, i) => !parts[i]!.matches(".nxd-row, .nxp-card")), rest];
+}
+
+const related = (a: Element, b: Element) => a.contains(b) || b.contains(a);
+
+/** What is said more than once in one unit of `root`: a whole text in two places, or six words in a
+ *  row in two texts — never counting a text and the element around it, which is one saying. */
+export function twice(root: Element): string[] {
+  const found = new Set<string>();
+  for (const unit of units(root)) {
+    const said = sentencesOf(unit);
+    const phrases = said.map((s) => phrasesOf(s.text));
+    for (let a = 0; a < said.length; a++) {
+      for (let b = a + 1; b < said.length; b++) {
+        if (related(said[a]!.el, said[b]!.el)) continue;
+        if (said[a]!.text === said[b]!.text) { found.add(`twice: ${said[a]!.text}`); continue; }
+        const shared = [...phrases[a]!].find((p) => phrases[b]!.has(p));
+        if (shared) found.add(`phrase "${shared}" in: ${said[a]!.text} | ${said[b]!.text}`);
+      }
+    }
+  }
+  return [...found];
+}
+
+describe("the check sees what is said twice (each fails on a planted fault)", () => {
+  it("a sentence twice in one place, across markup", () => {
     const root = document.createElement("div");
     root.innerHTML = `<p>a leg has no figure, and no sum is taken from part of them</p>
-      <div><span>a leg has no figure, and no sum is taken from part of them</span></div>`;
-    expect(twice(root)).toEqual(["×2 a leg has no figure, and no sum is taken from part of them"]);
+      <div><span>a leg has <b>no figure</b>, and no sum is taken from part of them</span></div>`;
+    expect(twice(root)).toEqual(["twice: a leg has no figure, and no sum is taken from part of them"]);
+  });
+
+  it("the rule line again \"as saved\": a drawn short form is what a viewer reads", () => {
+    const root = document.createElement("div");
+    const line = `<span class="sr-only">|value| ≥ 4.51 — now −3.20, 1.31 away</span><span aria-hidden="true">|value| ≥ 4.51   −3.20  ↑1.31</span>`;
+    root.innerHTML = `<li><span>${line}</span><form><p>as saved: ${line}</p></form></li>`;
+    expect(twice(root)).toEqual(["twice: |value| ≥ 4.51 −3.20 ↑1.31"]);
+  });
+
+  it("a phrase said in two notes", () => {
+    const root = document.createElement("div");
+    root.innerHTML = `<p>A raw code: so a code nothing can price is refused here rather than becoming a permanent dash.</p>
+      <p>A vendor this build cannot reach is refused here with that reason, rather than becoming a permanent dash.</p>`;
+    expect(twice(root).join("\n")).toMatch(/phrase "rather than becoming a permanent dash/);
+  });
+
+  it("not a reader's copy beside what is drawn, nor figures, nor a rule drawn in two cards", () => {
+    const root = document.createElement("div");
     root.innerHTML = `<span class="sr-only">|value| ≥ 5.51 — now −1.80, 3.71 away</span>
-      <span aria-hidden="true">|value| ≥ 5.51 — now −1.80, 3.71 away</span>
-      <p>−48.00 pts per contract</p><p>−48.00 pts per contract</p>`;
+      <span aria-hidden="true">|value| ≥ 5.51   −1.80  ↑3.71</span>
+      <p>−48.00 pts per contract</p><p>−48.00 pts per contract</p>
+      <article class="nxp-card"><p>|value| ≥ 8.00   6.40  ↑1.60 on the condor</p></article>
+      <article class="nxp-card"><p>|value| ≥ 8.00   6.40  ↑1.60 on the condor</p></article>`;
     expect(twice(root)).toEqual([]);
   });
 });
@@ -61,7 +157,8 @@ describe("the check sees a sentence said twice (it fails on a planted fault)", (
 const BARS = "[role=progressbar], [role=meter], .nxp-progress, .nxd-fill, [data-fill]";
 
 describe("no sentence said twice in one place, nor a bar beside a rule's distance, anywhere the page draws words", () => {
-  for (const [when, now] of [["in session", MONDAY], ["outside the session", SUNDAY]] as const) {
+  for (const [when, now, shape] of [["in session", MONDAY, undefined], ["outside the session", SUNDAY, undefined],
+    ["outside the session, SPX the last close's level", SUNDAY, (p: string, b: unknown) => stale(p, b)]] as const) {
     for (const [arrangement, walk] of [["desk", walkDesk], ["phone", walkPhone]] as const) {
       it(`on the ${arrangement}, ${when}`, async () => {
         const said: string[] = [];
@@ -70,7 +167,7 @@ describe("no sentence said twice in one place, nor a bar beside a rule's distanc
           // no bar toward a threshold: the rule's arrowed distance says how close (the owner, 2026-11-17)
           if (root.querySelector(BARS)) said.push(`${where}: a bar toward a threshold`);
         };
-        await walk(read, now);
+        await walk(read, now, shape);
         expect(said).toEqual([]);
       }, 60_000);
     }
@@ -118,6 +215,61 @@ for (const arrangement of ["desk", "phone"] as const) {
         expect(d.querySelector("[aria-label='payoff at expiry']")!.textContent).not.toContain(REASON);
         if (arrangement === "phone") { act(() => { window.history.back(); }); await settle(); }
       }
+    });
+
+    it("says SPX's reason once for the whole book, each strip marking its price instead", async () => {
+      await openPage(arrangement, MONDAY, stale);
+      const book = document.querySelector(".nx-book")!;
+      // once in what is seen, and once in what a reader hears: the marks are hidden from it
+      expect(count(seen(book), REASON)).toBe(1);
+      const heard = book.cloneNode(true) as Element;
+      for (const el of heard.querySelectorAll("[aria-hidden='true']")) el.remove();
+      expect(count(heard.textContent!, REASON)).toBe(1);
+      expect(within(book as HTMLElement).getByText(`* SPX: ${REASON}`)).toBeTruthy();
+      const strips = [...book.querySelectorAll("figure[aria-label='strike strip']")];
+      if (arrangement === "phone") {
+        // every card's strip: its price and the mark, never the reason
+        expect(strips.length).toBeGreaterThan(3);
+        for (const f of strips) {
+          expect(f.querySelector(".nxs-spx-words")!.textContent).toMatch(/^SPX (\d+\.\d{2}|—)\*$/);
+          expect(f.querySelector("[data-spx-mark]")!.getAttribute("aria-hidden")).toBe("true");
+        }
+      } else {
+        // the desk's rows draw the hollow dot alone; the note is the book's one sentence
+        expect(strips).toHaveLength(0);
+        expect(book.querySelectorAll(".nxs-spx[data-stale]").length).toBeGreaterThan(3);
+      }
+    });
+
+    it("says an expired rule is expired once, beside the day it expired and the day it goes", async () => {
+      await openPage(arrangement);
+      const row = arrangement === "phone"
+        ? document.querySelector("[data-monitor='m-expired']")!
+        : document.querySelector(".nxd-muted [data-ref='m-expired']")!;
+      expect(count(seen(row).toLowerCase(), "expired")).toBe(1);
+      expect(seen(row)).toMatch(/Fri 6 Nov — the service deletes it on \w{3} \d{1,2} \w{3}/);
+    });
+
+    it("says SPX's reason under the payoff where no strip is drawn to say it (review of #423)", async () => {
+      // a short leg with no strike the service placed, and no long one: the strip draws nothing
+      const bare = (path: string, body: unknown): unknown => {
+        const b = stale(path, body);
+        if (path !== "/positions/values") return b;
+        return (b as Holding[]).map((h) => h.id !== "h-calls" ? h
+          : { ...h, legs: h.legs.filter((l) => l.side === "short"), short_strikes: [] });
+      };
+      await openPage(arrangement, MONDAY, bare);
+      let d: HTMLElement;
+      if (arrangement === "phone") {
+        // its rule now stands apart under the same name: the holding's own card
+        fireEvent.click(document.querySelector<HTMLButtonElement>("[data-ref='h-calls'] .nxp-open")!);
+        await settle();
+        d = screen.getByRole("dialog");
+      } else d = await detail(arrangement, "1218_C7300");
+      await waitFor(() => expect(d.querySelector("[aria-label='payoff at expiry'] dl")).toBeTruthy());
+      expect(d.querySelector("[aria-label='strike strip']")).toBeNull();
+      expect(count(seen(d), REASON)).toBe(1);
+      expect(d.querySelector("[aria-label='payoff at expiry']")!.textContent).toContain(REASON);
     });
 
     it("draws each short strike's Δ once on its strip, and still says it to a reader", async () => {
@@ -199,8 +351,10 @@ for (const arrangement of ["desk", "phone"] as const) {
     it("titles the Add sheet once: its choices say a spread or one contract", async () => {
       await openPage(arrangement);
       fireEvent.click(screen.getByRole("button", { name: "add" }));
-      const sheet = await screen.findByRole("dialog", { name: "Add" });
-      expect(sheet.textContent).not.toContain("Add a spread or contract");
+      // named in full to a reader, titled "Add" on screen: its first control says the rest
+      const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+      expect(seen(sheet)).not.toContain("Add a spread or contract");
+      expect(seen(sheet.querySelector("h2, [data-slot='sheet-title']")!).trim()).toBe("Add");
       const choice = within(sheet).getByRole("group", { name: "what to add" });
       expect(within(choice).getByRole("button", { name: "a spread" })).toBeTruthy();
       expect(within(choice).getByRole("button", { name: "one contract" })).toBeTruthy();

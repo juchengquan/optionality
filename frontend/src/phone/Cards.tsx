@@ -73,9 +73,11 @@ export function RuleLine({ entry, marked = true, own = false, within, children }
   );
 }
 
-export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen }: {
+export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen, spxSaid = false }: {
   placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
   onOpen: () => void;
+  /** the book says why SPX is not current, once (`SpxNote`): the strip marks it rather than says it */
+  spxSaid?: boolean;
 }) {
   const { holding, rules } = placed;
   const hot = holding.schedule?.reached === "stop" || rules.some((r) => ruleState(r) === "alarm");
@@ -99,7 +101,7 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
         <div><dt>cost to close</dt><dd><CostAndPace holding={holding} /></dd></div>
         <div><dt>{SHORT_DELTA}</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
       </dl>
-      <HoldingStrip holding={holding} />
+      <HoldingStrip holding={holding} reasonSaid={spxSaid} />
       {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} within={holding.name} />)}</ul> : null}
     </article>
   );
@@ -122,11 +124,13 @@ function CostAndPace({ holding }: { holding: Holding }) {
 
 /** A watched spread — or a single contract, or a rule on something held that no drawn holding
  *  owns — with its value and Δ as its desk row writes them (part K; out of the session a watchlist
- *  row's value is its last in-session price and when, #400), its progress toward the threshold and
- *  the rules that sit under it, and, for a spread that only partly overlaps a holding, what it
+ *  row's value is its last in-session price and when, #400), its rule's sentence with its arrowed
+ *  distance and the rules that sit under it, and, for a spread that only partly overlaps a holding, what it
  *  shares and with whom (#346). */
-export function RuleCard({ entry, under, overlap = null, onOpen }: {
+export function RuleCard({ entry, under, overlap = null, onOpen, spxSaid = false }: {
   entry: Entry; under: Entry[]; overlap?: string | null; onOpen: () => void;
+  /** as `HoldingCard`'s */
+  spxSaid?: boolean;
 }) {
   const state = ruleState(entry);
   const cells = ruleCells(entry, overlap);
@@ -145,7 +149,7 @@ export function RuleCard({ entry, under, overlap = null, onOpen }: {
       </dl>
       <p className="nxp-sentence"><RuleWords entry={entry} /></p>
       {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
-      {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
+      {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} reasonSaid={spxSaid} /> : null}
       {under.length > 0 ? <ul className="nxp-rules">{under.map((r) => <RuleLine key={r.id} entry={r} within={entryName(entry)} />)}</ul> : null}
     </article>
   );
@@ -170,7 +174,7 @@ export function OffList({ quarantined, muted }: { quarantined: Monitor[]; muted:
           <span className="nxp-name">{monitorName(m)}</span>
           <span className="nxp-sentence">{fieldWords(m.field)}</span>
           <span className="nxp-meta">{mutedWords(m.disabled_reason)}</span>
-          <MonitorControls rule={ruleOfMonitor(m)} served={null} />
+          <MonitorControls rule={ruleOfMonitor(m)} served={null} expiredSaid={m.disabled_reason === "expired"} />
         </li>
       ))}
     </ul>

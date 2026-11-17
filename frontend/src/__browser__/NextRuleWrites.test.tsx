@@ -123,7 +123,7 @@ describe("Record as held from the inspector (#408)", () => {
     const button = within(panel).getByRole("button", { name: "record 1218_P7150 value as held" });
     expect(visible(button)).toBe(true);
     await userEvent.click(button);
-    const add = await screen.findByRole("dialog", { name: "Add" });
+    const add = await screen.findByRole("dialog", { name: "Add a spread or contract" });
     const form = within(add).getByRole("form", { name: "add a spread" });
     const entry = within(form).getByLabelText("spread 1 entry");
     await waitFor(() => expect(document.activeElement).toBe(entry));
@@ -142,6 +142,6 @@ describe("Record as held from the inspector (#408)", () => {
       legs: [{ side: "short", option_type: "PUT", strike: 7150 }, { side: "long", option_type: "PUT", strike: 7100 }],
     });
     await screen.findByText("added 1 holding and 2 rules, replacing 2 watch rules");
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
   });
 });

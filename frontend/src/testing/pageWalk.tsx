@@ -137,8 +137,9 @@ async function readPalette(read: Read): Promise<void> {
 
 /** The desk, walked: what it read, and how much of it was drawn to be read. */
 /** @param now the page's clock: Monday 10:00 New York, in session, unless given */
-export async function walkDesk(read: Read, now: Date = MONDAY): Promise<{ names: number; charts: number; compared: number; split: number }> {
-  await openPage("desk", now);
+/** @param shape the world the service answers, as `openPage`'s */
+export async function walkDesk(read: Read, now: Date = MONDAY, shape?: (path: string, body: unknown) => unknown): Promise<{ names: number; charts: number; compared: number; split: number }> {
+  await openPage("desk", now, shape);
   read("page", document.body);
   // the References strip, down on the day
   expect(document.body.textContent).toContain("−0.40%");
@@ -225,8 +226,8 @@ export async function walkDesk(read: Read, now: Date = MONDAY): Promise<{ names:
 }
 
 /** The phone, walked. */
-export async function walkPhone(read: Read, now: Date = MONDAY): Promise<{ opens: number; charts: number; closes: number }> {
-  await openPage("phone", now);
+export async function walkPhone(read: Read, now: Date = MONDAY, shape?: (path: string, body: unknown) => unknown): Promise<{ opens: number; charts: number; closes: number }> {
+  await openPage("phone", now, shape);
   read("page", document.body);
   expect(document.body.textContent).toContain("−0.40%");
   fireEvent.click(screen.getByRole("button", { name: "Closed trades" }));

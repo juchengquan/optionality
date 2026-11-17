@@ -17,7 +17,11 @@ to change the desktop layout, on the owner's call, which is why it is recorded.
 
 - **Columns drop by priority.** Rows are watched on different fields, so no single column set
   serves every row; the fallback chain moves the fill bar and the bell to the alarm cell and then to
-  the name when the watched column is hidden, so urgency survives down to two columns. Fitting
+  the name when the watched column is hidden, so urgency survives down to two columns. *(The fill
+  bar is gone since 2026-11-17, ADR 0023 "each thing said once": where the rule's column drops, the
+  name cell draws the rule's arrowed distance instead — `↑3.60`, `▲ past 0.05`, `▲ at` — with the
+  rule's sentence to a reader, and the fitting makes room for it; the chip and the row's colour carry
+  the urgency.)* Fitting
   **stops at the first column that does not fit**: skipping one and taking a narrower one further
   down made widening a window lose a column instead of gaining one.
 - **The column picker is a wish list.** Width wins; ticking means "show this when there is room",

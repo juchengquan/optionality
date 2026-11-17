@@ -126,7 +126,7 @@ for (const scheme of ["light", "dark"] as const) {
       render(<Next />);
       await settle();
       await userEvent.click(screen.getByRole("button", { name: "add" }));
-      await expectFormColours(screen.getByRole("dialog", { name: "Add" }));
+      await expectFormColours(screen.getByRole("dialog", { name: "Add a spread or contract" }));
     });
 
     it("colour each type letter in the book and bold a short leg, in text and in a chart", async () => {

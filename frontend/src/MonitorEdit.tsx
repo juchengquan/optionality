@@ -63,14 +63,16 @@ export interface MonitorActions {
 export const MonitorActionsContext = createContext<MonitorActions | null>(null);
 
 /** @param served the rule's row of `/quotes`, for a rule that is on: its sentence is the service's */
-export function MonitorControls({ rule, served }: { rule: Rule; served: Entry | null }) {
+/** @param expiredSaid the row beside it already says "expired" (its reason's label): the note says
+ *  the day and when the service deletes it, without the word again (2026-11-17) */
+export function MonitorControls({ rule, served, expiredSaid = false }: { rule: Rule; served: Entry | null; expiredSaid?: boolean }) {
   const actions = useContext(MonitorActionsContext);
-  return actions ? <Controls actions={actions} rule={rule} served={served} /> : null;
+  return actions ? <Controls actions={actions} rule={rule} served={served} expiredSaid={expiredSaid} /> : null;
 }
 
 type Doing = "idle" | "editing" | "deleting" | "enabling" | "splitting";
 
-function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Rule; served: Entry | null }) {
+function Controls({ actions, rule, served, expiredSaid }: { actions: MonitorActions; rule: Rule; served: Entry | null; expiredSaid: boolean }) {
   const [doing, setDoing] = useState<Doing>("idle");
   const [draft, setDraft] = useState<Draft>(() => draftOf(rule));
   // the rule as it was when the editor opened: the draft is a change to THAT, so a poll serving a
@@ -147,7 +149,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
     <div className="nx-mon" ref={root}>
       {state === "expired" ? (
         <p className="nx-meta nx-mon-note">
-          {`expired ${dateWords(rule.strike_date)} — the service deletes it ${actions.retentionDays === null
+          {`${expiredSaid ? "" : "expired "}${dateWords(rule.strike_date)} — the service deletes it ${actions.retentionDays === null
             ? "after its retention window" : `on ${dateWords(deletesOn(rule.strike_date, actions.retentionDays))}`}`}
         </p>
       ) : null}

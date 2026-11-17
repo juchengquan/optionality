@@ -454,7 +454,7 @@ export function Next() {
       {/* the phone's two sheets over the book, one component (#410): mounted in both arrangements
           and open only on the phone, for the reason the desk's below are */}
       <PhoneSheet open={adding && phone} onClose={closeAdding} up={up} entryStyle={entryStyle}
-                  title="Add" describedBy={addSaysId} ownBack={false}>
+                  title="Add" titleMore="a spread or contract" describedBy={addSaysId} ownBack={false}>
         {phone ? addForm : null}
       </PhoneSheet>
       <PhoneSheet open={settingsOpen && phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
@@ -464,7 +464,7 @@ export function Next() {
       {/* Mounted in both arrangements and only OPEN on the desk; their Back entries are the page's,
           kept across a switch of arrangement (above) */}
       <DeskSheet id={panelId} open={adding && !phone} onClose={closeAdding} finalFocus={addReturn}
-                 up={up} entryStyle={entryStyle} title="Add" describedBy={addSaysId} className="data-[side=right]:sm:max-w-3xl">
+                 up={up} entryStyle={entryStyle} title="Add" titleMore="a spread or contract" describedBy={addSaysId} className="data-[side=right]:sm:max-w-3xl">
         {phone ? null : addForm}
       </DeskSheet>
       <DeskSheet open={settingsOpen && !phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
@@ -534,9 +534,12 @@ type Described = { description: string; describedBy?: undefined } | { descriptio
  *  two open, close and give their Back entry up alike (`useDismissOnBack`, one list for every sheet
  *  the page opens, #408). `ownBack={false}` where the page holds the entry instead: Settings', which
  *  outlives a switch between this sheet and the desk's. */
-function PhoneSheet({ open, onClose, up, entryStyle, title, description, describedBy, ownBack = true, children }: {
+function PhoneSheet({ open, onClose, up, entryStyle, title, titleMore, description, describedBy, ownBack = true, children }: {
   open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle;
   title: string; ownBack?: boolean; children: React.ReactNode;
+  /** the rest of the dialog's name, said to a reader only: Add's visible title is "Add", its first
+   *  control saying "a spread / one contract", and its name "Add a spread or contract" (2026-11-17) */
+  titleMore?: string;
 } & Described) {
   useDismissOnBack(ownBack && open, onClose);
   return (
@@ -544,7 +547,7 @@ function PhoneSheet({ open, onClose, up, entryStyle, title, description, describ
       <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={up} data-entry={entryStyle}
                     aria-describedby={describedBy}>
         <SheetHeader>
-          <SheetTitle>{title}</SheetTitle>
+          <SheetTitle>{titleMore ? `${title} ` : title}{titleMore ? <span className="sr-only">{titleMore}</span> : null}</SheetTitle>
           {description !== undefined ? <SheetDescription>{description}</SheetDescription> : null}
         </SheetHeader>
         <div className="nxp-sheet-body">{children}</div>
@@ -555,10 +558,12 @@ function PhoneSheet({ open, onClose, up, entryStyle, title, description, describ
 
 /** A side sheet over the desk's book: Settings', and the Add form's, which was a panel above the
  *  table until it became one like Settings'. */
-function DeskSheet({ id, open, onClose, finalFocus, up, entryStyle, title, description, describedBy, className, children }: {
+function DeskSheet({ id, open, onClose, finalFocus, up, entryStyle, title, titleMore, description, describedBy, className, children }: {
   id?: string; open: boolean; onClose: () => void; finalFocus?: () => HTMLElement | null;
   up: UpColour; entryStyle: EntryStyle;
   title: string; className?: string; children: React.ReactNode;
+  /** as `PhoneSheet`'s */
+  titleMore?: string;
 } & Described) {
   // its Back entry is held by the page (Next), across a switch of arrangement
   return (
@@ -568,7 +573,7 @@ function DeskSheet({ id, open, onClose, finalFocus, up, entryStyle, title, descr
       <SheetContent id={id} finalFocus={finalFocus} className={`overflow-y-auto nx-tokens ${className ?? ""}`} data-up={up} data-entry={entryStyle}
                     aria-describedby={describedBy}>
         <SheetHeader>
-          <SheetTitle>{title}</SheetTitle>
+          <SheetTitle>{titleMore ? `${title} ` : title}{titleMore ? <span className="sr-only">{titleMore}</span> : null}</SheetTitle>
           {description !== undefined ? <SheetDescription>{description}</SheetDescription> : null}
         </SheetHeader>
         <div className="px-4 pb-4">{children}</div>

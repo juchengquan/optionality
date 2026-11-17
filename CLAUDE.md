@@ -627,7 +627,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   figures are current rather than up to one sweep old, and polling faster is NOT free (ADR 0010). What the
   earlier wording promised still holds and is what matters: a row's value and its 🔔 come from the same
   instant. That is now true by construction — `buildEntries` reads the watched figure once and derives both
-  the fill bar and the bell from it, with `isBreached`, the engine's own predicate. The engine is untouched:
+  the `fill` figure and the bell from it, with `isBreached`, the engine's own predicate. The engine is untouched:
   the stored `triggered`, the cooldowns and the Telegram messages remain the sweep's business, and the
   dashboard's bell may therefore lead or lag what has been sent. The engine keeps NO cached view of its
   last batch: `MonitorSweeper.cachedQuotes` was the cached alternative, no route ever called it, and it was

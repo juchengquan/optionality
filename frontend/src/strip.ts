@@ -58,6 +58,21 @@ export function stripOfEntry(e: Entry): Strip | null {
   };
 }
 
+/** Whether a strip draws at all: it has a strike to place. One with none — a spread whose legs the
+ *  service did not describe — draws nothing (`StrikeStrip`), and so says nothing of SPX either. */
+export const stripDraws = (s: Strip | null): s is Strip => s !== null && (s.shorts.length > 0 || s.longs.length > 0);
+
+/** Why SPX is not current, once for a whole book (2026-11-17): each distinct reason a drawn strip
+ *  carries — a holding with a short leg, a rule on a spread — in the order first met. One, outside
+ *  the session, where every strip is measured against the same last close; none in session. */
+export function bookSpxReasons(holdings: readonly Holding[] | null, quotes: readonly Entry[]): string[] {
+  const strips = [
+    ...(holdings ?? []).map(stripOfHolding),
+    ...quotes.map(stripOfEntry),
+  ];
+  return [...new Set(strips.flatMap((s) => (stripDraws(s) && s.reason ? [s.reason] : [])))];
+}
+
 /** A condor held as two spreads, on one strip: both came from the same response, so one SPX. */
 export function joinStrips(a: Strip, b: Strip): Strip {
   return { shorts: [...a.shorts, ...b.shorts], longs: [...a.longs, ...b.longs], spx: a.spx, reason: a.reason };

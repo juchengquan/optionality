@@ -10,6 +10,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { Entry, Holding } from "../shared/api";
 import { Next } from "../Next";
+import { StrikeStrip } from "../StrikeStrip";
+import type { Strip } from "../strip";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer, served } from "../testing/ownerBook";
 import { overflowsSideways, settle } from "./nextBook";
 
@@ -131,14 +133,17 @@ describe("on the cards", () => {
     }
   });
 
-  it("with no derived price, keeps its strikes and Δ, and its reason wraps inside the card", async () => {
+  it("with no derived price, keeps its strikes and Δ, marks its dash, and the book says the reason once, inside the screen", async () => {
     await show(false);
     for (const ref of SPREADS) {
       const fig = within(card(ref)).getByRole("figure", { name: "strike strip" });
       expect(faults(fig, card(ref)), ref).toEqual([]);
       expect(fig.querySelector(".nxs-spx"), ref).toBeNull();
-      expect(fig.textContent, ref).toContain(REASON);
+      // the reason is the book's, said once (2026-11-17): the strip's dash carries its mark
+      expect(fig.querySelector(".nxs-spx-words")!.textContent, ref).toBe("SPX —*");
     }
+    const note = screen.getByText(`* SPX: ${REASON}`);
+    expect(note.getBoundingClientRect().right).toBeLessThanOrEqual(document.documentElement.clientWidth);
     expect(overflowsSideways()).toBe(false);
   });
 
@@ -164,5 +169,54 @@ describe("in the detail sheet", () => {
     const fig = within(sheet).getByRole("figure", { name: "strike strip" });
     expect(faults(fig, sheet)).toEqual([]);
     expect(overflowsSideways()).toBe(false);
+  });
+});
+
+describe("two short strikes close together (review of #423)", () => {
+  /** An iron fly — both shorts at 7000 — and 8000P with 8050C while SPX is far below. */
+  const FLY: Strip = {
+    shorts: [served("2026-12-18", "PUT", 7000, -0.48, 38, 6900.5), served("2026-12-18", "CALL", 7000, 0.47, 38, 6900.5)],
+    longs: [{ option_type: "PUT", strike: 6950 }, { option_type: "CALL", strike: 7050 }],
+    spx: 6900.5, reason: null,
+  };
+  const FAR: Strip = {
+    shorts: [served("2026-12-18", "PUT", 8000, -0.9, 38, 7416.62), served("2026-12-18", "CALL", 8050, 0.04, 38, 7416.62)],
+    longs: [{ option_type: "PUT", strike: 7950 }, { option_type: "CALL", strike: 8100 }],
+    spx: 7416.62, reason: null,
+  };
+
+  for (const size of ["", "24px"]) {
+    for (const [name, strip] of [["an iron fly", FLY], ["8000P and 8050C, SPX far off", FAR]] as const) {
+      it(`${name}, at 358px${size ? ` and a ${size} text size` : ""}: no label over another, each short's Δ drawn under the scale`, async () => {
+        document.documentElement.style.fontSize = size;
+        try {
+          render(<div style={{ width: "358px" }} data-testid="box"><StrikeStrip strip={strip} /></div>);
+          const fig = screen.getByRole("figure", { name: "strike strip" });
+          const box = screen.getByTestId("box");
+          // the long strikes keep their labels; none touches another, or leaves the strip
+          expect(faults(fig, box)).toEqual([]);
+          // each short's Δ readable: drawn in the line under the scale, not hidden, inside the strip
+          const words = [...fig.querySelectorAll<HTMLElement>("[data-short-words]")];
+          expect(words).toHaveLength(2);
+          for (const [i, k] of strip.shorts.entries()) {
+            const line = words[i]!;
+            expect(line.className).not.toContain("sr-only");
+            expect(line.querySelector(".sr-only"), line.textContent!).toBeNull();
+            expect(line.textContent).toContain(`Δ ${k.delta! < 0 ? "\u2212" : ""}${Math.abs(k.delta!).toFixed(3)}`);
+            expect(inside(line.getBoundingClientRect(), fig.getBoundingClientRect())).toBe(true);
+          }
+          expect(overflowsSideways()).toBe(false);
+        } finally {
+          document.documentElement.style.fontSize = "";
+        }
+      });
+    }
+  }
+
+  it("a short strike with room keeps its Δ on the scale, and the line under it says it to a reader only", () => {
+    render(<div style={{ width: "358px" }}><StrikeStrip strip={{ ...FAR, shorts: [FAR.shorts[1]!] }} /></div>);
+    const fig = screen.getByRole("figure", { name: "strike strip" });
+    expect(fig.querySelector(".nxs-k[data-side=short] .nxs-l")!.textContent).toBe("8050Δ 0.040");
+    expect(fig.querySelector("[data-short-words] .sr-only")!.textContent).toBe(" Δ 0.040 ·");
   });
 });

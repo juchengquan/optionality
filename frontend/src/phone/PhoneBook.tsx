@@ -10,6 +10,8 @@ import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
 import { expiryWords } from "./figures";
 import { ErrorWords } from "../shared/ErrorWords";
+import { SpxNote } from "../StrikeStrip";
+import { bookSpxReasons } from "../strip";
 
 /** The phone's book, arrangement B (ADR 0023, #290): cards and the detail sheet — ONE book, the
  *  same cards in session and out of it (#374; ADR 0023 amended 2026-11-13), with no pager: a
@@ -39,6 +41,9 @@ export function PhoneBook({
   const gone = openId !== null && subject === null;
   useEffect(() => { if (gone) setOpenId(null); }, [gone]);
 
+  // why SPX is not current, said once for the book rather than on every card's strip (2026-11-17)
+  const spxReasons = bookSpxReasons(holdings, quotes);
+  const spxSaid = spxReasons.length > 0;
   const status = (
     <>
       {/* outside the session (#371): when the service valued what is drawn; the header's refresh
@@ -46,6 +51,7 @@ export function PhoneBook({
       {(phase ?? (session ? "regular" : "closed")) !== "regular"
         ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings}
                       phase={phase ?? "closed"} className="nxp-meta" /> : null}
+      <SpxNote reasons={spxReasons} className="nxp-meta" />
       {holdingsError !== null
         ? <div className="nxp-meta">{"the holdings could not be valued — "}<ErrorWords raw={holdingsError} again="refresh to try again" /></div> : null}
       {holdings === null && holdingsError === null ? <p className="nxp-meta">valuing…</p> : null}
@@ -63,7 +69,7 @@ export function PhoneBook({
       </p>
       <ul className="nxp-cards">
         {placed.unplaced.map((e) => (
-          <li key={e.id}><RuleCard entry={e} under={[]} onOpen={() => setOpenId(e.id)} /></li>
+          <li key={e.id}><RuleCard entry={e} under={[]} onOpen={() => setOpenId(e.id)} spxSaid={spxSaid} /></li>
         ))}
       </ul>
     </section>
@@ -84,12 +90,12 @@ export function PhoneBook({
                     <Condor row={row} privacy={privacy}>
                       {row.map((p) => (
                         <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
-                                     privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} />
+                                     privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} spxSaid={spxSaid} />
                       ))}
                     </Condor>
                   ) : row.map((p) => (
                     <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
-                                 privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} />
+                                 privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} spxSaid={spxSaid} />
                   ))}
                 </li>
               ))}
@@ -107,7 +113,7 @@ export function PhoneBook({
             <ul className="nxp-cards">
               {items.map(({ entry, under, overlap }) => (
                 <li key={entry.id}>
-                  <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)} />
+                  <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
                 </li>
               ))}
             </ul>

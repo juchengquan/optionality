@@ -419,20 +419,20 @@ describe("the desk's sheet", () => {
     render(<Next />);
     const plus = screen.getByRole("button", { name: "add" });
     fireEvent.click(plus);
-    const panel = screen.getByRole("dialog", { name: "Add" });
+    const panel = screen.getByRole("dialog", { name: "Add a spread or contract" });
     expect(plus.getAttribute("aria-haspopup")).toBe("dialog");
     // a side sheet, as Settings is, where it was a panel above the table
     expect(panel.getAttribute("data-side")).toBe("right");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("expiry")));
     fireEvent.keyDown(document.activeElement!, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
     expect(document.activeElement).toBe(plus);
   });
 
   it("draws no subtitle repeating its title, and is described by its footer instead (2026-11-16)", async () => {
     render(<Next />);
     fireEvent.click(screen.getByRole("button", { name: "add" }));
-    const panel = screen.getByRole("dialog", { name: "Add" });
+    const panel = screen.getByRole("dialog", { name: "Add a spread or contract" });
     expect(panel.textContent).not.toContain("saved together");
     expect(panel.querySelector("[data-slot='sheet-description']")).toBeNull();
     const described = panel.getAttribute("aria-describedby");

@@ -21,7 +21,7 @@ import { RuleFigures } from "./RuleFigures";
 import { HistoryOnDemand } from "./HistoryOnDemand";
 import { ShortDeltaWords } from "./phone/Cards";
 import { StrikeStrip } from "./StrikeStrip";
-import { stripOfEntry, stripOfHolding } from "./strip";
+import { stripDraws, stripOfEntry, stripOfHolding } from "./strip";
 import { figureOf, percent, points } from "./shared/numbers";
 import { POSITION_GREEKS, SHORT_DELTA } from "./shared/words";
 import { dateWords } from "./shared/times";
@@ -121,7 +121,7 @@ export function HoldingSections({
     ),
     legs: <><LegList legs={holding.legs.map(heldLeg)} />{extra}</>,
     strip,
-    payoff: <HoldingPayoff holding={holding} privacy={privacy} spxSaid={stripOfHolding(holding) !== null} />,
+    payoff: <HoldingPayoff holding={holding} privacy={privacy} spxSaid={stripDraws(stripOfHolding(holding))} />,
     figures: (
       <Facts surface={surface} label="figures" items={[
         ["cost to close", points(holding.cost_to_close)],
@@ -195,7 +195,7 @@ export function RuleSections({
     ),
     legs: entry.legs ? <LegList legs={entry.legs.map(signedLeg)} /> : null,
     strip: entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null,
-    payoff: entry.legs && watched ? <WatchedPayoff entry={entry} session={session} spxSaid /> : null,
+    payoff: entry.legs && watched ? <WatchedPayoff entry={entry} session={session} spxSaid={stripDraws(stripOfEntry(entry))} /> : null,
     figures: (
       <>
         {/* what it watches, the line both surfaces open its figures with (part J) */}

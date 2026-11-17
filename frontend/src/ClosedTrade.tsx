@@ -31,7 +31,7 @@ export function TradeLegs({ trade }: { trade: ClosedTrade }) {
   return <Legs legs={trade.legs.map(heldLeg)} />;
 }
 
-export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, heading = false }: {
+export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, heading = false, madeSaid = false }: {
   /** the element's id, for the row that opens it to name in `aria-controls` */
   id?: string;
   trade: ClosedTrade;
@@ -43,6 +43,9 @@ export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, 
   /** the desk's: a heading of its own, brought into view with the focus on it when a row opens it —
    *  beneath a long table it would otherwise open off the screen. The phone's sheet has a title. */
   heading?: boolean;
+  /** the table above it says what "made" is — Entry less Exit across the contracts held, in points —
+   *  so the trade's note says only why it is no dollar figure (2026-11-17) */
+  madeSaid?: boolean;
 }) {
   const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -73,7 +76,8 @@ export function ClosedTradeDetail({ id, trade, privacy, onCorrected, onDeleted, 
       <p className="nx-meta">
         {trade.realized_points === null
           ? "What it made is unknown: its Exit or its Entry was not recorded. Correct the Exit below if you know it."
-          : "Points, Entry less Exit across the contracts held: a closed holding has no quote to give it a dollar size."}
+          : madeSaid ? "A closed holding has no quote to give it a dollar size."
+            : "Points, Entry less Exit across the contracts held: a closed holding has no quote to give it a dollar size."}
       </p>
       <HoldingHistory key={`${trade.id}:${trade.closed_on}`} holding={trade} privacy={privacy} />
       <Correction key={trade.id} id={trade.id} name={trade.name} closedOn={trade.closed_on} exit={trade.exit}

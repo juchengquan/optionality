@@ -171,21 +171,20 @@ export function stateOf(r: Rule, today: string): RuleState {
 
 /** A quarantine in full: the page's one clause for it (`shared/groups.ts`, part I), then what the
  *  service found and what would fix it. Said before switching one back on. */
-export const QUARANTINE_WHY: Record<string, (r: Rule) => string> = Object.fromEntries(
-  Object.entries({
-    "unknown-contract": (r: Rule) => `${r.code}: its strike or its expiry is not one it lists`,
-    "no-figure": (r: Rule) =>
-      `its ${fieldWords(r.field)}, sweep after sweep: what a provider serves depends on the account, so watch a figure it does serve`,
-    unreadable: () => "a leg or an expiry the service cannot make sense of",
-  }).map(([reason, found]) => [reason, (r: Rule) => `${reasonWhy(reason)} — ${found(r)}`]));
+/** What the service found and what would fix it, WITHOUT the clause, per quarantine reason: said
+ *  under a quarantined rule whose own line, beside it, already ends in the clause (2026-11-17) — the
+ *  clause and "switched off by the service" were said twice on one screen. */
+const QUARANTINE_FOUND: Record<string, (r: Rule) => string> = {
+  "unknown-contract": (r) => `${r.code}: its strike or its expiry is not one it lists`,
+  "no-figure": (r) =>
+    `its ${fieldWords(r.field)}, sweep after sweep: what a provider serves depends on the account, so watch a figure it does serve`,
+  unreadable: () => "a leg or an expiry the service cannot make sense of",
+};
 
-/** What the service found and what would fix it, WITHOUT the clause: said under a quarantined rule
- *  whose own line, beside it, already ends in the clause (2026-11-17) — the clause and "switched off
- *  by the service" twice on one screen. */
-export function quarantineFound(r: Rule): string {
-  const whole = QUARANTINE_WHY[r.disabled_reason!]!(r);
-  return whole.slice(whole.indexOf(" — ") + 3);
-}
+export const QUARANTINE_WHY: Record<string, (r: Rule) => string> = Object.fromEntries(
+  Object.entries(QUARANTINE_FOUND).map(([reason, found]) => [reason, (r: Rule) => `${reasonWhy(reason)} — ${found(r)}`]));
+
+export const quarantineFound = (r: Rule): string => QUARANTINE_FOUND[r.disabled_reason!]!(r);
 
 /** What a rename does NOT do, said where the name is typed: the service renames the Monitor and
  *  nothing else (`PATCH /monitors/{id}`), and `PATCH /positions/{id}` takes no name at all, so a

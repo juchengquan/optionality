@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { charsOf, COLUMNS, fitColumns, offerable, type DeskColumn, type DeskRow } from "./columns";
+import { charsOf, COLUMNS, fitColumns, NAME_WITH_DISTANCE, offerable, PINNED, type DeskColumn, type DeskRow } from "./columns";
 
 /** Measures the room the desk table has and how wide one of its characters is, and fits the
  *  columns to both (ADR 0008): the container's width is why columns drop at all, the character's is
@@ -47,6 +47,7 @@ export function useDeskFit(
   const widths = useMemo(() => {
     const out: Record<string, number> = {};
     for (const c of COLUMNS) out[c.key] = Math.ceil(charsOf(c, rows, privacy, session) * charWidth);
+    out[NAME_WITH_DISTANCE] = Math.ceil(charsOf(COLUMNS.find((c) => c.key === PINNED)!, rows, privacy, session, true) * charWidth);
     return out;
   }, [rows, privacy, session, charWidth]);
   const widthOf = (key: string) => widths[key] ?? 0;
@@ -59,8 +60,10 @@ export function useDeskFit(
 
   // the rule's column takes what is left over, or the name's when the rule has dropped
   const flexible = columns.some((c) => c.key === "alarm") ? "alarm" : "name";
+  // the name's cell, the rule's column gone, draws each rule's distance too (2026-11-17)
+  const least = (key: string) => key === PINNED && flexible === "name" ? widthOf(NAME_WITH_DISTANCE) : widthOf(key);
   const template = ready
-    ? columns.map((c) => c.key === flexible ? `minmax(${widthOf(c.key)}px, 1fr)` : `${widthOf(c.key)}px`).join(" ")
+    ? columns.map((c) => c.key === flexible ? `minmax(${least(c.key)}px, 1fr)` : `${widthOf(c.key)}px`).join(" ")
     : columns.map((c) => c.key === flexible ? "minmax(max-content, 1fr)" : "max-content").join(" ");
 
   return { ref, columns, offered, template };

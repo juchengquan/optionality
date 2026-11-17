@@ -106,7 +106,8 @@ The research found three things nobody does, all of which this service can:
 - **On the phone, "B", cards:**
   - "needs you" as banners at the top;
   - one card per held spread, with a strike strip and a large P&L;
-  - watchlist cards with progress toward their entry thresholds;
+  - watchlist cards with progress toward their entry thresholds; *(superseded 2026-11-17: no bar —
+    the rule's arrowed distance says how close)*
   - a bottom tab bar: Live, Review, Add, Settings; *(superseded 2026-11-13: Book, Add, Settings;
     and 2026-11-15, #410: no tab bar — Add and Settings are buttons in the sticky header)*
   - REVIEW is one holding per screen, with its burndown as the main chart; *(superseded
@@ -953,7 +954,7 @@ zone mark.
   the name, on both, one line: `Thu 31 Dec · 45 DTE · opened Wed 11 Nov`. The desk's inspector no
   longer lists every column's figure (#372's "every figure, the hidden ones included"): its figures
   are the list above, and the P&L and the captured share lead it, as on the phone. A rule's own
-  progress is its line's in `Rules`. Each section is marked `data-section`, and `NextDetailOrder`
+  progress — its arrowed distance, since 2026-11-17 — is its line's in `Rules`. Each section is marked `data-section`, and `NextDetailOrder`
   holds both surfaces to the list and to each other, for every holding and watched row of the
   owner's book. A rule's chip and its fault are its level section's, said once: its own line in
   `Rules` draws neither (review of #420). A holding's chip is the same on both — its Level or its
@@ -964,6 +965,8 @@ zone mark.
   desk row writes them (`columns.ruleCells`) — the live price in session and the last in-session one
   out of it, a held spread's cost to close — where it had a value only out of session. Every rule
   line on a holding's card draws its progress toward its threshold, as a watch card draws its own.
+  *(The bar is superseded 2026-11-17, "each thing said once": every rule line says its arrowed
+  distance, and none draws a bar.)*
   A holding's DTE is its expiry heading's alone: the card's pill repeated it.
 - **L. The payoff's maximums said once**: in the list under the chart, `+4.72 pts per contract ·
   +$472`. The chart keeps a dashed rule at each and writes no figure beside it. A watched spread's
@@ -1022,8 +1025,8 @@ said once now, on both arrangements, and the fact only the repeat carried is kep
 - **A quarantined rule's note says what the service found** (`US.SPXW261211C8300000: its strike or its
   expiry is not one it lists.`), under the line or card that already ends in the clause (part I); the
   question before switching it back on still says the whole of it, clause first.
-- **The Add sheet is titled `Add`**: its first control says "a spread / one contract". The palette's
-  action keeps "Add a spread or contract", where it stands alone.
+- **The Add sheet is titled `Add`**: its first control says "a spread / one contract"; the dialog's
+  name stays "Add a spread or contract" for a reader. The palette's action keeps the long words.
 - **The add forms' payoff notes drop "per contract"** (`at 2.40 credit`, `no Entry given, so drawn at
   0`): every figure under the chart says `pts per contract` (part L). The payoff's hint is `point at a
   price, or use the arrow keys, for the P&L there` under its heading `Payoff at expiry`.
@@ -1041,18 +1044,40 @@ said once now, on both arrangements, and the fact only the repeat carried is kep
   line on a card or in a sheet the bar #420's K gave it. Each repeated the rule line's arrowed
   distance (`↑1.31`, `▲ past 0.20`, #388), which stays, as do the chips and the row's colour by its
   state. Gone with it: `DeskBook`'s `Fill`, `Cards`' `Progress`, `.nxd-fill` and `.nxp-progress`, and
-  the rule column's width allowance for the bar (`charsOf`). The service still serves `fill` (ADR
+  the rule column's width allowance for the bar (`charsOf`). **Where the rule's column drops** (the
+  owner, 2026-11-17), the row's name cell draws the arrowed distance its rule line draws — `↑3.60`,
+  `▲ past 0.05`, `▲ at` — where the bar fell back before, and a reader hears it in the rule's
+  sentence; where the column is drawn the name cell draws none. The fitting gives the name that room
+  (`NAME_WITH_DISTANCE`), which, measured on the owner's book, costs the strip at 900px shut and
+  1280px open and manage-by at 900px open. The service still serves `fill` (ADR
   0010's `buildEntries`) and the domain's `thresholdFill` and its golden cases stay — shared with the
   backend and the bot; the page simply no longer draws it. #338's reason for dropping the
   near-firing highlight now rests on the arrowed distance.
 
+- **A short strike's Δ under its strip where two short labels would touch** (review of #423): an
+  iron fly's two shorts at one strike, or 8000P and 8050C with SPX far off, draw no label over the
+  scale, and the line under it draws each one's strike and Δ.
+- **A closed trade's note under the desk's table** says only that a closed holding has no quote to
+  give it a dollar size: the table's caption says what "made" is.
+- **The Add sheet's dialog keeps its full name**, "Add a spread or contract", for a reader; "Add" is
+  what is drawn.
+- **SPX's reason, once per book** (the owner, 2026-11-17): under the Holdings heading, beside the
+  session line, `* SPX: index not computed overnight — the last close's level`, on the desk and the
+  phone (`SpxNote`, `bookSpxReasons`). Each card's strip on the phone marks its price `SPX 7416.62*`
+  (or `SPX —*`), the mark hidden from a screen reader, which hears the note once; the desk's rows
+  draw the hollow dot, as before. A detail's one strip — the inspector, a sheet — still says it
+  whole (#416). This revises #416's "the reason in its words" on every strip of the book.
+- **An expired rule says "expired" once**: beside its reason's label `expired`, its note is `Fri 6
+  Nov — the service deletes it on Sat 14 Nov` (the desk's fold and the phone's switched-off list);
+  where no label stands beside it, the note still starts `expired`.
+
 Kept, for the owner to decide: the desk's DTE column under a group heading that says the DTE (#420
 K took it off the phone's cards only); a held rule's row named as its holding on the desk's table;
-SPX's reason on every strip of the phone's book (one per card, by #416); the palette's `Actions` /
-`Go to` tag on each result; `watches` / `compare` in a rule's figures (part J); an expired rule's
-`expired` label beside its note `expired Fri 6 Nov — …`.
+the palette's `Actions` / `Go to` tag on each result; `watches` / `compare` in a rule's figures
+(part J).
 
-Held by `SaidOnce.test.tsx`: over the whole page walk, desk and phone, in session and out, no
-sentence of visible prose drawn twice in one place and no bar toward a threshold; and each removal
+Held by `SaidOnce.test.tsx`: over the whole page walk, desk and phone, in session, out of it, and out
+of it with SPX the last close's level — each row and card, and each list of the book, read apart — no
+text a viewer reads drawn twice in one place, nor six words in a row said in two texts, and no bar toward a threshold; and each removal
 above by name, with the fact it
 kept, each failing when its repeat is put back.
