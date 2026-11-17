@@ -18,6 +18,10 @@
 .nx-hist-stop text { fill: var(--alarm); font-weight: 600; }
 /* a Stop beyond the scale (#360): the edge it lies past, drawn as a dashed rule under its arrow */
 .nx-hist-stop[data-off] line { stroke-dasharray: 2 2; }
+/* the Entry (2026-11-17): the credit everything else is measured from, in the page's ink, solid —
+   a fact of the trade, never a state's colour */
+.nx-hist-entry line { stroke: var(--foreground); stroke-width: 1; opacity: 0.55; }
+.nx-hist-entry text { fill: var(--foreground); font-weight: 600; }
 .nx-hist-target line { stroke: var(--entry); stroke-width: 1; stroke-dasharray: 5 3; }
 .nx-hist-target text { fill: var(--entry); font-weight: 600; }
 .nx-hist-manage line { stroke: var(--warn); stroke-dasharray: 2 2; }

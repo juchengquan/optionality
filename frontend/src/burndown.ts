@@ -252,7 +252,8 @@ function nowOf(holding: Valued) {
 export function valueAxis(served: Samples, holding: Valued, unit: Unit, also: number[] = []) {
   const { levels, plan, samples } = served;
   const now = nowOf(holding);
-  // `also`: a watched row's threshold, drawn against its value (#402)
+  // `also`: a watched row's threshold, drawn against its value (#402), and a holding's Entry, drawn
+  // across its burndown (2026-11-17) — the Entry is where the plan starts, so it is usually in already
   const values = [
     0, ...samples.filter(hasCost).map((s) => s.cost_to_close), ...plan.map((p) => p.on_pace),
     ...(levels?.target == null ? [] : [levels.target]), ...(now ? [now.cost] : []), ...also,

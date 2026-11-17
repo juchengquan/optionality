@@ -138,6 +138,7 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
         : null;
   return (
     <HistoryPanels id={holding.id} holding={holding} served={served} blank={blank} unit={unit} privacy={privacy}
+                   entry={holding.entry}
                    title="Burndown" noCost="no day with a Cost to close yet: each was recorded out of hours, with no two-sided quote to price it" />
   );
 }
@@ -168,14 +169,17 @@ export function WatchedHistory({ entry, privacy }: { entry: Entry; privacy: bool
 
 /** The two panels of a history — the value by day and each leg's IV — on one DTE axis with one
  *  crosshair, for a holding or a watched row. */
-function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCost, threshold = null }: {
+function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCost, threshold = null, entry = null }: {
   id: string; holding: Charted; served: Samples | undefined; blank: React.ReactNode; unit: Unit; privacy: boolean;
   title: string; noCost: string; threshold?: number | null;
+  /** a holding's Entry, per contract, drawn across the burndown (2026-11-17); null for a watched row */
+  entry?: number | null;
 }) {
   const cross = useCross(id, served, holding);
   const before = served ? beforeEntryDays(served) : new Set<string>();
   // one pair of margins for both charts, so a DTE is at the same x in each (#298)
-  const axis = blank !== null || !served ? null : valueAxis(served, holding, unit, threshold === null ? [] : [threshold]);
+  const axis = blank !== null || !served ? null : valueAxis(served, holding, unit,
+    [...(threshold === null ? [] : [threshold]), ...(entry === null ? [] : [entry])]);
   const gutters: Gutters | null = axis === null || !served ? null : (() => {
     const iv = ivAxis(served, holding);
     return {
@@ -196,7 +200,7 @@ function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCos
           : (
             <>
               <Burndown served={served} unit={unit} axis={axis!} span={dteWindow(served)} gutters={gutters!}
-                        closeDte={closeDte} cross={cross} before={before} threshold={threshold}
+                        closeDte={closeDte} cross={cross} before={before} threshold={threshold} entry={entry}
                         entryDay={entryCloseDay(served)} />
               {served.samples.some(hasCost) ? null
                 // every day kept only for its vol (#380): the IV chart below has them, the burndown none
