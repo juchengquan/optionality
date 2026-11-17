@@ -135,7 +135,8 @@ CORPUS = Path(__file__).resolve().parents[2] / "testdata" / "vendors" / "opend-f
 def test_the_record_fields_are_the_typescripts():
     recorded = json.loads(CORPUS.read_text())["constants"]
     assert list(opend.RECORD_FIELDS) == recorded["RECORD_FIELDS"]
-    # and the corpus states nothing this port lacks, nor this port anything the corpus does not
+    # and every constant the corpus states, this port has (one way only: the port's own connection
+    # defaults, DEFAULT_HOST and DEFAULT_PORT, are no part of the record and the corpus omits them)
     assert {k for k in vars(opend) if k.isupper() and k in recorded} == set(recorded)
 
 
@@ -168,13 +169,18 @@ def test_a_record_carries_exactly_the_typescripts_fields():
 def test_a_field_the_sdk_marks_absent_is_absent_as_in_the_typescript():
     # the SDK writes the STRING 'N/A' where the protobuf has no value — a one-sided book among them —
     # and pandas a NaN; the TypeScript's record leaves the key out, and so a backend must
-    row = {**_sdk_row(A), "bid_price": "N/A", "option_delta": float("nan"), "option_rho": None}
+    row = {**_sdk_row(A), "bid_price": "N/A", "option_delta": float("nan"), "option_rho": None,
+           "suspension": False, "open_price": 0.0, "volume": 0}
     ctx = FakeContext(rows=[row])
     with opend.OpenD(connect=connect(ctx)) as od:
         [record] = od.fetch([A])
     for gone in ("bid_price", "option_delta", "option_rho", "mid_price"):
         assert gone not in record
-    assert record["suspension"] == row["suspension"]  # a present value is kept, whatever it is
+    # a present value is kept, whatever it is — falsy ones above all, since the TypeScript's `put`
+    # keeps `suspension: false` on every row and a "falsy is absent" test would drop it from all
+    assert record["suspension"] is False
+    assert record["open_price"] == 0.0
+    assert record["volume"] == 0
 
 
 def test_closes_the_connection_even_when_the_call_fails():
