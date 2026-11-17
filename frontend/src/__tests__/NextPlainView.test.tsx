@@ -48,10 +48,6 @@ function input(over: Partial<PlainInput> = {}): PlainInput {
   };
 }
 
-/** The view's rows of a section, by what each row names. */
-function rowsOf(view: ReturnType<typeof plainView>, title: string): string[][] {
-  return view.sections.find((s) => s.title === title)!.groups.flatMap((g) => g.rows);
-}
 /** The book's rows, across its sections (2026-11-17): Spreads, then Contracts — or Book, when empty. */
 function bookRows(view: ReturnType<typeof plainView>): string[][] {
   return view.sections.filter((s) => ["Spreads", "Contracts", "Book"].includes(s.title)).flatMap((s) => s.groups.flatMap((g) => g.rows));
