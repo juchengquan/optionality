@@ -2,7 +2,7 @@ import type { AddDraft } from "./add";
 import type { ContractDraft } from "./contract";
 
 /** What the Add form holds: which form is showing, and each one's draft. */
-export interface AddDrafts {
+interface AddDrafts {
   kind: "spread" | "contract";
   spread: AddDraft;
   contract: ContractDraft;

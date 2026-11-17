@@ -12,8 +12,8 @@ import { Fragment, useId } from "react";
 
 import "./add.css";
 
-export const HOLD_MEANS = "records a holding; its rules become a stop and risk";
-export const WATCH_MEANS = "rules only, as entry signals";
+const HOLD_MEANS = "records a holding; its rules become a stop and risk";
+const WATCH_MEANS = "rules only, as entry signals";
 
 export function HoldOrWatch({ held, onHeld }: { held: boolean; onHeld: (held: boolean) => void }) {
   const id = useId();

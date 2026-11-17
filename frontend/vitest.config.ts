@@ -27,8 +27,8 @@ export default defineConfig({
     setupFiles: ["src/testing/keys.setup.ts", "src/testing/zone.setup.ts"],
     exclude: ["**/node_modules/**", "src/__browser__/**"],
     // TZ=UTC, as backend/vitest.config.ts has always had it — and for a sharper reason here.
-    // `clockTime` and `snapshotName` deliberately read the DEVICE's zone, which is what "when this
-    // screen last fetched" means, so three tests were asserting a wall clock that only held at
+    // `snapshotName`, and the screen's own clock before it was retired, deliberately read the
+    // DEVICE's zone, which is what "when this screen last fetched" meant, so three tests were asserting a wall clock that only held at
     // +08. The gate was green by accident of the owner's location: under TZ=UTC the suite failed,
     // including a test titled "whatever locale the device is in" (review 2026-11-01).
     //

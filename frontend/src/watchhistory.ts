@@ -55,7 +55,7 @@ function contractOf(code: string): { option_type: "CALL" | "PUT"; strike: number
  *  watchlist's own payoff and strike strip read them — one contract, and no valuation of "now". A
  *  single contract is drawn as the strike it watches: as a short leg is, which is what a strike's
  *  delta rule watches (ADR 0023 sits it under its spread). */
-export type WatchedCharted = Pick<Holding, "id" | "contracts" | "legs" | "strike_date" | "closed_on">;
+type WatchedCharted = Pick<Holding, "id" | "contracts" | "legs" | "strike_date" | "closed_on">;
 
 export function watchedCharted(entry: Entry): WatchedCharted {
   const legs: Holding["legs"] = entry.legs && entry.legs.length > 0
@@ -107,7 +107,7 @@ export const BEFORE_ENTRY_WORDS = "before entry: watched, not yet held";
  *  - **In the session, live**, where the rule watches the price and has one now; else its last close
  *    — a spread watched only on its delta has no price on its row at all.
  *  - **Nothing** where neither is there, and the reason why. */
-export type PayoffAt =
+type PayoffAt =
   | { value: number; from: "live" }
   | { value: number; from: "close"; close: NonNullable<Entry["last_close"]> }
   | { value: null; blank: string };

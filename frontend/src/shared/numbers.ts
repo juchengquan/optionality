@@ -14,7 +14,7 @@
  *    and a breakeven (`8054.72`) are written beside it — the three are read against each other.
  *
  *  Pure, and no locale but `en-US` named explicitly: the owner's browser is Chinese, and a bare
- *  `toLocaleString()` renders in the device's language (`format.clockTime` has the note).
+ *  `toLocaleString()` renders in the device's language: the page once read `screen updated 晚上9:39:53`.
  */
 import { DASH } from "./format";
 
@@ -54,8 +54,6 @@ export const signedPoints = orDash((n) => {
   return n > 0 && !text.startsWith("<") ? `+${text}` : text;
 });
 export const delta = orDash((n) => fixed(n, 3));
-export const gamma = orDash((n) => fixed(n, 4));
-export const theta = orDash((n) => fixed(n, 2));
 export const vega = orDash((n) => fixed(n, 2));
 /** IV as served, in percent: `27.17%`. */
 export const iv = orDash((n) => `${fixed(n, 2)}%`);

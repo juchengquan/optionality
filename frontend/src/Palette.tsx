@@ -192,8 +192,7 @@ function Search({ found, findWhy, actions, onChoose }: {
   );
 }
 
-/** What a thing found is, its legs each drawn in their type's colour (#391): `Findable.detail`'s
- *  characters exactly. */
+/** What a thing found is, its legs each drawn in their type's colour (#391). */
 function FindDetail({ parts }: { parts: Findable["parts"] }) {
   return <>{parts.before}<Legs legs={parts.legs} />{parts.after}</>;
 }

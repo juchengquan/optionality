@@ -10,7 +10,7 @@ export function beingOperated(el: Element | null): boolean {
 
 /** A poll's read that a tick skips while the last one is still out (`skipWhileOut`), and `reset`,
  *  which makes the next tick ask whatever is out. */
-export interface Skipping {
+interface Skipping {
   (): Promise<void>;
   reset: () => void;
 }

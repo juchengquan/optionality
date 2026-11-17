@@ -189,7 +189,7 @@
 .nxd-monitor[data-state="alarm"] { --chip: var(--alarm); }
 .nxd-monitor[data-state="fault"] { --chip: var(--fault); }
 .nx[data-entry="risk"] .nxd-monitor[data-state="entry"] { --chip: var(--alarm); }
-.nxd-why, .nxd-inspector .nx-why { color: var(--fault); }
+.nxd-inspector .nx-why { color: var(--fault); }
 
 /* the price map (#298): a panel ABOVE the table and the inspector, across both, so it takes no width
    from the table and the table's measured fit (useDeskFit) is the same open or shut */

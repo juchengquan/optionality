@@ -29,10 +29,6 @@ export function setDisplayZone(tz: string | null | undefined): void {
   displayZone = tz && validZone(tz) ? tz : null;
 }
 
-export function getDisplayZone(): string | null {
-  return displayZone;
-}
-
 function validZone(tz: string): boolean {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: tz });

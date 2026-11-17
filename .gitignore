@@ -23,6 +23,10 @@ python/dist/
 
 # the frontend bundle IS committed (ADR 0005), which is why no dist/ rule above is a bare `dist/`
 
+# tsc's incremental state: nothing reads it (every tsc here is --noEmit), and one was committed by
+# accident in #430
+*.tsbuildinfo
+
 # playwright writes test traces and screenshots beside the tests it runs
 frontend/src/__browser__/__screenshots__/
 frontend/test-results/

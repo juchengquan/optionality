@@ -19,8 +19,9 @@ function ReferenceReading({ reference, at }: { reference: Reference; at: string 
   const change = changeText(reference.change);
   return (
     // `reference` matches no CSS rule and is kept anyway: the layout suite measures each ITEM by
-    // it (__browser__/References.test.tsx walks `.references .reference` and asserts none of them
-    // pushes the page sideways at 320px), and the parts carry all the styling there is.
+    // it (`__browser__/nextCarried.ts`'s `stripLines` walks `.references .reference`, and
+    // NextReferences*.test.tsx assert none of them pushes the page sideways at 320px), and the
+    // parts carry all the styling there is.
     <span className="reference" title={reference.error ?? reference.name ?? undefined}>
       <span className="reference-name">{referenceTitle(reference)}</span>
       {" "}

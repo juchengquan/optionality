@@ -454,11 +454,11 @@ export function Next() {
       {/* the phone's two sheets over the book, one component (#410): mounted in both arrangements
           and open only on the phone, for the reason the desk's below are */}
       <PhoneSheet open={adding && phone} onClose={closeAdding} up={up} entryStyle={entryStyle}
-                  title="Add" titleMore="a spread or contract" describedBy={addSaysId} ownBack={false}>
+                  title="Add" titleMore="a spread or contract" describedBy={addSaysId}>
         {phone ? addForm : null}
       </PhoneSheet>
       <PhoneSheet open={settingsOpen && phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
-                  title="Settings" description={SETTINGS_SAYS} ownBack={false}>
+                  title="Settings" description={SETTINGS_SAYS}>
         {phone ? settings : null}
       </PhoneSheet>
       {/* Mounted in both arrangements and only OPEN on the desk; their Back entries are the page's,
@@ -531,17 +531,15 @@ type Described = { description: string; describedBy?: undefined } | { descriptio
 
 /** A bottom sheet over the phone's book, closed by Back (ADR 0023): the Add form's since #293, and
  *  Settings' since #410, where Settings had been a screen in the book's place. One component, so the
- *  two open, close and give their Back entry up alike (`useDismissOnBack`, one list for every sheet
- *  the page opens, #408). `ownBack={false}` where the page holds the entry instead: Settings', which
- *  outlives a switch between this sheet and the desk's. */
-function PhoneSheet({ open, onClose, up, entryStyle, title, titleMore, description, describedBy, ownBack = true, children }: {
+ *  two open and close alike. Their Back entries are the page's (`useDismissOnBack`, one list for
+ *  every sheet the page opens, #408), kept across a switch between this sheet and the desk's. */
+function PhoneSheet({ open, onClose, up, entryStyle, title, titleMore, description, describedBy, children }: {
   open: boolean; onClose: () => void; up: UpColour; entryStyle: EntryStyle;
-  title: string; ownBack?: boolean; children: React.ReactNode;
+  title: string; children: React.ReactNode;
   /** the rest of the dialog's name, said to a reader only: Add's visible title is "Add", its first
    *  control saying "a spread / one contract", and its name "Add a spread or contract" (2026-11-17) */
   titleMore?: string;
 } & Described) {
-  useDismissOnBack(ownBack && open, onClose);
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={up} data-entry={entryStyle}
