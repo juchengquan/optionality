@@ -24,13 +24,17 @@ interface SweepService extends PageService {
   chosen: unknown[];
   /** the refusal the next PATCH gets, in the service's words, or null to take it */
   refusal: string | null;
+  /** a stored value the service refused, as `/health` serves it (#442's review) */
+  stored: string | null;
 }
 
 /** `.env` sweeps every 15s; the page has chosen nothing until a test does. */
 function serveSweep(): SweepService {
   const page = servePage();
   const state = { seconds: null as number | null };
-  const svc = Object.assign(page, { chosen: [] as unknown[], refusal: null as string | null });
+  const svc = Object.assign(page, {
+    chosen: [] as unknown[], refusal: null as string | null, stored: null as string | null,
+  });
   page.alter.set("/health", (h) => {
     const health = h as { settings: Record<string, unknown> };
     return {
@@ -38,7 +42,7 @@ function serveSweep(): SweepService {
       settings: {
         ...health.settings,
         sweep_seconds: state.seconds ?? 15, sweep_source: state.seconds === null ? "env" : "settings",
-        sweep_default_seconds: 15, sweep_presets: PRESETS,
+        sweep_default_seconds: 15, sweep_presets: PRESETS, sweep_refused: svc.stored,
       },
     };
   });
@@ -54,7 +58,7 @@ function serveSweep(): SweepService {
       state.seconds = body.sweep_seconds;
       return reply(200, {
         sweep_seconds: state.seconds ?? 15, sweep_source: state.seconds === null ? "env" : "settings",
-        sweep_default_seconds: 15, sweep_presets: PRESETS,
+        sweep_default_seconds: 15, sweep_presets: PRESETS, sweep_refused: null,
       });
     }
     return inner(url, init);
@@ -128,6 +132,25 @@ describe("the service's sweep in Settings", () => {
     svc.refusal = null;
     fireEvent.change(sweepBox(settings), { target: { value: "10" } });
     await waitFor(() => expect(within(settings).queryByRole("alert")).toBeNull());
+  });
+});
+
+describe("a stored value the service refused (#442's review)", () => {
+  it("is said under the box, with the interval swept at instead", async () => {
+    const svc = serveSweep();
+    svc.stored = "2";
+    render(<Next />);
+    await waitFor(() => expect(screen.queryByText(/screen updated/)).toBeTruthy());
+    const settings = await openSettings();
+    expect(sweepBox(settings).value).toBe("default");
+    expect(within(settings).getByText(/stored choice/).textContent)
+      .toBe("the stored choice (2) is not one of these, so the service sweeps at .env's 15s");
+  });
+
+  it("says nothing when nothing was refused", async () => {
+    await open();
+    const settings = await openSettings();
+    expect(within(settings).queryByText(/stored choice/)).toBeNull();
   });
 });
 

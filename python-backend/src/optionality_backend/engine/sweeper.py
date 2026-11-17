@@ -91,7 +91,7 @@ from ..hydrate import to_monitor, to_position
 from ..notify import Notifier, NotifySender, notifier
 from ..ports import QuoteFetcher
 from ..schemas.monitor import DisabledReason
-from ..sweep_interval import at_interval, sweep_interval
+from ..sweep_interval import at_interval, refusal_words, sweep_interval
 from .health import SweepHealth, SweepHealthDeps
 from .positions import PositionSweepDeps, notice_manage_by, record_samples
 from .watching import record_watch_samples
@@ -188,6 +188,8 @@ class MonitorSweeper:
         #: did not observe. The cost is that a deploy gives a silent rule its N sweeps again, which is
         #: the conservative direction.
         self.silent_sweeps: dict[str, int] = {}
+        #: The refusal last said in the log, so it is said once (`every_seconds`).
+        self._refusal_said: str | None = None
         #: Telling the owner, shared with `health.py` and `positions.py` so one answer about a failed
         #: send serves all three (notify.py).
         self._notify: Notifier = notifier(deps.settings, deps.send)
@@ -204,7 +206,21 @@ class MonitorSweeper:
         """The interval the sweep runs at now: the page's choice, or `.env`'s (#442, ADR 0025). Read from
         the database every time it is asked — by the scheduler at every tick, and by the counts below —
         so a choice made on the page is in force at the next sweep with no restart."""
-        return sweep_interval(self._deps.db, self._deps.settings).seconds
+        at = sweep_interval(self._deps.db, self._deps.settings)
+        # a stored value refused (a hand edit, or a database it could not read) is said ONCE when it
+        # appears — at boot, or whenever it is edited in — and once when it clears, never per tick
+        # (#442's review): asked at every tick and every reading, a line each time would bury the log
+        if at.refused != self._refusal_said:
+            if at.refused is not None:
+                log.error("%s", refusal_words(at))
+            else:
+                log.info(
+                    "sweep_interval is no longer refused: sweeping every %ss, %s",
+                    at.seconds,
+                    "set from the page" if at.source == "settings" else "MONITOR_INTERVAL_SECONDS",
+                )
+            self._refusal_said = at.refused
+        return at.seconds
 
     def _now(self) -> datetime:
         return self._deps.now() if self._deps.now is not None else datetime.now(UTC)

@@ -2,7 +2,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildSpxCode } from "optionality/domain/contract";
 import { createDatabase } from "../db/open.ts";
@@ -1371,6 +1371,31 @@ describe("at the interval the page chose", () => {
     expect(s.everySeconds()).toBe(15);
   });
 
+  it("logs a stored value it refuses once when it appears and once when it clears, never per tick", () => {
+    // #442's review: a hand edit after boot was silent. Said when it appears, whenever that is…
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const infos = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const s = failingFor();
+      expect(s.everySeconds()).toBe(15);
+      choose(2);
+      for (let i = 0; i < 5; i += 1) s.everySeconds();
+      expect(errors.mock.calls.map((c) => String(c[0]))).toEqual([
+        "sweep_interval in the database is 2, not one of the presets: sweeping every 15s, "
+        + "MONITOR_INTERVAL_SECONDS, until it is set from the page",
+      ]);
+      // …and once when it is gone, by a choice from the page
+      choose(5);
+      for (let i = 0; i < 5; i += 1) s.everySeconds();
+      expect(errors).toHaveBeenCalledTimes(1);
+      expect(infos.mock.calls.map((c) => String(c[0])))
+        .toEqual(["sweep_interval is no longer refused: sweeping every 5s, set from the page"]);
+    } finally {
+      errors.mockRestore();
+      infos.mockRestore();
+    }
+  });
+
   it("calls monitoring degraded after the same 75s at 5s: fifteen failures, not five", async () => {
     const s = failingFor();
     choose(5);
@@ -1400,6 +1425,49 @@ describe("at the interval the page chose", () => {
     failing = false;
     await sweepsAt(s, 5, 1);
     expect(sent.filter((t) => t.includes("recovered"))).toEqual([]);
+  });
+
+  /** A Provider down while `down.now` says so, on a rule, at .env's 15s. */
+  const outage = () => {
+    monitor();
+    const down = { now: true };
+    const s = sweeper((codes) => down.now ? Promise.reject(new Error("down"))
+      : Promise.resolve(codes.map((c) => ({ code: c, name: c, option_delta: 0.1 }))), ENV_15);
+    return { s, down };
+  };
+
+  it("says it recovered from an outage it announced, though the interval changed under it", async () => {
+    // #442's review: told at five failures at 15s; then 5s, where the threshold is fifteen; three
+    // more failures and a success — read against the count, the owner was never told it came back
+    const { s, down } = outage();
+    await sweepsAt(s, 15, 5);
+    expect(degraded()).toHaveLength(1);
+    choose(5);
+    await sweepsAt(s, 5, 3);
+    down.now = false;
+    await sweepsAt(s, 5, 1);
+    expect(sent.filter((t) => t.includes("recovered"))).toHaveLength(1);
+  });
+
+  it("announces no recovery from an outage nobody heard about, the other way round", async () => {
+    // twelve failures at 5s is 60s, under the 75s: nothing said. Switched to 15s, where five is
+    // the threshold, a count read against it would announce a recovery from silence
+    const { s, down } = outage();
+    choose(5);
+    await sweepsAt(s, 5, 12);
+    expect(degraded()).toEqual([]);
+    choose(15);
+    down.now = false;
+    await sweepsAt(s, 15, 1);
+    expect(sent.filter((t) => t.includes("recovered"))).toEqual([]);
+  });
+
+  it("goes on reminding about an announced outage after a faster interval raises the threshold", async () => {
+    const { s } = outage();
+    await sweepsAt(s, 15, 5);
+    choose(5);
+    await sweepsAt(s, 5, 1800 / 5);   // half an hour at 5s, still down
+    expect(sent.filter((t) => t.startsWith("⚠️ monitoring still degraded"))).toHaveLength(1);
   });
 
   it("calls a provider unreliable after the same time of failure inside the window", async () => {

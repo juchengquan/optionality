@@ -33,6 +33,7 @@ class TestChoosingTheSweepsInterval:
             "sweep_source": "settings",
             "sweep_default_seconds": 15,
             "sweep_presets": PRESETS,
+            "sweep_refused": None,
         }
         assert read_sweep_interval(h.db) == {"id": 1, "seconds": 5, "set_at": "2026-11-17 10:00:00.000000"}
 
@@ -46,6 +47,7 @@ class TestChoosingTheSweepsInterval:
             "sweep_source": "env",
             "sweep_default_seconds": 15,
             "sweep_presets": PRESETS,
+            "sweep_refused": None,
         }
         assert read_sweep_interval(h.db) is None
 
@@ -99,6 +101,7 @@ class TestHealthsSweepInterval:
         data = (await h.call("/health", anonymous=True)).json()
         assert data["settings"]["sweep_seconds"] == 15
         assert data["settings"]["sweep_source"] == "env"
+        assert data["settings"]["sweep_refused"] == "2"
 
 
 class TestWhatOnlyThePythonCanGetWrong:

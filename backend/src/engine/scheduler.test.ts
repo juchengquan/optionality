@@ -68,9 +68,11 @@ describe("the interval in force", () => {
     scheduler.startSweep(() => every, async () => { sweeps += 1; }, patient);
     expect(sweeps).toBe(1);                              // at once, as ever
     every = 0.02;                                        // chosen between ticks
-    await new Promise((r) => setTimeout(r, 700));        // the 0.5s tick, then 0.02s ones
+    // the 0.5s tick, then 0.02s ones: ~36 sweeps re-armed, 3 if it kept the boot interval — a
+    // margin wide enough for a loaded machine's timers (#442's review: 6 in 700ms could flake)
+    await new Promise((r) => setTimeout(r, 1200));
     scheduler.stopSweep();
-    expect(sweeps, "still sweeping at the interval armed at boot").toBeGreaterThanOrEqual(6);
+    expect(sweeps, "still sweeping at the interval armed at boot").toBeGreaterThanOrEqual(8);
   });
 
   it("slows down as readily", async () => {

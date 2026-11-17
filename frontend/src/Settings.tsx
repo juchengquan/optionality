@@ -181,6 +181,12 @@ function ServiceSweep({ health, onSweep }: {
       {refused !== null
         ? <p className="nx-meta" role="alert"><ErrorWords raw={refused} /></p>
         : null}
+      {/* a value in the database the service would not use — a hand edit, or a database it could
+          not read (#442's review): the box says "default", and this says why */}
+      {sweep.sweep_refused
+        ? <p className="nx-meta">{`the stored choice (${sweep.sweep_refused}) is not one of these, so the `
+            + `service sweeps at .env's ${sweep.sweep_default_seconds}s`}</p>
+        : null}
     </Field>
   );
 }

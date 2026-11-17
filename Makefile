@@ -130,7 +130,10 @@ check: lint check-workspace-links typecheck check-api check-cases check-scenario
 #                        instance SENDING anything — a sweep here must not message the owner.
 #                        Shell variables beat --env-file, which is what makes the blanking bite.
 #   a long sweep         one sweep at startup is unavoidable (the loop fires immediately, on
-#                        purpose), and 3600 stops it becoming a second sweeper after that.
+#                        purpose), and 3600 stops it becoming a second sweeper after that. The
+#                        snapshot's `sweep_interval` row is CLEARED (tools/serve-db.mjs), because
+#                        the page's choice overrides .env (ADR 0025) and would sweep live OpenD
+#                        every 5–60s from here. Never the live file: the tool refuses it.
 #   its own IB client id IB Gateway allows ONE connection per client id and the second displaces
 #                        the first in silence (ADR 0019), so a local run on the live service's id
 #                        (31415, the default) knocked the live service's References off the gateway
@@ -140,6 +143,7 @@ check: lint check-workspace-links typecheck check-api check-cases check-scenario
 SERVE_DB = data/optionality-ts.db.serve
 serve:
 	node backend/tools/backup/backup.ts $(TS_DB) $(SERVE_DB)
+	node tools/serve-db.mjs $(SERVE_DB) --not $(TS_DB)
 	OPTIONALITY_DB_PATH=$(SERVE_DB) TELEGRAM_BOT_TOKEN= TELEGRAM_CHAT_ID= IBKR_CLIENT_ID=31417 \
 	  MONITOR_INTERVAL_SECONDS=3600 node --env-file=.env backend/src/main.ts
 

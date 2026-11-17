@@ -911,13 +911,23 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "degradedVerdict", name: "an unknown start omits the duration",
       args: [degradedState(646, null, degradedAgo(1801)), degradedPolicy_, "x", NOW] },
 
-    // and coming back
+    // told, then the threshold moved with the interval (#442's review): the reminder is the clock's
+    { fn: "degradedVerdict", name: "once told, it reminds by the clock below the threshold in force",
+      args: [degradedState(3, degradedAgo(2400), degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+    { fn: "degradedVerdict", name: "and below it, untold, still says nothing",
+      args: [degradedState(3, degradedAgo(2400), null), degradedPolicy_, "x", NOW] },
+
+    // and coming back — said when the owner was TOLD, whatever the count (#442's review)
     { fn: "recoveredNotice", name: "says how long it was out",
-      args: [degradedState(646, degradedAgo(9720), degradedAgo(60)), degradedPolicy_, NOW] },
+      args: [degradedState(646, degradedAgo(9720), degradedAgo(60)), NOW] },
     { fn: "recoveredNotice", name: "stays quiet when nothing was ever announced",
-      args: [degradedState(4, degradedAgo(60), null), degradedPolicy_, NOW] },
+      args: [degradedState(4, degradedAgo(60), null), NOW] },
     { fn: "recoveredNotice", name: "an unknown start omits the duration",
-      args: [degradedState(646, null, degradedAgo(60)), degradedPolicy_, NOW] },
+      args: [degradedState(646, null, degradedAgo(60)), NOW] },
+    { fn: "recoveredNotice", name: "told, it recovers below the threshold in force",
+      args: [degradedState(3, degradedAgo(120), degradedAgo(60)), NOW] },
+    { fn: "recoveredNotice", name: "untold, it stays quiet above the threshold in force",
+      args: [degradedState(12, degradedAgo(60), null), NOW] },
   ],
   alarm: [
     // the four transitions, each with the sentence it sends

@@ -65,6 +65,21 @@ def sweep_interval(db: sqlite3.Connection, settings: Settings) -> SweepInterval:
     )
 
 
+def refusal_words(at: SweepInterval) -> str:
+    """What the log says when a stored value is refused (`MonitorSweeper.every_seconds`): once when it
+    first appears, at boot or later, and not at every tick."""
+    refused = at.refused or ""
+    if refused.startswith("unreadable: "):
+        return (
+            f"sweep_interval could not be read ({refused[len('unreadable: ') :]}): "
+            f"sweeping every {at.seconds}s, MONITOR_INTERVAL_SECONDS"
+        )
+    return (
+        f"sweep_interval in the database is {refused}, not one of the presets: "
+        f"sweeping every {at.seconds}s, MONITOR_INTERVAL_SECONDS, until it is set from the page"
+    )
+
+
 def choose_sweep_interval(
     db: sqlite3.Connection, settings: Settings, seconds: SweepSeconds | None, now: datetime
 ) -> SweepInterval:

@@ -9,7 +9,13 @@ import pytest
 from optionality_backend.db.open import create_database
 from optionality_backend.db.queries import read_sweep_interval
 from optionality_backend.env import DEFAULTS, Settings
-from optionality_backend.sweep_interval import SweepInterval, at_interval, choose_sweep_interval, sweep_interval
+from optionality_backend.sweep_interval import (
+    SweepInterval,
+    at_interval,
+    choose_sweep_interval,
+    refusal_words,
+    sweep_interval,
+)
 
 #: `.env` as the live service has it: a 15s sweep, and the counted knobs at their defaults.
 ENV = dataclasses.replace(DEFAULTS, monitor_interval_seconds=15)
@@ -58,6 +64,19 @@ class TestTheIntervalInForce:
         assert read.seconds == 15
         assert read.source == "env"
         assert read.refused is not None and read.refused.startswith("unreadable: ")
+
+
+class TestWhatTheLogSaysOfARefusedValue:
+    def test_names_what_was_stored_and_the_interval_used_instead(self):
+        assert refusal_words(interval(15, "env", "2")) == (
+            "sweep_interval in the database is 2, not one of the presets: sweeping every 15s, "
+            "MONITOR_INTERVAL_SECONDS, until it is set from the page"
+        )
+
+    def test_says_a_database_it_could_not_read_as_that_not_as_a_value(self):
+        assert refusal_words(interval(15, "env", "unreadable: gone")) == (
+            "sweep_interval could not be read (gone): sweeping every 15s, MONITOR_INTERVAL_SECONDS"
+        )
 
 
 def counted(s: Settings) -> list[int]:

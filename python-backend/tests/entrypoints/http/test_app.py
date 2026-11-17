@@ -154,6 +154,7 @@ class TestHealth:
             "sweep_source": "env",
             "sweep_default_seconds": 45,
             "sweep_presets": [5, 10, 15, 30, 60],
+            "sweep_refused": None,
         }
 
     async def test_says_the_alarm_engine_has_not_swept_yet_rather_than_inventing_a_time(self, start):

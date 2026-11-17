@@ -51,16 +51,11 @@ const send = telegramSender(settings.telegramBotToken, settings.telegramChatId);
 const vendors = openVendors(settings);
 const provider = vendors.provider;
 
-/** The sweep's interval as the page set it, or `.env`'s (#442, ADR 0025). A stored value that is
- *  not a preset got in by hand: said here, once, and swept past at `.env`'s interval — never a
- *  crash, since the knob is the owner's to fix from the page. Read again at every tick. */
+/** The sweep's interval as the page set it, or `.env`'s (#442, ADR 0025), for the line below.
+ *  Read again at every tick; a stored value that is not a preset got in by hand, and the sweeper
+ *  says so in the log when it first sees it — here at boot, or whenever it appears — never a crash,
+ *  since the knob is the owner's to fix from the page. */
 const interval = sweepInterval(db, settings);
-if (interval.refused !== null) {
-  console.error(
-    `sweep_interval in the database is ${interval.refused}, not one of the presets: `
-    + `sweeping every ${interval.seconds}s, MONITOR_INTERVAL_SECONDS, until it is set from the page`,
-  );
-}
 
 const scheduler = new Scheduler();
 const sweeper = new MonitorSweeper({

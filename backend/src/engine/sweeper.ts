@@ -58,7 +58,7 @@ import { fromSqlDatetime, toSqlDatetime } from "../db/time.ts";
 import { toSqliteBool, } from "../db/values.ts";
 import type { Settings } from "../env.ts";
 import type { DisabledReason } from "../schemas/monitor.ts";
-import { atInterval, sweepInterval } from "../sweep-interval.ts";
+import { atInterval, refusalWords, sweepInterval } from "../sweep-interval.ts";
 import { toMonitor, toPosition } from "../hydrate.ts";
 import type { QuoteFetcher, QuoteRecord } from "optionality/quotes";
 
@@ -138,8 +138,23 @@ export class MonitorSweeper {
    *  the database every time it is asked — by the scheduler at every tick, and by the counts below
    *  — so a choice made on the page is in force at the next sweep with no restart. */
   everySeconds(): number {
-    return sweepInterval(this.deps.db, this.deps.settings).seconds;
+    const at = sweepInterval(this.deps.db, this.deps.settings);
+    // a stored value refused (a hand edit, or a database it could not read) is said ONCE when it
+    // appears — at boot, or whenever it is edited in — and once when it clears, never per tick
+    // (#442's review): asked at every tick and every reading, a line each time would bury the log
+    if (at.refused !== this.refusalSaid) {
+      if (at.refused !== null) console.error(refusalWords(at));
+      else {
+        console.info(`sweep_interval is no longer refused: sweeping every ${at.seconds}s, `
+          + `${at.source === "settings" ? "set from the page" : "MONITOR_INTERVAL_SECONDS"}`);
+      }
+      this.refusalSaid = at.refused;
+    }
+    return at.seconds;
   }
+
+  /** The refusal last said in the log, so it is said once (`everySeconds`). */
+  private refusalSaid: string | null = null;
 
   private now(): Date {
     return this.deps.now?.() ?? new Date();

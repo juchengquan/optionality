@@ -78,7 +78,7 @@ describe("/health", () => {
       expired_retention_days: 3, display_tz: "Asia/Singapore",
       // the interval IN FORCE, and where it came from: `.env`'s here, nothing chosen (#442)
       sweep_seconds: 45, sweep_source: "env", sweep_default_seconds: 45,
-      sweep_presets: [5, 10, 15, 30, 60],
+      sweep_presets: [5, 10, 15, 30, 60], sweep_refused: null,
     });
   });
 

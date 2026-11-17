@@ -85,6 +85,16 @@ describe("the reminder, which is the point of this module", () => {
     expect(got.notice).toBe(null);
   });
 
+  it("reminds by the clock once told, even below the threshold in force (#442's review)", () => {
+    // told at the threshold at one interval, then the page chose a faster one and the threshold
+    // in force rose above the count: the outage is the same outage, already announced, and its
+    // reminder is due by the clock
+    const got = degradedVerdict(
+      state({ failures: 3, lastNoticeAt: new Date("2026-11-08T09:30:00Z") }), policy, "x", NOW,
+    );
+    expect(got.notice).toBe("⚠️ monitoring still degraded: 3 consecutive sweep failures over 4m (x)");
+  });
+
   it("does not repeat before the first notice has been sent", () => {
     // failures past the threshold with no stamp means the first notice failed to send. Treating
     // a null stamp as "long ago" would send the REMINDER as the first thing the owner sees,
@@ -129,9 +139,11 @@ describe("how long it has been broken", () => {
 });
 
 describe("recovery", () => {
+  const TOLD = new Date("2026-11-08T10:01:15Z");
+
   it("says so, with how long it was out", () => {
     expect(recoveredNotice(
-      state({ failures: 646, since: new Date("2026-11-08T10:00:00Z") }), policy,
+      state({ failures: 646, since: new Date("2026-11-08T10:00:00Z"), lastNoticeAt: TOLD }),
       new Date("2026-11-08T12:42:00Z"),
     )).toBe("✅ monitoring recovered after 2h42m");
   });
@@ -139,15 +151,21 @@ describe("recovery", () => {
   it("stays quiet when the owner was never told anything was wrong", () => {
     // four failures then a success is a blink. Announcing a recovery from a problem that was
     // never announced is noise that teaches the owner to ignore the channel.
-    expect(recoveredNotice(state({ failures: 4 }), policy, NOW)).toBe(null);
+    expect(recoveredNotice(state({ failures: 4 }), NOW)).toBe(null);
   });
 
-  it("speaks at exactly the threshold, matching when the first notice went out", () => {
-    expect(recoveredNotice(state({ failures: 5 }), policy, NOW)).toContain("recovered");
+  it("is decided by whether the owner was TOLD, never by the count (#442's review)", () => {
+    // The count's threshold moves with the sweep's interval (ADR 0025). Told at five failures at
+    // 15s, then switched to 5s — where the threshold is fifteen — three more failures and a success
+    // must still say it recovered, or the owner is left believing it degraded…
+    expect(recoveredNotice(state({ failures: 8, lastNoticeAt: TOLD }), NOW)).toContain("recovered");
+    // …and twelve failures at 5s (60s, nothing said), switched to 15s where five is the threshold,
+    // must not announce a recovery from an outage nobody heard about.
+    expect(recoveredNotice(state({ failures: 12, lastNoticeAt: null }), NOW)).toBe(null);
   });
 
   it("omits the duration when the start is unknown", () => {
-    expect(recoveredNotice(state({ failures: 646, since: null }), policy, NOW))
+    expect(recoveredNotice(state({ failures: 646, since: null, lastNoticeAt: TOLD }), NOW))
       .toBe("✅ monitoring recovered");
   });
 });

@@ -1343,6 +1343,33 @@ class TestAtTheIntervalThePageChose:
         self.choose(t, 7)  # by hand: not a preset, so .env's
         assert s.every_seconds() == 15
 
+    async def test_logs_a_stored_value_it_refuses_once_when_it_appears_and_once_when_it_clears_never_per_tick(
+        self, t, caplog
+    ):
+        # #442's review: a hand edit after boot was silent. Said when it appears, whenever that is…
+        caplog.set_level(logging.INFO, logger=LOG)
+        s = self.failing_for(t)
+        assert s.every_seconds() == 15
+        self.choose(t, 2)
+        for _ in range(5):
+            s.every_seconds()
+        said = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == LOG]
+        assert said == [
+            (
+                logging.ERROR,
+                (
+                    "sweep_interval in the database is 2, not one of the presets: sweeping every 15s, "
+                    "MONITOR_INTERVAL_SECONDS, until it is set from the page"
+                ),
+            )
+        ]
+        # …and once when it is gone, by a choice from the page
+        self.choose(t, 5)
+        for _ in range(5):
+            s.every_seconds()
+        said = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == LOG]
+        assert said[1:] == [(logging.INFO, "sweep_interval is no longer refused: sweeping every 5s, set from the page")]
+
     async def test_calls_monitoring_degraded_after_the_same_75s_at_5s_fifteen_failures_not_five(self, t):
         s = self.failing_for(t)
         self.choose(t, 5)
@@ -1369,6 +1396,43 @@ class TestAtTheIntervalThePageChose:
         failing[0] = False
         await self.sweeps_at(t, s, 5, 1)
         assert t.said("recovered") == []
+
+    def outage(self, t: Sweeps) -> tuple[MonitorSweeper, list[bool]]:
+        """A Provider down while `down[0]` says so, on a rule, at .env's 15s."""
+        t.monitor()
+        down = [True]
+        return t.sweeper(failing_while(lambda: down[0], "down"), **self.ENV_15), down
+
+    async def test_says_it_recovered_from_an_outage_it_announced_though_the_interval_changed_under_it(self, t):
+        # #442's review: told at five failures at 15s; then 5s, where the threshold is fifteen; three
+        # more failures and a success — read against the count, the owner was never told it came back
+        s, down = self.outage(t)
+        await self.sweeps_at(t, s, 15, 5)
+        assert len(self.degraded(t)) == 1
+        self.choose(t, 5)
+        await self.sweeps_at(t, s, 5, 3)
+        down[0] = False
+        await self.sweeps_at(t, s, 5, 1)
+        assert len(t.said("recovered")) == 1
+
+    async def test_announces_no_recovery_from_an_outage_nobody_heard_about_the_other_way_round(self, t):
+        # twelve failures at 5s is 60s, under the 75s: nothing said. Switched to 15s, where five is the
+        # threshold, a count read against it would announce a recovery from silence
+        s, down = self.outage(t)
+        self.choose(t, 5)
+        await self.sweeps_at(t, s, 5, 12)
+        assert self.degraded(t) == []
+        self.choose(t, 15)
+        down[0] = False
+        await self.sweeps_at(t, s, 15, 1)
+        assert t.said("recovered") == []
+
+    async def test_goes_on_reminding_about_an_announced_outage_after_a_faster_interval_raises_the_threshold(self, t):
+        s, _ = self.outage(t)
+        await self.sweeps_at(t, s, 15, 5)
+        self.choose(t, 5)
+        await self.sweeps_at(t, s, 5, 1800 // 5)  # half an hour at 5s, still down
+        assert len([m for m in t.sent if m.startswith("⚠️ monitoring still degraded")]) == 1
 
     async def test_calls_a_provider_unreliable_after_the_same_time_of_failure_inside_the_window(self, t):
         # fail, succeed, fail… at 5s: five failures in the window are 25s of failure, not 75s

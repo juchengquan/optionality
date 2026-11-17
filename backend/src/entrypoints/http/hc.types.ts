@@ -152,6 +152,7 @@ export type HcChecks = [
   Checked<Exactly<E["health"]["settings"]["sweep_source"], "settings" | "env">>,
   Checked<Exactly<E["health"]["settings"]["sweep_default_seconds"], number>>,
   Checked<Exactly<E["health"]["settings"]["sweep_presets"], number[]>>,
+  Checked<Exactly<E["health"]["settings"]["sweep_refused"], string | null>>,
   // PATCH /settings answers what /health's settings say of the sweep (#442)
   Checked<Exactly<Ok<E["settingsPatched"]>["sweep_seconds"], number>>,
   Checked<Exactly<Ok<E["settingsPatched"]>["sweep_source"], "settings" | "env">>,

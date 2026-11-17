@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createDatabase } from "./db/open.ts";
 import { readSweepInterval } from "./db/queries/index.ts";
 import { DEFAULTS, type Settings } from "./env.ts";
-import { atInterval, chooseSweepInterval, sweepInterval } from "./sweep-interval.ts";
+import { atInterval, chooseSweepInterval, refusalWords, sweepInterval } from "./sweep-interval.ts";
 
 /** `.env` as the live service has it: a 15s sweep, and the counted knobs at their defaults. */
 const ENV: Settings = { ...DEFAULTS, monitorIntervalSeconds: 15 };
@@ -71,6 +71,19 @@ describe("the interval in force", () => {
     expect(read.seconds).toBe(15);
     expect(read.source).toBe("env");
     expect(read.refused).toMatch(/^unreadable: /);
+  });
+});
+
+describe("what the log says of a refused value", () => {
+  it("names what was stored and the interval used instead", () => {
+    expect(refusalWords({ seconds: 15, source: "env", defaultSeconds: 15, refused: "2" })).toBe(
+      "sweep_interval in the database is 2, not one of the presets: sweeping every 15s, "
+      + "MONITOR_INTERVAL_SECONDS, until it is set from the page");
+  });
+
+  it("says a database it could not read as that, not as a value", () => {
+    expect(refusalWords({ seconds: 15, source: "env", defaultSeconds: 15, refused: "unreadable: gone" }))
+      .toBe("sweep_interval could not be read (gone): sweeping every 15s, MONITOR_INTERVAL_SECONDS");
   });
 });
 

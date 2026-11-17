@@ -51,6 +51,18 @@ export function sweepInterval(db: DatabaseSync, settings: Settings): SweepInterv
   };
 }
 
+/** What the log says when a stored value is refused (`MonitorSweeper.everySeconds`): once when it
+ *  first appears, at boot or later, and not at every tick. */
+export function refusalWords(at: SweepInterval): string {
+  const refused = at.refused ?? "";
+  if (refused.startsWith("unreadable: ")) {
+    return `sweep_interval could not be read (${refused.slice("unreadable: ".length)}): `
+      + `sweeping every ${at.seconds}s, MONITOR_INTERVAL_SECONDS`;
+  }
+  return `sweep_interval in the database is ${refused}, not one of the presets: `
+    + `sweeping every ${at.seconds}s, MONITOR_INTERVAL_SECONDS, until it is set from the page`;
+}
+
 /** The page's choice, or null for `.env`'s; answered with the interval now in force. */
 export function chooseSweepInterval(
   db: DatabaseSync, settings: Settings, seconds: SweepSeconds | null, now: Date,

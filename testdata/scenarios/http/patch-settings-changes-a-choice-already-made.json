@@ -59,7 +59,8 @@
           15,
           30,
           60
-        ]
+        ],
+        "sweep_refused": null
       }
     },
     "rows": {

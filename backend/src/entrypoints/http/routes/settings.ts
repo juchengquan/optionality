@@ -19,7 +19,8 @@ import { chooseSweepInterval, type SweepInterval } from "../../../sweep-interval
 import { valid } from "../validate.ts";
 
 /** The sweep's interval as the page needs it: what is in force, where it came from, the default a
- *  "back to .env" choice returns to, and what may be chosen. `/health` carries the same four. */
+ *  "back to .env" choice returns to, what may be chosen, and a stored value refused. `/health`
+ *  carries the same five. */
 export const SweepSettings = z.object({
   /** the interval the engine sweeps at now */
   sweep_seconds: z.number(),
@@ -29,6 +30,9 @@ export const SweepSettings = z.object({
   sweep_default_seconds: z.number(),
   /** the intervals the page may choose, from one definition (`domain/cadence.ts`) */
   sweep_presets: z.array(z.number()),
+  /** a stored value that was refused — not a preset, so a hand edit, or a database that could not
+   *  be read — as it was found, or null; `.env`'s interval is in force while it stands (#442) */
+  sweep_refused: z.string().nullable(),
 });
 
 export const sweepSettings = (at: SweepInterval) => ({
@@ -36,6 +40,7 @@ export const sweepSettings = (at: SweepInterval) => ({
   sweep_source: at.source,
   sweep_default_seconds: at.defaultSeconds,
   sweep_presets: [...SWEEP_PRESETS],
+  sweep_refused: at.refused,
 });
 
 const patch = documented(

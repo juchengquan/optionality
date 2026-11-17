@@ -30,7 +30,8 @@ _AS_ZOD = ConfigDict(strict=True, allow_inf_nan=False)
 
 class SweepSettings(BaseModel):
     """The sweep's interval as the page needs it: what is in force, where it came from, the default a
-    "back to .env" choice returns to, and what may be chosen. `/health` carries the same four."""
+    "back to .env" choice returns to, what may be chosen, and a stored value refused. `/health` carries
+    the same five."""
 
     model_config = _AS_ZOD
 
@@ -42,6 +43,9 @@ class SweepSettings(BaseModel):
     sweep_default_seconds: float
     #: the intervals the page may choose, from one definition (`optionality.cadence`)
     sweep_presets: list[float]
+    #: a stored value that was refused — not a preset, so a hand edit, or a database that could not be
+    #: read — as it was found, or None; `.env`'s interval is in force while it stands (#442)
+    sweep_refused: str | None
 
 
 def sweep_settings(at: SweepInterval) -> dict[str, Any]:
@@ -50,6 +54,7 @@ def sweep_settings(at: SweepInterval) -> dict[str, Any]:
         "sweep_source": at.source,
         "sweep_default_seconds": at.default_seconds,
         "sweep_presets": list(SWEEP_PRESETS),
+        "sweep_refused": at.refused,
     }
 
 

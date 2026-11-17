@@ -25,6 +25,7 @@ describe("choosing the sweep's interval", () => {
     expect(resp.status).toBe(200);
     expect(await body(resp)).toEqual({
       sweep_seconds: 5, sweep_source: "settings", sweep_default_seconds: 15, sweep_presets: PRESETS,
+      sweep_refused: null,
     });
     expect(readSweepInterval(h.db)).toEqual({ id: 1, seconds: 5, set_at: "2026-11-17 10:00:00.000000" });
   });
@@ -36,6 +37,7 @@ describe("choosing the sweep's interval", () => {
     expect(resp.status).toBe(200);
     expect(await body(resp)).toEqual({
       sweep_seconds: 15, sweep_source: "env", sweep_default_seconds: 15, sweep_presets: PRESETS,
+      sweep_refused: null,
     });
     expect(readSweepInterval(h.db)).toBeUndefined();
   });
@@ -66,6 +68,7 @@ describe("/health's sweep interval", () => {
     const data = await body(await h.call("/health", { anonymous: true }));
     expect(data.settings).toMatchObject({
       sweep_seconds: 15, sweep_source: "env", sweep_default_seconds: 15, sweep_presets: PRESETS,
+      sweep_refused: null,
     });
   });
 
@@ -80,6 +83,6 @@ describe("/health's sweep interval", () => {
     start(ENV_15);
     h.db.prepare("insert into sweep_interval values (1, 2, '2026-11-17 10:00:00.000000')").run();
     const data = await body(await h.call("/health", { anonymous: true }));
-    expect(data.settings).toMatchObject({ sweep_seconds: 15, sweep_source: "env" });
+    expect(data.settings).toMatchObject({ sweep_seconds: 15, sweep_source: "env", sweep_refused: "2" });
   });
 });

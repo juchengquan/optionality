@@ -249,15 +249,14 @@ class SweepHealth:
 
     async def success(self) -> None:
         notify = self._deps.notify
-        # the same threshold the notice was sent at, or recovery is announced for nothing said
-        settings = at_interval(self._deps.settings, self._deps.every_seconds())
+        # said when the owner was told, whatever the count: the threshold moves with the interval
+        # (#442), and a count read against today's could contradict what was said yesterday
         notice = recovered_notice(
             DegradedState(
                 failures=self.consecutive_failures_count,
                 since=self.degraded_since,
                 last_notice_at=self.last_degraded_notice_at,
             ),
-            _degraded_policy(settings),
             self._deps.now(),
         )
         self.consecutive_failures_count = 0

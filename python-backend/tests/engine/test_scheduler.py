@@ -122,9 +122,10 @@ class TestTheIntervalInForce:
         scheduler.start_sweep(lambda: every, sweep, PATIENT)
         assert sweeps == 1  # at once, as ever
         every = 0.02  # chosen between ticks
-        await asyncio.sleep(0.7)  # the 0.5s tick, then 0.02s ones
+        # the 0.5s tick, then 0.02s ones: ~36 sweeps re-armed, 3 if it kept the boot interval
+        await asyncio.sleep(1.2)
         scheduler.stop_sweep()
-        assert sweeps >= 6, "still sweeping at the interval armed at boot"
+        assert sweeps >= 8, "still sweeping at the interval armed at boot"
 
     async def test_slows_down_as_readily(self, scheduler: Scheduler) -> None:
         every = 0.02

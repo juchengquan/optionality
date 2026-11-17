@@ -173,6 +173,12 @@
                                 "items": {
                                   "type": "number"
                                 }
+                              },
+                              "sweep_refused": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
                               }
                             },
                             "required": [
@@ -182,7 +188,8 @@
                               "sweep_seconds",
                               "sweep_source",
                               "sweep_default_seconds",
-                              "sweep_presets"
+                              "sweep_presets",
+                              "sweep_refused"
                             ]
                           }
                         },
@@ -4376,13 +4383,20 @@
                             "items": {
                               "type": "number"
                             }
+                          },
+                          "sweep_refused": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
                           }
                         },
                         "required": [
                           "sweep_seconds",
                           "sweep_source",
                           "sweep_default_seconds",
-                          "sweep_presets"
+                          "sweep_presets",
+                          "sweep_refused"
                         ]
                       }
                     }

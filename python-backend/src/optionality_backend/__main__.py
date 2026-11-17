@@ -218,17 +218,11 @@ async def _run() -> NoReturn:
     vendors = open_vendors(settings)
     provider = vendors.provider
 
-    # The sweep's interval as the page set it, or `.env`'s (#442, ADR 0025). A stored value that is not a
-    # preset got in by hand: said here, once, and swept past at `.env`'s interval — never a crash, since
-    # the knob is the owner's to fix from the page. Read again at every tick.
+    # The sweep's interval as the page set it, or `.env`'s (#442, ADR 0025), for the line below. Read
+    # again at every tick; a stored value that is not a preset got in by hand, and the sweeper says so in
+    # the log when it first sees it — here at boot, or whenever it appears — never a crash, since the knob
+    # is the owner's to fix from the page.
     interval = sweep_interval(db, settings)
-    if interval.refused is not None:
-        log.error(
-            "sweep_interval in the database is %s, not one of the presets: "
-            "sweeping every %ss, MONITOR_INTERVAL_SECONDS, until it is set from the page",
-            interval.refused,
-            interval.seconds,
-        )
 
     scheduler = Scheduler()
     sweeper = MonitorSweeper(SweeperDeps(db=db, settings=settings, fetch_quotes=provider.fetch_quotes, send=send))

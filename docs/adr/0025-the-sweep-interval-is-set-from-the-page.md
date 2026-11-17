@@ -61,6 +61,19 @@ rule is otherwise unchanged.
   that is not one got in by hand: it is refused when READ, the service says so in its log at boot,
   and sweeps at `.env`'s interval. A database that cannot be read at all also falls back, because
   the read happens at every tick and a throw there would stop the alarms.
+- **A refusal is said once, and served.** The log says a refused value when it first appears — at
+  boot or whenever it is edited in — and once when it clears, never per tick; `/health` serves it as
+  `sweep_refused`, and Settings says the stored choice is not used and why.
+- **Whether the owner was TOLD decides the recovery, not the count.** A threshold that moves with
+  the interval cannot be re-read mid-outage: told at five failures at 15s, switched to 5s (threshold
+  fifteen), a recovery judged by the count was never said; twelve silent failures at 5s, switched to
+  15s, announced a recovery from an outage nobody heard about. So `recoveredNotice` speaks iff a
+  notice went out, and an announced outage's reminder is due by the clock alone, below the
+  threshold in force or not (`domain/degraded.ts`). The flapping notice has no recovery and is a
+  rate in a window, so a change only moves when it next speaks.
+- **`make serve` clears the snapshot's row** (`tools/serve-db.mjs`, which refuses the live file): the
+  recipe sweeps its snapshot hourly so as not to be a second sweeper, and a copied choice would
+  override that.
 - **A table of its own, one row at most** (`CHECK (id = 1)`), rather than a key/value table of
   settings: a second knob here is a migration and an ADR, never a row someone adds.
 

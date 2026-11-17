@@ -223,15 +223,15 @@ export class SweepHealth implements SweeperPort {
 
   async success(): Promise<void> {
     const { notify } = this.deps;
-    // the same threshold the notice was sent at, or recovery is announced for nothing said
-    const settings = atInterval(this.deps.settings, this.deps.everySeconds());
+    // said when the owner was told, whatever the count: the threshold moves with the interval
+    // (#442), and a count read against today's could contradict what was said yesterday
     const notice = recoveredNotice(
       {
         failures: this.consecutiveFailuresCount,
         since: this.degradedSince,
         lastNoticeAt: this.lastDegradedNoticeAt,
       },
-      degradedPolicy(settings), this.deps.now(),
+      this.deps.now(),
     );
     this.consecutiveFailuresCount = 0;
     this.degradedSince = null;
