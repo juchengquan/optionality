@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Next } from "../Next";
 import { greekInCapitals, headingsInCapitals, serveGreeks } from "../testing/greekLabels";
 import { overflowsSideways, settle } from "./nextBook";
+import { bareName } from "../testing/held";
 
 afterEach(async () => {
   cleanup();
@@ -23,11 +24,11 @@ describe("Greek letters as written, on the desk", () => {
     expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("desk");
     // and no heading, label or button in capitals set by CSS (part H)
     const found = [...greekInCapitals(), ...headingsInCapitals()];
-    const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map((b) => b.textContent!);
+    const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map(bareName);
     expect(names.length).toBeGreaterThan(8);
     let labels = 0;
     for (const name of names) {
-      fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === name)!);
+      fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => bareName(b) === name)!);
       await settle();
       const insp = screen.getByRole("complementary", { name: `inspector: ${name}` });
       found.push(...[...greekInCapitals(insp), ...headingsInCapitals(insp)].map((f) => `${name}: ${f}`));

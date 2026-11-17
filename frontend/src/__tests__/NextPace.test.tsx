@@ -14,6 +14,7 @@ import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
 import { PhoneBook } from "../phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer, VOLS } from "../testing/ownerBook";
+import { heldOrNot } from "../testing/held";
 
 /** Every request the page made, as `METHOD path`. */
 let asked: string[] = [];
@@ -75,7 +76,7 @@ const valueCell = (id: string) => deskRow(id).querySelector<HTMLElement>('[data-
 const gapIn = (el: HTMLElement | null) => el?.querySelector<HTMLElement>("[data-outcome]") ?? null;
 
 function inspect(id: string, name: string) {
-  fireEvent.click(within(deskRow(id)).getByRole("button", { name }));
+  fireEvent.click(within(deskRow(id)).getByRole("button", { name: heldOrNot(name) }));
   return screen.getByRole("complementary", { name: `inspector: ${name}` });
 }
 const paceOf = (root: HTMLElement) => within(root).getByRole("region", { name: "the pace explained" });

@@ -44,7 +44,7 @@ export interface BookProps {
   /** editing, closing and deleting a holding (#294); absent, its detail offers none of them */
   writes?: HoldingWrites;
   /** the closed trades' fold (#296, #373), drawn by either arrangement as the LAST thing in its
-   *  book, after the watchlist. The saved picture (#394) draws none: a journal is not the book */
+   *  book, after its expiries. The saved picture (#394) draws none: a journal is not the book */
   journal?: React.ReactNode;
 }
 

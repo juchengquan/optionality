@@ -312,14 +312,14 @@ describe("the desk's inspector, on a holding", () => {
     const held = HOLDINGS.map((h) => h.id === "h-ic"
       ? { ...h, greeks: { option_delta: -0.12, option_gamma: -0.00042, option_theta: 1.1, option_vega: -2.3 } } : h);
     render(<DeskBook {...props(BOOK, { holdings: held })} />);
-    fireEvent.click(within(deskRow("h-ic")).getByRole("button", { name: "1231_IC" }));
+    fireEvent.click(within(deskRow("h-ic")).getByRole("button", { name: "1231_IC held" }));
     const insp = screen.getByRole("complementary", { name: /inspector/ });
     expect(within(insp).getByText("position Γ").nextElementSibling!.textContent).toBe("\u22120.0004");
     expect(within(insp).getByText("position ν").nextElementSibling!.textContent).toBe("\u22122.30");
     cleanup();
     // and a dash where the service summed none
     render(<DeskBook {...props(BOOK)} />);
-    fireEvent.click(within(deskRow("h-ic")).getByRole("button", { name: "1231_IC" }));
+    fireEvent.click(within(deskRow("h-ic")).getByRole("button", { name: "1231_IC held" }));
     const bare = screen.getByRole("complementary", { name: /inspector/ });
     expect(within(bare).getByText("position Γ").nextElementSibling!.textContent).toBe("—");
   });

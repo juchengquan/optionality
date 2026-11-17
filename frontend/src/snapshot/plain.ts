@@ -23,10 +23,10 @@ import { DASH, freshnessWords } from "../shared/format";
 import { GROUPS, headingOf, reasonLabel } from "../shared/groups";
 import { drawnReadings, referenceWords } from "../shared/readings";
 
-import { PINNED, PLAIN_COLUMNS, rowName, rowStrip, type DeskColumn, type DeskRow } from "../desk/columns";
+import { HELD, PINNED, PLAIN_COLUMNS, rowName, rowStrip, ruleOfRow, subRules, type DeskColumn, type DeskRow } from "../desk/columns";
 import { closedLineText, levelWords } from "../levels";
-import { monitorName, storedRuleWords, type Need } from "../needs";
-import { placeBook, type PlacedHolding } from "../placement";
+import { monitorName, sentence, storedRuleWords, type Need } from "../needs";
+import { drawnUnder, NOTHING, placeBook, type PlacedHolding } from "../placement";
 import { servedWhen, type MarketPhase } from "../session";
 import { ET, weekdayDate, writtenDate, zoneName } from "../shared/times";
 import { compactWords, nearest, strikeName } from "../strip";
@@ -69,8 +69,8 @@ export interface PlainSection {
   title: string;
   /** what the section says before its rows: why there are none, or why they are listed apart */
   notes: string[];
-  /** the section's table header: the holdings' every column the viewer ticked, and the watchlist's
-   *  and the muted rules' without the columns only a holding fills (2026-11-16) */
+  /** the section's table header: the book's every column the viewer ticked, and the muted rules'
+   *  without the columns only a holding fills (2026-11-16) */
   columns: string[];
   /** each column's alignment, as `columns`: a figure to the right, words to the left */
   align: ("left" | "right")[];
@@ -98,8 +98,8 @@ const LABELS: Record<string, string> = {
  *  rest are words, set to the left. */
 const FIGURE_COLUMNS = new Set(["value", "pnl", "captured", "delta", "dte", "manage"]);
 
-/** The columns only a holding fills: a watchlist row and a muted rule leave them blank, so their
- *  tables carry none of them (2026-11-16). */
+/** The columns only a holding fills: a muted rule leaves them blank, so its table carries none of
+ *  them (2026-11-16). The book's one table carries them, blank on a watched row (2026-11-17). */
 const HOLDING_ONLY = new Set(["pnl", "captured", "pace_gap", "manage"]);
 
 /** The nearest short strike, named, and how far SPX is from it: "C8050 488 · 1.64σ" (`compactWords`,
@@ -146,64 +146,70 @@ function byReason(muted: readonly Monitor[]): [string | null, Monitor[]][] {
 export function plainView(input: PlainInput): PlainView {
   const { privacy } = input;
   const columns = shownColumns(input.hidden);
-  const watched = columns.filter((c) => !HOLDING_ONLY.has(c.key));
   const placed = placeBook(input.quotes, input.holdings, input.monitors);
 
-  // a name with no note beside it (#400): the page keeps its overlap note, the table does not
-  const rowIn = (cols: readonly DeskColumn[]) => (r: DeskRow) =>
-    cols.map((c) => c.key === PINNED ? rowName(r) : cellOf(c, r, privacy));
-  const row = rowIn(columns);
-  const watchRow = rowIn(watched);
+  // a name with no note beside it (#400): the page keeps its overlap note, the table does not. A
+  // holding's name carries its "held" tag, as on the screen (2026-11-17)
+  // Where the rule's column is hidden, a holding's own rule — drawn on its row since 2026-11-17, with
+  // no row of its own — is said in its name cell, in its sentence, as the desk's name cell says its
+  // distance: hidden with the column, it would be in neither
+  const ruleShown = columns.some((c) => c.key === "alarm");
+  const nameOf = (r: DeskRow) => {
+    if (r.kind !== "holding") return rowName(r);
+    const own = ruleShown ? null : ruleOfRow(r);
+    return own ? `${rowName(r)} ${HELD} — ${sentence(own)}` : `${rowName(r)} ${HELD}`;
+  };
+  const row = (r: DeskRow) => columns.map((c) => c.key === PINNED ? nameOf(r) : cellOf(c, r, privacy));
   const header = (cols: readonly DeskColumn[]) => ({
     columns: cols.map((c) => LABELS[c.key] ?? c.label),
     align: cols.map((c): "left" | "right" => FIGURE_COLUMNS.has(c.key) ? "right" : "left"),
   });
+  // the quiet "contracts" label over an expiry's lone contracts, as a row of its own
+  const subLabel = (words: string) => columns.map((c) => (c.key === PINNED ? words : ""));
 
-  // ---- Holdings
-  const holdingNotes: string[] = [];
-  if (input.holdingsError !== null) holdingNotes.push(`the holdings could not be valued — ${plainWords(input.holdingsError, "refresh to try again")}`);
-  else if (input.holdings === null) holdingNotes.push("valuing…");
-  else if (input.holdings.length === 0) holdingNotes.push("nothing held");
-  const holdingGroups: PlainGroup[] = placed.holdings.map(({ expiry, rows }) => ({
-    heading: `${writtenDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`,
-    rows: rows.flat().flatMap((p: PlacedHolding) => [
-      row({ kind: "holding", holding: p.holding, rules: p.rules }),
-      ...p.rules.map((e) => row({ kind: "rule", entry: e, nested: true })),
-    ]),
+  // ---- the one book (2026-11-17): each expiry once, its held spreads (their own rule in their rule
+  // cell, any other rule a row under them), its watched spreads, then its lone contracts
+  const notes: string[] = [];
+  if (input.holdingsError !== null) notes.push(`the holdings could not be valued — ${plainWords(input.holdingsError, "refresh to try again")}`);
+  else if (input.holdings === null) notes.push("valuing…");
+  else if (placed.book.length === 0 && placed.unplaced.length === 0 && placed.quarantined.length === 0) notes.push(NOTHING);
+  const groups: PlainGroup[] = placed.book.map((g) => ({
+    heading: `${writtenDate(g.expiry)} · ${g.dte} DTE`,
+    rows: [
+      ...g.held.flat().flatMap((p: PlacedHolding) => [
+        row({ kind: "holding", holding: p.holding, rules: p.rules }),
+        ...subRules(p).map((e) => row({ kind: "rule", entry: e, nested: true })),
+      ]),
+      // each rule once (2026-11-17): a leg rule met under a second spread is not written again
+      ...g.spreads.flatMap(({ entry, under, overlap, elsewhere }) => [
+        row({ kind: "rule", entry, nested: false, overlap }),
+        ...drawnUnder(under, elsewhere).map((e) => row({ kind: "rule", entry: e, nested: true })),
+      ]),
+      ...(g.contracts.length > 0 ? [subLabel("contracts")] : []),
+      ...g.contracts.flatMap(({ entry, under, elsewhere }) => [
+        row({ kind: "rule", entry, nested: false }),
+        ...drawnUnder(under, elsewhere).map((e) => row({ kind: "rule", entry: e, nested: true })),
+      ]),
+    ],
   }));
   if (placed.unplaced.length > 0) {
-    holdingGroups.push({
+    groups.push({
       heading: `Rules on held contracts — ${input.holdings === null
         ? "the holdings are not valued, so the rules about them are listed on their own"
         : "each watches a held contract that no single holding owns, as on a roll day"}`,
       rows: placed.unplaced.map((e) => row({ kind: "rule", entry: e, nested: false })),
     });
   }
-
-  // ---- Watchlist
-  const watchGroups: PlainGroup[] = placed.watchlist.map(({ expiry, items }) => ({
-    heading: `${writtenDate(expiry)} · ${items[0]!.entry.dte} DTE`,
-    rows: items.flatMap(({ entry, under, overlap }) => [
-      watchRow({ kind: "rule", entry, nested: false, overlap }),
-      ...under.map((e) => watchRow({ kind: "rule", entry: e, nested: true })),
-    ]),
-  }));
   if (placed.quarantined.length > 0) {
-    watchGroups.push({
+    groups.push({
       heading: "Quarantined — switched off by the service",
-      rows: placed.quarantined.map((m) => watchRow({ kind: "quarantined", monitor: m })),
+      rows: placed.quarantined.map((m) => row({ kind: "quarantined", monitor: m })),
     });
   }
 
-  const sections: PlainSection[] = [
-    { title: "Holdings", notes: holdingNotes, ...header(columns), groups: holdingGroups },
-    {
-      title: "Watchlist",
-      notes: placed.watchlist.length === 0 && placed.quarantined.length === 0 ? ["nothing watched"] : [],
-      ...header(watched),
-      groups: watchGroups,
-    },
-  ];
+  const sections: PlainSection[] = [{ title: "Book", notes, ...header(columns), groups }];
+  // the muted rules' table carries none of the columns only a holding fills (2026-11-16)
+  const watched = columns.filter((c) => !HOLDING_ONLY.has(c.key));
 
   // ---- Muted and expired: off by hand, by the calendar, or with their holding — the desk's fold
   // under a heading row per reason, as the expiries are (#400): with no status column, the heading

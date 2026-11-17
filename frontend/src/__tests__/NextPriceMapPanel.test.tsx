@@ -167,7 +167,7 @@ describe("one selection, shared with the table", () => {
   it("a row picked in the table is the spread marked on the map, and only that one", () => {
     render(<DeskBook {...props()} />);
     const map = open();
-    fireEvent.click(within(deskRow("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(deskRow("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     const pressed = [...map.querySelectorAll<SVGGElement>("[data-spread]")]
       .filter((s) => s.getAttribute("aria-pressed") === "true").map((s) => s.dataset.spread);
     expect(pressed).toEqual(["h-calls"]);

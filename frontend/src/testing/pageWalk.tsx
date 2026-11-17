@@ -17,6 +17,7 @@ import type { Entry, Holding } from "../shared/api";
 import { Next } from "../Next";
 import { closedBookService } from "./closedBook";
 import { CONDOR } from "./ruleEdits";
+import { bareName } from "../testing/held";
 
 export type Read = (where: string, root: Element) => void;
 
@@ -165,9 +166,9 @@ export async function walkDesk(read: Read, now: Date = MONDAY, shape?: (path: st
 
   // each holding's forms, and each payoff's crosshair
   let charts = 0, compared = 0, split = 0;
-  const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map((b) => b.textContent!);
+  const names = [...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].map(bareName);
   for (const name of names) {
-    fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === name)!);
+    fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => bareName(b) === name)!);
     await settle();
     const insp = screen.getByRole("complementary", { name: `inspector: ${name}` });
     read(name, insp);
@@ -213,7 +214,7 @@ export async function walkDesk(read: Read, now: Date = MONDAY, shape?: (path: st
   // a rule's editor and its delete question, from the first rule row's inspector
   let ruleForms = 0;
   for (const name of names) {
-    fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === name)!);
+    fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => bareName(b) === name)!);
     await settle();
     const insp = screen.getByRole("complementary", { name: `inspector: ${name}` });
     if (!insp.querySelector(".nx-hold-actions") && await readRuleForms(name, insp, read)) { ruleForms++; break; }

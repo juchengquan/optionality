@@ -4,7 +4,7 @@ import "./phone.css";
 import type { BookProps } from "../Book";
 import { Money } from "../Book";
 import { ClosedLine } from "../ClosedLine";
-import { placeBook, type BookModel, type PlacedHolding } from "../placement";
+import { NOTHING, placeBook, type BookModel, type PlacedHolding } from "../placement";
 import { keptHolding } from "../kept";
 import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
@@ -13,8 +13,8 @@ import { ErrorWords } from "../shared/ErrorWords";
 import { SpxNote } from "../StrikeStrip";
 import { bookSpxReasons } from "../strip";
 
-/** The phone's book, arrangement B (ADR 0023, #290): cards and the detail sheet — ONE book, the
- *  same cards in session and out of it (#374; ADR 0023 amended 2026-11-13), with no pager: a
+/** The phone's book, arrangement B (ADR 0023, #290): cards and the detail sheet — ONE book, by
+ *  expiry, holdings and watches together (2026-11-17), the same cards in session and out of it (#374; ADR 0023 amended 2026-11-13), with no pager: a
  *  holding's history is in its sheet, open from the start outside the session.
  *
  *  It DRAWS `placeBook` and decides nothing about where a rule sits, so the phone cannot group the
@@ -41,6 +41,7 @@ export function PhoneBook({
   const gone = openId !== null && subject === null;
   useEffect(() => { if (gone) setOpenId(null); }, [gone]);
 
+  const empty = placed.book.length === 0 && placed.unplaced.length === 0 && placed.quarantined.length === 0;
   // why SPX is not current, said once for the book rather than on every card's strip (2026-11-17)
   const spxReasons = bookSpxReasons(holdings, quotes);
   const spxSaid = spxReasons.length > 0;
@@ -55,7 +56,8 @@ export function PhoneBook({
       {holdingsError !== null
         ? <div className="nxp-meta">{"the holdings could not be valued — "}<ErrorWords raw={holdingsError} again="refresh to try again" /></div> : null}
       {holdings === null && holdingsError === null ? <p className="nxp-meta">valuing…</p> : null}
-      {holdings !== null && holdings.length === 0 ? <p className="nxp-meta">nothing held</p> : null}
+      {/* one line for an empty book, whichever half is missing (2026-11-17) */}
+      {holdings !== null && empty ? <p className="nxp-meta">{NOTHING}</p> : null}
     </>
   );
 
@@ -77,14 +79,16 @@ export function PhoneBook({
 
   return (
     <div className="nx-book nxp-book">
-      <section aria-labelledby="nxp-holdings">
-        <h2 id="nxp-holdings">Holdings</h2>
+      {/* ONE book (2026-11-17): each expiry once, its held spreads, its watched spreads, then its
+          lone contracts under a quiet label */}
+      <section aria-labelledby="nxp-book">
+        <h2 id="nxp-book" className="sr-only">Book</h2>
         {status}
-        {placed.holdings.map(({ expiry, rows }) => (
-          <section key={expiry} className="nxp-expiry" data-expiry={expiry}>
-            <ExpiryHead expiry={expiry} dte={rows[0]![0]!.holding.dte} />
+        {placed.book.map((g) => (
+          <section key={g.expiry} className="nxp-expiry" data-expiry={g.expiry}>
+            <ExpiryHead expiry={g.expiry} dte={g.dte} />
             <ul className="nxp-cards">
-              {rows.map((row) => (
+              {g.held.map((row) => (
                 <li key={row.map((p) => p.holding.id).join("+")}>
                   {row.length === 2 ? (
                     <Condor row={row} privacy={privacy}>
@@ -99,26 +103,27 @@ export function PhoneBook({
                   ))}
                 </li>
               ))}
-            </ul>
-          </section>
-        ))}
-        {unplaced}
-      </section>
-      <section aria-labelledby="nxp-watchlist">
-        <h2 id="nxp-watchlist">Watchlist</h2>
-        {placed.watchlist.length === 0 ? <p className="nxp-meta">nothing watched</p> : null}
-        {placed.watchlist.map(({ expiry, items }) => (
-          <section key={expiry} className="nxp-expiry" data-expiry={expiry}>
-            <ExpiryHead expiry={expiry} dte={items[0]!.entry.dte} />
-            <ul className="nxp-cards">
-              {items.map(({ entry, under, overlap }) => (
+              {g.spreads.map(({ entry, under, overlap, elsewhere }) => (
                 <li key={entry.id}>
-                  <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
+                  <RuleCard entry={entry} under={under} overlap={overlap} elsewhere={elsewhere} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
                 </li>
               ))}
             </ul>
+            {g.contracts.length > 0 ? (
+              <>
+                <p className="nxp-meta nxp-sub" data-sub="contracts">contracts</p>
+                <ul className="nxp-cards">
+                  {g.contracts.map(({ entry, under, overlap, elsewhere }) => (
+                    <li key={entry.id}>
+                      <RuleCard entry={entry} under={under} overlap={overlap} elsewhere={elsewhere} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
           </section>
         ))}
+        {unplaced}
       </section>
 
       {placed.quarantined.length + placed.muted.length > 0 ? (
@@ -165,11 +170,9 @@ function Condor({ row, privacy, children }: { row: PlacedHolding[]; privacy: boo
 
 /** What the sheet shows for an id, from THIS render's book: a holding, or a rule wherever it sits. */
 function find(placed: BookModel, id: string): Subject | null {
-  for (const g of placed.holdings) {
-    for (const p of g.rows.flat()) if (p.holding.id === id) return { kind: "holding", ...p };
-  }
-  for (const g of placed.watchlist) {
-    for (const item of g.items) if (item.entry.id === id) return { kind: "rule", ...item };
+  for (const g of placed.book) {
+    for (const p of g.held.flat()) if (p.holding.id === id) return { kind: "holding", ...p };
+    for (const item of [...g.spreads, ...g.contracts]) if (item.entry.id === id) return { kind: "rule", ...item };
   }
   const lone = placed.unplaced.find((e) => e.id === id);
   return lone ? { kind: "rule", entry: lone, under: [] } : null;

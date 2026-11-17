@@ -19,6 +19,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Holding } from "../shared/api";
 import { MONDAY, openPage, settle, SUNDAY, walkDesk, walkPhone, type Read } from "../testing/pageWalk";
+import { heldOrNot } from "../testing/held";
+import { bareName } from "../testing/held";
 
 afterEach(() => {
   cleanup();
@@ -185,11 +187,11 @@ const stale = (path: string, body: unknown): unknown => {
 /** A holding's or a watched spread's detail: the desk's inspector or the phone's sheet. */
 async function detail(arrangement: "desk" | "phone", name: string): Promise<HTMLElement> {
   if (arrangement === "phone") {
-    fireEvent.click(screen.getByRole("button", { name: `details of ${name}` }));
+    fireEvent.click(screen.getByRole("button", { name: heldOrNot(`details of ${name}`) }));
     await settle();
     return screen.getByRole("dialog");
   }
-  fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === name)!);
+  fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => bareName(b) === name)!);
   await settle();
   return screen.getByRole("complementary", { name: `inspector: ${name}` });
 }

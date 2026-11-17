@@ -39,35 +39,33 @@ const card = (ref: string) =>
 describe("the cards, on the owner's book", () => {
   const book = placeBook(QUOTES, HOLDINGS, MONITORS);
 
-  it("draw the holdings placeBook places, in its order, each with the rules about it", () => {
+  it("draw the one book placeBook places, in its order: each expiry's held spreads with their rules, watched spreads, contracts", () => {
     draw();
-    const expected = book.holdings.flatMap((g) =>
-      g.rows.flat().flatMap(({ holding, rules }) => [holding.id, ...rules.map((r) => r.id)]));
-    expect(refs(region("Holdings"))).toEqual(expected);
-  });
-
-  it("draw the watchlist placeBook places, each leg rule inside its spread's card", () => {
-    draw();
-    const expected = book.watchlist.flatMap((g) =>
-      g.items.flatMap(({ entry, under }) => [entry.id, ...under.map((u) => u.id)]));
-    expect(refs(region("Watchlist"))).toEqual(expected);
+    const expected = book.book.flatMap((g) => [
+      ...g.held.flat().flatMap(({ holding, rules }) => [holding.id, ...rules.map((r) => r.id)]),
+      ...[...g.spreads, ...g.contracts].flatMap(({ entry, under }) => [entry.id, ...under.map((u) => u.id)]),
+    ]);
+    expect(refs(region("Book"))).toEqual(expected);
+    expect(expected).toEqual([
+      "w-dec04", "h-calls", "r-calls", "h-puts", "w-dec18", "w-dec18-delta", "h-ic", "r-ic", "w-dec31", "w-lone",
+    ]);
+    expect(screen.queryByRole("region", { name: "Holdings" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Watchlist" })).toBeNull();
     const spread = card("w-dec18");
     expect(within(spread).getByText(/\|Δ\| ≥ 0\.20 — now/)).toBeTruthy();
   });
 
-  it("group both by expiry, under a heading per expiry", () => {
+  it("group it by expiry, under ONE heading per expiry", () => {
     draw();
-    const headings = (name: string) => [...region(name).querySelectorAll<HTMLElement>("[data-expiry]")]
-      .map((g) => g.dataset.expiry);
-    expect(headings("Holdings")).toEqual(book.holdings.map((g) => g.expiry));
-    expect(headings("Watchlist")).toEqual(book.watchlist.map((g) => g.expiry));
-    // the expiry in prose, never ISO, and its DTE said once, here (parts F and K)
-    expect(within(region("Holdings")).getByRole("heading", { name: /20261218/ })).toBeTruthy();
+    const groups = [...region("Book").querySelectorAll<HTMLElement>("[data-expiry]")].map((g) => g.dataset.expiry);
+    expect(groups).toEqual(["2026-12-04", "2026-12-18", "2026-12-31"]);
+    // the expiry as the page writes a date, and its DTE said once, here (parts F and K)
+    expect(within(region("Book")).getAllByRole("heading", { name: /20261218/ })).toHaveLength(1);
   });
 
   it("sit a condor's two cards together, the calls first", () => {
     draw();
-    const condor = within(region("Holdings")).getByRole("group", { name: /iron condor/ });
+    const condor = within(region("Book")).getByRole("group", { name: /iron condor/ });
     expect([...condor.querySelectorAll<HTMLElement>("article[data-ref]")].map((a) => a.dataset.ref))
       .toEqual(["h-calls", "h-puts"]);
   });
@@ -137,8 +135,8 @@ describe("the cards, on the owner's book", () => {
 
   it("say the rules on held contracts apart while the holdings are not valued", () => {
     draw({ holdings: null, holdingsError: "OpenD timed out" });
-    expect(within(region("Holdings")).getByText(/could not be valued — OpenD timed out/)).toBeTruthy();
-    expect(refs(region("Holdings"))).toEqual(["r-calls", "r-ic"]);
+    expect(within(region("Book")).getByText(/could not be valued — OpenD timed out/)).toBeTruthy();
+    expect(refs(screen.getByTestId("unplaced"))).toEqual(["r-calls", "r-ic"]);
   });
 
   it("hide $ amounts under privacy and keep the rest", () => {
@@ -148,7 +146,7 @@ describe("the cards, on the owner's book", () => {
   });
 
   it("hide a condor's summed P&L under privacy, and show it otherwise", () => {
-    const condor = () => within(region("Holdings")).getByRole("group", { name: /iron condor/ })
+    const condor = () => within(region("Book")).getByRole("group", { name: /iron condor/ })
       .querySelector(".nxp-condor-head [data-money]")!;
     draw();
     expect(condor().textContent).toBe("−$140");
@@ -174,7 +172,7 @@ describe("the cards say what the desk's rows say (part K)", () => {
     }]));
     cleanup();
     draw();
-    const cards = [...region("Watchlist").querySelectorAll<HTMLElement>("article[data-ref]")];
+    const cards = [...region("Book").querySelectorAll<HTMLElement>("article.nxp-watch[data-ref]")];
     expect(cards.length).toBeGreaterThan(3);
     for (const c of cards) {
       const row = desk.get(c.dataset.ref!)!;
@@ -201,7 +199,7 @@ describe("the cards say what the desk's rows say (part K)", () => {
     render(<DeskBook {...book} holdingsError={null} holdingsAt={null} session privacy={false} entryStyle="opportunity" />);
     const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="h-calls"]')!;
     const table = row.querySelector('[data-col="delta"] .nxd-v')!.textContent;
-    fireEvent.click(within(row).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(row).getByRole("button", { name: "1218_C7300 held" }));
     const insp = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
     const inspector = within(insp).getByText("short Δ").nextElementSibling!.textContent;
     cleanup();
@@ -214,7 +212,7 @@ describe("the cards say what the desk's rows say (part K)", () => {
 
   it("says a holding's DTE once, on its expiry's heading and not on its card", () => {
     draw();
-    for (const c of region("Holdings").querySelectorAll<HTMLElement>("article[data-ref]")) {
+    for (const c of region("Book").querySelectorAll<HTMLElement>("article.nxp-holding[data-ref]")) {
       expect(c.textContent, c.dataset.ref).not.toMatch(/\bDTE\b/);
       expect(c.closest("[data-expiry]")!.querySelector("h3")!.textContent).toMatch(/\d+ DTE$/);
     }
@@ -252,7 +250,7 @@ describe("the legs, each type marked for its colour and a short leg for its weig
     render(<Still quotes={QUOTES} monitors={MONITORS} holdings={HOLDINGS} holdingsError={null}
                   holdingsAt="23:14:05" session privacy={false} needs={[]} health={null} polledAt={null}
                   error={null} references={[]} hidden={new Set()} takenAt={new Date("2026-11-16T15:00:00Z")} />);
-    const ic = [...document.querySelectorAll("tr")].find((tr) => tr.children[0]?.textContent === "1231_IC")!;
+    const ic = [...document.querySelectorAll("tr")].find((tr) => tr.children[0]?.textContent === "1231_IC held")!;
     expect(ic.children[1]!.textContent).toBe("−C7400 −P6300 +C7450 +P6250");
     expect(document.querySelectorAll(".nx-still .nx-leg, .nx-still [data-type]")).toHaveLength(0);
   });
@@ -282,7 +280,7 @@ describe("the detail sheet", () => {
     await screen.findByRole("dialog");
     act(() => { window.history.back(); });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(region("Holdings")).toBeTruthy();
+    expect(region("Book")).toBeTruthy();
   });
 
   it("follows the live figures while it is open", async () => {
@@ -377,13 +375,13 @@ describe("one book, in session and out of it (#374)", () => {
       expect(drawn(), `${session ? "in" : "out of"} session`).toEqual(inSession);
       expect(document.querySelector("[data-page], .nxp-pager, .nxp-track")).toBeNull();
       expect(screen.queryByRole("button", { name: /next holding|previous holding/ })).toBeNull();
-      expect(region("Holdings")).toBeTruthy();
+      expect(region("Book")).toBeTruthy();
     }
   });
 
   it("says when they were valued outside the session, and not in it (#371)", () => {
     draw({ session: false });
-    expect(within(region("Holdings")).getByText("market closed — valued at 23:14")).toBeTruthy();
+    expect(within(region("Book")).getByText("market closed — valued at 23:14")).toBeTruthy();
     cleanup();
     draw({ session: true });
     expect(document.querySelector(".nx-mkt-closed")).toBeNull();
@@ -413,7 +411,7 @@ describe("one book, in session and out of it (#374)", () => {
 
   it("still draws the watchlist outside the session, so a banner about it has a card to lead to", () => {
     draw({ session: false });
-    expect(refs(region("Watchlist"))).toContain("w-dec04");
+    expect(refs(region("Book"))).toContain("w-dec04");
   });
 });
 
@@ -442,12 +440,14 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     draw({ quotes: OVERLAP_QUOTES, holdings: OVERLAP_HOLDINGS, monitors: OVERLAP_MONITORS, ...over });
   const note = (ref: string) => card(ref).querySelector<HTMLElement>("[data-overlap]")?.textContent ?? null;
 
-  it("is a card in the watchlist with its note, and the holding's card keeps its own rules", () => {
+  it("is a card among the watched spreads with its note, and the holding's card keeps its own rules", () => {
     overlap();
-    // a wing of a held condor names nothing unheld, and stays on the condor's card
-    expect(refs(region("Holdings")))
-      .toEqual(["h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200"]);
-    expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700", "r-ratio"]);
+    // a wing of a held condor names nothing unheld, and stays on the condor's card; the combos
+    // that name a contract nobody holds follow the held spreads, under the same expiry
+    expect(refs(region("Book"))).toEqual([
+      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
+      "r-8100", "w-8150-delta", "w-7700", "r-ratio",
+    ]);
     expect(note("r-8100")).toBe("shares C8100 with 1231_8050");
     expect(note("w-7700")).toBe("contains 1231_7700's C7700");
     expect(note("r-ratio")).toBe("contains 1231_7200's C7200 and C7250");
@@ -473,8 +473,9 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("is placed the same outside the session", () => {
     overlap({ session: false });
-    expect(refs(region("Watchlist"))).toEqual(["r-8100", "w-8150-delta", "w-7700", "r-ratio"]);
-    expect(refs(region("Holdings")))
-      .toEqual(["h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200"]);
+    expect(refs(region("Book"))).toEqual([
+      "h-8050", "r-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
+      "r-8100", "w-8150-delta", "w-7700", "r-ratio",
+    ]);
   });
 });

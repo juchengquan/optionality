@@ -1,4 +1,4 @@
-/** A combo that only partly overlaps a holding, on the desk (#346): drawn in the Watchlist with a
+/** A combo that only partly overlaps a holding, on the desk (#346): drawn as a watched spread with a
  *  note of what it shares, in a real layout engine — the note sits under its own row, inside the
  *  table, and widens nothing from a 900px desk up. The behaviour is the jsdom suites'
  *  (`NextDesk.test.tsx`, `NextBookModel.test.ts`).
@@ -56,16 +56,18 @@ function inside(inner: Element, outer: Element): boolean {
 afterEach(cleanup);
 
 describe.each([900, 1280, 2560])("on a %ipx desk", (width) => {
-  it("draws the partly overlapping combos in the Watchlist, each note under its row and inside the table", async () => {
+  it("draws the partly overlapping combos as watched spreads in their holding's expiry, each note under its row and inside the table", async () => {
     await page.viewport(width, 900);
     serveOverlap();
     render(<Next />);
     await settle();
     expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("desk");
-    const watchlist = screen.getByRole("region", { name: "Watchlist" });
+    // the one book (2026-11-17): in the same expiry as the holdings they overlap, after them
+    const expiry = rowOf("h-8050").closest<HTMLElement>(".nxd-expiry")!;
     const table = document.querySelector<HTMLElement>(".nxd-table")!;
     for (const [id, words] of [["r-8100", "shares C8100 with 1231_8050"], ["w-7700", "contains 1231_7700's C7700"]]) {
-      expect(watchlist.contains(rowOf(id!))).toBe(true);
+      expect(expiry.contains(rowOf(id!))).toBe(true);
+      expect(rowOf("h-8050").compareDocumentPosition(rowOf(id!)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       const note = noteOf(id!);
       expect(note.textContent).toBe(words);
       // seen, under its own row, and whole: no ellipsis, nothing cut

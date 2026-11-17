@@ -61,7 +61,11 @@ export function useDeskFit(
   // the rule's column takes what is left over, or the name's when the rule has dropped
   const flexible = columns.some((c) => c.key === "alarm") ? "alarm" : "name";
   // the name's cell, the rule's column gone, draws each rule's distance too (2026-11-17)
-  const least = (key: string) => key === PINNED && flexible === "name" ? widthOf(NAME_WITH_DISTANCE) : widthOf(key);
+  // — never wider than the table itself: the name is pinned and drops for nothing, so where even it
+  // alone has no room (a holding's Level, its own rule's chip and distance, beside the inspector at
+  // 900px), its cell wraps them onto a second line (desk.css) rather than run past the edge
+  const least = (key: string) => key === PINNED && flexible === "name"
+    ? Math.min(widthOf(NAME_WITH_DISTANCE), ready ? available : Number.POSITIVE_INFINITY) : widthOf(key);
   const template = ready
     ? columns.map((c) => c.key === flexible ? `minmax(${least(c.key)}px, 1fr)` : `${widthOf(c.key)}px`).join(" ")
     : columns.map((c) => c.key === flexible ? "minmax(max-content, 1fr)" : "max-content").join(" ");

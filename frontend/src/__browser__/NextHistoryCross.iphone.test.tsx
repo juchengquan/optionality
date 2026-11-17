@@ -42,7 +42,7 @@ async function review() {
   serveOwnerBook();
   render(<Next />);
   await settle();
-  await userEvent.click(screen.getByRole("button", { name: "details of 1218_C7300" }));
+  await userEvent.click(screen.getByRole("button", { name: "details of 1218_C7300 held" }));
   const sheet = await screen.findByRole("dialog");
   await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)));
   const panels = await waitFor(() => {

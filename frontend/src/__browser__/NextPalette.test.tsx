@@ -172,16 +172,18 @@ describe("a dialog that behaves like one", () => {
 describe("j and k", () => {
   it("walk the table, Enter opens the inspector and Escape closes it", async () => {
     await openDesk();
+    // the one book (2026-11-17): 12-04's watched spread, then 12-18's two held spreads
     await userEvent.keyboard("jjj");
     expect(document.querySelector<HTMLElement>(".nxd-row[data-cursor]")!.dataset.ref).toBe("h-puts");
     expect(inspector()).toBeNull();
     await userEvent.keyboard("{Enter}");
     await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_P6400"));
+    // then 12-18's watched spread, after its held spreads
     await userEvent.keyboard("j");
-    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1231_IC"));
+    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_P7150"));
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(inspector()).toBeNull());
-    expect(document.activeElement).toBe(within(row("h-ic")).getByRole("button", { name: "1231_IC" }));
+    expect(document.activeElement).toBe(within(row("w-dec18")).getByRole("button", { name: "1218_P7150" }));
   });
 
   it("type into a box rather than move the table (the box is in a form, which holds them too)", async () => {

@@ -34,7 +34,10 @@ actions, one set of words for why a rule is off, ONE section order for the inspe
 the phone's cards saying what the desk's rows say, the payoff's maximums said once, and errors in
 plain words. **Amended 2026-11-17: each thing said once** — a description that repeated its
 title, or a sentence said twice on one screen, removed or shortened, and the fill bar removed in
-favour of the rule's arrowed distance (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+favour of the rule's arrowed distance (last section). **Amended 2026-11-17: one book** — holdings
+and watches together under each expiry, held spreads first, a "held" tag, a holding's own rule on
+its row; it supersedes "holdings first and then the watchlist" on every surface and the saved
+picture's Holdings and Watchlist sections (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -78,7 +81,9 @@ How it is used shaped the answer as much as what it shows:
   candidate spreads ("worth selling now") and not risk. Holdings carry the risk: a stop on cost to
   close, the short leg's delta, and an exit schedule.
 - **The owner rejected linking the two lists.** A candidate → held → closed lifecycle was offered
-  and declined: they stay separate lists.
+  and declined: they stay separate lists. *(2026-11-17: they are still not LINKED — a watch rule
+  is no holding's — but they are drawn as one book by expiry, a holding told apart by its "held"
+  tag; see the last section.)*
 
 The research found three things nobody does, all of which this service can:
 - a holding and its alerts made in ONE step (Option Alpha comes closest);
@@ -90,7 +95,8 @@ The research found three things nobody does, all of which this service can:
 ### Two arrangements over one capability
 
 - **On the desk, "A", a terminal.** One dense table, holdings first and then the watchlist, each
-  grouped by expiry:
+  grouped by expiry *(superseded 2026-11-17: ONE book, each expiry once with its held spreads, its
+  watched spreads and its lone contracts under it — see the last section)*:
   - a condor's two spreads sit together, joined by a bracket;
   - a NON-MODAL inspector sits beside the table and stays open, so the table stays live while one
     row is studied (the old sheet blurred the page);
@@ -495,7 +501,9 @@ desk, and B's cards from the phone. It is now read later, by a person or another
 lays each figure out in a place of its own while colour, bars and symbols carry meaning a reader of
 an image can miss. **This supersedes #300's "A's table from the desk, B's cards from the phone".**
 
-- **One plain table, from either arrangement.** The phone saves the desk's table, not cards. The
+- **One plain table, from either arrangement.** The phone saves the desk's table, not cards. *(The
+  order and the sections superseded 2026-11-17: ONE book section in the one book's order, then the
+  muted and expired — see the last section.)* The
   holdings first, then the watchlist, each grouped by expiry under a heading row with its DTE (the
   watchlist's quarantined rules last, under a heading of their own), then the muted and expired
   rules as one ungrouped list, as the desk's fold has them; every column the viewer ticked (`ui_cols_combo`), under headers that
@@ -866,7 +874,8 @@ payoff's maximums and the errors' words — is the second half, built and record
   (`__browser__/NextGreekLabels*`): no element whose own text has a lower-case Greek letter is drawn
   with `text-transform: uppercase`.
 - **The saved picture and Copy as text** (#394, #400): each section has its own columns — the
-  watchlist's and the muted rules' carry none that only a holding fills (P&L, captured, pace gap,
+  watchlist's *(one book since 2026-11-17: its one table has every column, blank on a watched row)*
+  and the muted rules' carry none that only a holding fills (P&L, captured, pace gap,
   manage-by); a figure's column is set to the right, in the picture and as `---:` in the Markdown;
   and a unit sits in a header only where the cells do not say it — `P&L` above `+$177`, `captured`
   above `38%`, `pace gap (pts)` above "ahead by 1.53". The two stay held to each other
@@ -1138,3 +1147,76 @@ prose — and the bot's `Fri 13 Nov` and ISO.
   number — each held to planted faults. The bot's tables by `isContract`'s tests, and a test that no
   `/monitors` on the owner's book or in a door scenario cuts a contract. The bot's by its tests and the door scenarios; the domain's
   by its golden cases.
+
+
+## Amended 2026-11-17: one book — holdings and watches together, by expiry
+
+The owner, 2026-11-17, from the live page, decided after a grilling: the book read as two books,
+the same expiry headed twice ("20261231 · 44 DTE" over 1231_8050 in Holdings and over 1231_8100 in
+the Watchlist), and a held spread's own rule as a second row named the same as its holding. **This
+supersedes "holdings first and then the watchlist" on the desk, the phone, the saved picture and
+Copy as text, and the picture's Holdings and Watchlist sections (#394).** The two lists are still
+not linked: a watch rule is no holding's, and `placeBook` decides what sits where exactly as before.
+
+- **One book.** No Holdings or Watchlist section: each expiry's heading appears once
+  (`20261231 · 44 DTE`), the earliest first. The rules on held contracts no drawn holding owns, and
+  the quarantined, follow the expiries; the muted and expired fold, the phone's switched-off list and
+  the closed trades' fold stay where they were, below the book. The session line ("overnight
+  session — live quotes, thin", the market-closed line) and the `* SPX: …` note are said once,
+  above it.
+- **Under each expiry, in this order:** the held spreads (a condor held as two spreads still
+  bracketed, calls first), then the watched spreads, then a quiet muted label `contracts` and the
+  lone watched contracts — the label only where the expiry has one. Each part keeps the order its
+  rows arrive in, as before.
+- **A "held" tag after a holding's name**, small and muted; a watched row carries none. A screen
+  reader hears it in the row's name (`1231_8050 held`, `details of 1231_8050 held` on the phone);
+  the inspector's and the sheet's heading stay the holding's name alone.
+- **A holding's own rule on its row.** `ownRule`: the rule the service links to this holding
+  alone over all of it (`scope` "all", `positions` exactly this holding — what its `schedule` is
+  built from), a price rule before any other, the one named as the holding only breaking a tie; a
+  rule renamed is still its own. It is drawn in the holding's rule cell — its short form and
+  arrowed distance, and, where the rule's column drops, the distance in the name cell (#423); the
+  saved picture and Copy as text, with the rule's column hidden, put its sentence in the name cell
+  (`1218_C7300 held — |value| ≥ 4.00 — now 4.40, past it by 0.40`). Its ringing or fault chip is
+  drawn on the holding's row beside the Level's, and its row is gone. Any other rule about the holding is still a row under it; the inspector's and the
+  sheet's Rules section list every rule, its own first. The phone's card already drew the rule's
+  line without its name (2026-11-17); its own rule is now that card's first line.
+- **The row's colour is the most serious** of the holding's Level and its own rule (the owner,
+  2026-11-17): a fault (the name struck through) before ringing or at stop, before manage-by,
+  before at target — on the desk's row (`rowState`); the phone's card, which draws every rule about
+  the holding on it, takes the most serious of those too (a second rule ringing tints the card), where
+  the desk gives each other rule a tinted row of its own.
+- **A leg's rule sits under its spread**, as before; a contract rule on a held leg already sits
+  under its holding, since the service marks it held and links it (`holdsAnyOf`,
+  `adoptOrphanMonitors`), and on a roll day, unlinked but held, among the rules on held contracts.
+- **Every rule is drawn once** (the owner, 2026-11-17; on main a leg rule in two watched spreads,
+  and a combo linked to two drawn holdings — a condor rule over a condor held as two spreads — were
+  drawn under both): under the first place by the book's order, and at the other a short muted
+  note, `1218_IC also in 1218_C7300`, which is no row, takes no focus and carries no `data-ref`. So
+  j and k, the palette and a banner each meet one row per rule. The inspector and the sheet still
+  list it under both. The picture and the text write it once and no note, as they write no overlap
+  note (#400). The overlap note (`shares C8100 with 1231_8050`, #346) stays under its
+  watched spread, now in the same expiry as the holding it names.
+- **The phone, the saved picture and Copy as text follow the same order.** The picture is one
+  `Book` section with every ticked column (blank on a watched row), the name cell of a holding
+  `1231_8050 held`, its own rule's sentence in its rule cell, and the label as a row of its own
+  (`contracts`); then the muted and expired, as before.
+- **Empty states, one line:** `nothing held or watched` for a book with neither; nothing for a
+  book with only one of the two (the other is simply drawn, and the tags say which is which);
+  `valuing…` while the holdings are not valued, and a failed valuation's words, as before.
+- **The keys and the palette follow it.** j and k walk the rows in the one book's order
+  (`tableRows`). The palette finds what the table draws, so a holding's own rule is found as the
+  holding — by what it watches too (`price`, `spread`), and as a `rule` or `monitor` — and "Edit the selected rule" on a holding
+  with an own rule opens that rule's editor in its inspector.
+- **The fitting** counts the tag and the own rule's chip in the name column. Where even the name
+  alone is wider than the table (a holding at stop with its rule ringing, beside the inspector at
+  900px), its cell wraps the chips under the name rather than run past the edge.
+- **Not changed:** the needs-you line, the inspector and sheet contents, column fitting (#423),
+  the said-once guard, the date and time standards (#420, #424), and the bot.
+
+Held by `NextOneBookModel.test.ts` (the model), `NextOneBook.test.tsx` (each decision on the desk,
+the phone and the picture with its text, each pairing of a Level and an own rule's state, and 60
+seeded books shaped as the service shapes them, each holding and rule once on every surface),
+`NextDeskKeys.test.tsx` (the keys' order), and the browser's `NextOneBook*.test.tsx` (nothing
+sideways at 900, 1024, 1280 and 1440px with the inspector shut and open, and under the iPhone 13
+profile).

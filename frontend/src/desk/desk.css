@@ -73,6 +73,24 @@
   font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em;
 }
 .nxd-note { padding: 0.25rem 0.75ch; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
+/* the quiet label over an expiry's lone contracts (2026-11-17): quieter than the expiry's heading */
+.nxd-sub {
+  margin: 0;
+  padding: 0.375rem 0.75ch 0.125rem;
+  font-size: 0.6875rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+}
+/* a rule met again under a second place: where its row is, in the overlap note's indent */
+.nxd-also {
+  margin: 0; padding: 0.1rem 0.75ch 0.3rem 2.75ch; border-bottom: 1px solid var(--nxd-line);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; overflow-wrap: anywhere;
+}
+/* "held" after a holding's name (2026-11-17): small and muted, a tag rather than a word of the name */
+.nxd-held {
+  font-size: 0.6875rem; font-weight: 400;
+  color: var(--muted-foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+}
 
 /* what a spread in the watchlist shares with a holding (#346): under its row, in the row's indent,
    wrapping rather than widening the table */
@@ -112,7 +130,8 @@
   background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
 }
 .nxd-name:hover { text-decoration: underline; }
-.nxd-row [data-col="name"] { display: flex; align-items: center; gap: 0.5ch; }
+/* wraps only where the name alone is wider than the table (useDeskFit's `least`) */
+.nxd-row [data-col="name"] { display: flex; flex-wrap: wrap; align-items: center; gap: 0.125rem 0.5ch; min-width: 0; }
 .nxd-row[data-nested] [data-col="name"] { padding-left: 2.75ch; }
 .nxd-row[data-nested] [data-col="name"]::before {
   content: ""; position: absolute; left: 1.25ch; top: 0; bottom: 50%; width: 0.9ch;

@@ -161,7 +161,7 @@ describe("outside the session, a holding's chip and the needs-you line never con
       expect(line()).not.toContain("1204_6900P");
 
       const row = document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!;
-      fireEvent.click(within(row).getByRole("button", { name: "1231_7000P" }));
+      fireEvent.click(within(row).getByRole("button", { name: "1231_7000P held" }));
       const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
       expect(inspector.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t} SGT`);
       expect(inspector.textContent).toContain("as last valued");
@@ -175,7 +175,7 @@ describe("outside the session, a holding's chip and the needs-you line never con
       const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
       expect(card.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t} SGT`);
       expect(line()).not.toContain("1231_7000P");
-      fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P" }));
+      fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P held" }));
       const sheet = await screen.findByRole("dialog");
       await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe(`at stop · as valued at ${t} SGT`));
     });
@@ -192,7 +192,7 @@ describe("in session they read the same poll and agree, so the chip carries no t
 
     // the inspector draws the row's chip, bare as the row's is
     fireEvent.click(within(document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!)
-      .getByRole("button", { name: "1231_7000P" }));
+      .getByRole("button", { name: "1231_7000P held" }));
     const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
     expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop");
     expect(inspector.textContent).toContain("live: updates with every poll");
@@ -202,7 +202,7 @@ describe("in session they read the same poll and agree, so the chip carries no t
     await open("phone", SESSION);
     const card = document.querySelector<HTMLElement>('article[data-ref="p1"]')!;
     expect(card.querySelector(".nx-chip")?.textContent).toBe("at stop");
-    fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P" }));
+    fireEvent.click(within(card).getByRole("button", { name: "details of 1231_7000P held" }));
     const sheet = await screen.findByRole("dialog");
     await until(() => expect(sheet.querySelector(".nx-chip")?.textContent).toBe("at stop"));
   });
@@ -282,7 +282,7 @@ describe("a valuation from another day says its date (#371's review)", () => {
     expect(chipIn(document, "p1")).toBe("at stop · as valued at Fri 23:04 SGT");
     expect(document.querySelector(".nx-mkt-closed")!.textContent).toContain("market closed — valued at Fri 23:04");
     fireEvent.click(within(document.querySelector<HTMLElement>('.nxd-row[data-ref="p1"]')!)
-      .getByRole("button", { name: "1231_7000P" }));
+      .getByRole("button", { name: "1231_7000P held" }));
     const inspector = await screen.findByRole("complementary", { name: "inspector: 1231_7000P" });
     expect(inspector.querySelector(".nx-chip")?.textContent).toBe("at stop · as valued at Fri 23:04 SGT");
   });

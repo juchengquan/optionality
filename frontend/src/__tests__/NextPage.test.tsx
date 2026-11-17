@@ -359,7 +359,9 @@ describe("the market-closed line and its refresh (#371)", () => {
     await open();
     await until(() => expect(held!.length).toBe(1));
     await act(async () => { held![0]!.settle(true, []); });
-    await until(() => expect(screen.getByText("nothing held")).toBeTruthy());
+    // valued, and nothing held: the book says nothing of it while it has watches (2026-11-17)
+    await until(() => expect(screen.queryByText("valuing…")).toBeNull());
+    expect(screen.queryByText(/^nothing held/)).toBeNull();
     expect(closedLine()?.firstElementChild?.textContent).toBe("market closed");
   });
 
@@ -469,7 +471,7 @@ describe("a holding's history in session (#353)", () => {
       await open();
       await quiet();
       fireEvent.click(await screen.findByRole("button",
-        { name: where === "desk" ? "1231_7000P" : "details of 1231_7000P" }));
+        { name: where === "desk" ? "1231_7000P held" : "details of 1231_7000P held" }));
       await quiet();
       expect(calls.filter((c) => c.endsWith("/samples")), `shut, nothing\n${said()}`).toEqual([]);
       fireEvent.click(screen.getByRole("button", { name: "History" }));
@@ -491,7 +493,7 @@ describe("the desk inspector's history, by the session (#372)", () => {
   const samplesAsked = () => calls.filter((c) => c === "/positions/p1/samples").length;
   const history = () => screen.getByRole("button", { name: "History" });
   const inspect = async () => {
-    fireEvent.click(await screen.findByRole("button", { name: "1231_7000P" }));
+    fireEvent.click(await screen.findByRole("button", { name: "1231_7000P held" }));
     await quiet();
   };
   const shut = async () => {
@@ -570,7 +572,7 @@ describe("a holding's history in the phone's sheet, by the session (#374)", () =
   const samples = () => calls.filter((c) => c === "/positions/p1/samples").length;
   const toggle = () => within(screen.getByRole("dialog")).getByRole("button", { name: "History" });
   async function openSheet() {
-    fireEvent.click(await screen.findByRole("button", { name: "details of 1231_7000P" }));
+    fireEvent.click(await screen.findByRole("button", { name: "details of 1231_7000P held" }));
     await screen.findByRole("dialog");
     await quiet();
   }
@@ -930,7 +932,7 @@ describe("one page at every hour (#375)", () => {
       const sheet = await screen.findByRole("dialog", { name: "Settings" });
       expect(sheet.getAttribute("data-side")).toBe("bottom");
       expect(within(sheet).getByLabelText("up is")).toBeTruthy();
-      expect(screen.getByRole("region", { name: "Holdings", hidden: true })).toBeTruthy();
+      expect(screen.getByRole("region", { name: "Book", hidden: true })).toBeTruthy();
       fireEvent.click(within(sheet).getByRole("button", { name: "close sheet" }));
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
       // and Add the sheet it was from the tab bar

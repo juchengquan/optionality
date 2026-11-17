@@ -1,5 +1,5 @@
 /** A combo that only partly overlaps a holding, on a phone (#346), under Playwright's iPhone
- *  profile: its card is in the Watchlist with a note of what it shares, and the note fits the card
+ *  profile: its card is among the watched spreads with a note of what it shares, and the note fits the card
  *  at 390px — wrapped if it must, never pushing the page sideways. In the detail sheet too.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
@@ -59,16 +59,17 @@ function inside(inner: Element, outer: Element): boolean {
 afterEach(cleanup);
 
 describe("under the iPhone profile", () => {
-  it("draws the partly overlapping combos as Watchlist cards, each note inside its card", async () => {
+  it("draws the partly overlapping combos as watched cards in their holding's expiry, each note inside its card", async () => {
     serveOverlap();
     render(<Next />);
     await settle();
     await settle();
     expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe("phone");
     expect(document.documentElement.clientWidth).toBe(390);
-    const watchlist = screen.getByRole("region", { name: "Watchlist" });
+    // the one book (2026-11-17): in the same expiry as the holdings they overlap, after them
+    const expiry = card("h-8050").closest<HTMLElement>(".nxp-expiry")!;
     for (const [ref, words] of [["r-8100", `shares C8100 with ${LONG}`], ["w-7700", "contains 1231_7700's C7700"]]) {
-      expect(watchlist.contains(card(ref!))).toBe(true);
+      expect(expiry.contains(card(ref!))).toBe(true);
       const note = card(ref!).querySelector<HTMLElement>("[data-overlap]")!;
       expect(note.textContent).toBe(words);
       expect(note.getBoundingClientRect().height).toBeGreaterThan(0);

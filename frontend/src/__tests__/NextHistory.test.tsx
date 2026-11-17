@@ -13,6 +13,7 @@ import { HistoryOnDemand } from "../HistoryOnDemand";
 import { PhoneBook } from "../phone/PhoneBook";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 import { legMarks } from "../testing/legs";
+import { heldOrNot } from "../testing/held";
 
 /** Every request the page made, as `METHOD path`. */
 let asked: string[] = [];
@@ -64,7 +65,7 @@ const deskRow = (id: string) =>
 
 async function inspect(id: string, name: string, over: Partial<BookProps> = {}) {
   const view = render(<DeskBook {...props(over)} />);
-  fireEvent.click(within(deskRow(id)).getByRole("button", { name }));
+  fireEvent.click(within(deskRow(id)).getByRole("button", { name: heldOrNot(name) }));
   const insp = screen.getByRole("complementary", { name: `inspector: ${name}` });
   return { view, insp };
 }
@@ -643,7 +644,7 @@ describe("switching holdings outside the session", () => {
     return async (path: string) => { await act(async () => { waiting.get(path)!(); await Promise.resolve(); }); };
   }
   const select = (id: string, name: string) =>
-    fireEvent.click(within(deskRow(id)).getByRole("button", { name }));
+    fireEvent.click(within(deskRow(id)).getByRole("button", { name: heldOrNot(name) }));
   const chartOf = () => burndownOf(screen.getByRole("complementary", { name: /inspector/ }));
 
   it("draws the holding now selected when the one before answers late", async () => {
@@ -707,7 +708,7 @@ describe("in the phone's holding sheet outside the session, open from the start 
   const draw = (over: Partial<BookProps> = {}) =>
     render(<div className="nx"><PhoneBook {...props({ session: false, ...over })} /></div>);
   async function sheetOf(name: string) {
-    fireEvent.click(screen.getByRole("button", { name: `details of ${name}` }));
+    fireEvent.click(screen.getByRole("button", { name: heldOrNot(`details of ${name}`) }));
     return screen.getByRole("dialog");
   }
 
@@ -838,7 +839,7 @@ describe("in session, on demand (#353): the desk's inspector", () => {
     const { insp } = await inspect("h-calls", "1218_C7300", { session: true });
     fireEvent.click(toggleOf(insp));
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
-    fireEvent.click(within(deskRow("h-puts")).getByRole("button", { name: "1218_P6400" }));
+    fireEvent.click(within(deskRow("h-puts")).getByRole("button", { name: "1218_P6400 held" }));
     const next = screen.getByRole("complementary", { name: "inspector: 1218_P6400" });
     expect(disclosure(next).expanded).toBe("false");
     expect(samplesAsked()).toEqual(["GET /positions/h-calls/samples"]);
@@ -859,7 +860,7 @@ describe("in session, on demand (#353): the phone's holding sheet", () => {
 
   it("is shut until opened, then reads the samples once, however often it is shut and opened", async () => {
     draw();
-    fireEvent.click(screen.getByRole("button", { name: "details of 1218_C7300" }));
+    fireEvent.click(screen.getByRole("button", { name: "details of 1218_C7300 held" }));
     const sheet = screen.getByRole("dialog");
     expect(disclosure(sheet).expanded).toBe("false");
     expect(within(sheet).queryByRole("group", { name: "burndown" })).toBeNull();

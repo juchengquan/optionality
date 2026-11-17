@@ -180,13 +180,17 @@ describe("finding by text", () => {
     await waitFor(() => expect(inspector()!.contains(document.activeElement)).toBe(true));
   });
 
-  it("lands on a holding, on a rule under a holding, and on a quarantined rule", async () => {
+  it("lands on a holding, on a holding's own rule (its row), and on a quarantined rule", async () => {
     const { user } = await open();
     await run(user, "1231_IC holding");
     await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1231_IC"));
-    await run(user, "7300 Monitor");
-    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300"));
-    expect(row("r-calls").hasAttribute("data-selected")).toBe(true);
+    // the holding's own rule is drawn on its row (2026-11-17): found, as a rule or by what it
+    // watches, and landed on, as the holding
+    for (const q of ["7300 Monitor", "7300 price"]) {
+      await run(user, q);
+      await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300"));
+      expect(row("h-calls").hasAttribute("data-selected")).toBe(true);
+    }
     await run(user, "8300");
     await waitFor(() => expect(row("q-unknown").hasAttribute("data-selected")).toBe(true));
   });
@@ -234,6 +238,15 @@ describe("its actions", () => {
     await run(user, "7150 delta");
     await run(user, "edit the selected");
     const form = await screen.findByRole("form", { name: "editing 20261218 7150P Δ" });
+    expect(inspector()!.contains(form)).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("threshold")));
+  });
+
+  it("edits a selected holding's own rule, which its row draws (2026-11-17)", async () => {
+    const { user } = await open();
+    await run(user, "1218_C7300 holding");
+    await run(user, "edit the selected");
+    const form = await screen.findByRole("form", { name: "editing 1218_C7300 value" });
     expect(inspector()!.contains(form)).toBe(true);
     await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("threshold")));
   });

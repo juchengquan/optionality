@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
 import { servePage } from "../testing/pageService";
+import { heldOrNot } from "../testing/held";
 
 /** When set, the payoff chart of the watched spread `w-dec18` throws as it draws: a stand-in for
  *  any fault inside a detail, the boundary's subject. */
@@ -50,10 +51,10 @@ async function open(arrangement: Arrangement) {
 /** The detail of a row, by its name: the phone's sheet, or the desk's inspector. */
 async function detail(arrangement: Arrangement, name: string): Promise<HTMLElement> {
   if (arrangement === "phone") {
-    fireEvent.click(await screen.findByRole("button", { name: `details of ${name}` }));
+    fireEvent.click(await screen.findByRole("button", { name: heldOrNot(`details of ${name}`) }));
     return screen.findByRole("dialog");
   }
-  fireEvent.click(await screen.findByRole("button", { name }));
+  fireEvent.click(await screen.findByRole("button", { name: heldOrNot(name) }));
   return screen.findByRole("complementary", { name: `inspector: ${name}` });
 }
 

@@ -15,6 +15,7 @@ import { SpxPath, spxGutter } from "../SpxPath";
 import { stillCross } from "../testing/cross";
 import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, SAMPLES, samplesAnswer, volAnswer } from "../testing/ownerBook";
 import { legMarks } from "../testing/legs";
+import { heldOrNot } from "../testing/held";
 
 let asked: string[] = [];
 let samples: (path: string) => Samples | null = samplesAnswer;
@@ -50,7 +51,7 @@ const deskRow = (id: string) =>
 
 function inspect(id: string, name: string, over: Partial<BookProps> = {}) {
   render(<DeskBook {...props(over)} />);
-  fireEvent.click(within(deskRow(id)).getByRole("button", { name }));
+  fireEvent.click(within(deskRow(id)).getByRole("button", { name: heldOrNot(name) }));
   return screen.getByRole("complementary", { name: `inspector: ${name}` });
 }
 
@@ -164,7 +165,7 @@ describe("a holding with two legs on one strike", () => {
 describe("on the phone, outside the session", () => {
   it("draws it in the holding's sheet, whose history opens with it (#374)", async () => {
     render(<PhoneBook {...props()} />);
-    fireEvent.click(screen.getAllByRole("button", { name: /^details of / })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: /^details of .* held$/ })[0]!);
     const charts = await screen.findAllByRole("group", { name: "SPX against the strikes" });
     expect(charts.length).toBeGreaterThan(0);
     expect(charts[0]!.querySelectorAll("[data-spx-day]").length).toBeGreaterThan(0);

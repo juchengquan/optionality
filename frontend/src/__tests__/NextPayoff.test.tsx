@@ -14,6 +14,7 @@ import { HOLDINGS, MONITORS, payoffAnswer, QUOTES, volAnswer } from "../testing/
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 import { until } from "../testing/until";
 import { legMarks } from "../testing/legs";
+import { heldOrNot } from "../testing/held";
 
 /** Every request the page made, as `METHOD path body`. */
 let asked: string[] = [];
@@ -48,7 +49,7 @@ const deskRow = (id: string) =>
 /** The desk, with one row's inspector open, and its payoff once it has arrived. */
 async function inspect(id: string, name: string, over: Partial<BookProps> = {}) {
   render(<DeskBook {...props(over)} />);
-  fireEvent.click(within(deskRow(id)).getByRole("button", { name }));
+  fireEvent.click(within(deskRow(id)).getByRole("button", { name: heldOrNot(name) }));
   return screen.getByRole("complementary", { name: `inspector: ${name}` });
 }
 
@@ -108,11 +109,11 @@ describe("a holding's payoff, in the desk's inspector", () => {
 
   it("never shows one holding's curve as another's while the other's is asked for", async () => {
     render(<DeskBook {...props()} />);
-    fireEvent.click(within(deskRow("h-ic")).getByRole("button", { name: "1231_IC" }));
+    fireEvent.click(within(deskRow("h-ic")).getByRole("button", { name: "1231_IC held" }));
     const first = await payoffOf(screen.getByRole("complementary", { name: /inspector/ }));
     await waitFor(() => expect(first.querySelector("svg")).toBeTruthy());
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
-    fireEvent.click(within(deskRow("h-calls")).getByRole("button", { name: "1218_C7300" }));
+    fireEvent.click(within(deskRow("h-calls")).getByRole("button", { name: "1218_C7300 held" }));
     const insp = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
     await waitFor(() => expect(within(insp).getByText("drawing…")).toBeTruthy());
     expect(insp.querySelector(".nx-payoff svg")).toBeNull();

@@ -15,7 +15,7 @@ import { Glyph } from "../NeedsLine";
 import { entryName, fieldWords, monitorName } from "../needs";
 import { reasonWhy } from "../shared/groups";
 import { RuleWords } from "../RuleWords";
-import type { PlacedHolding } from "../placement";
+import { alsoWords, drawnUnder, ownRule, type Elsewhere, type PlacedHolding } from "../placement";
 import { mutedWords, shortDeltas, shortDeltaWords } from "./figures";
 import { percent } from "../shared/numbers";
 import { SHORT_DELTA } from "../shared/words";
@@ -24,7 +24,7 @@ import { HoldingStrip, StrikeStrip } from "../StrikeStrip";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfMonitor } from "../edit";
 import { stripOfEntry } from "../strip";
-import { ruleCells } from "../desk/columns";
+import { HELD, moreSerious, ruleCells, rowState } from "../desk/columns";
 
 /** Whether a card's value is a held spread's cost to close, as its desk row reads it (`heldSpread`). */
 const heldSpreadValue = (e: Entry, overlap: string | null) => Boolean(e.legs) && e.held && !overlap;
@@ -80,12 +80,19 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
   spxSaid?: boolean;
 }) {
   const { holding, rules } = placed;
-  const hot = holding.schedule?.reached === "stop" || rules.some((r) => ruleState(r) === "alarm");
+  // its own rule first, then the rest drawn here: one drawn under an earlier holding is a note
+  const own = ownRule(holding, rules);
+  const lines = [...(own ? [own] : []), ...drawnUnder(rules, placed.elsewhere, own)];
+  // the most serious of its Level, its own rule and every other rule drawn on the card (the owner,
+  // 2026-11-17): the card is all of them at once, where the desk gives each other rule its own row
+  const state = lines.reduce((worst, r) => moreSerious(worst, ruleState(r) ?? "calm"),
+    rowState({ kind: "holding", holding, rules }));
   return (
-    <article className="nxp-card nxp-holding" data-ref={holding.id} data-state={hot ? "alarm" : "calm"}>
-      <OpenCard name={holding.name} onOpen={onOpen} />
+    <article className="nxp-card nxp-holding" data-ref={holding.id} data-state={state}>
+      {/* "held" in its name, to a reader as on screen: the one book draws watches beside it (2026-11-17) */}
+      <OpenCard name={`${holding.name} ${HELD}`} onOpen={onOpen} />
       <header className="nxp-head">
-        <span className="nxp-name">{holding.name}</span>
+        <span className="nxp-name">{holding.name}{" "}<span className="nxp-held" data-held="">{HELD}</span></span>
         <span className="nxp-legs"><Legs legs={holding.legs.map(heldLeg)} /></span>
         {/* no DTE here: its expiry's heading says it, once (part K) */}
       </header>
@@ -102,7 +109,8 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
         <div><dt>{SHORT_DELTA}</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
       </dl>
       <HoldingStrip holding={holding} reasonSaid={spxSaid} />
-      {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} within={holding.name} />)}</ul> : null}
+      {lines.length > 0 ? <ul className="nxp-rules">{lines.map((r) => <RuleLine key={r.id} entry={r} within={holding.name} />)}</ul> : null}
+      <AlsoNotes elsewhere={placed.elsewhere} />
     </article>
   );
 }
@@ -127,8 +135,10 @@ function CostAndPace({ holding }: { holding: Holding }) {
  *  row's value is its last in-session price and when, #400), its rule's sentence with its arrowed
  *  distance and the rules that sit under it, and, for a spread that only partly overlaps a holding, what it
  *  shares and with whom (#346). */
-export function RuleCard({ entry, under, overlap = null, onOpen, spxSaid = false }: {
+export function RuleCard({ entry, under, overlap = null, elsewhere, onOpen, spxSaid = false }: {
   entry: Entry; under: Entry[]; overlap?: string | null; onOpen: () => void;
+  /** leg rules drawn under an earlier spread: a note each, no line (2026-11-17) */
+  elsewhere?: Elsewhere[];
   /** as `HoldingCard`'s */
   spxSaid?: boolean;
 }) {
@@ -150,9 +160,18 @@ export function RuleCard({ entry, under, overlap = null, onOpen, spxSaid = false
       <p className="nxp-sentence"><RuleWords entry={entry} /></p>
       {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} reasonSaid={spxSaid} /> : null}
-      {under.length > 0 ? <ul className="nxp-rules">{under.map((r) => <RuleLine key={r.id} entry={r} within={entryName(entry)} />)}</ul> : null}
+      {drawnUnder(under, elsewhere).length > 0
+        ? <ul className="nxp-rules">{drawnUnder(under, elsewhere).map((r) => <RuleLine key={r.id} entry={r} within={entryName(entry)} />)}</ul> : null}
+      <AlsoNotes elsewhere={elsewhere} />
     </article>
   );
+}
+
+/** A rule met again on a second card (the owner, 2026-11-17): a quiet note naming where its line
+ *  is, never a second line — no `data-ref`, so a banner leads to the one place it is drawn. */
+function AlsoNotes({ elsewhere }: { elsewhere: Elsewhere[] | undefined }) {
+  if (!elsewhere?.length) return null;
+  return <>{elsewhere.map((e) => <p key={e.entry.id} className="nxp-meta nxp-also" data-also="">{alsoWords(e)}</p>)}</>;
 }
 
 /** The rules that are off: a quarantine is a fault the service declared, so it carries the fault

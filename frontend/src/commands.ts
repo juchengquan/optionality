@@ -14,7 +14,7 @@ import { writtenDate } from "./shared/times";
 import type { ArrangementChoice } from "./shared/prefs";
 import { rowName, tableRows, type DeskRow } from "./desk/columns";
 import { fieldWords, monitorName } from "./needs";
-import type { BookModel } from "./placement";
+import { ownRule, type BookModel } from "./placement";
 
 type FindKind =
   | "holding" | "watched spread" | "rule" | "quarantined rule" | "muted rule" | "expired rule";
@@ -100,7 +100,14 @@ function ofRow(row: DeskRow): Findable {
   if (row.kind === "holding") {
     const h = row.holding;
     const legs = h.legs.map(heldLeg);
-    return findable(h.id, "holding", h.name, h.strike_date, legs, null);
+    const found = findable(h.id, "holding", h.name, h.strike_date, legs, null);
+    // its own rule is drawn on its row (2026-11-17), so what that rule watches finds the holding
+    // too; its detail stays the holding's
+    const own = ownRule(h, row.rules);
+    if (!own) return found;
+    // and as a rule: "7300 monitor" lands on the row that draws it
+    const watches = [...tokens(SPOKEN[own.field] ?? own.field), ...(own.legs ? ["spread"] : []), ...RULE_SYNONYMS];
+    return { ...found, words: [...new Set([...found.words, ...watches])] };
   }
   if (row.kind === "rule") {
     const e = row.entry;
@@ -179,7 +186,9 @@ export function paletteActions(s: {
 }): PaletteAction[] {
   const kind = s.selected?.kind ?? null;
   const name = s.selected ? rowName(s.selected) : "";
-  const isMonitor = kind === "rule" || kind === "quarantined";
+  // a holding's own rule is drawn on its row (2026-11-17): selecting the holding selects it too
+  const own = s.selected?.kind === "holding" ? ownRule(s.selected.holding, s.selected.rules) : null;
+  const isMonitor = kind === "rule" || kind === "quarantined" || own !== null;
   const hold = s.hold ?? null;
   // a form action is fine while ITS form is the one open: that is landing on it again
   const held = (mine: Hold) => (hold !== null && hold !== mine ? HOLD_WHY : null);
@@ -188,7 +197,7 @@ export function paletteActions(s: {
     {
       key: "edit-monitor", label: "Edit the selected rule", detail: isMonitor ? name : "",
       why: kind === null ? "nothing is selected"
-        : kind === "holding" ? "a holding is selected: select one of its rules" : held("edit"),
+        : kind === "holding" && own === null ? "a holding is selected: select one of its rules" : held("edit"),
     },
     {
       key: "close-holding", label: "Close the selected holding", detail: kind === "holding" ? name : "",

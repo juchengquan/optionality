@@ -1,5 +1,5 @@
 /** The saved image (#300) places a combo that only partly overlaps a holding where the book does
- *  (#346): in the watchlist — the picture is drawn by its own tree, one plain table from either
+ *  (#346): among the watched spreads — the picture is drawn by its own tree, one plain table from either
  *  arrangement since #394, so it is held here rather than assumed from the page's. Since #400 the
  *  row is named alone, with no note in brackets: the page keeps its note, the table does not.
  */
@@ -28,14 +28,16 @@ function namesIn(title: string): string[] {
 }
 
 describe.each([false, true])("the picture, privacy %s", (privacy) => {
-  it("draws the partly overlapping combos in the watchlist, each by its name alone", () => {
+  it("draws the partly overlapping combos among the watched spreads, after the held ones, each by its name alone", () => {
     picture(privacy);
-    const watch = namesIn("Watchlist");
-    const held = namesIn("Holdings");
-    for (const id of ["r-8100", "w-7700", "r-ratio"]) expect(watch).toContain(nameOf(id));
-    // a wing of a held condor names nothing unheld, and a rule on held contracts stays under them
-    for (const id of ["r-8050", "r-8050-delta", "r-7700", "r-ic-calls"]) expect(held).toContain(nameOf(id));
+    const book = namesIn("Book");
+    // the held spreads first, "held" in the name cell, their own rule on their row; then the
+    // combos that name a contract nobody holds, as watched spreads (2026-11-17)
+    expect(book).toEqual([
+      "1231_8050 held", nameOf("r-8050-delta"), "1231_7700 held", "1231_IC held", nameOf("r-ic-calls"),
+      "1231_7200 held", nameOf("r-8100"), nameOf("w-8150-delta"), nameOf("w-7700"), nameOf("r-ratio"),
+    ]);
     // no bracket note anywhere in the table (#400)
-    for (const n of [...watch, ...held]) expect(n).not.toMatch(/[()]|shares|contains/);
+    for (const n of book) expect(n).not.toMatch(/[()]|shares|contains/);
   });
 });
