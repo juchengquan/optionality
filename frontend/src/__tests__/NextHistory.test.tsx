@@ -121,6 +121,18 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(chart.querySelector("[data-level='target']")?.textContent).toContain("$100");
   });
 
+  it("draws the Entry across the chart, where the cost to close started (the owner, 2026-11-17)", async () => {
+    const { insp } = await inspect("h-calls", "1218_C7300");
+    const chart = await burndownOf(insp);
+    await waitFor(() => expect(chart.querySelector("[data-level='entry']")).toBeTruthy());
+    // a 2.00 credit, one contract at the size the valuation served: $200
+    expect(chart.querySelector("[data-level='entry']")!.textContent).toBe("entry $200");
+    // drawn where the cost to close of 2.00 would be: on the plan's first corner, the Entry at open
+    const line = chart.querySelector("[data-level='entry'] line")!;
+    const [, y0] = corners(chart.querySelector("[data-plan]"))[0]!;
+    expect(Math.abs(Number(line.getAttribute("y1")) - y0)).toBeLessThan(0.5);
+  });
+
   it("marks a point that is not a close, and says why on hover", async () => {
     const { insp } = await inspect("h-calls", "1218_C7300");
     const chart = await burndownOf(insp);
@@ -208,6 +220,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelector("[data-level='target']")).toBeTruthy());
     expect(chart.querySelector("[data-level='target']")?.textContent).toBe("target $500");
+    expect(chart.querySelector("[data-level='entry']")?.textContent).toBe("entry $1,000");
     expect(within(chart).getByText("$ to close, 2 contracts")).toBeTruthy();
     pointAt(chart, dayOf(chart, ""));
     expect(within(chart).getByRole("status").textContent)
@@ -256,6 +269,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     // and it does say the per-contract figures: the valuation now, the Target and the Stop
     expect(carried()).toContain(`to close, per contract: ${perContract.at(-1)!.toFixed(2)} pts`);
     expect(chart.querySelector("[data-level='target']")?.textContent).toBe(`target ${served.levels!.target!.toFixed(2)} pts`);
+    expect(chart.querySelector("[data-level='entry']")?.textContent).toBe(`entry ${HOLDINGS.find((h) => h.id === "h-ic")!.entry!.toFixed(2)} pts`);
   });
 
   it("is one stop for the keyboard, its arrows moving from day to day and the line saying each", async () => {
