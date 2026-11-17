@@ -229,12 +229,13 @@ export function contractPreview(d: ContractDraft): DraftPayoff | null {
   };
 }
 
-/** The words under the preview: per contract, at what — or that no Entry was given, rather than a
+/** The words under the preview: at what — or that no Entry was given, rather than a
  *  credit of nothing nobody typed. */
 export function contractNote(d: ContractDraft): string {
   const entry = typed(d.entry);
-  if (entry === null || entry < 0) return "per contract — no Entry given, so drawn at 0";
-  return `per contract, at a ${d.side === "long" ? "debit" : "credit"} of ${entry.toFixed(2)}`;
+  // no "per contract": every figure under the chart says "pts per contract" (part L, 2026-11-17)
+  if (entry === null || entry < 0) return "no Entry given, so drawn at 0";
+  return `at a ${d.side === "long" ? "debit" : "credit"} of ${entry.toFixed(2)}`;
 }
 
 /** What a save will make, said on its button: a holding and a rule (part G), never contracts. */

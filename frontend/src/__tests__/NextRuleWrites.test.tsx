@@ -103,8 +103,9 @@ describe("renaming a combo from its editor", () => {
   it("says, for a held spread, that its holding keeps the name it was recorded with", async () => {
     controls(HELD);
     const form = await openEditor("1218_C7300 value");
-    expect(form.textContent).toContain(
-      "Renames this rule only: the holding 1218_C7300 keeps its name — the service never renames a holding.");
+    expect(form.textContent).toContain("the holding 1218_C7300 keeps its name");
+    // said once: "renames this rule only" and "never renames a holding" said it twice more (2026-11-17)
+    expect(form.textContent).not.toMatch(/Renames this rule only|never renames/);
   });
 });
 

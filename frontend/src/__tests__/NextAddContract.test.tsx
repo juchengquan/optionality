@@ -291,14 +291,16 @@ describe("a held contract", () => {
 
   it("previews the payoff of the one leg at its Entry, per contract, and says when none is given", async () => {
     hold();
-    expect(await screen.findByText("per contract — no Entry given, so drawn at 0")).toBeTruthy();
+    expect(await screen.findByText("no Entry given, so drawn at 0")).toBeTruthy();
     type("entry", "2.40");
     type("contracts", "3");
     await waitFor(() => expect(asked.filter((a) => a.what === "POST /positions/payoff").at(-1)?.body).toEqual({
       legs: [{ side: "short", option_type: "PUT", strike: 7150 }], entry: 2.4, contracts: 1,
     }));
     await screen.findByRole("group", { name: /payoff at expiry by SPX price/ });
-    expect(screen.getByText("per contract, at a credit of 2.40")).toBeTruthy();
+    expect(screen.getByText("at a credit of 2.40")).toBeTruthy();
+    // "per contract" is every figure's under the chart, not the note's too (2026-11-17)
+    expect(screen.getByText("max profit").nextElementSibling!.textContent).toMatch(/pts per contract$/);
   });
 
   it("names the watch rule it will replace, before saving", () => {

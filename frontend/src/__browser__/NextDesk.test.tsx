@@ -54,6 +54,7 @@ function serveOwnerBook(extra: object[] = []): void {
 const table = () => document.querySelector<HTMLElement>(".nxd-table")!;
 const rowOf = (id: string) =>
   [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === id)!;
+const cellOf = (id: string, col: string) => rowOf(id).querySelector(`[data-col="${col}"]`)?.textContent ?? "";
 const shown = () => [...document.querySelectorAll<HTMLElement>(".nxd-head [data-col]")].map((c) => c.dataset.col!);
 
 /** The page at a width, on the suite's pinned clock (in session) unless the test set another. */
@@ -449,13 +450,16 @@ describe("columns are dropped as measured (ADR 0008)", () => {
   const DRAWN: Record<number, { shut: string[]; open: string[] }> = {
     // the pace gap drawn in the value column (2026-11-16), where it had a column of its own: one
     // field of 91px where the two took 50 and 75, which leaves manage-by room at 900 open
+    // where the rule's column drops, the name cell draws each rule's arrowed distance (the owner,
+    // 2026-11-17), and makes room for it: the strip gives way at 900 shut and 1280 open, and
+    // manage-by at 900 open
     900: {
-      shut: ["name", "value", "pnl", "delta", "strip", "dte", "manage"],
-      open: ["name", "value", "pnl", "delta", "dte", "manage"],
+      shut: ["name", "value", "pnl", "delta", "dte", "manage"],
+      open: ["name", "value", "pnl", "delta", "dte"],
     },
     1280: {
       shut: ["name", "legs", "value", "pnl", "captured", "delta", "strip", "dte", "manage"],
-      open: ["name", "value", "pnl", "delta", "strip", "dte", "manage"],
+      open: ["name", "value", "pnl", "delta", "dte", "manage"],
     },
     // the owner's desk (review of #415)
     1440: { shut: ["name", "legs", "value", "pnl", "captured", "delta", "strip", "dte", "manage"],
@@ -525,11 +529,62 @@ describe("columns are dropped as measured (ADR 0008)", () => {
     expect(misfits()).toEqual([]);
   });
 
-  it("moves the fill bar into the name cell when the rule's column has dropped", async () => {
-    document.cookie = "ui_cols_combo=alarm;path=/";
-    await show(1280);
-    expect(shown()).not.toContain("alarm");
-    expect(rowOf("w-dec18").querySelector('[data-col="name"] [data-fill]')).toBeTruthy();
+  /** Every rule row's arrowed distance in its name cell, and anything wrong with how it is drawn. */
+  function distances(): { refs: string[]; faults: string[] } {
+    const refs: string[] = [], faults: string[] = [];
+    for (const row of document.querySelectorAll<HTMLElement>(".nxd-row[data-kind='rule']")) {
+      const d = row.querySelector<HTMLElement>('[data-col="name"] [data-distance]');
+      if (!d) continue;
+      refs.push(row.dataset.ref!);
+      const shownText = d.querySelector("[aria-hidden='true']")!.textContent!;
+      if (!/^(↑|↓)\d|^(▲|▼) (at|past \d)/.test(shownText)) faults.push(`${row.dataset.ref} draws "${shownText}"`);
+      if (!/^ rule .+ — /.test(d.querySelector(".sr-only")!.textContent!)) faults.push(`${row.dataset.ref} says no rule to a reader`);
+      // drawn whole: inside its cell, and the cell inside the table
+      const cell = d.closest<HTMLElement>("[data-col]")!.getBoundingClientRect(), r = d.getBoundingClientRect();
+      if (r.right > cell.right + 0.5 || r.left < cell.left - 0.5) faults.push(`${row.dataset.ref} distance past its cell`);
+      if (r.width < 4) faults.push(`${row.dataset.ref} distance squeezed to ${r.width}px`);
+    }
+    return { refs, faults };
+  }
+
+  // the owner, 2026-11-17: where the rule's column drops, the row says its distance — the short text
+  // its rule line draws — in the name cell, where a fill bar fell back before; no bar anywhere
+  for (const width of [900, 1024, 1280, 1440]) {
+    for (const open of [false, true]) {
+      it(`at ${width}px, the inspector ${open ? "open" : "shut"}: each rule row's distance where the rule's column has dropped`, async () => {
+        document.cookie = "ui_cols_combo=alarm;path=/";
+        await show(width);
+        if (open) await inspect("w-dec18");
+        expect(shown()).not.toContain("alarm");
+        const { refs, faults } = distances();
+        expect(refs).toEqual(expect.arrayContaining(["w-dec18", "w-dec18-delta", "w-lone"]));
+        expect(faults).toEqual([]);
+        expect(rowOf("w-dec18").querySelector("[data-distance] [aria-hidden='true']")!.textContent).toBe("↑3.60");
+        expect(document.querySelectorAll("[data-fill], .nxd-fill, [role=meter]")).toHaveLength(0);
+        expect(misfits()).toEqual([]);
+        expect(overflowsSideways()).toBe(false);
+      });
+    }
+  }
+
+  it("at 2560px, where the rule's column is drawn, the name cell says no distance: it is the rule line's", async () => {
+    await show(2560);
+    expect(shown()).toContain("alarm");
+    expect(distances().refs).toEqual([]);
+    expect(cellOf("w-dec18", "alarm")).toMatch(/↑3\.60$/);
+  });
+
+  it("at 900px with the column fitting alone, wherever the rule's column drops the distance is in the name", async () => {
+    for (const width of [900, 1024, 1280, 1440]) {
+      await page.viewport(width, 900);
+      cleanup();
+      await show(width);
+      const { refs, faults } = distances();
+      expect(faults, `${width}px`).toEqual([]);
+      if (shown().includes("alarm")) expect(refs, `${width}px`).toEqual([]);
+      else expect(refs.length, `${width}px`).toBeGreaterThan(2);
+      expect(misfits(), `${width}px`).toEqual([]);
+    }
   });
 });
 

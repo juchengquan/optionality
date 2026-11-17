@@ -47,7 +47,9 @@ function negative(path: string, body: unknown): unknown {
   return body;
 }
 
-export async function openPage(arrangement: "desk" | "phone", now: Date = MONDAY) {
+/** @param shape changes what the service answers, after the walk's own negatives: a test's world */
+export async function openPage(arrangement: "desk" | "phone", now: Date = MONDAY,
+  shape: (path: string, body: unknown) => unknown = (_, body) => body) {
   const s = closedBookService();
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now });
   document.cookie = `ui_arrangement=${arrangement};path=/`;
@@ -56,7 +58,7 @@ export async function openPage(arrangement: "desk" | "phone", now: Date = MONDAY
     const answer = await s.fetch(url, init);
     if ((init?.method ?? "GET") !== "GET" || !answer.ok) return answer;
     const body: unknown = await answer.json().catch(() => null);
-    return { ok: true, status: 200, json: () => Promise.resolve(negative(path, body)) } as Response;
+    return { ok: true, status: 200, json: () => Promise.resolve(shape(path, negative(path, body))) } as Response;
   }) as typeof fetch);
   render(<Next />);
   await waitFor(() => expect(document.querySelectorAll("[data-ref]").length).toBeGreaterThan(5));
@@ -135,8 +137,9 @@ async function readPalette(read: Read): Promise<void> {
 
 /** The desk, walked: what it read, and how much of it was drawn to be read. */
 /** @param now the page's clock: Monday 10:00 New York, in session, unless given */
-export async function walkDesk(read: Read, now: Date = MONDAY): Promise<{ names: number; charts: number; compared: number; split: number }> {
-  await openPage("desk", now);
+/** @param shape the world the service answers, as `openPage`'s */
+export async function walkDesk(read: Read, now: Date = MONDAY, shape?: (path: string, body: unknown) => unknown): Promise<{ names: number; charts: number; compared: number; split: number }> {
+  await openPage("desk", now, shape);
   read("page", document.body);
   // the References strip, down on the day
   expect(document.body.textContent).toContain("−0.40%");
@@ -223,8 +226,8 @@ export async function walkDesk(read: Read, now: Date = MONDAY): Promise<{ names:
 }
 
 /** The phone, walked. */
-export async function walkPhone(read: Read, now: Date = MONDAY): Promise<{ opens: number; charts: number; closes: number }> {
-  await openPage("phone", now);
+export async function walkPhone(read: Read, now: Date = MONDAY, shape?: (path: string, body: unknown) => unknown): Promise<{ opens: number; charts: number; closes: number }> {
+  await openPage("phone", now, shape);
   read("page", document.body);
   expect(document.body.textContent).toContain("−0.40%");
   fireEvent.click(screen.getByRole("button", { name: "Closed trades" }));

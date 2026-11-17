@@ -237,10 +237,13 @@ describe("on the phone (arrangement B)", () => {
     expect(said(fig)).toContain("P6400 Δ −0.210 · 500.50 pts · 1.25σ away");
   });
 
-  it("with no derived price, a card's strip keeps its strikes and Δ, and gives a dash and the reason", () => {
+  it("with no derived price, a card's strip keeps its strikes and Δ, and gives a dash marked for the book's one reason", () => {
     render(<PhoneBook {...deskProps({ holdings: HOLDINGS.map(bare) })} />);
     const fig = within(card("h-puts")).getByRole("figure", { name: "strike strip" });
     expect(fig.querySelector(".nxs-k[data-side=short]")!.textContent).toBe("6400Δ −0.210");
-    expect(fig.textContent).toContain(`SPX — ${REASON}`);
+    // the reason is the book's to say, once, under its heading (2026-11-17); the strip marks its dash
+    expect(fig.querySelector(".nxs-spx-words")!.textContent).toBe("SPX —*");
+    expect(fig.textContent).not.toContain(REASON);
+    expect(screen.getAllByText(`* SPX: ${REASON}`)).toHaveLength(1);
   });
 });

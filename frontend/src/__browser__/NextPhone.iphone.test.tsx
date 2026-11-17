@@ -178,18 +178,12 @@ describe("the detail sheet", () => {
     });
   }
 
-  it("colours a fired entry's progress bar as the card does, though it is drawn outside the page", async () => {
+  it("draws a fired entry with its distance past the threshold and no progress bar, on the card and in the sheet", async () => {
     const sheet = await openSheet("w-dec04");
-    const bar = within(sheet).getByRole("progressbar").firstElementChild as HTMLElement;
-    const onCard = card("w-dec04").querySelector<HTMLElement>(".nxp-progress > span")!;
-    // a probe in the sheet painted with the entry token, as the page resolves it there
-    const probe = document.createElement("span");
-    probe.style.background = "var(--entry)";
-    sheet.append(probe);
-    const entry = getComputedStyle(probe).backgroundColor;
-    probe.remove();
-    expect(getComputedStyle(bar).backgroundColor).toBe(entry);
-    expect(getComputedStyle(onCard).backgroundColor).toBe(getComputedStyle(bar).backgroundColor);
+    // the arrowed distance says how far past; a bar said it again (the owner, 2026-11-17)
+    expect(sheet.querySelector(".nx-rule-short")!.textContent).toMatch(/▲ past 0\.20$/);
+    expect(card("w-dec04").querySelector(".nx-rule-short")!.textContent).toMatch(/▲ past 0\.20$/);
+    expect(document.querySelectorAll("[role=progressbar], [role=meter], .nxp-progress, .nxd-fill, [data-fill]")).toHaveLength(0);
   });
 
   it("gives its controls 44pt targets", async () => {

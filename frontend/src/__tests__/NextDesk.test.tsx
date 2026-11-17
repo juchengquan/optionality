@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Entry, Holding, Monitor } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
-import { charsOf, COLUMNS, fitColumns, offerable, PRIORITY, tableRows, type DeskRow } from "../desk/columns";
+import { charsOf, COLUMNS, fitColumns, NAME_WITH_DISTANCE, offerable, PRIORITY, tableRows, type DeskRow } from "../desk/columns";
 import { Next } from "../Next";
 import { placeBook } from "../placement";
 import { readHidden } from "../shared/prefs";
@@ -94,7 +94,7 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
     expect(row("w-lone").dataset.nested).toBeUndefined();
   });
 
-  it("gives every rule its fill bar, and its short form with its sentence to a pointer and a reader (#388)", () => {
+  it("gives every rule its short form with its sentence to a pointer and a reader (#388), and no fill bar (2026-11-17)", () => {
     render(<DeskBook {...props()} />);
     const full = "|Δ| ≥ 0.20 — now −0.170, 0.030 away";
     expect(cellText("w-dec18-delta", "alarm")).toBe("|Δ| ≥ 0.20   \u22120.170  ↑0.030");
@@ -102,8 +102,9 @@ describe("one table: holdings first, then the watchlist, each by expiry", () => 
     expect(drawn.title).toBe(full);
     expect(drawn.getAttribute("aria-hidden")).toBe("true");
     expect(cell("w-dec18-delta", "alarm")!.querySelector(".sr-only")!.textContent).toBe(`rule ${full}`);
-    const bar = cell("w-dec18", "alarm")!.querySelector<HTMLElement>("[data-fill]")!;
-    expect(bar.dataset.fill).toBe("40");
+    // the arrowed distance says how close; a bar beside it said it again (the owner, 2026-11-17)
+    expect(cellText("w-dec18", "alarm")).toMatch(/↑3\.60$/);
+    expect(document.querySelectorAll("[role=progressbar], [role=meter], .nxp-progress, .nxd-fill, [data-fill]")).toHaveLength(0);
   });
 });
 
@@ -577,7 +578,9 @@ describe("the columns", () => {
 
   it("drop in exactly the survival order as the room shrinks: the rule first, the value last", () => {
     const rows = ownerRows();
-    const widthOf = (key: string) => Math.ceil(charsOf(COLUMNS.find((c) => c.key === key)!, rows, false, true) * 8);
+    const widthOf = (key: string) => key === NAME_WITH_DISTANCE
+      ? Math.ceil(charsOf(COLUMNS.find((c) => c.key === "name")!, rows, false, true, true) * 8)
+      : Math.ceil(charsOf(COLUMNS.find((c) => c.key === key)!, rows, false, true) * 8);
     const all = COLUMNS.reduce((n, c) => n + widthOf(c.key), 0);
     const dropped: string[] = [];
     let before = COLUMNS.map((c) => c.key);
@@ -589,6 +592,14 @@ describe("the columns", () => {
     // the reverse of value (with its pace gap), P&L, Δ, DTE, manage-by, SPX → short, captured, legs, rule
     expect(dropped).toEqual(["alarm", "legs", "captured", "strip", "manage", "dte", "delta", "pnl", "value"]);
     expect(before).toEqual(["name"]);
+    // and wherever the rule's column has dropped, what is kept leaves the name room for each rule's
+    // distance (the owner, 2026-11-17)
+    for (let room = widthOf(NAME_WITH_DISTANCE); room <= all; room += 7) {
+      const kept = fitColumns(room, new Set(), widthOf).map((c) => c.key);
+      if (kept.includes("alarm")) continue;
+      const used = kept.reduce((n, k) => n + widthOf(k === "name" ? NAME_WITH_DISTANCE : k), 0);
+      expect(used, `${room}px`).toBeLessThanOrEqual(room);
+    }
     expect(PRIORITY).toEqual(["value", "pnl", "delta", "dte", "manage", "strip", "captured", "legs", "alarm"]);
   });
 

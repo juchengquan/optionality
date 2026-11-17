@@ -10,9 +10,10 @@
  *    opens the add form as "I hold it", prefilled from the rule, and its save through `POST /spreads`
  *    replaces the watch rule. It replaced #336's "I hold this", a form of its own in these controls.
  *
- *  - The draft is said in words as it is typed; the figure and its distance beside it stay the
- *    SERVED row's, said as "as saved", because only the service measures a distance (ADR 0005).
- *    Saved, the page reloads and the sentence beside the rule is the service's new one.
+ *  - The draft is said in words as it is typed. The figure and its distance stay the SERVED row's,
+ *    on the rule's own line just above the form, because only the service measures a distance (ADR
+ *    0005): the form no longer repeats that line under "as saved" (2026-11-17). Saved, the page
+ *    reloads and the sentence beside the rule is the service's new one.
  *  - A refusal is said beside the field it is about, inside the form — so inside any sheet the form
  *    is in. The old dashboard's toast was drawn underneath its form, and a refused change looked
  *    like nothing had happened (ADR 0023).
@@ -30,12 +31,12 @@ import type { Entry, Holding, Monitor } from "./shared/api";
 import { Button } from "@/components/ui/button";
 import { DASH } from "./shared/format";
 import {
-  deletesOn, draftOf, draftSentence, draftWords, fieldsFor, patchOf, QUARANTINE_WHY, recordOffered, renameNote,
+  deletesOn, draftOf, draftSentence, draftWords, fieldsFor, patchOf, QUARANTINE_WHY, quarantineFound, recordOffered, renameNote,
   ruleLabel, splitCounts, splitOffered, splitPreview, spotOf, stateOf, totalOf,
   type Draft, type PatchBody, type Rule, type Spot,
 } from "./edit";
 import { fieldWords } from "./needs";
-import { RuleWords, ShortWords } from "./RuleWords";
+import { ShortWords } from "./RuleWords";
 import { DirectionPair } from "./DirectionPair";
 import { dateWords } from "./shared/times";
 import "./monitor-edit.css";
@@ -62,14 +63,16 @@ export interface MonitorActions {
 export const MonitorActionsContext = createContext<MonitorActions | null>(null);
 
 /** @param served the rule's row of `/quotes`, for a rule that is on: its sentence is the service's */
-export function MonitorControls({ rule, served }: { rule: Rule; served: Entry | null }) {
+/** @param expiredSaid the row beside it already says "expired" (its reason's label): the note says
+ *  the day and when the service deletes it, without the word again (2026-11-17) */
+export function MonitorControls({ rule, served, expiredSaid = false }: { rule: Rule; served: Entry | null; expiredSaid?: boolean }) {
   const actions = useContext(MonitorActionsContext);
-  return actions ? <Controls actions={actions} rule={rule} served={served} /> : null;
+  return actions ? <Controls actions={actions} rule={rule} served={served} expiredSaid={expiredSaid} /> : null;
 }
 
 type Doing = "idle" | "editing" | "deleting" | "enabling" | "splitting";
 
-function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Rule; served: Entry | null }) {
+function Controls({ actions, rule, served, expiredSaid }: { actions: MonitorActions; rule: Rule; served: Entry | null; expiredSaid: boolean }) {
   const [doing, setDoing] = useState<Doing>("idle");
   const [draft, setDraft] = useState<Draft>(() => draftOf(rule));
   // the rule as it was when the editor opened: the draft is a change to THAT, so a poll serving a
@@ -146,11 +149,12 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
     <div className="nx-mon" ref={root}>
       {state === "expired" ? (
         <p className="nx-meta nx-mon-note">
-          {`expired ${dateWords(rule.strike_date)} — the service deletes it ${actions.retentionDays === null
+          {`${expiredSaid ? "" : "expired "}${dateWords(rule.strike_date)} — the service deletes it ${actions.retentionDays === null
             ? "after its retention window" : `on ${dateWords(deletesOn(rule.strike_date, actions.retentionDays))}`}`}
         </p>
       ) : null}
-      {why !== null && doing !== "enabling" ? <p className="nx-mon-note">{`Switched off by the service: ${why}.`}</p> : null}
+      {/* what the service found, under the rule's own line, which already ends in the clause */}
+      {why !== null && doing !== "enabling" ? <p className="nx-mon-note">{`${quarantineFound(rule)}.`}</p> : null}
 
       <div className="nx-mon-actions">
         <button ref={editButton} type="button" className="nx-mon-button" aria-label={`edit ${label}`}
@@ -209,7 +213,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
         </Ask>
       ) : null}
       {doing === "editing" ? (
-        <EditForm rule={rule} served={served} label={label} draft={draft} busy={busy} error={error}
+        <EditForm rule={rule} label={label} draft={draft} busy={busy} error={error}
                   onDraft={(d) => { setDraft(d); setError(null); }} onSave={save} onCancel={close} />
       ) : null}
       {doing === "splitting" && book && actions.totalEntry ? (
@@ -276,8 +280,8 @@ function Ask({ label, yes, no, busy, destructive, onYes, onNo, children }: {
   );
 }
 
-function EditForm({ rule, served, label, draft, busy, error, onDraft, onSave, onCancel }: {
-  rule: Rule; served: Entry | null; label: string; draft: Draft; busy: boolean;
+function EditForm({ rule, label, draft, busy, error, onDraft, onSave, onCancel }: {
+  rule: Rule; label: string; draft: Draft; busy: boolean;
   error: { text: string; at: Spot } | null;
   onDraft: (d: Draft) => void; onSave: (e: React.FormEvent) => void; onCancel: () => void;
 }) {
@@ -300,7 +304,6 @@ function EditForm({ rule, served, label, draft, busy, error, onDraft, onSave, on
       <p className="nx-mon-draft" data-testid="draft" aria-live="polite">
         <ShortWords short={draftWords(rule, draft)} full={draftSentence(rule, draft)} />
       </p>
-      {served ? <p className="nx-meta" data-testid="served">{"as saved: "}<RuleWords entry={served} /></p> : null}
       <div className="nx-mon-fields">
         {rule.combo ? (
           <div className="nx-mon-field nx-mon-name">

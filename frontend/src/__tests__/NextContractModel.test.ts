@@ -194,9 +194,9 @@ describe("the payoff preview", () => {
   });
 
   it("says when no Entry is given, rather than claiming a credit of nothing", () => {
-    expect(contractNote(put({ held: true, entry: "" }))).toBe("per contract — no Entry given, so drawn at 0");
-    expect(contractNote(put({ held: true, entry: "2.4" }))).toBe("per contract, at a credit of 2.40");
-    expect(contractNote(put({ held: true, entry: "5", side: "long" }))).toBe("per contract, at a debit of 5.00");
+    expect(contractNote(put({ held: true, entry: "" }))).toBe("no Entry given, so drawn at 0");
+    expect(contractNote(put({ held: true, entry: "2.4" }))).toBe("at a credit of 2.40");
+    expect(contractNote(put({ held: true, entry: "5", side: "long" }))).toBe("at a debit of 5.00");
   });
 });
 

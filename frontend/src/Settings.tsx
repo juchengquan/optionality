@@ -95,12 +95,13 @@ export function Settings(p: SettingsProps) {
         <NativeSelect id="nx-privacy" value={p.privacy ? "hidden" : "shown"}
                       onChange={(e) => p.onPrivacy(e.target.value === "hidden")}>
           <option value="shown">shown</option>
-          <option value="hidden">hidden — %, Δ, DTE and points stay</option>
+          {/* what stays is the note's to say, once (2026-11-17) */}
+          <option value="hidden">hidden</option>
         </NativeSelect>
         <FieldDescription>
-          For a screen somebody else can see. Dollars and the count of contracts are hidden; figures in
-          points per contract — cost to close, entry, the pace gap, the payoff — stay, since none says
-          how big a trade is.
+          For a screen somebody else can see. Dollars and the count of contracts are hidden; %, Δ, DTE
+          and figures in points per contract — cost to close, entry, the pace gap, the payoff — stay,
+          since none says how big a trade is.
         </FieldDescription>
       </Field>
 

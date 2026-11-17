@@ -211,7 +211,7 @@ export function storedRuleWords(
  *  held credit's signed stop (`isCostToClose`). The short form's words, places and minus (#404),
  *  said in full: the distance in words rather than an arrow.
  *
- *  Every figure in it is the service's: `watched` is the very figure the bell and the fill bar were
+ *  Every figure in it is the service's: `watched` is the very figure the bell is
  *  drawn from, and `distance` is the domain's `thresholdDistance` (ADR 0005 — nothing is assembled
  *  here).
  *

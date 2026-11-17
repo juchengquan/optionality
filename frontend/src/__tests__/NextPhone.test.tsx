@@ -105,10 +105,12 @@ describe("the cards, on the owner's book", () => {
     expect(short("h-ic")).toBe("C7400 0.120 · P6300 −0.250");
   });
 
-  it("show a candidate's progress toward its threshold and each rule's sentence", () => {
+  it("show each rule's sentence and its arrowed distance, and no progress bar (2026-11-17)", () => {
     draw();
     const c = card("w-dec18");
-    expect(c.querySelector(":scope > [role=progressbar]")!.getAttribute("aria-valuenow")).toBe("40");
+    // the distance says how close; the bar under the figures said it again
+    expect(c.querySelector(".nx-rule-short")!.textContent).toMatch(/↑3\.60$/);
+    expect(document.querySelectorAll("[role=progressbar], [role=meter], .nxp-progress, .nxd-fill, [data-fill]")).toHaveLength(0);
     expect(within(c).getByText(/\|value\| ≥ 6\.00 — now 2\.40, 3\.60 away/)).toBeTruthy();
   });
 
@@ -155,12 +157,10 @@ describe("the cards, on the owner's book", () => {
     expect(condor().textContent).toBe("$•••");
   });
 
-  it("draw no progress bar for a rule with no figure, where 0% would read as far from it", () => {
+  it("say a rule with no figure has none, in words", () => {
     const blind = QUOTES.map((q) => q.id === "w-dec18" ? { ...q, fill: null, watched: null } as Entry : q);
     draw({ quotes: blind });
-    expect(card("w-dec18").querySelector(":scope > [role=progressbar]")).toBeNull();
     expect(within(card("w-dec18")).getAllByText(/no figure/).length).toBeGreaterThan(0);
-    expect(card("w-dec31").querySelector(":scope > [role=progressbar]")).toBeTruthy();
   });
 });
 
@@ -183,13 +183,13 @@ describe("the cards say what the desk's rows say (part K)", () => {
     }
   });
 
-  it("draws each rule on a holding's card with its progress, as a watch card draws its own", () => {
+  it("draws each rule on a holding's card with its arrowed distance, as a watch card draws its own, and no bar", () => {
     draw();
     const lines = [...card("h-calls").querySelectorAll<HTMLElement>(".nxp-rule")];
     expect(lines.length).toBeGreaterThan(0);
     for (const line of lines) {
-      const entry = QUOTES.find((q) => q.id === line.dataset.ref)!;
-      expect(line.querySelector("[role=progressbar]") !== null, line.dataset.ref).toBe(entry.fill !== null);
+      expect(line.querySelector(".nx-rule-short")!.textContent, line.dataset.ref).toMatch(/[↑↓▲▼]/);
+      expect(line.querySelectorAll("[role=progressbar], [role=meter], .nxp-progress, .nxd-fill, [data-fill]"), line.dataset.ref).toHaveLength(0);
     }
   });
 
@@ -324,13 +324,12 @@ describe("the detail sheet, beyond opening and closing", () => {
     }
   });
 
-  it("draws no progress bar in the sheet for a rule with no figure", async () => {
-    const blind = QUOTES.map((q) => q.id === "w-dec18" ? { ...q, fill: null, watched: null } as Entry : q);
-    draw({ quotes: blind });
+  it("draws no progress bar in the sheet: its rule lines say the distance (2026-11-17)", async () => {
+    draw();
     fireEvent.click(within(card("w-dec18")).getByRole("button", { name: /details of/ }));
     const sheet = await screen.findByRole("dialog");
-    // its own line in Rules carries its bar, and has none without a figure
-    expect(sheet.querySelector("[data-section='rules'] li")!.querySelector("[role=progressbar]")).toBeNull();
+    expect(sheet.querySelector("[data-section='rules'] li .nx-rule-short")!.textContent).toMatch(/↑3\.60$/);
+    expect(sheet.querySelectorAll("[role=progressbar], [role=meter], .nxp-progress, .nxd-fill, [data-fill]")).toHaveLength(0);
   });
 
   it("stays closed when what it showed goes away and comes back, and pushes no second entry", async () => {

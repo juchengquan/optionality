@@ -58,8 +58,9 @@ describe("editing a Monitor from the inspector", () => {
     expect(within(form).getByTestId("draft").querySelector(".nx-rule-short")!.textContent).toBe("|Δ| ≥ 0.3");
     // as typed, the short form IS its words: written once (2026-11-16)
     expect(within(form).getByTestId("draft").textContent).toBe("|Δ| ≥ 0.3");
-    expect(within(form).getByTestId("served").querySelector(".nx-rule-short")!.textContent).toMatch(/↑0\.030$/);
-    expect(within(form).getByTestId("served").querySelector(".sr-only")!.textContent).toMatch(/0\.030 away$/);
+    // ... on the rule's own line, still drawn above the form, which does not repeat it (2026-11-17)
+    expect(within(panel).getByText(/^\|Δ\| ≥ 0\.20 — now −0\.170, 0\.030 away$/)).toBeTruthy();
+    expect(form.textContent).not.toMatch(/as saved|0\.030/);
     await userEvent.click(within(form).getByRole("button", { name: "save" }));
 
     await waitFor(() => expect(within(inspector()).queryByRole("form")).toBeNull());
@@ -157,6 +158,8 @@ describe("mute, unmute and delete from the desk", () => {
   it("says when an expired rule is deleted, from the retention the service serves", async () => {
     await openDesk();
     await userEvent.click(await screen.findByText(/^Muted and expired · /));
-    expect(screen.getByText("expired Fri 6 Nov — the service deletes it on Thu 12 Nov")).toBeTruthy();
+    // beside its reason's label "expired", the note says the day without the word again (2026-11-17)
+    const note = screen.getByText("Fri 6 Nov — the service deletes it on Thu 12 Nov");
+    expect(note.closest("li")!.textContent!.match(/expired/g)).toHaveLength(1);
   });
 });

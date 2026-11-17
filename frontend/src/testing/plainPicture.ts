@@ -13,7 +13,7 @@ const SMALLEST_PX = 12;
 
 /** Everything the screen draws and the picture must not: a chip, a fill or progress bar, a condor's
  *  bracket, a leg drawn in its type's colour (#391), an outcome colour, a glyph or any graphic. */
-const DRAWINGS = ".nx-chip, .nxd-fill, .nxp-progress, .nxd-bracket, .nx-leg, [data-type], [data-outcome], "
+const DRAWINGS = ".nx-chip, .nxd-bracket, .nx-leg, [data-type], [data-outcome], "
   + "svg, img, canvas, [role=meter], [role=progressbar]";
 
 const describe = (el: Element) => `${el.tagName.toLowerCase()} "${(el.textContent ?? "").slice(0, 40)}"`;

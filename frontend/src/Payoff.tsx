@@ -112,7 +112,9 @@ function usePayoff(subject: string, key: string | null, load: () => Promise<Payo
 const PRICE_FIELDS: ReadonlySet<string> = new Set(["mid_price"]);
 
 /** A holding's payoff, at the Entry it was taken for, over the contracts held. */
-export function HoldingPayoff({ holding, privacy }: { holding: Holding; privacy: boolean }) {
+/** `spxSaid`: the strike strip drawn beside it already says SPX's price and why it is not current
+ *  (#416), so the line under the chart would say that sentence a second time (2026-11-17) */
+export function HoldingPayoff({ holding, privacy, spxSaid = false }: { holding: Holding; privacy: boolean; spxSaid?: boolean }) {
   const { id, entry, contracts } = holding;
   // asked again for new legs, a new Entry or count (`askedFor`), never for a poll's new valuation
   const state = usePayoff(id, entry === null ? null : askedFor(holding), () => fetchPayoff(id));
@@ -120,7 +122,7 @@ export function HoldingPayoff({ holding, privacy }: { holding: Holding; privacy:
   const unit: PayoffUnit = { contracts, size: holding.contract_size, hidden: privacy, perContract: true };
   return (
     <PayoffFigure state={state} unit={unit} legs={holding.legs.map(heldLeg)}
-                  spx={holding.spx} spxReason={holding.spx_reason}
+                  spx={holding.spx} spxReason={holding.spx_reason} spxSaid={spxSaid}
                   blank={entry === null ? "no Entry recorded, so there is no credit to draw it at" : null} />
   );
 }
@@ -131,7 +133,7 @@ export function HoldingPayoff({ holding, privacy }: { holding: Holding; privacy:
  *  Minus is short (ADR 0013) and a combo's value is the signed sum under its signs, so what it would
  *  be sold for is the negative of its value. One spread, in points: nobody holds it, so there is no
  *  count and no size to make money of. */
-export function WatchedPayoff({ entry, session }: { entry: Entry; session: boolean }) {
+export function WatchedPayoff({ entry, session, spxSaid = false }: { entry: Entry; session: boolean; spxSaid?: boolean }) {
   // live in the session, at its last close outside it — or where the rule watches no price (#402)
   const at = payoffAt(entry, session, PRICE_FIELDS.has(entry.field));
   const value = at.value;
@@ -158,7 +160,7 @@ export function WatchedPayoff({ entry, session }: { entry: Entry; session: boole
     : "its current value";
   return (
     <PayoffFigure state={state} unit={POINTS} legs={shownLegs(state) ?? (entry.legs ?? []).map(signedLeg)}
-                  spx={entry.spx} spxReason={entry.spx_reason} blank={blank}
+                  spx={entry.spx} spxReason={entry.spx_reason} spxSaid={spxSaid} blank={blank}
                   note={`no Entry: drawn at ${where}, ${Math.abs(credit).toFixed(2)}, as the ${credit < 0 ? "debit" : "credit"}`} />
   );
 }
@@ -218,8 +220,10 @@ function useSettled<T>(value: T | null, ms: number): T | null {
   return value === null ? null : settled;
 }
 
-function PayoffFigure({ state, unit, legs, spx, spxReason, blank, note }: {
+function PayoffFigure({ state, unit, legs, spx, spxReason, spxSaid = false, blank, note }: {
   state: PayoffState | null; unit: PayoffUnit; legs: WrittenLeg[]; spx: number | null; spxReason: string | null;
+  /** SPX's line is said beside the chart already, by the strike strip: not said again here */
+  spxSaid?: boolean;
   /** why nothing is drawn, when nothing can be */
   blank: string | null;
   note?: string;
@@ -232,7 +236,7 @@ function PayoffFigure({ state, unit, legs, spx, spxReason, blank, note }: {
           <>
             {note ? <p className="nx-meta nx-payoff-note">{note}</p> : null}
             <Chart payoff={state.payoff} unit={unit} legs={legs} spx={spx} />
-            {spx === null ? <p className="nx-meta nx-payoff-spx">{`SPX — ${spxReason ?? "no price"}`}</p>
+            {spxSaid ? null : spx === null ? <p className="nx-meta nx-payoff-spx">{`SPX — ${spxReason ?? "no price"}`}</p>
               // a price that is not current says so (#416): the marker is the last close's level
               : spxReason ? <p className="nx-meta nx-payoff-spx" data-stale="">{`SPX ${spxText(spx)} (${spxReason})`}</p> : null}
             <dl className="nx-payoff-kv">
@@ -465,7 +469,7 @@ function Chart({ payoff, unit, legs, spx }: { payoff: Payoff; unit: PayoffUnit; 
           inspector's `status` lines are the holding's actions' and the burndown's, and the tests and
           tools that find "the status" of a holding's actions by role would find two */}
       <p className="nx-payoff-said" aria-live="polite" aria-atomic="true" data-said="">
-        {chosen && said ? said.words : "point at a price, or use the arrow keys, for the P&L at expiry there"}
+        {chosen && said ? said.words : "point at a price, or use the arrow keys, for the P&L there"}
       </p>
     </>
   );

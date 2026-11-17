@@ -17,6 +17,11 @@ export function RuleFigures({ entry, className, held = entry.held }: {
   const none = missing === null ? null
     : <p className="nx-meta nx-figures-missing" data-figures-missing="">{`no figures — ${missing}`}</p>;
   if (figures.length === 0) return none;
+  // a reason two or more dashes share is said once, under the list, naming the figures it is for —
+  // "a leg has no figure, and no sum is taken from part of them" was said four times in a row
+  // under a spread's Δ Γ Θ ν (2026-11-17); a reason only one dash has stays beside it
+  const shared = [...new Set(figures.map((f) => f.why))]
+    .filter((why): why is string => why !== null && figures.filter((f) => f.why === why).length > 1);
   return (
     <>
     {/* out of the session a quote-less watchlist row still says its last in-session price */}
@@ -26,10 +31,15 @@ export function RuleFigures({ entry, className, held = entry.held }: {
         <div key={f.key} data-figure={f.key} data-detail={f.detail ? "" : undefined}>
           <dt>{f.label}</dt>
           {/* the reason sits under its dash, in words a finger can read: a title is for a pointer */}
-          <dd>{f.text}{f.why === null ? null : <>{" "}<span className="nx-figure-why">{f.why}</span></>}</dd>
+          <dd>{f.text}{f.why === null || shared.includes(f.why) ? null : <>{" "}<span className="nx-figure-why">{f.why}</span></>}</dd>
         </div>
       ))}
     </dl>
+    {shared.map((why) => (
+      <p key={why} className="nx-meta nx-figures-why" data-figures-why="">
+        {`${figures.filter((f) => f.why === why).map((f) => f.label).join(" ")}: ${why}`}
+      </p>
+    ))}
     </>
   );
 }

@@ -18,7 +18,7 @@ import { DASH, heldLeg, legText, shortFirst, signedLeg, type WrittenLeg } from "
 import { delta, money, percent, points } from "../shared/numbers";
 import type { BookModel } from "../placement";
 import {
-  entryName, isEntrySignal, monitorName, QUARANTINED, sentence, shapeOf, shortRule, shortSentence, storedRuleWords,
+  entryName, isEntrySignal, monitorName, QUARANTINED, sentence, shapeOf, shortDistance, shortRule, shortSentence, storedRuleWords,
 } from "../needs";
 import { servedDelta } from "../legs";
 import { costAndPace, manageBy, paceSigned, paceWords } from "../pace";
@@ -323,10 +323,22 @@ export const RETIRED_KEYS: readonly string[] = ["on_pace", "to_manage", "pace_ga
 
 export const PINNED = "name";
 
+/** The name column's width where the rule's column has dropped: its cell then also draws the rule's
+ *  arrowed distance (the owner, 2026-11-17), so it needs that much more room. */
+export const NAME_WITH_DISTANCE = "name+distance";
+
+/** A rule row's arrowed distance in the short form its line draws — "↑3.60", "▲ past 0.05",
+ *  "▲ at" — or "" where there is no figure or no distance: drawn in the name cell when the rule's
+ *  column has dropped, where the fill bar fell back before (2026-11-17). */
+export function distanceShort(row: DeskRow): string {
+  if (row.kind !== "rule" || row.entry.watched === null || row.entry.distance === null) return "";
+  return shortDistance(shapeOf(row.entry), row.entry.distance);
+}
+
 /** The order columns SURVIVE in, which is not the order they are drawn in. The widest goes last
  *  (ADR 0008): fitting stops at the first column that does not fit, so a wide column early on
  *  would starve every column behind it. The rule's sentence is the widest, and when it drops the
- *  fill bar moves into the name cell and the inspector still says it whole. The pace gap survives
+ *  inspector still says it whole. The pace gap survives
  *  as long as the value does, being drawn in it (2026-11-16). */
 export const PRIORITY: readonly string[] = [
   "value", "pnl", "delta", "dte", "manage", "strip", "captured", "legs", "alarm",
@@ -336,18 +348,20 @@ export const PRIORITY: readonly string[] = [
 const PAD_CH = 1.5;
 
 /** How many characters a column needs, from the longest thing it will draw, its header included.
- *  The name cell also carries its chip and, nested, an indent; the rule cell its fill bar. */
-export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: boolean, session: boolean): number {
+ *  The name cell also carries its chip and, nested, an indent. */
+export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: boolean, session: boolean,
+  withDistance = false): number {
   let longest = column.label.length;
   for (const r of rows) {
     let n = column.text(r, privacy).length;
     if (column.key === "name") {
+      // the rule's arrowed distance beside the name, where the rule's column has dropped
+      if (withDistance && distanceShort(r)) n += distanceShort(r).length + 1;
       const words = chipWords(r, session);
       // a chip is smaller type than the cell, but carries a glyph and its own padding
       if (words !== null) n += words.length + 4;
       if (r.kind === "rule" && r.nested) n += 2;
     }
-    if (column.key === "alarm" && n > 0) n += 6; // the fill bar beside the sentence
     if (column.key === "strip" && n > 0) n += STRIP_CH + 1; // the scale beside the words
     longest = Math.max(longest, n);
   }
@@ -364,12 +378,22 @@ export function fitColumns(
 ): DeskColumn[] {
   const kept = new Set([PINNED]);
   let used = widthOf(PINNED);
+  const order: string[] = [];
   for (const key of PRIORITY) {
     if (hidden.has(key)) continue;
     const w = widthOf(key);
     if (used + w > available) break;
     kept.add(key);
+    order.push(key);
     used += w;
+  }
+  // the rule's column gone, the name's cell draws each rule's distance too: room for it, made by
+  // dropping the last columns kept until it fits
+  const extra = kept.has("alarm") ? 0 : Math.max(0, widthOf(NAME_WITH_DISTANCE) - widthOf(PINNED));
+  while (extra > 0 && used + extra > available && order.length > 0) {
+    const last = order.pop()!;
+    kept.delete(last);
+    used -= widthOf(last);
   }
   return COLUMNS.filter((c) => kept.has(c.key));
 }

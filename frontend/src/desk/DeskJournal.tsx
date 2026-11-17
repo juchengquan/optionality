@@ -69,7 +69,7 @@ export function DeskJournal({ journal, privacy, onCorrected, onDeleted }: {
               </table>
             )}
       {current ? <ClosedTradeDetail id={detailId} trade={current} privacy={privacy} onCorrected={onCorrected}
-                                    onDeleted={onDeleted} heading /> : null}
+                                    onDeleted={onDeleted} heading madeSaid /> : null}
     </div>
   );
 }

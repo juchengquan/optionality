@@ -14,7 +14,7 @@ import { readHidden, readPriceMap, writeHidden, writePriceMap } from "../shared/
 import { Money, type BookProps } from "../Book";
 import { AttentionChip } from "../AttentionChip";
 import { ClosedLine } from "../ClosedLine";
-import { monitorName, shapeOf, shortRule, storedRuleWords } from "../needs";
+import { monitorName, sentence, shapeOf, shortRule, storedRuleWords } from "../needs";
 import { ShortWords } from "../RuleWords";
 import { costAndPace, paceOutcome } from "../pace";
 import type { HoldingWrites } from "../HoldingActions";
@@ -24,11 +24,11 @@ import { placeBook, type BookModel } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  attentionOf, chipWords, COLUMNS, heldSpread, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
+  attentionOf, chipWords, COLUMNS, distanceShort, heldSpread, RETIRED_KEYS, rowId, rowLegs, rowName, rowStrip, tableRows,
   type DeskColumn, type DeskRow,
 } from "./columns";
-import { StrikeStrip } from "../StrikeStrip";
-import { joinStrips, stripOfHolding } from "../strip";
+import { SpxNote, StrikeStrip } from "../StrikeStrip";
+import { bookSpxReasons, joinStrips, stripOfHolding } from "../strip";
 import { inFold, NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
 import { useDeskFit } from "./useDeskFit";
 import { PriceMapPanel } from "./PriceMapPanel";
@@ -242,7 +242,7 @@ const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
 
 // ---- the sections
 
-function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, picker }: BookProps & {
+function Holdings({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, picker }: BookProps & {
   placed: BookModel; ctx: Ctx; picker: React.ReactNode;
 }) {
   return (
@@ -260,6 +260,8 @@ function Holdings({ placed, holdings, holdingsError, holdingsAt, holdingsServed,
       {(phase ?? (session ? "regular" : "closed")) !== "regular"
         ? <ClosedLine at={holdings !== null ? holdingsAt : null} served={holdingsServed} holdings={holdings}
                       phase={phase ?? "closed"} className="nx-meta nxd-note" /> : null}
+      {/* why SPX is not current, once for the book: its rows' strips draw the hollow dot (2026-11-17) */}
+      <SpxNote reasons={bookSpxReasons(holdings, quotes)} className="nx-meta nxd-note" />
       {placed.holdings.map(({ expiry, rows }) => (
         <div key={expiry} className="nxd-expiry">
           <h3 className="nxd-group">{`${shortDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`}</h3>
@@ -362,7 +364,7 @@ function Muted({ monitors }: { monitors: Monitor[] }) {
             <span><ShortWords short={shortRule(shapeOf(m))}
                               full={storedRuleWords(m.field, Boolean(m.legs), m.compare, m.direction, m.threshold)} /></span>
             <span className="nx-meta">{reason(m)}</span>
-            <MonitorControls rule={ruleOfMonitor(m)} served={null} />
+            <MonitorControls rule={ruleOfMonitor(m)} served={null} expiredSaid={m.disabled_reason === "expired"} />
           </li>
         ))}
       </ul>
@@ -380,10 +382,7 @@ function stateOf(row: DeskRow): string {
 
 function Row({ row, ctx, bracket }: { row: DeskRow; ctx: Ctx; bracket?: "top" | "through" | "bottom" }) {
   const id = rowId(row);
-  const shown = new Set(ctx.columns.map((c) => c.key));
   const isRule = row.kind === "rule";
-  // the fill bar sits beside the sentence, and falls back to the name when the sentence drops
-  const barIn = shown.has("alarm") ? "alarm" : "name";
   return (
     <div className="nxd-row nxd-grid" data-ref={id} data-kind={row.kind} data-state={stateOf(row)}
          data-nested={isRule && row.nested ? "" : undefined}
@@ -393,16 +392,20 @@ function Row({ row, ctx, bracket }: { row: DeskRow; ctx: Ctx; bracket?: "top" | 
       {bracket ? <span className="nxd-bracket" data-part={bracket} aria-hidden="true" /> : null}
       {ctx.columns.map((c) => (
         <span key={c.key} data-col={c.key} data-align={c.align}>
-          {c.key === "name" ? <NameCell row={row} ctx={ctx} /> : <Cell row={row} column={c} privacy={ctx.privacy} />}
-          {barIn === c.key && row.kind === "rule" ? <Fill entry={row.entry} /> : null}
+          {c.key === "name" ? <NameCell row={row} ctx={ctx} distance={!ctx.columns.some((k) => k.key === "alarm")} />
+            : <Cell row={row} column={c} privacy={ctx.privacy} />}
         </span>
       ))}
     </div>
   );
 }
 
-function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
+/** @param distance the rule's column has dropped: a rule row draws its arrowed distance here, the
+ *  short text its line draws ("↑3.60"), and a reader hears it with the rule, in its sentence
+ *  (the owner, 2026-11-17, where the fill bar fell back before) */
+function NameCell({ row, ctx, distance }: { row: DeskRow; ctx: Ctx; distance: boolean }) {
   const a = attentionOf(row);
+  const short = distance ? distanceShort(row) : "";
   return (
     <>
       <button type="button" className="nxd-name" aria-expanded={ctx.selected === rowId(row)}
@@ -411,6 +414,12 @@ function NameCell({ row, ctx }: { row: DeskRow; ctx: Ctx }) {
         {rowName(row)}
       </button>
       {a ? <AttentionChip kind={a} words={chipWords(row, ctx.session)} /> : null}
+      {short && row.kind === "rule" ? (
+        <span className="nxd-distance" data-distance="">
+          <span className="sr-only">{` rule ${sentence(row.entry)}`}</span>
+          <span aria-hidden="true" title={sentence(row.entry)}>{short}</span>
+        </span>
+      ) : null}
     </>
   );
 }
@@ -483,18 +492,6 @@ function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; priv
  *  close than it should by now — and the table and the inspector draw it alike. */
 function outcomeOf(row: DeskRow, column: DeskColumn): "loss" | "gain" | undefined {
   return column.key === "pace_gap" && row.kind === "holding" ? paceOutcome(row.holding.schedule?.pace_gap) : undefined;
-}
-
-/** How far the watched figure has come toward its threshold, as the service measured it. */
-function Fill({ entry }: { entry: Entry }) {
-  if (entry.fill === null || entry.error) return null;
-  const fill = Math.max(0, Math.min(100, entry.fill));
-  return (
-    <span className="nxd-fill" data-fill={String(entry.fill)} role="meter" aria-valuenow={fill}
-          aria-valuemin={0} aria-valuemax={100} aria-label="toward its threshold">
-      <i style={{ width: `${fill}%` }} />
-    </span>
-  );
 }
 
 // ---- the inspector
@@ -609,7 +606,6 @@ function RuleItem({ entry, own = false }: {
     <li className="nxd-monitor" data-state={a ?? "calm"}>
       {a && !own ? <AttentionChip kind={a} /> : null}
       <span><ShortWords short={ALARM_COLUMN.text(row, false)} full={ALARM_COLUMN.words!(row, false)} /></span>
-      <Fill entry={entry} />
       <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
     </li>
   );

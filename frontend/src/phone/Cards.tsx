@@ -47,8 +47,11 @@ export function LevelChip({ holding, session }: { holding: Holding; session: boo
 }
 
 /** One rule as a line: what it watches in its own sentence, and its state's chip when it has one. */
-export function RuleLine({ entry, marked = true, own = false, children }: {
+export function RuleLine({ entry, marked = true, own = false, within, children }: {
   entry: Entry;
+  /** the name of the card or sheet the line sits in: a rule's name is not drawn where it is that
+   *  name — "1231_8050" under 1231_8050's own heading (2026-11-17) — and stays where it is a leg's */
+  within?: string;
   /** the rule a sheet is OF: its chip and its fault are the sheet's level section's, said once
    *  (review of #420) */
   own?: boolean;
@@ -61,20 +64,20 @@ export function RuleLine({ entry, marked = true, own = false, children }: {
   const state = ruleState(entry);
   return (
     <li className="nxp-rule" data-ref={marked ? entry.id : undefined} data-state={state ?? "calm"}>
-      <span className="nxp-rule-name">{entryName(entry)}</span>
+      {entryName(entry) === within ? null : <span className="nxp-rule-name">{entryName(entry)}</span>}
       <span className="nxp-sentence"><RuleWords entry={entry} /></span>
       {state && !own ? <Chip state={state} /> : null}
-      {/* how far it has come, as a watch card draws it (part K) */}
-      <Progress entry={entry} />
       {entry.error && !own ? <span className="nxp-error">{entry.error}</span> : null}
       {children}
     </li>
   );
 }
 
-export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen }: {
+export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen, spxSaid = false }: {
   placed: PlacedHolding; quotes: Entry[]; monitors: Monitor[]; privacy: boolean; session: boolean;
   onOpen: () => void;
+  /** the book says why SPX is not current, once (`SpxNote`): the strip marks it rather than says it */
+  spxSaid?: boolean;
 }) {
   const { holding, rules } = placed;
   const hot = holding.schedule?.reached === "stop" || rules.some((r) => ruleState(r) === "alarm");
@@ -98,8 +101,8 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
         <div><dt>cost to close</dt><dd><CostAndPace holding={holding} /></dd></div>
         <div><dt>{SHORT_DELTA}</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
       </dl>
-      <HoldingStrip holding={holding} />
-      {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}
+      <HoldingStrip holding={holding} reasonSaid={spxSaid} />
+      {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} within={holding.name} />)}</ul> : null}
     </article>
   );
 }
@@ -119,28 +122,15 @@ function CostAndPace({ holding }: { holding: Holding }) {
   );
 }
 
-/** How far a rule's figure has come toward its threshold, coloured by the rule's state. With NO
- *  figure there is no bar at all: an empty bar would read as "far from it", and the sentence
- *  beside it already says "no figure". */
-export function Progress({ entry }: { entry: Entry }) {
-  if (entry.fill === null || entry.fill === undefined) return null;
-  const fill = Math.max(0, Math.min(100, entry.fill));
-  return (
-    <div className="nxp-progress" role="progressbar" aria-label="toward its threshold"
-         aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fill)}
-         data-state={ruleState(entry) ?? "calm"}>
-      <span style={{ width: `${fill}%` }} />
-    </div>
-  );
-}
-
 /** A watched spread — or a single contract, or a rule on something held that no drawn holding
  *  owns — with its value and Δ as its desk row writes them (part K; out of the session a watchlist
- *  row's value is its last in-session price and when, #400), its progress toward the threshold and
- *  the rules that sit under it, and, for a spread that only partly overlaps a holding, what it
+ *  row's value is its last in-session price and when, #400), its rule's sentence with its arrowed
+ *  distance and the rules that sit under it, and, for a spread that only partly overlaps a holding, what it
  *  shares and with whom (#346). */
-export function RuleCard({ entry, under, overlap = null, onOpen }: {
+export function RuleCard({ entry, under, overlap = null, onOpen, spxSaid = false }: {
   entry: Entry; under: Entry[]; overlap?: string | null; onOpen: () => void;
+  /** as `HoldingCard`'s */
+  spxSaid?: boolean;
 }) {
   const state = ruleState(entry);
   const cells = ruleCells(entry, overlap);
@@ -157,11 +147,10 @@ export function RuleCard({ entry, under, overlap = null, onOpen }: {
         <div data-value=""><dt>{heldSpreadValue(entry, overlap) ? "cost to close" : "value"}</dt><dd>{cells.value}</dd></div>
         <div data-delta=""><dt>Δ</dt><dd>{cells.delta}</dd></div>
       </dl>
-      <Progress entry={entry} />
       <p className="nxp-sentence"><RuleWords entry={entry} /></p>
       {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
-      {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
-      {under.length > 0 ? <ul className="nxp-rules">{under.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}
+      {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} reasonSaid={spxSaid} /> : null}
+      {under.length > 0 ? <ul className="nxp-rules">{under.map((r) => <RuleLine key={r.id} entry={r} within={entryName(entry)} />)}</ul> : null}
     </article>
   );
 }
@@ -185,7 +174,7 @@ export function OffList({ quarantined, muted }: { quarantined: Monitor[]; muted:
           <span className="nxp-name">{monitorName(m)}</span>
           <span className="nxp-sentence">{fieldWords(m.field)}</span>
           <span className="nxp-meta">{mutedWords(m.disabled_reason)}</span>
-          <MonitorControls rule={ruleOfMonitor(m)} served={null} />
+          <MonitorControls rule={ruleOfMonitor(m)} served={null} expiredSaid={m.disabled_reason === "expired"} />
         </li>
       ))}
     </ul>

@@ -330,7 +330,7 @@ function SpreadFields({ index, spread: s, draft, privacy, id, replacing, taking,
         </div>
         <DraftPreview subject={`${id}-${s.key}`} draft={preview} spx={spx} spxReason={spxReason} onDrawn={setDrawn}
                       blank="type the strikes"
-                      note={`per contract, at ${Math.abs(credit).toFixed(2)} ${credit < 0 ? "debit" : "credit"}${held ? "" : ": the value it watches for"}`} />
+                      note={`at ${Math.abs(credit).toFixed(2)} ${credit < 0 ? "debit" : "credit"}${held ? "" : ": the value it watches for"}`} />
       </div>
     </fieldset>
   );

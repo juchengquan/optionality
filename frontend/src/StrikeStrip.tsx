@@ -13,13 +13,21 @@
  *  measured under the iPhone profile at a 24px text size.
  */
 import type { Holding } from "./shared/api";
-import { deltaWords, distanceWords, scaleOf, spxStripWords, stripOfHolding, type Strip } from "./strip";
+import { deltaWords, distanceWords, scaleOf, spxStripWords, stripDraws, stripOfHolding, type Strip } from "./strip";
 import { Leg } from "./shared/Legs";
 import "./StrikeStrip.css";
 
-export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?: boolean }) {
+/** @param reasonSaid the book this strip sits in says why SPX is not current, once, under its
+ *  heading (`SpxNote`): the strip marks its price with an asterisk instead of saying it again — the
+ *  same sentence was on every card of the phone's book (2026-11-17). A detail's one strip says it. */
+/** How near two short strikes may sit, in percent of the scale, before their labels would touch: a
+ *  label is a strike over a Δ, about 7ch of 0.72rem, centred on its mark; at 358px and at a 24px
+ *  text size two of them need about a quarter of the scale between their marks. */
+const CROWDED_PCT = 25;
+
+export function StrikeStrip({ strip, compact = false, reasonSaid = false }: { strip: Strip; compact?: boolean; reasonSaid?: boolean }) {
   // nothing to place: a spread whose legs the service did not describe
-  if (strip.shorts.length === 0 && strip.longs.length === 0) return null;
+  if (!stripDraws(strip)) return null;
   const at = scaleOf(strip);
   // each short strike's wing runs to the long strike of its own type nearest it
   const wings = strip.shorts.flatMap((k) => {
@@ -30,6 +38,11 @@ export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?
     return [{ key: `${k.code}`, left: a!, width: b! - a! }];
   });
   const pct = (x: number) => `${x.toFixed(2)}%`;
+  // short strikes too close for their labels to sit apart — an iron fly's two at one strike, or
+  // 8000P and 8050C with SPX far off (review of #423, at 358px): no label over them, and the line
+  // under the scale says each one's strike and Δ, drawn, where otherwise it says the Δ to a reader only
+  const crowded = strip.shorts.map((k) => at(k.strike)).sort((p, q) => p - q)
+    .some((p, i, all) => i > 0 && p - all[i - 1]! < CROWDED_PCT);
   const scale = (
     <div className="nxs-scale" aria-hidden="true">
       <span className="nxs-line" />
@@ -43,7 +56,7 @@ export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?
       {strip.shorts.map((k) => (
         <span key={k.code} className="nxs-k" data-side="short"
               style={{ left: pct(at(k.strike)) }}>
-          {compact ? null : <span className="nxs-l"><b>{k.strike}</b><i>{deltaWords(k.delta)}</i></span>}
+          {compact || crowded ? null : <span className="nxs-l"><b>{k.strike}</b><i>{deltaWords(k.delta)}</i></span>}
         </span>
       ))}
       {strip.spx !== null
@@ -56,12 +69,18 @@ export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?
       {scale}
       <figcaption className="nxs-words">
         <span className="nxs-spx-words" data-stale={strip.spx !== null && strip.reason ? "" : undefined}>
-          {spxStripWords(strip)}
+          {reasonSaid && strip.reason
+            ? <>{spxStripWords({ ...strip, reason: null }).replace(/ no price$/, "")}<span aria-hidden="true" data-spx-mark="">*</span></>
+            : spxStripWords(strip)}
         </span>
+        {/* each short strike's Δ is drawn on the scale, over its strike: said here to a reader only,
+            to whom the scale is decoration (2026-11-17) — and with no SPX to measure from, the line
+            has nothing else to say, so all of it is the reader's */}
         {strip.shorts.map((k) => (
-          <span key={k.code}>
+          <span key={k.code} className={strip.spx === null && !crowded ? "sr-only" : undefined} data-short-words="">
             <Leg leg={{ short: true, option_type: k.option_type, strike: k.strike }} form="name" />
-            {` ${deltaWords(k.delta)}${strip.spx === null ? "" : ` · ${distanceWords(k)}`}`}
+            <span className={crowded ? undefined : "sr-only"}>{` ${deltaWords(k.delta)}${strip.spx === null ? "" : " ·"}`}</span>
+            {strip.spx === null ? "" : ` ${distanceWords(k)}`}
           </span>
         ))}
       </figcaption>
@@ -70,7 +89,18 @@ export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?
 }
 
 /** A holding's strip, or nothing for a holding with no short leg (`stripOfHolding`). */
-export function HoldingStrip({ holding }: { holding: Holding }) {
+export function HoldingStrip({ holding, reasonSaid = false }: { holding: Holding; reasonSaid?: boolean }) {
   const strip = stripOfHolding(holding);
-  return strip ? <StrikeStrip strip={strip} /> : null;
+  return strip ? <StrikeStrip strip={strip} reasonSaid={reasonSaid} /> : null;
+}
+
+/** Why SPX is not current, said once for a book (2026-11-17): "* SPX: index not computed overnight
+ *  — the last close's level", the asterisk each strip's price carries. Read by a screen reader once
+ *  per view, where the strips' marks are hidden from it. */
+export function SpxNote({ reasons, className }: { reasons: readonly string[]; className: string }) {
+  return (
+    <>
+      {reasons.map((r) => <p key={r} className={`${className} nx-spx-note`} data-spx-note="">{`* SPX: ${r}`}</p>)}
+    </>
+  );
 }

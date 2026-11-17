@@ -182,11 +182,12 @@ describe("editing a rule in place", () => {
     choose(form, "direction", "below");
     expect(drawn().textContent).toBe("Δ ≤ 0.3");
     expect(draft.textContent).toBe("Δ ≤ 0.3");
-    // the figure and how far it is are the SERVED row's, said as such until it is saved
-    const served = within(form).getByTestId("served");
-    expect(served.querySelector(".nx-rule-short")!.textContent).toBe(shortSentence(DELTA));
-    expect(served.querySelector<HTMLElement>(".nx-rule-short")!.title).toBe(sentence(DELTA));
-    expect(served.querySelector(".sr-only")!.textContent).toBe(sentence(DELTA));
+    // the figure and how far it is are the SERVED row's, on the rule's own line above the form:
+    // the form no longer repeats that line "as saved" (2026-11-17)
+    expect(within(form).queryByTestId("served")).toBeNull();
+    expect(form.textContent).not.toContain("as saved");
+    expect(form.textContent).not.toContain(shortSentence(DELTA));
+    expect(form.textContent).not.toContain(sentence(DELTA));
   });
 
   it("opens on the rule as saved, not on a draft that was cancelled", async () => {
