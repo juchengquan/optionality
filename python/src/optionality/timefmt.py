@@ -40,8 +40,19 @@ def display_time(when: datetime | None, tz_name: str = "") -> str | None:
     return f"{local:%Y-%m-%d %H:%M:%S}{_offset(local)}"
 
 
+_WEEKDAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_DATE = re.compile(r"(\d{4})-(\d{2})-(\d{2})", re.ASCII)
+
+
+def display_date(day: str) -> str:
+    """`2026-11-13` -> `20261113`: a calendar date as the owner reads one (his standard of 2026-11-17).
+    Anything that is not a date is returned untouched."""
+    m = _DATE.fullmatch(day)
+    return f"{m[1]}{m[2]}{m[3]}" if m else day
+
+
 def display_time_short(when: datetime | None, tz_name: str = "") -> str | None:
-    """`2026-10-17 13:26 +08`, as the bot prints it.
+    """`Sat 20261017 13:26 +08`, as the bot prints it: the date YYYYMMDD with its weekday beside a time.
 
     The zone is named with tzdata's abbreviation. The TypeScript names it with ICU's, and the two
     agree on America/New_York, UTC and every zone whose abbreviation IS an offset — Asia/Singapore
@@ -57,7 +68,7 @@ def display_time_short(when: datetime | None, tz_name: str = "") -> str | None:
     if when is None:
         return None
     local = _local(when, tz_name)
-    return f"{local:%Y-%m-%d %H:%M} {local.tzname()}"
+    return f"{_WEEKDAYS[local.weekday()]} {local:%Y%m%d %H:%M} {local.tzname()}"
 
 
 # re.ASCII: JavaScript's \d is 0-9 alone; Python's is every Unicode decimal digit.

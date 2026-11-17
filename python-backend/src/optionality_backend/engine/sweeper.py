@@ -58,6 +58,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from optionality.alarm import AlarmPolicy, AlarmState, RuleShape, alarm_transition
+from optionality.contract import dated_name
 from optionality.js import js_string
 from optionality.js import truthy as js_truthy
 from optionality.lifecycle import (
@@ -533,7 +534,8 @@ class MonitorSweeper:
                     # phone
                     record = by_code.get(monitor.code)
                     named = None if record is None else record.get("name")
-                    name = _js_text(named) if js_truthy(named) else monitor.code
+                    # — its date written YYYYMMDD, as every date the owner reads is (`dated_name`)
+                    name = dated_name(_js_text(named) if js_truthy(named) else monitor.code)
                     # the decision is `optionality.alarm`'s; what is left here is turning it into a row
                     # and a message
                     decision = alarm_transition(

@@ -353,7 +353,7 @@ describe("the book outside the session (#374)", () => {
     const first = sheet.querySelector<SVGCircleElement>("[data-sample] [data-mark]")!.getBoundingClientRect();
     const box = svg.getBoundingClientRect();
     await userEvent.click(svg, { position: { x: first.left - box.left + 6, y: first.top - box.top + 14 } });
-    expect(said.textContent).toMatch(/^3 Nov · 45 DTE .* not the close: observed 20:30 ET, after the 16:15 ET close/);
+    expect(said.textContent).toMatch(/^20261103 · 45 DTE .* not the close: observed 20:30 ET, after the 16:15 ET close/);
   });
 });
 

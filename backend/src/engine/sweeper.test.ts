@@ -513,7 +513,7 @@ describe("the expiry lifecycle", () => {
     combo({ strike_date: past() });
     await sweeper(() => Promise.resolve([])).sweep();
     expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatch(new RegExp(`^ℹ️ monitor sep-condor \\|value\\| ≤ 10\\.00 expired \\(${past()}\\) — muted; auto-removes in \\d+ days$`));
+    expect(sent[0]).toMatch(new RegExp(`^ℹ️ monitor sep-condor \\|value\\| ≤ 10\\.00 expired \\(${past().replaceAll("-", "")}\\) — muted; auto-removes in \\d+ days$`));
   });
 
   it("is still watching on the expiry day itself, and still fetches it", async () => {

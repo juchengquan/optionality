@@ -1079,7 +1079,7 @@ class TestTheManageByNotice:
         self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
         await b.sweeper(self.priceless(b, 21)).sweep()
         assert len(self.notices(b)) == 1
-        assert "entry 6.86 · 4.40 at the 2026-09-30 close" in self.notices(b)[0]
+        assert "entry 6.86 · 4.40 at the 20260930 close" in self.notices(b)[0]
         # on-pace at the close's own 22 DTE (opened at 45): 6.86 × √(22/45) = 4.80, and 4.40 is ahead
         assert "on-pace 4.80 — ahead by 0.40" in self.notices(b)[0]
         assert self.notified_at(b, id_)
@@ -1134,7 +1134,7 @@ class TestTheManageByNotice:
         self.close_row(b, id_, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22)
         await b.sweeper(quoting("mid_price", {build_spx_code(b.days_from_now(21), "CALL", 8050): 3.9})).sweep()
         assert len(self.notices(b)) == 1
-        assert "entry 6.86 · 4.40 at the 2026-09-30 close" in self.notices(b)[0]
+        assert "entry 6.86 · 4.40 at the 20260930 close" in self.notices(b)[0]
         assert "now" not in self.notices(b)[0]
 
     async def test_overnight_with_no_close_says_the_batch_s_cost_live_never_a_stored_gth_price(self, b: Book) -> None:

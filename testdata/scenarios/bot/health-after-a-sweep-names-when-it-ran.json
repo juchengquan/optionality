@@ -83,7 +83,7 @@
   "expect": {
     "reply": {
       "chat_id": "42",
-      "text": "Service is up.\nalarms: active — last sweep 2026-11-09 22:59 +08",
+      "text": "Service is up.\nalarms: active — last sweep Mon 20261109 22:59 +08",
       "parse_mode": null
     },
     "rows": {},

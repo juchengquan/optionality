@@ -109,8 +109,8 @@ for (const arrangement of ["desk", "phone"] as const) {
       const rows = await entries();
       expect(rows.map((r) => r.dataset.closed)).toEqual(["c-blank", "c-tie", "c-old"]);
       const [blank, tie, old] = rows as [HTMLElement, HTMLElement, HTMLElement];
-      expect(fig(old, "opened")).toBe("Sun 1 Nov");
-      expect(fig(old, "closed")).toBe("Fri 6 Nov");
+      expect(fig(old, "opened")).toBe("20261101");
+      expect(fig(old, "closed")).toBe("20261106");
       expect(fig(old, "entry")).toBe("2");
       expect(fig(old, "exit")).toBe("0.5");
       // (2 − 0.5) × 3, as the service answered it
@@ -166,7 +166,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       expect(legMarks(facts)).toEqual(["−P6000 short PUT", "+P5950 long PUT"]);
       if (arrangement === "phone") {
         const line = (await screen.findByRole("dialog")).querySelector("[data-slot='sheet-description']")!;
-        expect(line.textContent).toBe("closed on Fri 6 Nov · −P6000 +P5950");
+        expect(line.textContent).toBe("closed on 20261106 · −P6000 +P5950");
         expect(legMarks(line)).toEqual(["−P6000 short PUT", "+P5950 long PUT"]);
       }
     });
@@ -203,11 +203,11 @@ for (const arrangement of ["desk", "phone"] as const) {
       // the journal as the service now has it: (2 − 0.7) × 3
       await waitFor(() => expect(fig(trade, "made")).toBe("3.9 pts"));
       expect(fig(trade, "exit")).toBe("0.7");
-      expect(fig(trade, "closed")).toBe("Wed 4 Nov");
+      expect(fig(trade, "closed")).toBe("20261104");
       // the journal's own row too — read past the phone's sheet, which hides the page beneath it
       const row = document.querySelector<HTMLElement>('[aria-label="closed trades"] [data-closed="c-old"]')!;
       await waitFor(() => expect(fig(row, "made")).toBe("3.9 pts"));
-      expect(fig(row, "closed")).toBe("Wed 4 Nov");
+      expect(fig(row, "closed")).toBe("20261104");
       // and the charts end at the corrected day, read again because the day moved
       await waitFor(() => {
         const now = within(trade).getByRole("group", { name: "burndown" });
@@ -227,7 +227,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       typeIn(within(fix).getByLabelText("closed on"), "2026-10-30");
       fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
       expect((await within(fix).findByRole("alert")).textContent).toBe("closed on 2026-10-30, before it was opened on 2026-11-01");
-      expect(fig(trade, "closed")).toBe("Fri 6 Nov");
+      expect(fig(trade, "closed")).toBe("20261106");
       expect(asked(s, "/positions")).toBe(1);
     });
 
@@ -248,7 +248,7 @@ for (const arrangement of ["desk", "phone"] as const) {
       fireEvent.click(within(within(d).getByRole("form", { name: "close 1231_IC" })).getByRole("button", { name: "close it" }));
       await screen.findByRole("region", { name: "closed 1231_IC" });
       await waitFor(async () => expect((await entries()).map((r) => r.dataset.closed)[0]).toBe("h-ic"));
-      expect(fig((await entries())[0]!, "closed")).toBe("Thu 12 Nov");
+      expect(fig((await entries())[0]!, "closed")).toBe("20261112");
     });
 
     it("reads the journal again after a correction made from the close's account", async () => {
@@ -410,10 +410,10 @@ describe("the desk's journal", () => {
     await waitFor(() => expect(s.writes().at(-1)).toEqual(
       { method: "PATCH", path: "/positions/h-ic", body: { closed_on: "2026-11-11" } }));
     expect(s.stored.get("h-ic")!.exit).toBe(0.7);
-    await waitFor(() => expect(fig(trade, "closed")).toBe("Wed 11 Nov"));
+    await waitFor(() => expect(fig(trade, "closed")).toBe("20261111"));
     expect(fig(trade, "exit")).toBe("0.7");
     // and the close's account says the close as the service now has it
-    await waitFor(() => expect(account.textContent).toMatch(/closed on Wed 11 Nov/));
+    await waitFor(() => expect(account.textContent).toMatch(/closed on 20261111/));
     expect(account.textContent).toMatch(/exit 0\.7 ·/);
   });
 
@@ -496,7 +496,7 @@ describe("folded at the bottom of the book (#373)", () => {
       await open(arrangement, s);
       const account = await closeHeld(arrangement, "1");
       // drawn from the close's answer: the journal was never read
-      expect(account.textContent).toMatch(/closed on Thu 12 Nov/);
+      expect(account.textContent).toMatch(/closed on 20261112/);
       const fix = within(account).getByRole("form", { name: "correct the close of 1231_IC" });
       typeIn(within(fix).getByLabelText("exit, per contract"), "1.3");
       fireEvent.click(within(fix).getByRole("button", { name: "Save correction" }));

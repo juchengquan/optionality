@@ -168,7 +168,7 @@ class TestWhatVolDidToAHoldingOverItsOwnSamples:
         }
         # and says why, in the service's words, for the dashboard to say as they are (#333)
         assert got["reason"] == (
-            "its samples begin on 12 Oct, not on 6 Oct when it was Opened: the vol it was sold at was never recorded"
+            "its samples begin on 20261012, not on 20261006 when it was Opened: the vol it was sold at was never recorded"
         )
 
     async def test_survives_a_sample_whose_stored_reading_is_not_a_number(self, start):
@@ -2371,7 +2371,7 @@ class TestCorrectingAHeldLegsQuantity:
         assert (await h.call(f"/positions/{id_}/vol")).json()["gap"] is not None
         assert (await patch(h, id_, {"legs": MEANT})).status_code == 200
         after = (await h.call(f"/positions/{id_}/vol")).json()
-        why = "the Cost to close of 2026-10-01 was summed before a leg's quantity was corrected"
+        why = "the Cost to close of 20261001 was summed before a leg's quantity was corrected"
         assert [after[k] for k in ("gap", "gap_reason", "rest", "cover", "cover_reason")] == [
             None,
             why,

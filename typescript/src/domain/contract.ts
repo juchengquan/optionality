@@ -46,10 +46,12 @@ export function buildSpxCode(strikeDate: string, optionType: string, strike: num
   return `US.SPXW${y.slice(2)}${mo}${d}${letter}${Math.trunc(strike)}000`;
 }
 
-/** `2026-10-16` → `261016`: the six digits a code carries, and the bot's short form with it. */
+/** `2026-10-16` → `20261016`: a date as the owner reads one, YYYYMMDD, everywhere a date is written
+ *  for him — the bot's short form of a contract included (the owner's standard of 2026-11-17). The
+ *  code itself keeps its six digits (`buildSpxCode`): that is moomoo's grammar, not a display. */
 export function compactStrikeDate(strikeDate: string): string {
   const { y, mo, d } = parseStrikeDate(strikeDate);
-  return `${y.slice(2)}${mo}${d}`;
+  return `${y}${mo}${d}`;
 }
 
 /** A contract's three facts — exactly what buildSpxCode is given. */
@@ -87,7 +89,7 @@ export function parseSpxCode(code: string): SpxContract | null {
   return { strike_date: strikeDate, option_type: letter === "C" ? "CALL" : "PUT", strike: Number(strike) };
 }
 
-/** `US.SPXW261030C8100000` as `261030 C8100`. The SPXW and the trailing 000 are on every contract
+/** `US.SPXW261030C8100000` as `20261030 C8100`. The SPXW and the trailing 000 are on every contract
  *  this service can create, so they carry no information and cost twelve of the bot's forty
  *  characters. Anything this cannot read is returned untouched, so a quarantined code from
  *  somewhere else is shown as it is rather than shortened into a different-looking contract. */
@@ -97,7 +99,10 @@ export function shortSpxCode(code: string): string {
   return `${compactStrikeDate(c.strike_date)} ${c.option_type === "CALL" ? "C" : "P"}${c.strike}`;
 }
 
-const SHORT_CODE = /^(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)$/;
+/** The year written whole (`20261030`, what `shortSpxCode` prints since 2026-11-17) or as the code's
+ *  two digits (`261030`, what it printed before, and what a person may still type). A whole year is
+ *  only one the code's two digits can carry, 20YY. */
+const SHORT_CODE = /^(?:20)?(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)$/;
 
 /** shortSpxCode read backwards: what the bot prints is what /unwatch accepts. Spaces and case are
  *  a person's, not the grammar's, so they are stripped before matching; null for anything else. */
@@ -110,4 +115,16 @@ export function expandSpxShort(short: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** A vendor's name for an SPXW contract, `SPXW 261030 8100.00C` (moomoo's), with its date written as
+ *  every other date the owner reads is, YYYYMMDD: `SPXW 20261030 8100.00C`. The name the bot's alarms
+ *  and `/snapshot` say a contract by. Strict, as `shortSpxCode` is: a name in any other shape — a
+ *  rule's own name, a code — is returned untouched rather than rewritten into something else. */
+const VENDOR_NAME = /^SPXW (\d{2})(\d{2})(\d{2}) (?=[^ ])/;
+
+export function datedName(name: string): string {
+  const m = VENDOR_NAME.exec(name);
+  if (!m) return name;
+  return `SPXW 20${m[1]}${m[2]}${m[3]} ${name.slice(m[0].length)}`;
 }

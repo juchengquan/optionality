@@ -1133,7 +1133,7 @@
         "from": "2026-10-06",
         "to": "2026-10-06",
         "days": 0,
-        "reason": "only 6 Oct, the day it was Opened, is recorded: nothing has moved yet",
+        "reason": "only 20261006, the day it was Opened, is recorded: nothing has moved yet",
         "at": "2026-10-06",
         "timing": "close",
         "gap": 0,
@@ -1319,15 +1319,15 @@
         "from": "2026-10-06",
         "to": "2026-10-06",
         "days": 0,
-        "reason": "only 6 Oct, the day it was Opened, is recorded: nothing has moved yet",
+        "reason": "only 20261006, the day it was Opened, is recorded: nothing has moved yet",
         "at": "2026-10-06",
         "timing": "after-close",
         "gap": null,
-        "gap_reason": "6 Oct has no Cost to close from a regular session",
+        "gap_reason": "20261006 has no Cost to close from a regular session",
         "rest": null,
         "vega": -1.8000000000000003,
         "cover": null,
-        "cover_reason": "6 Oct has no Cost to close from a regular session"
+        "cover_reason": "20261006 has no Cost to close from a regular session"
       }
     },
     {
@@ -1412,7 +1412,7 @@
         "from": null,
         "to": null,
         "days": null,
-        "reason": "its samples begin on 7 Oct, not on 6 Oct when it was Opened: the vol it was sold at was never recorded",
+        "reason": "its samples begin on 20261007, not on 20261006 when it was Opened: the vol it was sold at was never recorded",
         "at": "2026-10-08",
         "timing": "close",
         "gap": -0.02257565972303599,
@@ -1505,7 +1505,7 @@
         "from": null,
         "to": null,
         "days": null,
-        "reason": "the record skips from 6 Oct to 8 Oct: a day is missing",
+        "reason": "the record skips from 20261006 to 20261008: a day is missing",
         "at": "2026-10-08",
         "timing": "close",
         "gap": -0.02257565972303599,
@@ -1593,7 +1593,7 @@
         "from": null,
         "to": null,
         "days": null,
-        "reason": "7 Oct has no vol reading for every leg",
+        "reason": "20261007 has no vol reading for every leg",
         "at": "2026-10-07",
         "timing": "close",
         "gap": 0.08352060516173454,
@@ -2097,11 +2097,11 @@
         "at": "2026-10-08",
         "timing": "close",
         "gap": null,
-        "gap_reason": "8 Oct has no Cost to close",
+        "gap_reason": "20261008 has no Cost to close",
         "rest": null,
         "vega": -2.000000000000001,
         "cover": null,
-        "cover_reason": "8 Oct has no Cost to close"
+        "cover_reason": "20261008 has no Cost to close"
       }
     },
     {
@@ -2279,7 +2279,7 @@
         "from": "2026-10-06",
         "to": "2026-10-06",
         "days": 0,
-        "reason": "only 6 Oct, the day it was Opened, is recorded: nothing has moved yet",
+        "reason": "only 20261006, the day it was Opened, is recorded: nothing has moved yet",
         "at": "2026-10-06",
         "timing": "close",
         "gap": null,
@@ -2556,7 +2556,7 @@
         "from": null,
         "to": null,
         "days": null,
-        "reason": "7 Oct has no vol reading for every leg",
+        "reason": "20261007 has no vol reading for every leg",
         "at": "2026-10-07",
         "timing": "close",
         "gap": 0.08352060516173454,
@@ -2564,7 +2564,7 @@
         "rest": null,
         "vega": null,
         "cover": null,
-        "cover_reason": "7 Oct has no vega for every leg"
+        "cover_reason": "20261007 has no vega for every leg"
       }
     }
   ]

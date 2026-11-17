@@ -39,7 +39,7 @@ describe("the session line in the Curb and GTH", () => {
 
   it("names how many were valued from a close for want of a quote, and which close", () => {
     expect(thinLineWords([overnight("a"), fromClose("b")], "overnight"))
-      .toBe("overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14 ET");
+      .toBe("overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 20261113 16:14 ET");
   });
 
   it("says where the Provider could not be asked", () => {
@@ -52,7 +52,7 @@ describe("the session line in the Curb and GTH", () => {
     // every holding is asked overnight: the close-valued one carries the failure too (#416 review)
     const down = { ...fromClose("b"), valued_reason: "moomoo call failed: connect ECONNREFUSED" };
     expect(thinLineWords([down], "overnight")).toBe(
-      "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 13 Nov 16:14 ET; the Provider could not be asked");
+      "overnight session — live quotes, thin; 1 not quoted, as of the close, Fri 20261113 16:14 ET; the Provider could not be asked");
   });
 
   it("is the line's words by the phase, and the market-closed words while nothing trades", () => {

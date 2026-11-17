@@ -27,8 +27,8 @@ describe("contract names", () => {
     // build_spx_code hardcodes SPXW and builds strikes with int(), so the symbol and the
     // decimals are identical on every row this service can create — twenty characters of
     // which eight say nothing
-    expect(shortContract("SPXW 261016 8050.00C")).toBe("261016 8050C");
-    expect(shortContract("SPXW 261120 7100.00P")).toBe("261120 7100P");
+    expect(shortContract("SPXW 261016 8050.00C")).toBe("20261016 8050C");
+    expect(shortContract("SPXW 261120 7100.00P")).toBe("20261120 7100P");
   });
 
   it("leaves anything it does not recognise exactly as it found it", () => {

@@ -23,6 +23,34 @@ export const CHECKS: Record<string, (text: string) => string[]> = {
 
 const around = (text: string, at: number) => text.slice(Math.max(0, at - 30), at + 24);
 
+const MONTH = "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec";
+
+/** A date written any way but YYYYMMDD (the owner's standard of 2026-11-17): the day and the month in
+ *  words, either way round (`31 Dec`, `Dec 31`), or the six digits a contract's code carries
+ *  (`261231`). Read over each text node APART (`textsOf`) as well as the whole, because the page's
+ *  text runs together: `261218` in one cell and `7150P` in the next read as one number. The six
+ *  digits are a year from 20 to 29, a month and a day, standing alone — not inside a code
+ *  (`US.SPXW261231C8100000`), a name (`261231_8050`), the whole date (`20261231`) or a figure. */
+export const DATE_CHECKS: Record<string, (text: string) => string[]> = {
+  "a date in words": (text) => [...text.matchAll(new RegExp(String.raw`(?<![\w])\d{1,2} (?:${MONTH})\b|\b(?:${MONTH}) \d{1,2}(?!\d)`, "g"))]
+    .map((m) => around(text, m.index)),
+  "a six-digit date": (text) => [...text.matchAll(/(?<![\w.\-+\u2212$])2\d(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?![\w\-]|[.,]\d)/g)]
+    .map((m) => around(text, m.index)),
+};
+
+/** What a place says, node by node: each text node's own text and each label, apart. */
+export function textsOf(root: Element): string {
+  const copy = root.cloneNode(true) as Element;
+  for (const raw of copy.querySelectorAll("[data-raw]")) raw.remove();
+  const out: string[] = [];
+  const walker = copy.ownerDocument.createTreeWalker(copy, 4 /* NodeFilter.SHOW_TEXT */);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.textContent?.trim()) out.push(n.textContent);
+  for (const el of [copy, ...copy.querySelectorAll("*")]) {
+    for (const a of ["title", "aria-label", "aria-valuetext"]) { const v = el.getAttribute(a); if (v) out.push(v); }
+  }
+  return out.join(" | ");
+}
+
 
 /** What a place says in WORDS: its text and labels with every raw disclosure (`ErrorWords.tsx`'s
  *  `data-raw`) taken out — what was thrown or served is kept there on purpose, raw, one tap away. */

@@ -58,7 +58,7 @@ from optionality.position import (
     realized_points,
 )
 from optionality.quote import strike_distances
-from optionality.timefmt import display_time
+from optionality.timefmt import display_date, display_time
 from optionality.vol import PacedSample, pace_explained
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -429,11 +429,11 @@ def _closed_on_fault(row: PositionRow, closed_on: str, opened_at: str | None, to
     and not after today in New York, since a close that has not happened yet is a plan. ISO dates compare
     as text."""
     if opened_at is not None and closed_on < opened_at:
-        return f"closed on {closed_on}, before it was opened on {opened_at}"
+        return f"closed on {display_date(closed_on)}, before it was opened on {display_date(opened_at)}"
     if closed_on > row["strike_date"]:
-        return f"closed on {closed_on}, after its expiry on {row['strike_date']}"
+        return f"closed on {display_date(closed_on)}, after its expiry on {display_date(row['strike_date'])}"
     if closed_on > today:
-        return f"closed on {closed_on}, after today ({today} in New York)"
+        return f"closed on {display_date(closed_on)}, after today ({display_date(today)} in New York)"
     return None
 
 
@@ -695,7 +695,9 @@ def position_routes(deps: Deps) -> APIRouter:
             or not before_correction(last["observed_at"], row["qty_corrected_at"])
         ):
             return explained
-        why = f"the Cost to close of {last['observed_on']} was summed before a leg's quantity was corrected"
+        why = (
+            f"the Cost to close of {display_date(last['observed_on'])} was summed before a leg's quantity was corrected"
+        )
         return {**explained, "gap": None, "gap_reason": why, "rest": None, "cover": None, "cover_reason": why}
 
     @router.get(

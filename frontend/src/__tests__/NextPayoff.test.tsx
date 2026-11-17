@@ -253,7 +253,7 @@ describe("a combo drawn in the Watchlist because it names a contract its holding
     expect(within(payoff).getByText("no Entry: drawn at its current value, 0.60, as the credit")).toBeTruthy();
     expect(insp.textContent).not.toContain("on something held");
     // neither held nor watch only: the note under it says what it shares, and with whom
-    expect(within(insp).getByText("Thu 31 Dec · 38 DTE")).toBeTruthy();
+    expect(within(insp).getByText("20261231 · 38 DTE")).toBeTruthy();
     expect(insp.querySelector("[data-overlap]")!.textContent).toBe("shares C8100 with 1231_8050");
   });
 

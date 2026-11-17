@@ -29,8 +29,11 @@ function cell(value: unknown, render: (n: number) => string): string {
 export const monitors: Command = (ctx) => {
   const rows = listMonitors(ctx.db);
   if (rows.length === 0) return EMPTY_WATCHLIST;
-  return table(["contract", "rule", "last", "state"], rows.map((m) => {
-    let state = fromSqliteBool(m.triggered) ? "🔔" : "armed";
+  // `now`, where it was `state`: the heading is the column's widest cell once its words are `on`,
+  // `off` and 🔔, and a contract written whole needs the two characters (2026-11-17)
+  return table(["contract", "rule", "last", "now"], rows.map((m) => {
+    // `on`, where it was `armed`: three characters a contract written whole needs (2026-11-17)
+    let state = fromSqliteBool(m.triggered) ? "🔔" : "on";
     if (!fromSqliteBool(m.enabled)) state = "off";
     const rule: RuleShape = {
       field: m.field, combo: m.legs !== null, compare: m.compare, direction: m.direction,

@@ -14,6 +14,7 @@
 import { dteAtOpen, onPace } from "./exit.ts";
 import { inSampleHours, marketDate, sampleTiming, takenInSession } from "./expiry.ts";
 import { positionLegCodes, type Position } from "./position.ts";
+import { displayDate } from "./timefmt.ts";
 
 /** One market day's readings, as the sampler stored them. */
 export interface VolSample {
@@ -140,7 +141,7 @@ export type PacedTiming = "close" | "in-hours" | "before-open" | "after-close" |
  *  to the last sample would charge the day's own vol moves to the rest (ADR 0011, 2026-11-12).
  *
  *  Each figure that can be absent says why when it is: `reason` for the vol part, `gap_reason` for
- *  the gap and so the rest, `cover_reason` for the cover. Dates in them are written "9 Nov".
+ *  the gap and so the rest, `cover_reason` for the cover. Dates in them are written "20261109" (`displayDate`).
  */
 export interface PaceExplained {
   /** `volAttribution`'s four, null together where it gives nothing */
@@ -176,11 +177,9 @@ export interface PaceExplained {
  *  that cancel to 2.8e-17 would otherwise cover a gap with 1e17 vol points. */
 export const VEGA_FLOOR = 0.005;
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** "9 Nov": a stored YYYY-MM-DD as the dashboard writes a day, by string, with no zone to move it. */
-function dayWords(iso: string): string {
-  return `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`;
-}
+/** "20261109": a stored YYYY-MM-DD as every date the owner reads is written (`displayDate`), by
+ *  string, with no zone to move it. */
+const dayWords = displayDate;
 
 export function paceExplained(
   samples: readonly PacedSample[], position: Position, now: Date,

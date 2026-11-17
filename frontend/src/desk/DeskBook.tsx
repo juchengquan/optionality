@@ -3,10 +3,10 @@ import { X } from "lucide-react";
 
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { ColumnPicker } from "../shared/ColumnPickers";
-import { shortDate } from "../shared/format";
+
 import { Legs } from "../shared/Legs";
 import { SHORT_DELTA } from "../shared/words";
-import { dateWords } from "../shared/times";
+import { writtenDate } from "../shared/times";
 import { HoldingSections, holdingMeta, RuleSections, ruleMeta } from "../DetailSections";
 
 import { reasonLabel } from "../shared/groups";
@@ -264,7 +264,7 @@ function Holdings({ placed, quotes, holdings, holdingsError, holdingsAt, holding
       <SpxNote reasons={bookSpxReasons(holdings, quotes)} className="nx-meta nxd-note" />
       {placed.holdings.map(({ expiry, rows }) => (
         <div key={expiry} className="nxd-expiry">
-          <h3 className="nxd-group">{`${shortDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`}</h3>
+          <h3 className="nxd-group">{`${writtenDate(expiry)} · ${rows[0]![0]!.holding.dte} DTE`}</h3>
           <ul>
             {rows.map((bracket) => (
               <li key={bracket.map((p) => p.holding.id).join("+")}
@@ -316,7 +316,7 @@ function Watchlist({ placed, ctx }: { placed: BookModel; ctx: Ctx }) {
       {empty ? <p className="nx-meta nxd-note">nothing watched</p> : null}
       {placed.watchlist.map(({ expiry, items }) => (
         <div key={expiry} className="nxd-expiry">
-          <h3 className="nxd-group">{`${shortDate(expiry)} · ${items[0]!.entry.dte} DTE`}</h3>
+          <h3 className="nxd-group">{`${writtenDate(expiry)} · ${items[0]!.entry.dte} DTE`}</h3>
           <ul>
             {items.map(({ entry, under, overlap }) => (
               <li key={entry.id}>
@@ -521,7 +521,7 @@ function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClos
         {/* the meta line, and by the session (#371) whether what is shown updates with the poll */}
         <p className="nx-meta">
           {row.kind === "holding" ? holdingMeta(row.holding) : row.kind === "rule" ? ruleMeta(row.entry)
-            : `${dateWords(row.monitor.strike_date)} · ${row.monitor.code}`}
+            : `${writtenDate(row.monitor.strike_date)} · ${row.monitor.code}`}
         </p>
         <p className="nx-meta nxd-note">{session && !stale ? "live: updates with every poll" : "as last valued"}</p>
         {/* the one order the phone's sheet draws too (part J, `sections.ts`) */}

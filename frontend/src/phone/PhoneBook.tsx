@@ -137,11 +137,12 @@ export function PhoneBook({
   );
 }
 
+/** "20261231 · 45 DTE": an expiry's heading, as the desk's group heading writes it (2026-11-17) —
+ *  one text, the DTE in the meta weight. */
 function ExpiryHead({ expiry, dte }: { expiry: string; dte: number }) {
   return (
     <h3 className="nxp-expiry-head">
-      <span>{expiryWords(expiry)}</span>
-      <span className="nxp-meta">{`${dte} DTE`}</span>
+      <span>{`${expiryWords(expiry)} `}<span className="nxp-meta">{`· ${dte} DTE`}</span></span>
     </h3>
   );
 }

@@ -159,7 +159,7 @@ describe("a served time, dated when it is not this session's", () => {
   it("carries its weekday from earlier in the week, and its date from before that", () => {
     expect(servedWhen("2026-11-09 21:04:11+08:00", now)).toBe("Mon 21:04 SGT");
     expect(servedWhen("2026-11-07 05:15:00+08:00", now)).toBe("Sat 05:15 SGT");
-    expect(servedWhen("2026-11-03 21:04:00+08:00", now)).toBe("3 Nov 21:04 SGT");
+    expect(servedWhen("2026-11-03 21:04:00+08:00", now)).toBe("Tue 20261103 21:04 SGT");
   });
 
   it("carries its weekday when it is today's but from before the last edge", () => {

@@ -19,9 +19,9 @@ beforeEach(() => setDisplayZone("Asia/Singapore"));
 
 afterEach(cleanup);
 
-/** Monday 16 Nov 2026, 10:00 New York: in session. */
+/** Monday 20261116 2026, 10:00 New York: in session. */
 const MONDAY = new Date("2026-11-16T15:00:00Z");
-/** Sunday 15 Nov, 12:00 New York: outside it. */
+/** Sunday 20261115, 12:00 New York: outside it. */
 const SUNDAY = new Date("2026-11-15T17:00:00Z");
 
 const HEALTH = {
@@ -110,23 +110,23 @@ describe("the table", () => {
   it("puts the holdings first, then the watchlist, then the muted and expired, each by expiry", () => {
     const view = plainView(input());
     expect(view.sections.map((s) => s.title)).toEqual(["Holdings", "Watchlist", "Muted and expired"]);
-    expect(view.sections[0]!.groups.map((g) => g.heading)).toEqual(["261218 · 38 DTE", "261231 · 38 DTE"]);
+    expect(view.sections[0]!.groups.map((g) => g.heading)).toEqual(["20261218 · 38 DTE", "20261231 · 38 DTE"]);
     expect(view.sections[1]!.groups.map((g) => g.heading)).toEqual([
-      "261204 · 38 DTE", "261218 · 38 DTE", "261231 · 38 DTE", "Quarantined — switched off by the service",
+      "20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE", "Quarantined — switched off by the service",
     ]);
     // each row by its name alone, in the book's order
     expect(rowsOf(view, "Holdings").map((r) => r[0])).toEqual([
       "1218_C7300", "1218_C7300", "1218_P6400", "1231_IC", "1231_IC",
     ]);
     expect(rowsOf(view, "Watchlist").map((r) => r[0])).toEqual([
-      "1204_P6900", "1218_P7150", "261218 7150P", "1231_C7600", "261231 8000C", "261211 8000C",
+      "1204_P6900", "1218_P7150", "20261218 7150P", "1231_C7600", "20261231 8000C", "20261211 8000C",
     ]);
   });
 
   it("says each rule in its full sentence, never the screen's short form", () => {
     const view = plainView(input());
     expect(cell(view, "1218_C7300", "rule")).toBe("");
-    expect(cell(view, "261218 7150P", "rule")).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
+    expect(cell(view, "20261218 7150P", "rule")).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
     expect(cell(view, "1204_P6900", "rule")).toBe("|value| ≥ 6.00 — now 6.20, past it by 0.20");
     const rules = rowsOf(view, "Watchlist").map((r) => r[sectionOf(view, "Watchlist").columns.indexOf("rule")]!).join(" ");
     // the short form's arrows are the screen's; the field's words are one vocabulary since #404 — Δ
@@ -243,9 +243,9 @@ describe("every state the status column carried is still named, in the header or
     const muted = view.sections.find((s) => s.title === "Muted and expired")!;
     // the desk's fold's order, in the page's one set of words (part I), each a heading (part H)
     expect(muted.groups.map((g) => [g.heading, g.rows.map((r) => r[0])])).toEqual([
-      ["Expired", ["261218 8003C"]], ["Holding closed", ["261218 8004C"]],
-      ["Muted by you", ["261218 8002C", "261218 8006C"]], ["Reason not recorded", ["261218 8005C"]],
-      ["Sunset", ["261218 8007C"]],
+      ["Expired", ["20261218 8003C"]], ["Holding closed", ["20261218 8004C"]],
+      ["Muted by you", ["20261218 8002C", "20261218 8006C"]], ["Reason not recorded", ["20261218 8005C"]],
+      ["Sunset", ["20261218 8007C"]],
     ]);
     // the rule in words, with no figure: nothing watches it
     expect(muted.groups[0]!.rows[0]![muted.columns.indexOf("rule")]).toBe("|Δ| ≥ 0.10");
@@ -255,10 +255,10 @@ describe("every state the status column carried is still named, in the header or
 describe("the header block", () => {
   it("says when it was taken, in New York and in DISPLAY_TZ", () => {
     // each clock marked with its zone by name (part F): New York's as ET, DISPLAY_TZ's by its own
-    expect(takenWords(MONDAY, "Asia/Singapore")).toBe("Mon 16 Nov 2026 10:00 ET · Mon 16 Nov 2026 23:00 SGT");
+    expect(takenWords(MONDAY, "Asia/Singapore")).toBe("Mon 20261116 10:00 ET · Mon 20261116 23:00 SGT");
     // a service that has not said its zone, or says New York's, gives New York's alone
-    expect(takenWords(MONDAY, null)).toBe("Mon 16 Nov 2026 10:00 ET");
-    expect(takenWords(MONDAY, "America/New_York")).toBe("Mon 16 Nov 2026 10:00 ET");
+    expect(takenWords(MONDAY, null)).toBe("Mon 20261116 10:00 ET");
+    expect(takenWords(MONDAY, "America/New_York")).toBe("Mon 20261116 10:00 ET");
   });
 
   it("in session: the session, the figures' freshness, the References without a time, every need named", () => {
@@ -269,7 +269,7 @@ describe("the header block", () => {
     ] as Need[];
     const view = plainView(input({ needs }));
     expect(view.lines.slice(0, 4)).toEqual([
-      { label: "taken", text: "Mon 16 Nov 2026 10:00 ET · Mon 16 Nov 2026 23:00 SGT" },
+      { label: "taken", text: "Mon 20261116 10:00 ET · Mon 20261116 23:00 SGT" },
       { label: "session", text: "in session" },
       { label: "figures", text: "fetched at 23:00:05 SGT · 10:00:05 ET · screen updated 23:00:09 SGT · service sweeps every 15s" },
       { label: "References", text: "", items: ["S&P 500 (moomoo) 7612.25 +0.42%"] },
@@ -307,7 +307,7 @@ describe("the minus, in the picture and in the text (the owner, 2026-11-16)", ()
     expect([rowIn(picture)[pnl!], rowIn(picture)[delta!]]).toEqual(["\u2212$240", "0.330"]);
     expect(rowIn(text)[pnl!]).toBe("-$240");
     const short = sectionOf(plainView(given), "Watchlist");
-    const lone = readMarkdown(toMarkdown(plainView(given))).sections[1]!.rows.find((r) => r[0] === "261218 7150P")!;
+    const lone = readMarkdown(toMarkdown(plainView(given))).sections[1]!.rows.find((r) => r[0] === "20261218 7150P")!;
     expect(lone[short.columns.indexOf("Δ")]).toBe("-0.170");
     // words keep the true minus in both: a leg, and a rule's sentence
     expect(rowIn(text)[legs!]).toBe("\u2212C7300 +C7350");
@@ -354,9 +354,9 @@ describe("the picture and the text, one builder", () => {
 
   it("writes the header block as lines above a Markdown table per section", () => {
     const md = toMarkdown(plainView(input()));
-    expect(md.split("\n").slice(0, 3)).toEqual(["# optionality", "", "- taken: Mon 16 Nov 2026 10:00 ET · Mon 16 Nov 2026 23:00 SGT"]);
+    expect(md.split("\n").slice(0, 3)).toEqual(["# optionality", "", "- taken: Mon 20261116 10:00 ET · Mon 20261116 23:00 SGT"]);
     expect(md).toContain("\n## Holdings\n\n| name | legs | value |");
-    expect(md).toContain("\n| 261218 · 38 DTE |  |  |");
+    expect(md).toContain("\n| 20261218 · 38 DTE |  |  |");
     // the References a nested list, one a line (#400)
     const twice = toMarkdown(plainView(input({ references: [SPX_REF, { ...SPX_REF, id: "r2", label: "VIX" } as Reference] })));
     expect(twice).toContain("\n- References:\n  - S&P 500 (moomoo) 7612.25 +0.42%\n  - VIX (moomoo) 7612.25 +0.42%\n");

@@ -221,7 +221,7 @@
   "expect": {
     "messages": [
       "⚠️ dec-calls: |value| crossed ≥ 4.00 — −4.00  ▲ at",
-      "⚠️ SPXW 261218 7300C: |Δ| crossed ≥ 0.20 — 0.210  ▲ past 0.010"
+      "⚠️ SPXW 20261218 7300C: |Δ| crossed ≥ 0.20 — 0.210  ▲ past 0.010"
     ],
     "rows": {
       "monitors": {

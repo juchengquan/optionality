@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from optionality.exit import dte_at_open, on_pace
 from optionality.expiry import in_sample_hours, market_date, sample_timing, taken_in_session
 from optionality.position import Position, position_leg_codes
+from optionality.timefmt import display_date
 
 
 class VolSample(BaseModel):
@@ -115,12 +116,10 @@ class PaceExplained(BaseModel):
 VEGA_FLOOR = 0.005
 """A net vega smaller than this is zero: the precision every vega is shown at."""
 
-_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-
 
 def _day_words(iso: str) -> str:
-    """ "9 Nov": a stored YYYY-MM-DD as the dashboard writes a day, by string."""
-    return f"{int(iso[8:10])} {_MONTHS[int(iso[5:7]) - 1]}"
+    """ "20261109": a stored YYYY-MM-DD as every date the owner reads is written (`display_date`)."""
+    return display_date(iso)
 
 
 def pace_explained(samples: list[PacedSample], position: Position, now: datetime) -> PaceExplained:

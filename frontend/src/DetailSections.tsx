@@ -24,7 +24,7 @@ import { StrikeStrip } from "./StrikeStrip";
 import { stripDraws, stripOfEntry, stripOfHolding } from "./strip";
 import { figureOf, percent, points } from "./shared/numbers";
 import { POSITION_GREEKS, SHORT_DELTA } from "./shared/words";
-import { dateWords } from "./shared/times";
+import { writtenDate } from "./shared/times";
 import { AttentionChip } from "./AttentionChip";
 import { attentionOf, chipWords, type DeskRow } from "./desk/columns";
 import { ruleState } from "./phone/state";
@@ -43,12 +43,12 @@ const CLASSES: Record<Surface, { facts: string; meta: string; heading: string; h
 /** The line under a holding's name: its expiry in prose, its DTE once, and the day it was opened in
  *  prose (part F) — never ISO. */
 export function holdingMeta(h: Pick<Holding, "strike_date" | "dte" | "opened_at">): string {
-  return `${dateWords(h.strike_date)} · ${h.dte} DTE · ${h.opened_at ? `opened ${dateWords(h.opened_at)}` : "Opened not recorded"}`;
+  return `${writtenDate(h.strike_date)} · ${h.dte} DTE · ${h.opened_at ? `opened ${writtenDate(h.opened_at)}` : "Opened not recorded"}`;
 }
 
 /** The line under a rule's name: its expiry in prose and its DTE. */
 export function ruleMeta(e: Pick<Entry, "strike_date" | "dte">): string {
-  return `${dateWords(e.strike_date)} · ${e.dte} DTE`;
+  return `${writtenDate(e.strike_date)} · ${e.dte} DTE`;
 }
 
 /** A structure's legs in words, short first, `short 2× CALL 8150`, each type in its colour (#391). */

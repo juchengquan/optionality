@@ -1,5 +1,5 @@
 import type { Leg } from "./api";
-import { dateWords, ET, stampParts, zoneOfStamp } from "./times";
+import { ET, stampParts, weekdayDate, zoneOfStamp } from "./times";
 
 /** Display rules the page shares between its arrangements. */
 
@@ -48,7 +48,7 @@ export const signedLeg = (l: Leg): WrittenLeg =>
 export const heldLeg = (l: { side: string; option_type: string; strike: number; qty?: number }): WrittenLeg =>
   ({ short: l.side === "short", option_type: l.option_type, strike: l.strike, qty: l.qty });
 
-/** "SPXW 261016 8050.00C" → "261016 8050C".
+/** "SPXW 261016 8050.00C" → "20261016 8050C".
  *
  *  Every contract this service can create goes through build_spx_code, which hardcodes the
  *  SPXW symbol and builds the strike with int() — so the prefix and the decimals are
@@ -63,13 +63,9 @@ const SPXW_NAME = /^SPXW (\d{6}) (\d+)\.00([CP])$/;
 
 export function shortContract(name: string): string {
   const m = SPXW_NAME.exec(name);
-  return m ? `${m[1]} ${m[2]}${m[3]}` : name;
-}
-
-/** "2026-10-16" → "261016", the form contract names use since they lost their SPXW. */
-export function shortDate(iso: string): string {
-  const m = /^(\d{2})(\d{2})-(\d{2})-(\d{2})$/.exec(iso);
-  return m ? `${m[2]}${m[3]}${m[4]}` : iso;
+  // the vendor's six digits read as 20YY, as the service reads a code (`parseSpxCode`), and written
+  // as every date is (`times.writtenDate`): "SPXW 261218 6800.00P" is "20261218 6800P"
+  return m ? `20${m[1]} ${m[2]}${m[3]}` : name;
 }
 
 /** "2026-10-31 04:16:24+08:00" → "2026-10-31 04:16:24".
@@ -172,7 +168,7 @@ export function marketClock(served: string | null | undefined): string | null {
   return `${MARKET_CLOCK.format(at)} ${ET}`;
 }
 
-/** "21:04:37 SGT", or "Fri 21:04:37 SGT" where it is not from `now`'s day: when the service fetched,
+/** "21:04:37 SGT", or "Fri 20261113 21:04:37 SGT" where it is not from `now`'s day: when the service fetched,
  *  on the viewer's clock — the stamp as written, in DISPLAY_TZ — with its zone by name, never the
  *  `+08:00` it was served with (part F). The stamp whole where it is not one. */
 export function fetchedWords(served: string, now: Date = new Date()): string {
@@ -182,7 +178,7 @@ export function fetchedWords(served: string, now: Date = new Date()): string {
   const clock = `${p.clock}:${p.seconds} ${zone}`;
   if (p.offset === null || p.at === null) return clock;
   const today = new Date(now.getTime() + p.offset * 60_000).toISOString().slice(0, 10);
-  return p.date === today ? clock : `${dateWords(p.date)} ${clock}`;
+  return p.date === today ? clock : `${weekdayDate(p.date)} ${clock}`;
 }
 
 /** The line's words, for the freshness line (`Freshness.tsx`) and the saved

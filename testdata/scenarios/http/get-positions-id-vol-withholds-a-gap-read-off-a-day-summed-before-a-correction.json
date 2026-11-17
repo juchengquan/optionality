@@ -175,11 +175,11 @@
         "at": "2026-11-09",
         "timing": "in-hours",
         "gap": null,
-        "gap_reason": "the Cost to close of 2026-11-09 was summed before a leg's quantity was corrected",
+        "gap_reason": "the Cost to close of 20261109 was summed before a leg's quantity was corrected",
         "rest": null,
         "vega": -1.5,
         "cover": null,
-        "cover_reason": "the Cost to close of 2026-11-09 was summed before a leg's quantity was corrected"
+        "cover_reason": "the Cost to close of 20261109 was summed before a leg's quantity was corrected"
       }
     },
     "rows": {},

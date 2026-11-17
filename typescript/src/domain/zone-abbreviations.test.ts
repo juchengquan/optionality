@@ -61,7 +61,7 @@ describe("the zone abbreviations, as ICU gives them", () => {
     const [winter, summer] = london as [Row, Row];
     expect(winter.ts).toBe(winter.py);
     expect(summer.ts).not.toBe(summer.py);
-    expect(displayTimeShort(new Date(winter.at), "Europe/London")).toBe("2026-01-15 12:00 GMT");
-    expect(displayTimeShort(new Date(summer.at), "Europe/London")).toBe("2026-07-15 13:00 +01");
+    expect(displayTimeShort(new Date(winter.at), "Europe/London")).toBe("Thu 20260115 12:00 GMT");
+    expect(displayTimeShort(new Date(summer.at), "Europe/London")).toBe("Wed 20260715 13:00 +01");
   });
 });

@@ -21,13 +21,13 @@ afterEach(async () => {
 
 const holdingOf = (id: string) => HOLDINGS.find((h) => h.id === id)!;
 
-/** The call spread's week with 5 Nov missing — the service down that whole day — so a missed day's
+/** The call spread's week with 20261105 missing — the service down that whole day — so a missed day's
  *  hatched column is drawn too. */
 const MISSED: Samples = {
   ...SAMPLES["h-calls"]!, samples: SAMPLES["h-calls"]!.samples.filter((s) => s.observed_on !== "2026-11-05"),
 };
 
-/** The call spread's week with a leg's quantity corrected on 6 Nov (#359): the three days before it
+/** The call spread's week with a leg's quantity corrected on 20261106 (#359): the three days before it
  *  summed under the quantities first recorded, drawn faint, and the day marked "qty corrected". */
 const CORRECTED: Samples = {
   ...SAMPLES["h-calls"]!, qty_corrected_at: "2026-11-06 13:00:00+08:00",

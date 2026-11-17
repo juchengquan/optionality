@@ -7,6 +7,7 @@ import { fixed, moneyPlain, tick } from "./shared/numbers";
 import { scaleLinear } from "@visx/scale";
 
 import type { Sample, Samples } from "./shared/api";
+import { writtenDate } from "./shared/times";
 import { paceOutcome, paceWords } from "./pace";
 
 /** How a Cost to close is said: money across the contracts at the contract size the valuation
@@ -53,9 +54,9 @@ export function scopeWords(unit: Unit): string {
   return `${unit.contracts} contract${unit.contracts === 1 ? "" : "s"}`;
 }
 
-const DAY = new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", day: "numeric", month: "short" });
-/** "3 Nov": a market date as a day to read, read in UTC so the device's zone cannot move it. */
-const dayWords = (iso: string) => DAY.format(new Date(`${iso}T00:00:00Z`));
+/** "20261103": a market date as every date is written (`times.writtenDate`), by string, so no zone
+ *  can move it — the way the service writes the days in its reasons. */
+const dayWords = writtenDate;
 
 const NEW_YORK = new Intl.DateTimeFormat("en-GB", {
   timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hourCycle: "h23",

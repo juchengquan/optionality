@@ -742,7 +742,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   are its legs' stored delta and vega (no gamma or theta stored: dashes), its strike distances its
   stored SPX and IVs. The answer says `valued_from`, `valued_on` and `valued_timing`, and its
   `fetched_at` is the row's observed time, so the page's chips and market-closed line ("market
-  closed — as of the close, Fri 13 Nov 16:14", New York's clock) and the bot's one line under its
+  closed — as of the close, Fri 20261113 16:14 ET", New York's clock) and the bot's one line under its
   table say which close. The manage-by notice, sent once, is HELD until it has a cost to say, and
   it is the cost the page and the bot say (#387): the batch's in the session (and in the Curb and GTH
   where it quotes every leg, #416), and otherwise the latest close's, named, even where the batch
@@ -767,7 +767,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   a spread's and a contract's alike, and the Greeks are `Δ Γ Θ ν` — in the short form AND in the
   page's full sentence (`needs.ts`'s `fieldWords`, held to the same cases), which also takes the
   short form's places and its real minus; only a held credit's stop is said apart, `close ≥` short
-  and `cost to close ≥` in full. `|value|` made `/monitors`' widest row 43 (`TABLE_WIDTH`).
+  and `cost to close ≥` in full. `|value|` made `/monitors`' widest row 43 (`TABLE_WIDTH`); since 2026-11-17 a contract
+  (`20261218 C7300`) is never cut to fit (`isContract`) — a row runs wide instead.
 - Timestamps: storage is UTC; display converts via `DISPLAY_TZ`. moomoo `update_time` arrives naive US-Eastern
   and means LAST TRADE, not freshness — `fetched_at` is freshness.
 - Config: behavior knobs live in `.env` (which mirrors `.env.example`'s structure — active lines are overrides,

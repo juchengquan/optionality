@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict
 from optionality.alarm import RuleShape, rule_shape, rule_short
 from optionality.monitor import Monitor, monitor_leg_codes
 from optionality.quote import ByCode
+from optionality.timefmt import display_date
 
 
 def silence_reason(monitor: Monitor, priced: set[str], by_code: ByCode | None = None) -> str:
@@ -165,14 +166,16 @@ def expiry_verdict(monitor: ExpiringMonitor, today: str, retention_days: int) ->
     expiry = monitor.strike_date
     code = f"{monitor.code} {rule_short(monitor.rule)}"
     if expiry < cutoff:
-        notice = f"ℹ️ monitor {code} expired ({expiry}) — removed" if monitor.enabled else None
+        notice = f"ℹ️ monitor {code} expired ({display_date(expiry)}) — removed" if monitor.enabled else None
         return ExpiryVerdict(action="remove", notice=notice)
     if expiry < today:
         if not monitor.enabled:
             return ExpiryVerdict(action="keep", notice=None)
         return ExpiryVerdict(
             action="mute",
-            notice=(f"ℹ️ monitor {code} expired ({expiry}) — muted; auto-removes in {retention_days} days"),
+            notice=(
+                f"ℹ️ monitor {code} expired ({display_date(expiry)}) — muted; auto-removes in {retention_days} days"
+            ),
         )
     return ExpiryVerdict(action="keep", notice=None)
 

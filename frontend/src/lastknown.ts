@@ -7,7 +7,7 @@
  *  where the service stored one (`last_close`, #402); for the rest, and for the sentence, the page
  *  says what the sweep last read for the rule —
  *  `/monitors`' `last_value` — and when (`last_checked_at`), beside the dash and never in its place:
- *  "no figure out of session; last 3.05 at Fri 13 Nov 16:14", on New York's clock as the
+ *  "no figure out of session; last 3.05 at Fri 20261113 16:14 ET", on New York's clock as the
  *  market-closed line names the close. The bell is the service's
  *  and is not drawn from it.
  *

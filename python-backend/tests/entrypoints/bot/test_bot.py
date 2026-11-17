@@ -35,12 +35,16 @@ FUTURE = "2026-11-01"
 OPENED = "2026-09-17"
 YYMMDD = "261101"
 FAR = "2026-11-11"
-#: `/monitors` for the two rules of the short-form test, character for character
+#: `/monitors` for the two rules of the short-form test, character for character: the contract
+#: whole, `on` under `now` (2026-11-17)
 MONITORS_TABLE = (
-    "<pre>contract      rule             last   state\n"
-    "bear-cs       close ≥ 4.05     3.05   armed\n"
-    "261101 C8100  |value| ≥ 30.00  26.41  armed</pre>"
+    "<pre>contract        rule             last   now\n"
+    "bear-cs         close ≥ 4.05     3.05   on\n"
+    "20261101 C8100  |value| ≥ 30.00  26.41  on</pre>"
 )
+
+#: A contract cut in its middle (the owner's decision of 2026-11-17: never)
+CUT_CONTRACT = re.compile(r"\d{4,8}…|\d{8} [CP]?\d*…")
 
 
 def echo(codes: list[str]) -> list[dict[str, Any]]:
@@ -371,8 +375,8 @@ class TestMonitors:
         reply = chat.last()
         assert reply.startswith("<pre>")
         assert reply.endswith("</pre>")
-        assert f"{YYMMDD} P6425" in reply  # not the full moomoo code
-        assert "armed" in reply
+        assert f"20{YYMMDD} P6425" in reply  # not the full moomoo code, and the date whole
+        assert reply.endswith(" on</pre>")  # its state, `on` since 2026-11-17
         assert chat.last_params()["parse_mode"] == "HTML"
 
     async def test_groups_by_expiry_then_calls_before_puts(self, chat):
@@ -409,6 +413,44 @@ class TestMonitors:
         assert chat.last() == MONITORS_TABLE
         for line in re.sub(r"</?pre>", "", chat.last()).split("\n"):
             assert len(line) <= TABLE_WIDTH
+
+    async def test_writes_every_contract_whole_on_the_owners_book_a_ringing_one_and_a_wide_threshold_beside_it(
+        self, chat
+    ):
+        b = chat.bot()
+        await b.handle_update(update(f"/watchcombo 1218-6800 {FUTURE} -P6800 +P6750 4.51"))
+        await b.handle_update(update(f"/watchcombo 1231_8100 {FAR} -C8100 +C8150 5.01"))
+        await b.handle_update(update(f"/watchcombo 1231_8050 {FAR} -C8050 +C8100 5.51"))
+        await b.handle_update(update(f"/watch {FUTURE} CALL 8100 0.1"))
+        await b.handle_update(update(f"/watch {FUTURE} PUT 6700 0.16"))
+        await b.handle_update(update(f"/watch {FUTURE} PUT 6800 0.2"))
+        chat.db.execute("update monitors set last_value = -3.35 where legs is not null")
+        chat.db.execute("update monitors set last_value = -0.121 where legs is null")
+        await b.handle_update(update("/monitors"))
+        book = chat.last()
+        assert not CUT_CONTRACT.search(book), book
+        for c in ("20261101 C8100", "20261101 P6700", "20261101 P6800"):
+            assert f"{c}  " in book
+        assert max(len(line) for line in re.sub(r"</?pre>", "", book).split("\n")) <= TABLE_WIDTH
+        await b.handle_update(update(f"/watch {FUTURE} CALL 7300 4000 mid_price"))
+        chat.db.execute("update monitors set triggered = 1 where code like '%P6800%'")
+        await b.handle_update(update("/monitors"))
+        assert not CUT_CONTRACT.search(chat.last()), chat.last()
+        assert "20261101 P6800  " in chat.last()
+        assert "20261101 C7300  " in chat.last()
+
+    def test_writes_every_contract_whole_in_every_monitors_the_door_scenarios_hold(self):
+        from pathlib import Path
+
+        folder = Path(__file__).resolve().parents[4] / "testdata" / "scenarios" / "bot"
+        replies = [
+            (json.loads(f.read_text())["expect"]["reply"] or {}).get("text") or ""
+            for f in sorted(folder.glob("*.json"))
+        ]
+        tables = [t for t in replies if t.startswith("<pre>contract")]
+        assert len(tables) > 2
+        for t in tables:
+            assert not CUT_CONTRACT.search(t), t
 
     async def test_shows_an_em_dash_for_a_monitor_that_has_never_been_swept(self, chat):
         b = chat.bot()
@@ -753,7 +795,7 @@ class TestHealth:
         sweeper.label = "active"
         b = chat.bot(echo, {"display_tz": "Asia/Singapore"}, sweeper=sweeper)
         await b.handle_update(update("/health"))
-        assert chat.last() == "Service is up.\nalarms: active — last sweep 2026-08-10 11:35 +08"
+        assert chat.last() == "Service is up.\nalarms: active — last sweep Mon 20260810 11:35 +08"
 
     async def test_says_only_that_it_is_up_when_nothing_else_is_wired(self, chat):
         await chat.bot().handle_update(update("/health"))

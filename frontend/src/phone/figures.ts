@@ -4,11 +4,11 @@ import type { Entry, Holding, Monitor } from "../shared/api";
 import { DASH } from "../shared/format";
 import { servedDelta } from "../legs";
 import { delta } from "../shared/numbers";
-import { dateWords } from "../shared/times";
+import { writtenDate } from "../shared/times";
 import { reasonLabel } from "../shared/groups";
 
-/** "Fri 18 Dec": an expiry as prose names it (part F, `times.dateWords`), never ISO. */
-export const expiryWords = (iso: string): string => dateWords(iso);
+/** "20261218": an expiry as every date is written (`times.writtenDate`, 2026-11-17), never ISO. */
+export const expiryWords = (iso: string): string => writtenDate(iso);
 
 /** "×2", or "×•••" under privacy: contracts × points × 100 is the dollar amount privacy hides, so
  *  the count beside a figure in points goes with it (owner's decision, #314). */

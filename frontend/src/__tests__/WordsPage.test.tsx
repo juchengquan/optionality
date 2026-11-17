@@ -5,7 +5,8 @@
  *  - "rule", never "Monitor" (part G): the API's word, not the page's;
  *  - every clock carries its zone (part F): `16:14 ET` for the market's, `21:04 SGT` for the
  *    viewer's, and never a bare `+08:00`;
- *  - never an ISO date (part F): an expiry is `261231` where it is dense and `Thu 31 Dec` in prose;
+ *  - never an ISO date (part F), and since 2026-11-17 every date YYYYMMDD: `20261231`, never `261231`
+ *    or `Thu 31 Dec`, on the desk and the phone alike — `Mon 20261116 20:15 ET` beside a time;
  *  - no raw error (part N): never "Failed to fetch" or "ECONNREFUSED" on screen.
  *
  *  Each check is a function of the text, held by its own self-test below so a guard that has gone
@@ -16,7 +17,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { saidBy } from "../testing/hyphens";
 import { MONDAY, SUNDAY, walkDesk, walkPhone, type Read } from "../testing/pageWalk";
-import { CHECKS, wordsOf } from "../testing/words";
+import { CHECKS, DATE_CHECKS, textsOf, wordsOf } from "../testing/words";
 
 afterEach(() => {
   cleanup();
@@ -30,6 +31,11 @@ function reading(): { said: string[]; read: Read } {
   const read: Read = (where, root) => {
     const text = wordsOf(root, saidBy);
     for (const [name, check] of Object.entries(CHECKS)) said.push(...check(text).map((s) => `${where} — ${name}: ${s}`));
+    // a date's checks read the whole and each node apart, where text run together hides six digits
+    const nodes = textsOf(root);
+    for (const [name, check] of Object.entries(DATE_CHECKS)) {
+      said.push(...[...new Set([...check(text), ...check(nodes)])].map((s) => `${where} — ${name}: ${s}`));
+    }
   };
   return { said, read };
 }
@@ -51,11 +57,29 @@ describe("the checks see what they look for (each fails on a planted fault)", ()
   it("an offset, an ISO date, Monitor and a raw error", () => {
     expect(CHECKS["an offset for a zone"]!("fetched at 2026-11-16 21:04:37+08:00")).toHaveLength(1);
     expect(CHECKS["an ISO date"]!("expiry 2026-12-31")).toHaveLength(1);
-    expect(CHECKS["an ISO date"]!("1231_-C8050+C8100 · 261231 · Thu 31 Dec")).toEqual([]);
+    expect(CHECKS["an ISO date"]!("1231_-C8050+C8100 · 20261231 · 20261231")).toEqual([]);
     expect(CHECKS["Monitor, where the page says rule"]!("Record holding + 2 Monitors")).toHaveLength(1);
     expect(CHECKS["Monitor, where the page says rule"]!("Record holding + 2 rules")).toEqual([]);
     expect(CHECKS["a raw error"]!("the holdings could not be valued — Failed to fetch")).toHaveLength(1);
     expect(CHECKS["a raw error"]!("moomoo call failed: connect ECONNREFUSED 127.0.0.1:33333")).toHaveLength(1);
+  });
+
+  it("a date written any way but YYYYMMDD (2026-11-17)", () => {
+    for (const bad of ["Thu 31 Dec · 45 DTE", "expired 6 Nov", "as of the close, Fri 13 Nov 16:14 ET", "on Dec 31",
+      "261231 · 45 DTE", "261218 6800P", "expired 261106", "opened on 261103.", "261103, then"]) {
+      expect([...DATE_CHECKS["a date in words"]!(bad), ...DATE_CHECKS["a six-digit date"]!(bad)], bad).toHaveLength(1);
+    }
+    for (const ok of ["20261231 · 45 DTE", "20261218 6800P", "Mon 20261116 20:15 ET", "US.SPXW261231C8100000",
+      "1231_8050", "1218-6800", "261231_8050", "+$261,218", "7416.62", "261103.5 pts", "261,103", "12 DTE", "in 24d", "3 legs", "Dec rules"]) {
+      expect([...DATE_CHECKS["a date in words"]!(ok), ...DATE_CHECKS["a six-digit date"]!(ok)], ok).toEqual([]);
+    }
+  });
+
+  it("reads each node apart, where the page's text runs together", () => {
+    const root = document.createElement("div");
+    root.innerHTML = "<span>261218</span><span>7150P</span>";
+    expect(DATE_CHECKS["a six-digit date"]!(root.textContent ?? "")).toEqual([]);
+    expect(DATE_CHECKS["a six-digit date"]!(textsOf(root))).toHaveLength(1);
   });
 });
 

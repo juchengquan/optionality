@@ -153,11 +153,11 @@
         "at": "2026-11-07",
         "timing": "unrecorded",
         "gap": null,
-        "gap_reason": "7 Nov has no Cost to close from a regular session",
+        "gap_reason": "20261107 has no Cost to close from a regular session",
         "rest": null,
         "vega": 0,
         "cover": null,
-        "cover_reason": "7 Nov has no Cost to close from a regular session"
+        "cover_reason": "20261107 has no Cost to close from a regular session"
       }
     },
     "rows": {},

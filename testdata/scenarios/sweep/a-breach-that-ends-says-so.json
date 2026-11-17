@@ -69,7 +69,7 @@
   },
   "expect": {
     "messages": [
-      "✅ SPXW 261218 7300C: |Δ| back below 0.30 — 0.270  ↑0.030"
+      "✅ SPXW 20261218 7300C: |Δ| back below 0.30 — 0.270  ↑0.030"
     ],
     "rows": {
       "monitors": {

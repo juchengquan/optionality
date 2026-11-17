@@ -17,10 +17,11 @@
  *
  *  Hand-written SVG at its measured width, as `SpxPath.tsx` is (the payoff moved to visx in #396).
  */
+import { writtenDate } from "../shared/times";
 import { spx as spxText } from "../shared/numbers";
 import { useLayoutEffect, useRef, useState } from "react";
 
-import { shortDate } from "../shared/format";
+
 import {
   bandParts, bandWords, domainOf, slotRows, spxWords, ticksOf, type MapSpread, type PriceMap,
 } from "../pricemap";
@@ -69,7 +70,7 @@ export function PriceMapPanel({ id, map, session, note, selected, onSelect }: {
   const [box, W] = useWidth();
   const [lo, hi] = domainOf(map);
   // the lanes' own labels: the expiry and DTE, and the band's width and whose IV it is
-  const laneWords = map.lanes.map((l) => [`${shortDate(l.expiry)} · ${l.dte} DTE`, bandWords(l)] as const);
+  const laneWords = map.lanes.map((l) => [`${writtenDate(l.expiry)} · ${l.dte} DTE`, bandWords(l)] as const);
   const LEFT = Math.ceil(Math.max(80, ...laneWords.flatMap(([a, b]) => [textWidth(a, 12), textWidth(b, 10.5)]))) + 14;
   // the plot is inset by the widest strike label's half, so one on the outermost strike stays inside
   const inset = Math.ceil(Math.max(20, ...map.lanes.flatMap((l) => l.spreads.flatMap((s) =>

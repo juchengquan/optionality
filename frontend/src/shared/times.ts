@@ -153,16 +153,36 @@ export function zoneOfStamp(served: string | null | undefined): string {
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-/** "Thu 31 Dec": a calendar date (YYYY-MM-DD) as prose names it — an expiry in a sentence, the day a
- *  holding was opened or closed — as `session.marketDayWords` and the bot name a market day. No year:
- *  the weekday already pins the date within years of it, and every other date on the page is written
- *  without one. Anything that is not a date is returned untouched. Never ISO on screen (part F): the
- *  compact `261231` is `format.shortDate`, for dense places — the table, the picture, the palette. */
-export function dateWords(iso: string | null | undefined): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? "");
+/* How a DATE is written, the owner's standard of 2026-11-17 (ADR 0023): one form everywhere a date is
+   shown — the page, the picture, Copy as text and the bot — in three shapes, each written here and
+   nowhere else:
+   - a date alone is `writtenDate`, `20261231` — an expiry heading, a contract, an opened or closed
+     day, a note, a history's day, the palette;
+   - a date beside a time keeps its weekday, `weekdayDate`, `Mon 20261116` — `Mon 20261116 20:15 ET`
+     (`session.newYorkWhen`, `servedWhen`, `format.fetchedWords`, the picture's "taken");
+   - a chart's axis would write `1116` (MMDD) to stay narrow; no chart draws a date axis today (each
+     runs on DTE), so nothing here writes one.
+   A weekday alone beside a time, `Fri 16:14 ET`, names no date and stays. Before, these were
+   `dateWords` ("Thu 31 Dec"), `format.shortDate` ("261231"), `session.marketDayWords` ("Fri 13 Nov"),
+   the day in `servedWhen` ("13 Nov 21:04"), three `Intl` "3 Nov" formats (`burndown.ts`,
+   `historyDays.ts`, `PaceExplained.tsx`), `format.shortContract`'s six digits and the picture's
+   `Intl` "Sun 15 Nov 2026". */
+
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** "20261231": a calendar date (YYYY-MM-DD) as the owner reads one. Anything that is not a date is
+ *  returned untouched — a figure must never fail for the day it names. */
+export function writtenDate(iso: string | null | undefined): string {
+  const m = DATE.exec(iso ?? "");
+  return m ? `${m[1]}${m[2]}${m[3]}` : iso ?? "";
+}
+
+/** "Mon 20261116": a date with its weekday, for a date written beside a time. Anything that is not a
+ *  date is returned untouched. */
+export function weekdayDate(iso: string | null | undefined): string {
+  const m = DATE.exec(iso ?? "");
   if (!m) return iso ?? "";
   const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  return `${WEEKDAYS[d.getUTCDay()]} ${m[1]}${m[2]}${m[3]}`;
 }

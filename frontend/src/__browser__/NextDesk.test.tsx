@@ -413,7 +413,7 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
     expect(document.activeElement).toBe(days);
     await userEvent.keyboard("{ArrowRight}{ArrowRight}");
     const said = document.querySelector(".nxd-inspector .nx-hist-said")!;
-    expect(said.textContent).toMatch(/^4 Nov · 44 DTE/);
+    expect(said.textContent).toMatch(/^20261104 · 44 DTE/);
     // the day said is the day marked
     expect(document.querySelector(".nxd-inspector [data-pointed]")?.getAttribute("data-sample")).toBe("2026-11-04");
   });

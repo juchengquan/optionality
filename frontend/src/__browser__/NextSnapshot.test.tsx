@@ -41,7 +41,7 @@ const references = [
     field: "mid_price", name: "S&P 500", error: null, last_known: false, fetched_at: "2026-11-16 00:59:05+08:00" },
 ];
 
-/** A holding closed on 6 Nov, as `/positions` keeps it (ADR 0022). */
+/** A holding closed on 20261106, as `/positions` keeps it (ADR 0022). */
 const CLOSED = {
   ...HOLDINGS[0]!, id: "c-old", name: "1120_P6000", strike_date: "2026-11-20", opened_at: "2026-11-01",
   closed_on: "2026-11-06", entry: 2, exit: 0.5, realized_points: 1.5, cost_to_close: null, pnl: null,
@@ -211,7 +211,7 @@ describe("saving the desk as an image", () => {
     const { root, release } = await take();
     expect([...root.querySelectorAll<HTMLElement>(CONTROLS)].map((el) => el.outerHTML.slice(0, 80))).toEqual([]);
     // the book is in it all the same: holdings, the rules under them, the watchlist, the quarantine
-    for (const name of ["1218_P6400", "1218_C7300", "1231_IC", "1204_P6900", "261218 7150P", "261211 8000C"]) {
+    for (const name of ["1218_P6400", "1218_C7300", "1231_IC", "1204_P6900", "20261218 7150P", "20261211 8000C"]) {
       expect(rowNamed(root, name), `${name} is not in the picture`).toBeTruthy();
     }
     release();
@@ -247,7 +247,7 @@ describe("saving the desk as an image", () => {
     expect(rowOnScreen("w-dec18-delta").querySelector('[data-col="alarm"]')!.textContent).toContain("|Δ| ≥ 0.20");
     const { root, release } = await take();
     // the watchlist's own header: its table carries no holding-only column (2026-11-16)
-    const row = rowNamed(root, "261218 7150P");
+    const row = rowNamed(root, "20261218 7150P");
     const rule = [...row.closest("table")!.querySelector("thead tr")!.children].findIndex((c) => c.textContent === "rule");
     expect(row.children[rule]!.textContent).toBe("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
     // the Δ column's header is the one Δ (#400): no rule is said in symbols

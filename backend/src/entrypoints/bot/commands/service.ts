@@ -5,7 +5,7 @@
  *  the dashboard cannot disagree about a cost, a P&L or a Level.
  */
 import { type Command, failed, requireNumber } from "./context.ts";
-import { buildSpxCode } from "optionality/domain/contract";
+import { buildSpxCode, datedName } from "optionality/domain/contract";
 import { displayTimeShort } from "optionality/domain/timefmt";
 import { holdingValues } from "../../../holdings.ts";
 import type { QuoteRecord } from "optionality/quotes";
@@ -73,7 +73,7 @@ export const snapshot: Command = async (ctx, args) => {
   }
   if (records.length === 0) return `No data for ${code}.`;
   const r = records[0]!;
-  const name = (r.name as string | undefined) || code;
+  const name = datedName((r.name as string | undefined) || code);
   const fields = [
     "option_delta", "option_implied_volatility", "mid_price", "bid_price", "ask_price",
     "last_price", "option_theta",

@@ -69,7 +69,7 @@
   },
   "expect": {
     "messages": [
-      "⚠️ SPXW 261218 7300C: |Δ| crossed ≥ 0.30 — 0.340  ▲ past 0.040"
+      "⚠️ SPXW 20261218 7300C: |Δ| crossed ≥ 0.30 — 0.340  ▲ past 0.040"
     ],
     "rows": {
       "monitors": {

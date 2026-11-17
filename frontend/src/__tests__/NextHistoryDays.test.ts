@@ -42,7 +42,7 @@ describe("the readouts", () => {
     const stops = stopsOf(days, null);
     const legs = [{ code: "US.SPXW261218C7300000", leg: { short: true, option_type: "CALL", strike: 7300 } }];
     stops.forEach((stop, i) => {
-      expect(ivLines(stop, legs).day.startsWith(`${Number(days[i]!.observed_on.slice(8))} Nov`)).toBe(true);
+      expect(ivLines(stop, legs).day.startsWith(days[i]!.observed_on.replaceAll("-", ""))).toBe(true);
       expect(spxLines(stop, { closed_on: null }).spx).toBe(`SPX ${days[i]!.spx!.toFixed(2)}`);
     });
   });

@@ -142,14 +142,14 @@ describe("the pace explained, in the desk's inspector", () => {
   it("splits the gap with the route's own figures, at the close they were measured to", async () => {
     render(<DeskBook {...props()} />);
     const split = await splitOf(inspect("h-puts", "1218_P6400"));
-    // the route's gap (-0.42 at the 9 Nov close), not the schedule's live -0.50
-    expect(split.textContent).toContain("at the 9 Nov close: ahead by 0.42");
+    // the route's gap (-0.42 at the 20261109 close), not the schedule's live -0.50
+    expect(split.textContent).toContain("at the 20261109 close: ahead by 0.42");
     // in the outcome colour, as every gap in words is
     expect(within(split).getByText("ahead by 0.42").dataset.outcome).toBe("gain");
     // vol 0.31 hurt and the rest -0.73 helped, as served: a page subtracting from the live gap
     // would say the rest saved 0.81
     expect(split.textContent).toContain("vol cost you 0.31 · the rest saved you 0.73");
-    expect(split.textContent).toContain("over 6 days from 3 Nov · position ν −0.86");
+    expect(split.textContent).toContain("over 6 days from 20261103 · position ν −0.86");
     // the hypothetical is never shown beside a measurement
     expect(split.textContent).not.toMatch(/would cover/);
     expect(volAsked()).toEqual(["GET /positions/h-puts/vol"]);
@@ -158,7 +158,7 @@ describe("the pace explained, in the desk's inspector", () => {
   it("says why the route cannot split it, in the route's words, and what would cover the gap", async () => {
     render(<DeskBook {...props()} />);
     const split = await splitOf(inspect("h-calls", "1218_C7300"));
-    expect(split.textContent).toContain("at the 9 Nov close: behind by 2.27");
+    expect(split.textContent).toContain("at the 20261109 close: behind by 2.27");
     expect(within(split).getByText("behind by 2.27").dataset.outcome).toBe("loss");
     expect(split.textContent).toContain(`vol cannot be split out: ${VOLS["h-calls"]!.reason}`);
     expect(split.textContent).toContain("1.82 vol points would cover this gap · position ν −1.25");
@@ -176,13 +176,13 @@ describe("the pace explained, in the desk's inspector", () => {
 
   it("says nothing has moved on the day it was opened, rather than that vol cost nothing", async () => {
     volOver["h-puts"] = { vol: 0, from: "2026-11-09", to: "2026-11-09", days: 0,
-      reason: "only 9 Nov, the day it was Opened, is recorded: nothing has moved yet",
+      reason: "only 20261109, the day it was Opened, is recorded: nothing has moved yet",
       at: "2026-11-09", timing: "in-hours", gap: 0, gap_reason: null, rest: null, vega: -0.86,
       cover: 0, cover_reason: null };
     render(<DeskBook {...props()} />);
     const split = await splitOf(inspect("h-puts", "1218_P6400"));
     expect(split.textContent).toContain(
-      "vol cannot be split out: only 9 Nov, the day it was Opened, is recorded: nothing has moved yet");
+      "vol cannot be split out: only 20261109, the day it was Opened, is recorded: nothing has moved yet");
     expect(split.textContent).not.toMatch(/cost you|saved you/);
   });
 
@@ -208,23 +208,23 @@ describe("the pace explained, in the desk's inspector", () => {
 
   describe("says what the sample the split is at was, as the route says it", () => {
     it.each([
-      ["in-hours", "as of 9 Nov, in hours:"],
-      ["before-open", "as of 9 Nov, before the open:"],
-      ["after-close", "as of 9 Nov, after the close:"],
-      ["unrecorded", "as of 9 Nov:"],
+      ["in-hours", "as of 20261109, in hours:"],
+      ["before-open", "as of 20261109, before the open:"],
+      ["after-close", "as of 20261109, after the close:"],
+      ["unrecorded", "as of 20261109:"],
     ] as const)("%s", async (timing, words) => {
       volOver["h-puts"] = { ...VOLS["h-puts"]!, timing };
       render(<DeskBook {...props()} />);
       const split = await splitOf(inspect("h-puts", "1218_P6400"));
       expect(split.textContent).toContain(`${words} ahead by 0.42`);
-      expect(split.textContent).not.toMatch(/at the 9 Nov close/);
+      expect(split.textContent).not.toMatch(/at the 20261109 close/);
     });
   });
 
   describe("says why there is no gap to split, as served, and invents nothing", () => {
     // each cause the service names, under a vol part it did measure
     it.each([
-      "9 Nov has no Cost to close",
+      "20261109 has no Cost to close",
       "Entry is not recorded, so there is no On-pace to measure a gap from",
       "there is no On-pace at 0 DTE for a holding opened at 0 DTE",
     ])("%s", async (why) => {

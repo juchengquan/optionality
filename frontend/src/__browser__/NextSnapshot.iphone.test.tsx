@@ -29,7 +29,7 @@ vi.mock("html-to-image", async (orig) => {
   };
 });
 
-/** A holding closed on 6 Nov, as `/positions` keeps it (ADR 0022). */
+/** A holding closed on 20261106, as `/positions` keeps it (ADR 0022). */
 const CLOSED = {
   ...HOLDINGS[0]!, id: "c-old", name: "1120_P6000", strike_date: "2026-11-20", opened_at: "2026-11-01",
   closed_on: "2026-11-06", entry: 2, exit: 0.5, realized_points: 1.5, cost_to_close: null, pnl: null,

@@ -186,7 +186,7 @@ describe("changing a holding from the phone's sheet", () => {
     await userEvent.fill(within(fix).getByLabelText("closed on"), "2026-11-11");
     await userEvent.click(within(fix).getByRole("button", { name: "Save correction" }));
     await waitFor(() => expect(writes(s)[1]).toEqual(["PATCH /positions/h-ic", { closed_on: "2026-11-11" }]));
-    await waitFor(() => expect(within(result).getByText(/closed on Wed 11 Nov/)).toBeTruthy());
+    await waitFor(() => expect(within(result).getByText(/closed on 20261111/)).toBeTruthy());
   });
 
   it("deletes one only after asking, saying the samples go with it", async () => {

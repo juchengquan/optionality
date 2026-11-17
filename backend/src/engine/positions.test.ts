@@ -1028,7 +1028,7 @@ describe("the manage-by notice", () => {
     closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
     await sweeper(priceless(21)).sweep();
     expect(notices()).toHaveLength(1);
-    expect(notices()[0]).toContain("entry 6.86 · 4.40 at the 2026-09-30 close");
+    expect(notices()[0]).toContain("entry 6.86 · 4.40 at the 20260930 close");
     // on-pace at the close's own 22 DTE (opened at 45): 6.86 × √(22/45) = 4.80, and 4.40 is ahead
     expect(notices()[0]).toContain("on-pace 4.80 — ahead by 0.40");
     expect(notifiedAt(id)).toBeTruthy();
@@ -1060,7 +1060,7 @@ describe("the manage-by notice", () => {
     closeRow(id, "2026-09-30", "2026-09-30 20:14:59.000000", 4.4, 22);
     await sweeper(quoting("mid_price", { [buildSpxCode(daysFromNow(21), "CALL", 8050)]: 3.9 })).sweep();
     expect(notices()).toHaveLength(1);
-    expect(notices()[0]).toContain("entry 6.86 · 4.40 at the 2026-09-30 close");
+    expect(notices()[0]).toContain("entry 6.86 · 4.40 at the 20260930 close");
     expect(notices()[0]).not.toContain("now");
   });
 

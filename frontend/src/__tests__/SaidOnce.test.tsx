@@ -247,7 +247,7 @@ for (const arrangement of ["desk", "phone"] as const) {
         ? document.querySelector("[data-monitor='m-expired']")!
         : document.querySelector(".nxd-muted [data-ref='m-expired']")!;
       expect(count(seen(row).toLowerCase(), "expired")).toBe(1);
-      expect(seen(row)).toMatch(/Fri 6 Nov — the service deletes it on \w{3} \d{1,2} \w{3}/);
+      expect(seen(row)).toMatch(/20261106 — the service deletes it on \d{8}/);
     });
 
     it("says SPX's reason under the payoff where no strip is drawn to say it (review of #423)", async () => {
@@ -296,9 +296,9 @@ for (const arrangement of ["desk", "phone"] as const) {
         expect(card.querySelector("[data-ref='r-condor'] .nxp-rule-name")!.textContent).not.toBe("1218_C7300");
         // a watched spread's leg rule keeps its own name
         const watch = document.querySelector("[data-ref='w-dec18']")!;
-        expect([...watch.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["261218 7150P"]);
+        expect([...watch.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["20261218 7150P"]);
         const sheet = await detail(arrangement, "1218_P7150");
-        expect([...sheet.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["261218 7150P"]);
+        expect([...sheet.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["20261218 7150P"]);
       } else {
         // the desk's inspector never drew a rule's name in Rules: held to that
         const d = await detail(arrangement, "1218_P7150");
@@ -338,9 +338,9 @@ for (const arrangement of ["desk", "phone"] as const) {
       const where = arrangement === "phone"
         ? document.querySelector("[data-monitor='q-unknown']")!
         : await (async () => {
-          fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === "261211 8000C")!);
+          fireEvent.click([...document.querySelectorAll<HTMLButtonElement>(".nxd-row .nxd-name")].find((b) => b.textContent === "20261211 8000C")!);
           await settle();
-          return screen.getByRole("complementary", { name: "inspector: 261211 8000C" });
+          return screen.getByRole("complementary", { name: "inspector: 20261211 8000C" });
         })();
       expect(count(seen(where), clause)).toBe(1);
       expect(seen(where)).not.toMatch(/Switched off by the service/);

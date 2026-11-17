@@ -43,9 +43,10 @@ def build_spx_code(strike_date: str, option_type: str, strike: float) -> str:
 
 
 def compact_strike_date(strike_date: str) -> str:
-    """`2026-10-16` -> `261016`: the six digits a code carries, and the bot's short form with it."""
+    """`2026-10-16` -> `20261016`: a date as the owner reads one, YYYYMMDD (his standard of 2026-11-17).
+    The code itself keeps its six digits (`build_spx_code`): that is moomoo's grammar, not a display."""
     y, mo, d = _parse_strike_date(strike_date)
-    return f"{y[2:]}{mo}{d}"
+    return f"{y}{mo}{d}"
 
 
 class SpxContract(BaseModel):
@@ -60,7 +61,9 @@ class SpxContract(BaseModel):
 # Strict, because it is build_spx_code's inverse and nothing else: a leading-zero strike parses to a
 # number whose own code is a different string, so it is refused rather than round-tripped.
 _SPX_CODE = re.compile(r"US\.SPXW(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)000", re.ASCII)
-_SHORT_CODE = re.compile(r"(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)", re.ASCII)
+# the year written whole (20261030, printed since 2026-11-17) or as the code's two digits (261030)
+_SHORT_CODE = re.compile(r"(?:20)?(\d{2})(\d{2})(\d{2})([CP])(0|[1-9]\d*)", re.ASCII)
+_VENDOR_NAME = re.compile(r"SPXW (\d{2})(\d{2})(\d{2}) (?=[^ ])", re.ASCII)
 
 # JavaScript's \s, spelled out: its WhiteSpace and LineTerminator characters. Python's own \s differs
 # at both edges — it takes the file, group, record and unit separators (\x1c-\x1f) and \x85, which
@@ -93,7 +96,7 @@ def parse_spx_code(code: str) -> SpxContract | None:
 
 
 def short_spx_code(code: str) -> str:
-    """`US.SPXW261030C8100000` as `261030 C8100`. The SPXW and the trailing 000 are on every contract
+    """`US.SPXW261030C8100000` as `20261030 C8100`. The SPXW and the trailing 000 are on every contract
     this service can create, so they carry no information and cost twelve of the bot's forty
     characters. Anything this cannot read is returned untouched."""
     c = parse_spx_code(code)
@@ -114,3 +117,12 @@ def expand_spx_short(short: str) -> str | None:
         return build_spx_code(f"20{yy}{mo}{d}", "CALL" if letter == "C" else "PUT", float(strike))
     except ValueError:
         return None
+
+
+def dated_name(name: str) -> str:
+    """A vendor's name for an SPXW contract, `SPXW 261030 8100.00C`, with its date written YYYYMMDD:
+    `SPXW 20261030 8100.00C`. Any other name is returned untouched."""
+    m = _VENDOR_NAME.match(name)
+    if not m:
+        return name
+    return f"SPXW 20{m[1]}{m[2]}{m[3]} {name[m.end() :]}"

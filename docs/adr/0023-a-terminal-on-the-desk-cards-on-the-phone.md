@@ -916,6 +916,8 @@ zone mark.
     date on the page is the weekday, the day and the month, as `marketDayWords` and the bot write a
     market day. A service's own refusal ("closed on 2026-10-30, before it was opened on …") is its
     words and is shown as they are.
+    *(Superseded 2026-11-17, "one date format": every date is YYYYMMDD, `20261231`, dense or in
+    prose, with its weekday only beside a time.)*
   - **Manage-by is days left**, `in 24d` or `due`, on the desk's column, its inspector and the phone's
     sheet alike, the threshold as its detail, `at 21 DTE` (`pace.manageBy`).
 - **G. "rule", never "Monitor", on screen.** The save button says `Record holding + 2 rules`, the
@@ -1081,3 +1083,58 @@ of it with SPX the last close's level — each row and card, and each list of th
 text a viewer reads drawn twice in one place, nor six words in a row said in two texts, and no bar toward a threshold; and each removal
 above by name, with the fact it
 kept, each failing when its repeat is put back.
+
+
+## Amended 2026-11-17: one date format — YYYYMMDD on the page and the bot
+
+The owner, 2026-11-17: every date written for him is `YYYYMMDD`, on the dashboard and the Telegram
+bot alike. It supersedes part F's two forms — `261231` where the page was dense and `Thu 31 Dec` in
+prose — and the bot's `Fri 13 Nov` and ISO.
+
+- **A date alone is `20261231`**: an expiry's heading, the same on both arrangements
+  (`20261231 · 45 DTE` — the phone's said `Thu 31 Dec` and `45 DTE` apart), a contract's name
+  (`20261218 6800P`, from moomoo's `SPXW 261218 6800.00P`), the meta line under a name
+  (`20261231 · 45 DTE · opened 20261111`), an opened, closed or expired day, an expired rule's note
+  (`20261106 — the service deletes it on 20261114`), a history's day and its readouts
+  (`20261109 · 39 DTE`), the pace split's reasons, the palette, the saved picture and Copy as text.
+- **A date beside a time keeps its weekday**: `Mon 20261116 20:15 ET`; the market-closed line's
+  `as of the close, Fri 20261113 16:14 ET`; a fetch from another day, `Thu 20261112 23:14:05 SGT`;
+  a valuation older than six days, `Fri 20261106 21:04 SGT`; the picture's "taken",
+  `Mon 20261116 10:00 ET · Mon 20261116 23:00 SGT`. The zones are part F's. A weekday alone
+  beside a time names no date and stays (`Fri 16:14 ET`), as do the time-only labels
+  (`fetched at 11:07:04 SGT`).
+- **A chart's axis would write `1116` (MMDD)** to stay narrow; no chart draws a date axis (each runs
+  on DTE), so none does. A chart's readout is a date alone, `20261109 · 39 DTE`.
+- **One writer per shape** (`frontend/src/shared/times.ts`): `writtenDate` and `weekdayDate`, which
+  replace `dateWords`, `format.shortDate`, `session.marketDayWords`'s and `servedWhen`'s own day
+  words, three `Intl` `3 Nov` formats (`burndown.ts`, `historyDays.ts`, `PaceExplained.tsx`),
+  `shortContract`'s six digits and the picture's `Intl` stamp. In the service, the domain's
+  `timefmt.displayDate` (and `displayTimeShort`, `Mon 20261109 22:59 +08` on `/health`),
+  `contract.compactStrikeDate` (`shortSpxCode`: `20261218 C7300`) and `contract.datedName` (a
+  vendor's name in an alarm and `/snapshot`, `SPXW 20261218 7300C`), cased and ported to the Python.
+- **The bot** writes the same: `/monitors`, `/quotes`, `/greeks`, `/vol` and `/combo` name a
+  contract `20261218 C7300`; `/holdings`' line `as of the close, Fri 20261113 16:14`; `/health`'s
+  sweep `Mon 20261109 22:59 +08`; an alarm, reminder and clear `SPXW 20261218 7300C: …`; an expiry
+  `expired (20261030)`; the manage-by notice `at the 20261113 close`. `/unwatch` and `/threshold`
+  take a contract with either year, `20261218 C7300` or `261218 C7300`.
+- **The service's own words with a date** are written so too: the vol split's reasons
+  (`20261007 has no vol reading for every leg`), and a close's refusal (`closed on 20261011, before it
+  was opened on 20261012`) — what part F showed as served.
+- **Not dates on screen, and unchanged**: a name the owner chose (`1231_8050`, `1218-6800`), moomoo's
+  codes (`US.SPXW261218P6800000`), every date the API serves (ISO), the stored data, the browser's
+  own date inputs and the formats they and the bot's commands accept.
+- **A contract is written whole in every bot table** (the owner, 2026-11-17): `fitCell` never cuts
+  `20261218 C7300` (`isContract`, both backends), and no rule's own name is cut narrower than the
+  widest contract beside it. `/monitors`' state is `on` where it was `armed`, under the heading `now`
+  where it was `state` (the heading was the column's widest cell). Measured on the owner's book its
+  widest line is 43, the heading's, and its rows 42; a rule with a wider threshold or figure
+  (`|value| ≥ 4000.00`) runs the row past `TABLE_WIDTH` rather than cut the contract. Every other
+  table fits: `/greeks` 41 with the bell, `/quotes` 35, `/vol` 31, `/combo` 25. `/unwatch` and
+  `/threshold` take the contract as `/monitors` writes it (door scenarios).
+- **Held by** `Dates.test.tsx` (each place above by name, the two arrangements' headings against each
+  other) and `WordsPage.test.tsx`'s two new checks over the whole page walk, desk and phone, in
+  session and out: no date in words (`31 Dec`, `Dec 31`) and no six-digit date — read over each text
+  node apart as well as the whole, since `261218` and `7150P` in two cells run together into one
+  number — each held to planted faults. The bot's tables by `isContract`'s tests, and a test that no
+  `/monitors` on the owner's book or in a door scenario cuts a contract. The bot's by its tests and the door scenarios; the domain's
+  by its golden cases.
