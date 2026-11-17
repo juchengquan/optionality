@@ -28,6 +28,7 @@ type TableName = Literal[
     "watch_samples",
     "monitor_positions",
     "reference_securities",
+    "sweep_interval",
     "schema_migrations",
 ]
 
@@ -54,6 +55,7 @@ COLUMNS: dict[TableName, tuple[str, ...]] = {
     ),
     "monitor_positions": ("monitor_id", "position_id"),
     "reference_securities": ("id", "code", "label", "source", "created_at"),
+    "sweep_interval": ("id", "seconds", "set_at"),
     # bookkeeping: COLUMNS covers every table the schema creates, and a table left out of it is a
     # table nothing checks (db/migrate.py)
     "schema_migrations": ("name", "applied_at"),
@@ -79,6 +81,7 @@ NULLABLE: dict[TableName, tuple[str, ...]] = {
     "watch_samples": ("legs_mid", "legs_iv", "legs_vega", "legs_delta", "spx", "contract_size"),
     "monitor_positions": (),
     "reference_securities": ("label",),
+    "sweep_interval": (),
     "schema_migrations": (),
 }
 
@@ -159,6 +162,19 @@ class ReferenceRow(TypedDict):
     created_at: str
 
 
+class SweepIntervalRow(TypedDict):
+    """The sweep's interval as the page set it (#442, ADR 0025): one row at most, and none means
+    `.env`'s MONITOR_INTERVAL_SECONDS. The one behaviour knob kept in the database."""
+
+    #: always 1: the table holds one row or none
+    id: int
+    #: what the page chose. Read through `is_sweep_preset`, never trusted: the route writes only a
+    #: preset, and anything else got in by hand (`sweep_interval.py`).
+    seconds: int
+    #: when it was chosen, UTC
+    set_at: str
+
+
 class SchemaMigrationRow(TypedDict):
     name: str
     applied_at: str
@@ -236,5 +252,6 @@ ROW_TYPES: dict[TableName, type] = {
     "watch_samples": WatchSampleRow,
     "monitor_positions": MonitorPositionRow,
     "reference_securities": ReferenceRow,
+    "sweep_interval": SweepIntervalRow,
     "schema_migrations": SchemaMigrationRow,
 }

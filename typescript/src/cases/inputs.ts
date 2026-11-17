@@ -858,6 +858,23 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "flappingVerdict", name: "a window said in hours and minutes",
       args: [flapState([10, 20]), flapWide, NOW] },
   ],
+  cadence: [
+    // The sweep's interval as the page sets it (#442, ADR 0025): the presets, and a knob counted in
+    // sweeps kept as the TIME it was sized for at the .env interval, rounded up to a whole sweep.
+    ...[5, 10, 15, 30, 60, 0, 4, 7, 20, 120, 5.5, -5, "5", null, true].map((x) => (
+      { fn: "isSweepPreset", name: `is ${JSON.stringify(x)} a preset`, args: [x] })),
+    { fn: "sweepsFor", name: "the count, at the interval it was sized at", args: [5, 15, 15] },
+    { fn: "sweepsFor", name: "five failures at 15s are fifteen at 5s", args: [5, 15, 5] },
+    { fn: "sweepsFor", name: "ten silent sweeps at 15s are thirty at 5s", args: [10, 15, 5] },
+    { fn: "sweepsFor", name: "7.5 sweeps are 8", args: [5, 15, 10] },
+    { fn: "sweepsFor", name: "1.25 sweeps are 2 at 60s, never 1", args: [5, 15, 60] },
+    { fn: "sweepsFor", name: "2.5 sweeps are 3", args: [10, 15, 60] },
+    { fn: "sweepsFor", name: "exactly one sweep is one", args: [4, 15, 60] },
+    { fn: "sweepsFor", name: "exactly two is two", args: [4, 15, 30] },
+    { fn: "sweepsFor", name: "a second past two is three", args: [4, 16, 30] },
+    { fn: "sweepsFor", name: "a count of 0 stays off", args: [0, 15, 5] },
+    { fn: "sweepsFor", name: "a count that was on stays at least one", args: [1, 1, 60] },
+  ],
   degraded: [
     // What the owner is told when the service cannot see the market, and how often. The reminder
     // exists because on 2026-11-08 OpenD exited, 646 sweeps failed over 2h42m, and the only
@@ -894,13 +911,23 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "degradedVerdict", name: "an unknown start omits the duration",
       args: [degradedState(646, null, degradedAgo(1801)), degradedPolicy_, "x", NOW] },
 
-    // and coming back
+    // told, then the threshold moved with the interval (#442's review): the reminder is the clock's
+    { fn: "degradedVerdict", name: "once told, it reminds by the clock below the threshold in force",
+      args: [degradedState(3, degradedAgo(2400), degradedAgo(1801)), degradedPolicy_, "x", NOW] },
+    { fn: "degradedVerdict", name: "and below it, untold, still says nothing",
+      args: [degradedState(3, degradedAgo(2400), null), degradedPolicy_, "x", NOW] },
+
+    // and coming back — said when the owner was TOLD, whatever the count (#442's review)
     { fn: "recoveredNotice", name: "says how long it was out",
-      args: [degradedState(646, degradedAgo(9720), degradedAgo(60)), degradedPolicy_, NOW] },
+      args: [degradedState(646, degradedAgo(9720), degradedAgo(60)), NOW] },
     { fn: "recoveredNotice", name: "stays quiet when nothing was ever announced",
-      args: [degradedState(4, degradedAgo(60), null), degradedPolicy_, NOW] },
+      args: [degradedState(4, degradedAgo(60), null), NOW] },
     { fn: "recoveredNotice", name: "an unknown start omits the duration",
-      args: [degradedState(646, null, degradedAgo(60)), degradedPolicy_, NOW] },
+      args: [degradedState(646, null, degradedAgo(60)), NOW] },
+    { fn: "recoveredNotice", name: "told, it recovers below the threshold in force",
+      args: [degradedState(3, degradedAgo(120), degradedAgo(60)), NOW] },
+    { fn: "recoveredNotice", name: "untold, it stays quiet above the threshold in force",
+      args: [degradedState(12, degradedAgo(60), null), NOW] },
   ],
   alarm: [
     // the four transitions, each with the sentence it sends

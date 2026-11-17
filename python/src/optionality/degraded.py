@@ -81,10 +81,16 @@ def degraded_verdict(state: DegradedState, policy: DegradedPolicy, reason: str, 
     ADR 0018 fixed in `verify_contracts` and this branch fixed once more in the sweeper's default.
     """
     failures = state.failures
-    if failures < policy.after_failures:
+
+    # Told first, the count after (#442's review): once the owner has heard about this outage its
+    # reminder is due by the clock alone. The threshold moves with the sweep's interval (ADR 0025), and
+    # an outage announced at five failures at 15s must not go quiet because the page then chose 5s,
+    # where the threshold is fifteen.
+    told = state.last_notice_at is not None
+    if not told and failures < policy.after_failures:
         return SILENT
 
-    if state.last_notice_at is not None:
+    if told:
         # due by the clock, not by the failure count, so the interval means the same thing whatever
         # MONITOR_INTERVAL_SECONDS is set to
         if not policy.repeat_seconds or _since(state.last_notice_at, now) < policy.repeat_seconds:
@@ -102,13 +108,18 @@ def degraded_verdict(state: DegradedState, policy: DegradedPolicy, reason: str, 
     return DegradedVerdict(notice=f"⚠️ monitoring degraded: {failures} consecutive sweep failures ({reason})")
 
 
-def recovered_notice(state: DegradedState, policy: DegradedPolicy, now: datetime) -> str | None:
+def recovered_notice(state: DegradedState, now: datetime) -> str | None:
     """What to say when it comes back, or None when the owner was never told it was broken.
 
     Announcing a recovery from a problem nobody heard about is noise, and noise is what teaches
     someone to stop reading the channel the alarms arrive on.
+
+    Decided by whether the owner was TOLD, not by the count (#442's review). The two agreed while the
+    threshold was fixed; since it moves with the sweep's interval (ADR 0025), a count read against the
+    threshold in force could leave an announced outage never recovered — told at five failures at 15s,
+    switched to 5s — or announce the recovery of one nobody heard about.
     """
-    if state.failures < policy.after_failures:
+    if state.last_notice_at is None:
         return None
     elapsed = _over(state.since, now)
     return f"✅ monitoring recovered{' after' + elapsed.replace(' over', '') if elapsed else ''}"

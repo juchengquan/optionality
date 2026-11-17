@@ -75,7 +75,10 @@ describe("/health", () => {
       // watchlist's pressure reading weighs fill against, and a second copy of 21 in the frontend
       // would drift from EXIT_MANAGE_BY_DTE the first time it moved
       manage_by_dte: 21,
-      sweep_seconds: 45, expired_retention_days: 3, display_tz: "Asia/Singapore",
+      expired_retention_days: 3, display_tz: "Asia/Singapore",
+      // the interval IN FORCE, and where it came from: `.env`'s here, nothing chosen (#442)
+      sweep_seconds: 45, sweep_source: "env", sweep_default_seconds: 45,
+      sweep_presets: [5, 10, 15, 30, 60], sweep_refused: null,
     });
   });
 
@@ -149,6 +152,8 @@ describe("the bearer token", () => {
       "GET /references",
       "PATCH /monitors/:id",
       "PATCH /positions/:id",
+      // the sweep's interval, the one knob kept in the database (#442, ADR 0025)
+      "PATCH /settings",
       "POST /monitors",
       "POST /monitors/:id/total-entry",
       "POST /positions",
@@ -183,7 +188,7 @@ describe("the bearer token", () => {
         return [`${r.method} ${path}`, { method: r.method, path }] as const;
       })).entries()];
     // the real number of doors, which the route list above enumerates one by one
-    expect(doors.length).toBe(22);
+    expect(doors.length).toBe(23);
     for (const [door, { method, path }] of doors) {
       expect((await h.call(path, { anonymous: true, method })).status, door).toBe(401);
     }

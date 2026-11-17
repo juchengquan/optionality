@@ -107,6 +107,62 @@ def hangs() -> asyncio.Future[None]:
     return asyncio.get_running_loop().create_future()
 
 
+class TestTheIntervalInForce:
+    """The interval the page chose (#442): asked at every tick, so a change is in force at the next sweep
+    with no restart."""
+
+    async def test_re_arms_each_tick_at_the_interval_asked_for_then(self, scheduler: Scheduler) -> None:
+        every = 0.5
+        sweeps = 0
+
+        async def sweep() -> None:
+            nonlocal sweeps
+            sweeps += 1
+
+        scheduler.start_sweep(lambda: every, sweep, PATIENT)
+        assert sweeps == 1  # at once, as ever
+        every = 0.02  # chosen between ticks
+        # the 0.5s tick, then 0.02s ones: ~36 sweeps re-armed, 3 if it kept the boot interval
+        await asyncio.sleep(1.2)
+        scheduler.stop_sweep()
+        assert sweeps >= 8, "still sweeping at the interval armed at boot"
+
+    async def test_slows_down_as_readily(self, scheduler: Scheduler) -> None:
+        every = 0.02
+        sweeps = 0
+
+        async def sweep() -> None:
+            nonlocal sweeps
+            sweeps += 1
+
+        scheduler.start_sweep(lambda: every, sweep, PATIENT)
+        await asyncio.sleep(0.1)
+        every = 10
+        before = sweeps
+        await asyncio.sleep(0.3)
+        scheduler.stop_sweep()
+        assert sweeps - before <= 1, "one tick at most was already armed at the old interval"
+
+    async def test_asks_the_watchdog_s_deadline_at_each_tick_since_it_follows_the_interval(
+        self, scheduler: Scheduler
+    ) -> None:
+        deadline = 3600.0
+        starts = 0
+
+        async def sweep() -> None:
+            nonlocal starts
+            starts += 1
+            await asyncio.Event().wait()  # hangs
+
+        scheduler.start_sweep(0.05, sweep, SweepWatchdog(stall_after_seconds=lambda: deadline, on_stall=counted))
+        await asyncio.sleep(0.2)
+        assert starts == 1
+        deadline = 0.1
+        await asyncio.sleep(0.3)
+        scheduler.stop_sweep()
+        assert starts >= 2
+
+
 class TestTheSweepWatchdog:
     """Coalescing is right, and on 2026-10-16 it was also how the alarm engine died: an OpenD request
     that never answered left `running` true, so every later tick returned at the first line. For

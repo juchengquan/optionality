@@ -13,6 +13,7 @@
  *  `testdata/golden/README.md` repeats this for whoever reads the files from Python.
  */
 import * as alarm from "../domain/alarm.ts";
+import * as cadence from "../domain/cadence.ts";
 import * as contract from "../domain/contract.ts";
 import * as degraded from "../domain/degraded.ts";
 import * as exit from "../domain/exit.ts";
@@ -37,7 +38,7 @@ import { INPUTS } from "./inputs.ts";
  *  off. Static imports rather than a dynamic walk, so the compiler still checks every name; the
  *  test is what makes the list complete. */
 export const MODULES: Record<string, Record<string, unknown>> = {
-  alarm, contract, degraded, exit, expiry, flapping, js, lifecycle, monitor, payoff, position,
+  alarm, cadence, contract, degraded, exit, expiry, flapping, js, lifecycle, monitor, payoff, position,
   quote, reference, vol, timefmt,
 };
 

@@ -75,6 +75,11 @@ async function endpoints() {
     totalEntry: await client.monitors[":id"]["total-entry"].$post({ param: id, json: { entry: 3.21 } }),
     monitorDeleted: await client.monitors[":id"].$delete({ param: id }),
 
+    // --- settings -----------------------------------------------------------------------
+    // the sweep's interval, set from the page's Settings or back to .env's (#442)
+    settingsPatched: await (await client.settings.$patch({ json: { sweep_seconds: 5 } })).json(),
+    settingsReset: await client.settings.$patch({ json: { sweep_seconds: null } }),
+
     // --- references ---------------------------------------------------------------------
     references: await (await client.references.$get()).json(),
     referenceCreated: await client.references.$post({
@@ -144,6 +149,13 @@ export type HcChecks = [
   Checked<Exactly<E["health"]["monitor"]["alarms"]["label"], string>>,
   Checked<Exactly<E["health"]["monitor"]["alarms"]["bad"], boolean>>,
   Checked<Exactly<E["health"]["settings"]["sweep_seconds"], number>>,
+  Checked<Exactly<E["health"]["settings"]["sweep_source"], "settings" | "env">>,
+  Checked<Exactly<E["health"]["settings"]["sweep_default_seconds"], number>>,
+  Checked<Exactly<E["health"]["settings"]["sweep_presets"], number[]>>,
+  Checked<Exactly<E["health"]["settings"]["sweep_refused"], string | null>>,
+  // PATCH /settings answers what /health's settings say of the sweep (#442)
+  Checked<Exactly<Ok<E["settingsPatched"]>["sweep_seconds"], number>>,
+  Checked<Exactly<Ok<E["settingsPatched"]>["sweep_source"], "settings" | "env">>,
 
   // the watchlist entry the dashboard's table is built from ----------------------------
   Checked<Known<Ok<E["quotes"]>>>,

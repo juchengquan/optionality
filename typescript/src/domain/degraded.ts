@@ -84,9 +84,13 @@ export function degradedVerdict(
   state: DegradedState, policy: DegradedPolicy, reason: string, now: Date,
 ): DegradedVerdict {
   const { failures } = state;
-  if (failures < policy.afterFailures) return SILENT;
 
+  // Told first, the count after (#442's review): once the owner has heard about this outage its
+  // reminder is due by the clock alone. The threshold moves with the sweep's interval (ADR 0025),
+  // and an outage announced at five failures at 15s must not go quiet because the page then chose
+  // 5s, where the threshold is fifteen.
   const told = state.lastNoticeAt !== null;
+  if (!told && failures < policy.afterFailures) return SILENT;
   if (told) {
     // a reminder is due by the clock, not by the failure count, so the interval means the same
     // thing whatever MONITOR_INTERVAL_SECONDS is set to
@@ -108,11 +112,14 @@ export function degradedVerdict(
  *
  *  Announcing a recovery from a problem nobody heard about is noise, and noise is what teaches
  *  someone to stop reading the channel the alarms arrive on.
+ *
+ *  Decided by whether the owner was TOLD, not by the count (#442's review). The two agreed while the
+ *  threshold was fixed; since it moves with the sweep's interval (ADR 0025), a count read against
+ *  the threshold in force could leave an announced outage never recovered — told at five failures
+ *  at 15s, switched to 5s — or announce the recovery of one nobody heard about.
  */
-export function recoveredNotice(
-  state: DegradedState, policy: DegradedPolicy, now: Date,
-): string | null {
-  if (state.failures < policy.afterFailures) return null;
+export function recoveredNotice(state: DegradedState, now: Date): string | null {
+  if (state.lastNoticeAt === null) return null;
   const elapsed = over(state.since, now);
   return `✅ monitoring recovered${elapsed ? ` after${elapsed.replace(" over", "")}` : ""}`;
 }

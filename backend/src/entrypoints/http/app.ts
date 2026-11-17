@@ -13,6 +13,7 @@ import { healthRoutes } from "./routes/health.ts";
 import { monitorRoutes, quoteRoutes } from "./routes/monitors.ts";
 import { positionRoutes } from "./routes/positions.ts";
 import { referenceRoutes } from "./routes/references.ts";
+import { settingsRoutes } from "./routes/settings.ts";
 import { spreadRoutes } from "./routes/spreads.ts";
 
 /** Paths reachable without a token. `/health` is open because whatever is checking on the service
@@ -93,6 +94,7 @@ export function createApp(deps: Deps) {
     .route("/monitors", monitorRoutes(deps))
     .route("/positions", positionRoutes(deps))
     .route("/references", referenceRoutes(deps))
+    .route("/settings", settingsRoutes(deps))
     .route("/spreads", spreadRoutes(deps));
   // after every other route, because the spec is generated from the routes already registered;
   // and not part of the chain, so `AppType` stays the API's alone

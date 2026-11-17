@@ -849,7 +849,7 @@ def test_refuses_an_insider_whose_seam_is_not_declared(tree: Path) -> None:
 # --- the seams this backend declares --------------------------------------------------------------
 
 #: What the TypeScript's door exports, as `engine/index.ts` writes it.
-ENGINE_DOOR = {"MonitorSweeper", "SweeperDeps", "Scheduler", "STALE_AFTER_SWEEPS"}
+ENGINE_DOOR = {"MonitorSweeper", "SweeperDeps", "Scheduler", "stale_after_seconds"}
 #: What the Python's door exports that the TypeScript's leaves to the compiler: `startSweep`'s
 #: watchdog is an object literal checked by its shape there, and a record built by name here. (A
 #: `NOT_YET` stood beside these while the sweeper was unported; the door is whole, so it went.)

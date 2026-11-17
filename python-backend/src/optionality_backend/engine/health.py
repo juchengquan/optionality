@@ -45,6 +45,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
+from optionality.cadence import sweeps_for
 from optionality.degraded import DegradedPolicy, DegradedState, degraded_verdict, recovered_notice
 from optionality.flapping import FlappingPolicy, FlappingState, flapping_verdict
 from optionality.js import js_string, math_round
@@ -52,6 +53,7 @@ from optionality.js import js_string, math_round
 from ..env import Settings
 from ..notify import Notifier
 from ..ports import AlarmState
+from ..sweep_interval import at_interval
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +64,20 @@ log = logging.getLogger(__name__)
 #: `scheduler.py`'s watchdog abandons at the same age, so the engine says stalled and then recovers
 #: itself rather than waiting for a restart.
 STALE_AFTER_SWEEPS = 4
+
+
+def stale_after_seconds(settings: Settings, every_seconds: float) -> float:
+    """How long a sweep may go unstarted, or unfinished, before the engine calls itself stalled and the
+    watchdog abandons it — at the interval in force (#442, ADR 0025).
+
+    Counted in sweeps, so it keeps its TIME as sized at `.env`'s interval like the knobs `at_interval`
+    scales — four sweeps at 15s is a minute, and at 5s it is still a minute, not 20s, which a sweep that
+    logs in to OpenD (8s) and then asks (10s) could take legitimately. With a FLOOR the other knobs do
+    not have: never fewer than `STALE_AFTER_SWEEPS` intervals, because what it measures is ticks that
+    passed with nothing starting, and at 60s one sweep's tolerance of the same minute would call every
+    ordinary tick late."""
+    sweeps = max(STALE_AFTER_SWEEPS, sweeps_for(STALE_AFTER_SWEEPS, settings.monitor_interval_seconds, every_seconds))
+    return sweeps * every_seconds
 
 
 def _degraded_policy(settings: Settings) -> DegradedPolicy:
@@ -83,6 +99,9 @@ class SweepHealthDeps:
     settings: Settings
     notify: Notifier
     now: Callable[[], datetime]
+    #: the sweep's interval in force, asked at every reading: the page may change it (#442), and every
+    #: count below is a TIME at that interval (`at_interval`, `stale_after_seconds`)
+    every_seconds: Callable[[], float]
 
 
 class SweepHealth:
@@ -162,7 +181,7 @@ class SweepHealth:
         if self.sweep_at is None:
             return None  # nothing has started: that is "starting", not stalled
         age = (self._deps.now() - self.sweep_at).total_seconds()
-        limit = self._deps.settings.monitor_interval_seconds * STALE_AFTER_SWEEPS
+        limit = stale_after_seconds(self._deps.settings, self._deps.every_seconds())
         return age if age > limit else None
 
     # --- the record a sweep leaves ---------------------------------------------------------------
@@ -180,7 +199,9 @@ class SweepHealth:
         """The default names no vendor on purpose: the Provider is whichever one this deployment is
         configured with, and this said "OpenD unreachable?" whatever was answering. Same bug ADR 0018
         fixed in `verify_contracts`, which was not the only place it had been written."""
-        settings, notify = self._deps.settings, self._deps.notify
+        notify = self._deps.notify
+        # the counted knobs at the interval in force, so each keeps its time (#442)
+        settings = at_interval(self._deps.settings, self._deps.every_seconds())
         now = self._deps.now()
         self.sweep_ok = False
         self.consecutive_failures_count += 1
@@ -227,14 +248,15 @@ class SweepHealth:
             await notify(flapping.notice)
 
     async def success(self) -> None:
-        settings, notify = self._deps.settings, self._deps.notify
+        notify = self._deps.notify
+        # said when the owner was told, whatever the count: the threshold moves with the interval
+        # (#442), and a count read against today's could contradict what was said yesterday
         notice = recovered_notice(
             DegradedState(
                 failures=self.consecutive_failures_count,
                 since=self.degraded_since,
                 last_notice_at=self.last_degraded_notice_at,
             ),
-            _degraded_policy(settings),
             self._deps.now(),
         )
         self.consecutive_failures_count = 0
