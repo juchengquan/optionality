@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 const widen = (to: number) => act(() => { width = to; window.dispatchEvent(new Event("resize")); });
-const addSheet = () => screen.findByRole("dialog", { name: "Add a spread or contract" });
+const addSheet = () => screen.findByRole("dialog", { name: "Add" });
 const value = (root: HTMLElement, label: string) => (within(root).getByLabelText(label) as HTMLInputElement).value;
 const drain = () => act(async () => { await new Promise((r) => setTimeout(r, 50)); });
 
@@ -84,7 +84,7 @@ describe("the Add form across a switch of arrangement", () => {
     const form = within(await addSheet()).getByRole("form", { name: "add a spread" });
     fireEvent.change(within(form).getByLabelText("spread 1, leg 1 strike"), { target: { value: "7150" } });
     fireEvent.click(within(form).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "add" }));
     const fresh = within(await addSheet()).getByRole("form", { name: "add a spread" });
     expect(value(fresh, "spread 1, leg 1 strike")).toBe("");
@@ -156,7 +156,7 @@ describe("Record as held over the phone's detail, across a switch to the desk", 
   it("gives the detail's entry back with Add's when Add is cancelled", async () => {
     await recordAsHeld();
     fireEvent.click(within(await addSheet()).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     // Add's own, then the detail's, which was beneath it
     await waitFor(() => expect(back).toHaveBeenCalledTimes(2));
     await drain();
@@ -170,7 +170,7 @@ describe("Record as held over the phone's detail, across a switch to the desk", 
     const sheet = await addSheet();
     expect(value(within(sheet).getByRole("form", { name: "add a spread" }), "spread 1 entry")).toBe("2.40");
     fireEvent.click(within(sheet).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     await waitFor(() => expect(back).toHaveBeenCalledTimes(2));
     await drain();
     expect(back).toHaveBeenCalledTimes(2);
@@ -180,7 +180,7 @@ describe("Record as held over the phone's detail, across a switch to the desk", 
     await recordAsHeld();
     const sheet = await addSheet();
     fireEvent.click(within(sheet).getAllByRole("button").find((b) => /^Record/.test(b.textContent ?? ""))!);
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull(), { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull(), { timeout: 3000 });
     await waitFor(() => expect(back).toHaveBeenCalledTimes(2));
     await drain();
     expect(back).toHaveBeenCalledTimes(2);
@@ -189,7 +189,7 @@ describe("Record as held over the phone's detail, across a switch to the desk", 
   it("gives the detail's entry back after a Back closes Add, and nothing more", async () => {
     await recordAsHeld();
     act(() => { window.history.back(); });
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     // the press, then the detail's entry taken back by the page
     await waitFor(() => expect(back).toHaveBeenCalledTimes(2));
     await drain();

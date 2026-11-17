@@ -47,7 +47,9 @@ function negative(path: string, body: unknown): unknown {
   return body;
 }
 
-export async function openPage(arrangement: "desk" | "phone", now: Date = MONDAY) {
+/** @param shape changes what the service answers, after the walk's own negatives: a test's world */
+export async function openPage(arrangement: "desk" | "phone", now: Date = MONDAY,
+  shape: (path: string, body: unknown) => unknown = (_, body) => body) {
   const s = closedBookService();
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now });
   document.cookie = `ui_arrangement=${arrangement};path=/`;
@@ -56,7 +58,7 @@ export async function openPage(arrangement: "desk" | "phone", now: Date = MONDAY
     const answer = await s.fetch(url, init);
     if ((init?.method ?? "GET") !== "GET" || !answer.ok) return answer;
     const body: unknown = await answer.json().catch(() => null);
-    return { ok: true, status: 200, json: () => Promise.resolve(negative(path, body)) } as Response;
+    return { ok: true, status: 200, json: () => Promise.resolve(shape(path, negative(path, body))) } as Response;
   }) as typeof fetch);
   render(<Next />);
   await waitFor(() => expect(document.querySelectorAll("[data-ref]").length).toBeGreaterThan(5));

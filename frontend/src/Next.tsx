@@ -454,7 +454,7 @@ export function Next() {
       {/* the phone's two sheets over the book, one component (#410): mounted in both arrangements
           and open only on the phone, for the reason the desk's below are */}
       <PhoneSheet open={adding && phone} onClose={closeAdding} up={up} entryStyle={entryStyle}
-                  title="Add a spread or contract" describedBy={addSaysId} ownBack={false}>
+                  title="Add" describedBy={addSaysId} ownBack={false}>
         {phone ? addForm : null}
       </PhoneSheet>
       <PhoneSheet open={settingsOpen && phone} onClose={closeSettings} up={up} entryStyle={entryStyle}
@@ -464,7 +464,7 @@ export function Next() {
       {/* Mounted in both arrangements and only OPEN on the desk; their Back entries are the page's,
           kept across a switch of arrangement (above) */}
       <DeskSheet id={panelId} open={adding && !phone} onClose={closeAdding} finalFocus={addReturn}
-                 up={up} entryStyle={entryStyle} title="Add a spread or contract" describedBy={addSaysId} className="data-[side=right]:sm:max-w-3xl">
+                 up={up} entryStyle={entryStyle} title="Add" describedBy={addSaysId} className="data-[side=right]:sm:max-w-3xl">
         {phone ? null : addForm}
       </DeskSheet>
       <DeskSheet open={settingsOpen && !phone} onClose={closeSettings} up={up} entryStyle={entryStyle}

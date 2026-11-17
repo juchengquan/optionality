@@ -103,8 +103,9 @@ describe("renaming a combo from its editor", () => {
   it("says, for a held spread, that its holding keeps the name it was recorded with", async () => {
     controls(HELD);
     const form = await openEditor("1218_C7300 value");
-    expect(form.textContent).toContain(
-      "Renames this rule only: the holding 1218_C7300 keeps its name — the service never renames a holding.");
+    expect(form.textContent).toContain("the holding 1218_C7300 keeps its name");
+    // said once: "renames this rule only" and "never renames a holding" said it twice more (2026-11-17)
+    expect(form.textContent).not.toMatch(/Renames this rule only|never renames/);
   });
 });
 
@@ -324,7 +325,7 @@ describe("through the page, against a service that writes", () => {
     onTestFinished(() => { vi.useRealTimers(); });
   };
   const value = (root: HTMLElement, label: string) => (within(root).getByLabelText(label) as HTMLInputElement).value;
-  const addSheet = () => screen.findByRole("dialog", { name: "Add a spread or contract" });
+  const addSheet = () => screen.findByRole("dialog", { name: "Add" });
 
   it("records a watched spread from the phone's sheet: the add form over it, prefilled, its watch rules replaced", async () => {
     NOW();
@@ -361,7 +362,7 @@ describe("through the page, against a service that writes", () => {
     });
     expect(await screen.findByText("added 1 holding and 2 rules, replacing 2 watch rules")).toBeTruthy();
     // both sheets gone — the watch rule the detail showed is gone with it — and the holding in the book
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     await waitFor(() => expect(detail.isConnected).toBe(false));
     await screen.findByRole("button", { name: "details of 1218_P7150" });
     expect(screen.queryByRole("button", { name: /record 1218_P7150 value as held/ })).toBeNull();
@@ -376,11 +377,11 @@ describe("through the page, against a service that writes", () => {
     fireEvent.click(within(detail).getByRole("button", { name: "record 1218_P7150 value as held" }));
     await addSheet();
     act(() => { window.history.back(); });
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     expect(screen.getByRole("dialog")).toBe(detail);
     fireEvent.click(within(detail).getByRole("button", { name: "record 1218_P7150 value as held" }));
     fireEvent.click(within(await addSheet()).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByRole("dialog")).toBe(detail);
     // and the next Back closes the detail, as it did before
@@ -432,7 +433,7 @@ describe("through the page, against a service that writes", () => {
     fireEvent.click(await screen.findByRole("button", { name: "1231_+C7700_-2C7750" }));
     const panel = screen.getByRole("complementary", { name: /^inspector/ });
     fireEvent.click(within(panel).getByRole("button", { name: "record 1231_+C7700_-2C7750 value as held" }));
-    const add = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+    const add = await screen.findByRole("dialog", { name: "Add" });
     const form = within(add).getByRole("form", { name: "add a spread" });
     await waitFor(() => expect(document.activeElement).toBe(within(form).getByLabelText("spread 1 entry")));
     expect(within(form).getByRole("button", { name: "spread 1, leg 1 side: long — flip" })).toBeTruthy();
@@ -462,7 +463,7 @@ describe("through the page, against a service that writes", () => {
     fireEvent.click(await screen.findByRole("button", { name: "1218_P7150" }));
     const panel = screen.getByRole("complementary", { name: /^inspector/ });
     fireEvent.click(within(panel).getByRole("button", { name: "record 1218_P7150 value as held" }));
-    const form = within(await screen.findByRole("dialog", { name: "Add a spread or contract" }))
+    const form = within(await screen.findByRole("dialog", { name: "Add" }))
       .getByRole("form", { name: "add a spread" });
     // bought, as the owner says by typing a debit: the stop is a fall in its value
     fireEvent.change(within(form).getByLabelText("spread 1 entry"), { target: { value: "-2.40" } });
@@ -565,15 +566,15 @@ describe("through the page, against a service that writes", () => {
     const record = within(screen.getByRole("complementary", { name: /^inspector/ }))
       .getByRole("button", { name: "record 1218_P7150 value as held" });
     fireEvent.click(record);
-    const add = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+    const add = await screen.findByRole("dialog", { name: "Add" });
     fireEvent.click(within(add).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     expect(document.activeElement).toBe(record);
     // and by Escape
     fireEvent.click(record);
-    const again = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+    const again = await screen.findByRole("dialog", { name: "Add" });
     fireEvent.keyDown(within(again).getByLabelText("spread 1 entry"), { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     expect(document.activeElement).toBe(record);
   });
 

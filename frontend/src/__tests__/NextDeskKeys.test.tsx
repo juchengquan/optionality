@@ -189,7 +189,7 @@ describe("when they do nothing", () => {
   });
 
   it("does nothing while the add sheet is open", () => {
-    render(<><DeskBook {...props()} /><div role="dialog" aria-label="Add a spread or contract" /></>);
+    render(<><DeskBook {...props()} /><div role="dialog" aria-label="Add" /></>);
     expect(press("j", document.body)).toBe(true);
     expect(cursor()).toBeNull();
   });

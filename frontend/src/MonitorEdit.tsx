@@ -10,9 +10,10 @@
  *    opens the add form as "I hold it", prefilled from the rule, and its save through `POST /spreads`
  *    replaces the watch rule. It replaced #336's "I hold this", a form of its own in these controls.
  *
- *  - The draft is said in words as it is typed; the figure and its distance beside it stay the
- *    SERVED row's, said as "as saved", because only the service measures a distance (ADR 0005).
- *    Saved, the page reloads and the sentence beside the rule is the service's new one.
+ *  - The draft is said in words as it is typed. The figure and its distance stay the SERVED row's,
+ *    on the rule's own line just above the form, because only the service measures a distance (ADR
+ *    0005): the form no longer repeats that line under "as saved" (2026-11-17). Saved, the page
+ *    reloads and the sentence beside the rule is the service's new one.
  *  - A refusal is said beside the field it is about, inside the form — so inside any sheet the form
  *    is in. The old dashboard's toast was drawn underneath its form, and a refused change looked
  *    like nothing had happened (ADR 0023).
@@ -30,12 +31,12 @@ import type { Entry, Holding, Monitor } from "./shared/api";
 import { Button } from "@/components/ui/button";
 import { DASH } from "./shared/format";
 import {
-  deletesOn, draftOf, draftSentence, draftWords, fieldsFor, patchOf, QUARANTINE_WHY, recordOffered, renameNote,
+  deletesOn, draftOf, draftSentence, draftWords, fieldsFor, patchOf, QUARANTINE_WHY, quarantineFound, recordOffered, renameNote,
   ruleLabel, splitCounts, splitOffered, splitPreview, spotOf, stateOf, totalOf,
   type Draft, type PatchBody, type Rule, type Spot,
 } from "./edit";
 import { fieldWords } from "./needs";
-import { RuleWords, ShortWords } from "./RuleWords";
+import { ShortWords } from "./RuleWords";
 import { DirectionPair } from "./DirectionPair";
 import { dateWords } from "./shared/times";
 import "./monitor-edit.css";
@@ -150,7 +151,8 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
             ? "after its retention window" : `on ${dateWords(deletesOn(rule.strike_date, actions.retentionDays))}`}`}
         </p>
       ) : null}
-      {why !== null && doing !== "enabling" ? <p className="nx-mon-note">{`Switched off by the service: ${why}.`}</p> : null}
+      {/* what the service found, under the rule's own line, which already ends in the clause */}
+      {why !== null && doing !== "enabling" ? <p className="nx-mon-note">{`${quarantineFound(rule)}.`}</p> : null}
 
       <div className="nx-mon-actions">
         <button ref={editButton} type="button" className="nx-mon-button" aria-label={`edit ${label}`}
@@ -209,7 +211,7 @@ function Controls({ actions, rule, served }: { actions: MonitorActions; rule: Ru
         </Ask>
       ) : null}
       {doing === "editing" ? (
-        <EditForm rule={rule} served={served} label={label} draft={draft} busy={busy} error={error}
+        <EditForm rule={rule} label={label} draft={draft} busy={busy} error={error}
                   onDraft={(d) => { setDraft(d); setError(null); }} onSave={save} onCancel={close} />
       ) : null}
       {doing === "splitting" && book && actions.totalEntry ? (
@@ -276,8 +278,8 @@ function Ask({ label, yes, no, busy, destructive, onYes, onNo, children }: {
   );
 }
 
-function EditForm({ rule, served, label, draft, busy, error, onDraft, onSave, onCancel }: {
-  rule: Rule; served: Entry | null; label: string; draft: Draft; busy: boolean;
+function EditForm({ rule, label, draft, busy, error, onDraft, onSave, onCancel }: {
+  rule: Rule; label: string; draft: Draft; busy: boolean;
   error: { text: string; at: Spot } | null;
   onDraft: (d: Draft) => void; onSave: (e: React.FormEvent) => void; onCancel: () => void;
 }) {
@@ -300,7 +302,6 @@ function EditForm({ rule, served, label, draft, busy, error, onDraft, onSave, on
       <p className="nx-mon-draft" data-testid="draft" aria-live="polite">
         <ShortWords short={draftWords(rule, draft)} full={draftSentence(rule, draft)} />
       </p>
-      {served ? <p className="nx-meta" data-testid="served">{"as saved: "}<RuleWords entry={served} /></p> : null}
       <div className="nx-mon-fields">
         {rule.combo ? (
           <div className="nx-mon-field nx-mon-name">

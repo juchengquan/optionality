@@ -58,10 +58,14 @@ export function StrikeStrip({ strip, compact = false }: { strip: Strip; compact?
         <span className="nxs-spx-words" data-stale={strip.spx !== null && strip.reason ? "" : undefined}>
           {spxStripWords(strip)}
         </span>
+        {/* each short strike's Δ is drawn on the scale, over its strike: said here to a reader only,
+            to whom the scale is decoration (2026-11-17) — and with no SPX to measure from, the line
+            has nothing else to say, so all of it is the reader's */}
         {strip.shorts.map((k) => (
-          <span key={k.code}>
+          <span key={k.code} className={strip.spx === null ? "sr-only" : undefined} data-short-words="">
             <Leg leg={{ short: true, option_type: k.option_type, strike: k.strike }} form="name" />
-            {` ${deltaWords(k.delta)}${strip.spx === null ? "" : ` · ${distanceWords(k)}`}`}
+            <span className="sr-only">{` ${deltaWords(k.delta)}${strip.spx === null ? "" : " ·"}`}</span>
+            {strip.spx === null ? "" : ` ${distanceWords(k)}`}
           </span>
         ))}
       </figcaption>

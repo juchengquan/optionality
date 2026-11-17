@@ -29,7 +29,7 @@ for (const scheme of ["light", "dark"] as const) {
       render(<Next />);
       await settle();
       await userEvent.click(screen.getByRole("button", { name: "add" }));
-      const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+      const sheet = await screen.findByRole("dialog", { name: "Add" });
       await animationsDone();
       const edge = document.documentElement.clientWidth;
       const past = () => [...sheet.querySelectorAll<HTMLElement>("button")]

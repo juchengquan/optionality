@@ -61,8 +61,8 @@ describe.each(arrangements)("on the %s, a reload landing mid-edit", (arrangement
 
     savedElsewhere(svc);
     refresh();
-    // the reload has landed: the form says what the service now holds
-    await waitFor(() => expect(within(form).getByTestId("served").textContent).toContain("0.5"));
+    // the reload has landed: the rule's own line, above the form, says what the service now holds
+    await waitFor(() => expect(within(home).getByText(/^\|Δ\| ≥ 0\.50 — now/)).toBeTruthy());
 
     const now = within(home).getByRole("form", { name: "editing 261218 7150P Δ" });
     expect((within(now).getByLabelText("threshold") as HTMLInputElement).value, "the typed value survived")

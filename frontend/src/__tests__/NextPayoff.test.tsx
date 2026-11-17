@@ -82,12 +82,16 @@ describe("a holding's payoff, in the desk's inspector", () => {
     expect(marker?.textContent).toBe("SPX 6900.50");
   });
 
-  it("draws no marker without a derived price, and says why in its place", async () => {
+  it("draws no marker without a derived price, and says why once, on the strike strip beside it", async () => {
     const reason = "the Provider gives no option premium to derive it from";
     const blind = HOLDINGS.map((h) => ({ ...h, spx: null, spx_reason: reason }) as Holding);
-    const payoff = await payoffOf(await inspect("h-ic", "1231_IC", { holdings: blind }));
+    const inspector = await inspect("h-ic", "1231_IC", { holdings: blind });
+    const payoff = await payoffOf(inspector);
     expect(payoff.querySelector("[data-marker='spx']")).toBeNull();
-    expect(within(payoff).getByText(`SPX — ${reason}`)).toBeTruthy();
+    // the strip above the chart says it; the payoff saying it again was the sentence twice (2026-11-17)
+    expect(payoff.textContent).not.toContain(reason);
+    expect(within(inspector).getAllByText(`SPX — ${reason}`)).toHaveLength(1);
+    expect(within(inspector.querySelector("[aria-label='strike strip']")!).getByText(`SPX — ${reason}`)).toBeTruthy();
   });
 
   it("hides every $ figure under privacy, and keeps the points per contract, the breakevens and SPX", async () => {
@@ -303,7 +307,7 @@ describe("the crosshair readout (#396)", () => {
     expect(line.getAttribute("aria-live")).toBe("polite");
     return line.textContent;
   };
-  const HINT = "point at a price, or use the arrow keys, for the P&L at expiry there";
+  const HINT = "point at a price, or use the arrow keys, for the P&L there";
   const tip = (payoff: HTMLElement) => payoff.querySelector("[data-tip]")?.textContent ?? null;
   /** The x of the curve's zero crossing nearest `near`, from the path drawn: where the curve itself
    *  meets the zero line, whatever the labels say. */

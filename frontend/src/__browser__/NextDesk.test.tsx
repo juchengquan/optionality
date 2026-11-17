@@ -525,11 +525,12 @@ describe("columns are dropped as measured (ADR 0008)", () => {
     expect(misfits()).toEqual([]);
   });
 
-  it("moves the fill bar into the name cell when the rule's column has dropped", async () => {
+  it("draws no fill bar anywhere when the rule's column has dropped: the inspector says the rule (2026-11-17)", async () => {
     document.cookie = "ui_cols_combo=alarm;path=/";
     await show(1280);
     expect(shown()).not.toContain("alarm");
-    expect(rowOf("w-dec18").querySelector('[data-col="name"] [data-fill]')).toBeTruthy();
+    // the bar once fell back into the name cell; it is gone, the rule's arrowed distance saying how close
+    expect(document.querySelectorAll("[data-fill], .nxd-fill, [role=meter]")).toHaveLength(0);
   });
 });
 

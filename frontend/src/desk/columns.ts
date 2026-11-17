@@ -326,7 +326,7 @@ export const PINNED = "name";
 /** The order columns SURVIVE in, which is not the order they are drawn in. The widest goes last
  *  (ADR 0008): fitting stops at the first column that does not fit, so a wide column early on
  *  would starve every column behind it. The rule's sentence is the widest, and when it drops the
- *  fill bar moves into the name cell and the inspector still says it whole. The pace gap survives
+ *  inspector still says it whole. The pace gap survives
  *  as long as the value does, being drawn in it (2026-11-16). */
 export const PRIORITY: readonly string[] = [
   "value", "pnl", "delta", "dte", "manage", "strip", "captured", "legs", "alarm",
@@ -336,7 +336,7 @@ export const PRIORITY: readonly string[] = [
 const PAD_CH = 1.5;
 
 /** How many characters a column needs, from the longest thing it will draw, its header included.
- *  The name cell also carries its chip and, nested, an indent; the rule cell its fill bar. */
+ *  The name cell also carries its chip and, nested, an indent. */
 export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: boolean, session: boolean): number {
   let longest = column.label.length;
   for (const r of rows) {
@@ -347,7 +347,6 @@ export function charsOf(column: DeskColumn, rows: readonly DeskRow[], privacy: b
       if (words !== null) n += words.length + 4;
       if (r.kind === "rule" && r.nested) n += 2;
     }
-    if (column.key === "alarm" && n > 0) n += 6; // the fill bar beside the sentence
     if (column.key === "strip" && n > 0) n += STRIP_CH + 1; // the scale beside the words
     longest = Math.max(longest, n);
   }

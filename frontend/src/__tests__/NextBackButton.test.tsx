@@ -41,7 +41,7 @@ const SHEETS = [
   {
     name: "the phone's Add sheet", arrangement: "phone",
     open: () => fireEvent.click(screen.getByRole("button", { name: "add" })),
-    find: () => screen.queryByRole("dialog", { name: "Add a spread or contract" }),
+    find: () => screen.queryByRole("dialog", { name: "Add" }),
   },
   {
     // a sheet like Add's since #410, where it was a screen in the book's place
@@ -53,7 +53,7 @@ const SHEETS = [
     // a side sheet like Settings', where it was a panel above the table
     name: "the desk's Add sheet", arrangement: "desk",
     open: () => fireEvent.click(screen.getByRole("button", { name: "add" })),
-    find: () => screen.queryByRole("dialog", { name: "Add a spread or contract" }),
+    find: () => screen.queryByRole("dialog", { name: "Add" }),
   },
   {
     name: "the desk's Settings", arrangement: "desk",

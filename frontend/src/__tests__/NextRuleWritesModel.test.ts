@@ -62,7 +62,7 @@ describe("renaming a combo", () => {
 
   it("says that a holding SHARING the name keeps it: the service renames the Monitor alone", () => {
     expect(renameNote(ruleOfEntry(HELD)))
-      .toBe("Renames this rule only: the holding 1218_C7300 keeps its name — the service never renames a holding.");
+      .toBe("the holding 1218_C7300 keeps its name");
     // linked to holdings named otherwise: nothing to say about their names
     expect(renameNote(ruleOfEntry(CONDOR))).toBeNull();
     expect(renameNote(ruleOfEntry(SPREAD))).toBeNull();

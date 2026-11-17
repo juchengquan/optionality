@@ -231,9 +231,9 @@ function EditForm({ id, holding: served, watching, privacy, now, monitors, onCan
                       followers={followersOf(holding, monitors)}
                       onChange={(qty) => change({ qty })} />
       <p className="nx-meta">
-        {"The name, the contracts and their sides stay as recorded — the service does not edit them. "}
-        {"A wrong name cannot be changed, and the daily samples are worth more than the name: keep it. "}
-        {"A quantity typed wrong is corrected above. "}
+        {/* the quantities are the fields above it, so the note says nothing of them (2026-11-17) */}
+        {"The name, the contracts and their sides stay as recorded. "}
+        {"Keep a wrong name: the daily samples are worth more than it. "}
         {"A wrong strike or side is a different holding: delete it and add it again — which deletes its daily samples "}
         {"for good"}
         {watching > 0
@@ -498,7 +498,8 @@ export function DeleteAsk({ id, holding, watching, onCancel, onCloseInstead, onD
       </p>}
       {damaged ? null : <p>
         {onCloseInstead
-          ? "If this was a real trade, close it instead: closing keeps all of it."
+          // "close it instead" is the button's to say (2026-11-17)
+          ? "If this was a real trade, closing keeps all of it."
           : "If this was a real trade, keep it: its record is what the closed trades show, and a mistyped close is corrected above."}
       </p>}
       {error ? <div className="nx-hold-error" role="alert"><ErrorWords raw={error} /></div> : null}

@@ -76,18 +76,6 @@
 .nxp-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 0.125rem 0.5rem; }
 .nxp-rule-name { font-weight: 600; font-size: 0.8125rem; }
 
-/* progress toward the threshold: how near a candidate is to its entry */
-.nxp-progress {
-  height: 6px; margin: 0.5rem 0 0.375rem; border-radius: 999px;
-  background: var(--muted); overflow: hidden;
-}
-.nxp-progress > span { display: block; height: 100%; border-radius: inherit; background: var(--muted-foreground); }
-/* the bar carries its rule's state itself, so it is coloured the same on a card and in the sheet,
-   which is drawn in a portal where no card is its ancestor */
-.nxp-progress[data-state="entry"] > span { background: var(--entry); }
-:is(.nx, .nx-tokens)[data-entry="risk"] .nxp-progress[data-state="entry"] > span,
-.nxp-progress[data-state="alarm"] > span { background: var(--alarm); }
-.nxp-progress[data-state="fault"] > span { background: var(--fault); }
 
 /* a condor's two cards, together, under their summed P&L */
 .nxp-condor {
@@ -112,7 +100,6 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 .nxp-sheet-body { padding: 0 1rem 1.25rem; min-width: 0; overflow-wrap: anywhere; }
-.nxp-sheet .nxp-progress { margin-top: 0.75rem; }
 
 /* a holding kept through a failed valuation (kept.ts): said at the top of the sheet, over its
    figures, which are dimmed so they are not read as current */

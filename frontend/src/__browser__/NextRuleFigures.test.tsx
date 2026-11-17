@@ -100,7 +100,16 @@ describe("a rule's figures fit the inspector, from a 900px desk to a 2560px one"
           const figures = within(insp).getByRole("group", { name: "figures" });
           // worth nothing unless the list is the long one, and each dash carries its words
           expect(figures.querySelectorAll("[data-figure]").length).toBe(id === "w-lone" ? 10 : 5);
-          expect(figures.querySelectorAll(".nx-figure-why").length).toBe(served ? 0 : id === "w-lone" ? 10 : 4);
+          // every dash has its reason: beside it where it is that dash's alone, and once, under the list,
+          // naming its figures, where several share it (2026-11-17)
+          const shared = [...figures.parentElement!.querySelectorAll<HTMLElement>("[data-figures-why]")];
+          const named = shared.reduce((n, p) => n + p.textContent!.split(":")[0]!.split(" ").length, 0);
+          expect(figures.querySelectorAll(".nx-figure-why").length + named).toBe(served ? 0 : id === "w-lone" ? 10 : 4);
+          for (const p of shared) {
+            const r = p.getBoundingClientRect(), box = figures.parentElement!.getBoundingClientRect();
+            expect(r.right, p.textContent!).toBeLessThanOrEqual(box.right + 0.5);
+            expect(p.scrollWidth, p.textContent!).toBeLessThanOrEqual(p.clientWidth + 1);
+          }
           expect(misfits(insp)).toEqual([]);
           expect(insp.scrollWidth).toBeLessThanOrEqual(insp.clientWidth);
           expect(insp.getBoundingClientRect().right).toBeLessThanOrEqual(document.documentElement.clientWidth);

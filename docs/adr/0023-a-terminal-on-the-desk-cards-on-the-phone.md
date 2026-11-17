@@ -32,7 +32,9 @@ per section (its section). **Amended 2026-11-16: one vocabulary, second half** �
 zone and every date in prose or compact, "rule" for "Monitor", sentence case and one order of
 actions, one set of words for why a rule is off, ONE section order for the inspector and the sheet,
 the phone's cards saying what the desk's rows say, the payoff's maximums said once, and errors in
-plain words (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
+plain words. **Amended 2026-11-17: each thing said once** — a description that repeated its
+title, or a sentence said twice on one screen, removed or shortened, and the fill bar removed in
+favour of the rule's arrowed distance (last section). Decided by the owner on 2026-11-09 and 2026-11-10, in the design session that
 opened the redesign. It started from five research reports (commercial platforms, open source,
 design patterns, an audit of the dashboard as it stood, and a map of what the backend can supply),
 went through a grilling, and ended with a three-way prototype the owner tried on both screens:
@@ -236,7 +238,8 @@ The old page did five things the new one does not, and the owner decided on 2026
 each was dropped rather than ported:
 
 - **The near-firing highlight** ("flag on" a reading, "flag above" a band): the fill bar already
-  shows how close a rule is to firing. Its two preferences (`ui_signal`, `ui_band`) are no longer
+  shows how close a rule is to firing. *(Superseded 2026-11-17: the fill bar is gone; the rule's
+  arrowed distance, `↑1.31` (#388), is what shows how close — see "each thing said once".)* Its two preferences (`ui_signal`, `ui_band`) are no longer
   read.
 - **Grouping by calls and puts, or not at all:** the page groups by expiry only (`ui_group` is no
   longer read).
@@ -992,3 +995,64 @@ zone mark.
   holds the reason words across five surfaces, `NextDetailOrder` the section order, `NextPhone` the
   cards against the desk's rows, `PlainErrors` the errors, `Times` the clocks.
 
+
+## Amended 2026-11-17: each thing said once
+
+The owner, from the live page: "we can still remove some descriptive text more, currently there are
+still duplicate about them and their titles". An audit of the live page at desk width and on the
+iPhone 13 profile, and of the source for what the live book could not show, found these; each is
+said once now, on both arrangements, and the fact only the repeat carried is kept:
+
+- **SPX's reason, once in a detail**: the strike strip says `SPX 7416.64 (index not computed
+  overnight — the last close's level)`; the payoff under it no longer says the same line again
+  (#416's line stays where no strip is drawn — the add form's preview, a holding with no short leg).
+- **A short strike's Δ, once on its strip**: drawn over its strike on the scale; the line under the
+  scale says it to a reader only, to whom the scale is decoration (`C7300 399.50 pts · 1.00σ away`
+  drawn, `C7300 Δ 0.330 · 399.50 pts · 1.00σ away` heard).
+- **The rule editor says no "as saved:" line**: it repeated the rule's own line, drawn just above
+  the form, which keeps the served figure and distance (ADR 0005). The draft line stays.
+- **A rename's note**: `the holding 1218_C7300 keeps its name`, where "Renames this rule only" and
+  "the service never renames a holding" said it twice more.
+- **The phone draws no rule's name under its own card's or sheet's heading** (`1231_8050` under
+  1231_8050); a leg rule's name, and a rule over more than the card, keep theirs. The desk's
+  inspector never drew one.
+- **A reason several dashes share is said once**, under the figures, naming them: `Δ Γ Θ ν: a leg has
+  no figure, and no sum is taken from part of them`, where it sat beside each of four dashes. A reason
+  one dash alone has stays beside it (#332).
+- **A quarantined rule's note says what the service found** (`US.SPXW261211C8300000: its strike or its
+  expiry is not one it lists.`), under the line or card that already ends in the clause (part I); the
+  question before switching it back on still says the whole of it, clause first.
+- **The Add sheet is titled `Add`**: its first control says "a spread / one contract". The palette's
+  action keeps "Add a spread or contract", where it stands alone.
+- **The add forms' payoff notes drop "per contract"** (`at 2.40 credit`, `no Entry given, so drawn at
+  0`): every figure under the chart says `pts per contract` (part L). The payoff's hint is `point at a
+  price, or use the arrow keys, for the P&L there` under its heading `Payoff at expiry`.
+- **Settings**: privacy's option is `hidden`, and its note says what stays — `%, Δ, DTE and figures in
+  points per contract`; a Reference's source note says a vendor it cannot reach "is refused here too,
+  with that reason", where "rather than becoming a permanent dash" was the code note's sentence again.
+- **A holding's edit note**: `The name, the contracts and their sides stay as recorded. Keep a wrong
+  name: the daily samples are worth more than it.` — "the service does not edit them", "a wrong name
+  cannot be changed" and "a quantity typed wrong is corrected above" (the fields just above) went.
+  **Its delete question** says `If this was a real trade, closing keeps all of it.`, beside the button
+  `close it instead`.
+
+- **No bar toward a threshold, anywhere** (the owner, 2026-11-17): the desk's rule cell and inspector
+  rule lines lose their fill bar, the phone's watch cards the bar under value and Δ, and every rule
+  line on a card or in a sheet the bar #420's K gave it. Each repeated the rule line's arrowed
+  distance (`↑1.31`, `▲ past 0.20`, #388), which stays, as do the chips and the row's colour by its
+  state. Gone with it: `DeskBook`'s `Fill`, `Cards`' `Progress`, `.nxd-fill` and `.nxp-progress`, and
+  the rule column's width allowance for the bar (`charsOf`). The service still serves `fill` (ADR
+  0010's `buildEntries`) and the domain's `thresholdFill` and its golden cases stay — shared with the
+  backend and the bot; the page simply no longer draws it. #338's reason for dropping the
+  near-firing highlight now rests on the arrowed distance.
+
+Kept, for the owner to decide: the desk's DTE column under a group heading that says the DTE (#420
+K took it off the phone's cards only); a held rule's row named as its holding on the desk's table;
+SPX's reason on every strip of the phone's book (one per card, by #416); the palette's `Actions` /
+`Go to` tag on each result; `watches` / `compare` in a rule's figures (part J); an expired rule's
+`expired` label beside its note `expired Fri 6 Nov — …`.
+
+Held by `SaidOnce.test.tsx`: over the whole page walk, desk and phone, in session and out, no
+sentence of visible prose drawn twice in one place and no bar toward a threshold; and each removal
+above by name, with the fact it
+kept, each failing when its repeat is put back.

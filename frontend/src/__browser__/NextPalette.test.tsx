@@ -65,7 +65,7 @@ describe("every action, from the keyboard", () => {
   it("adds a spread", async () => {
     await openDesk();
     await run("add a spread");
-    const panel = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+    const panel = await screen.findByRole("dialog", { name: "Add" });
     await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true));
   });
 

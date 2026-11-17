@@ -158,7 +158,7 @@ describe("Record as held from a watch rule's sheet (#408)", () => {
       expect(tooSmall(button.parentElement!)).toEqual([]);
       expect(visible(button)).toBe(true);
       await userEvent.click(button);
-      const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+      const sheet = await screen.findByRole("dialog", { name: "Add" });
       await animationsDone();
       const form = within(sheet).getByRole("form", { name: kind });
       expect(within(form).getByRole("button", { name: "I hold it" }).getAttribute("aria-pressed")).toBe("true");
@@ -190,7 +190,7 @@ describe("Record as held from a watch rule's sheet (#408)", () => {
     const detail = await screen.findByRole("dialog");
     await animationsDone();
     await userEvent.click(within(detail).getByRole("button", { name: "record 1218_P7150 value as held" }));
-    const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+    const sheet = await screen.findByRole("dialog", { name: "Add" });
     await animationsDone();
     const form = within(sheet).getByRole("form", { name: "add a spread" });
     for (const said of [

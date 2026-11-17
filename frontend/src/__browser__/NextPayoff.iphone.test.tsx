@@ -88,7 +88,7 @@ describe("in the Add sheet's preview", () => {
     render(<Next />);
     await settle();
     await userEvent.click(screen.getByRole("button", { name: "add" }));
-    const sheet = await screen.findByRole("dialog", { name: "Add a spread or contract" });
+    const sheet = await screen.findByRole("dialog", { name: "Add" });
     await animationsDone();
     await userEvent.fill(screen.getByLabelText("expiry"), "2026-12-18");
     for (let i = 2; i < 6; i++) await userEvent.click(within(sheet).getByRole("button", { name: "spread 1: add a leg" }));

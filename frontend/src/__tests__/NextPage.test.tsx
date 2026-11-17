@@ -935,7 +935,7 @@ describe("one page at every hour (#375)", () => {
       await waitFor(() => expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull());
       // and Add the sheet it was from the tab bar
       fireEvent.click(within(head).getByRole("button", { name: "add" }));
-      expect((await screen.findByRole("dialog", { name: "Add a spread or contract" })).getAttribute("data-side"))
+      expect((await screen.findByRole("dialog", { name: "Add" })).getAttribute("data-side"))
         .toBe("bottom");
       cleanup();
       vi.useRealTimers();

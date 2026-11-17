@@ -380,10 +380,7 @@ function stateOf(row: DeskRow): string {
 
 function Row({ row, ctx, bracket }: { row: DeskRow; ctx: Ctx; bracket?: "top" | "through" | "bottom" }) {
   const id = rowId(row);
-  const shown = new Set(ctx.columns.map((c) => c.key));
   const isRule = row.kind === "rule";
-  // the fill bar sits beside the sentence, and falls back to the name when the sentence drops
-  const barIn = shown.has("alarm") ? "alarm" : "name";
   return (
     <div className="nxd-row nxd-grid" data-ref={id} data-kind={row.kind} data-state={stateOf(row)}
          data-nested={isRule && row.nested ? "" : undefined}
@@ -394,7 +391,6 @@ function Row({ row, ctx, bracket }: { row: DeskRow; ctx: Ctx; bracket?: "top" | 
       {ctx.columns.map((c) => (
         <span key={c.key} data-col={c.key} data-align={c.align}>
           {c.key === "name" ? <NameCell row={row} ctx={ctx} /> : <Cell row={row} column={c} privacy={ctx.privacy} />}
-          {barIn === c.key && row.kind === "rule" ? <Fill entry={row.entry} /> : null}
         </span>
       ))}
     </div>
@@ -483,18 +479,6 @@ function Cell({ row, column, privacy }: { row: DeskRow; column: DeskColumn; priv
  *  close than it should by now — and the table and the inspector draw it alike. */
 function outcomeOf(row: DeskRow, column: DeskColumn): "loss" | "gain" | undefined {
   return column.key === "pace_gap" && row.kind === "holding" ? paceOutcome(row.holding.schedule?.pace_gap) : undefined;
-}
-
-/** How far the watched figure has come toward its threshold, as the service measured it. */
-function Fill({ entry }: { entry: Entry }) {
-  if (entry.fill === null || entry.error) return null;
-  const fill = Math.max(0, Math.min(100, entry.fill));
-  return (
-    <span className="nxd-fill" data-fill={String(entry.fill)} role="meter" aria-valuenow={fill}
-          aria-valuemin={0} aria-valuemax={100} aria-label="toward its threshold">
-      <i style={{ width: `${fill}%` }} />
-    </span>
-  );
 }
 
 // ---- the inspector
@@ -609,7 +593,6 @@ function RuleItem({ entry, own = false }: {
     <li className="nxd-monitor" data-state={a ?? "calm"}>
       {a && !own ? <AttentionChip kind={a} /> : null}
       <span><ShortWords short={ALARM_COLUMN.text(row, false)} full={ALARM_COLUMN.words!(row, false)} /></span>
-      <Fill entry={entry} />
       <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
     </li>
   );

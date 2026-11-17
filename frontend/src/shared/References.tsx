@@ -118,7 +118,7 @@ export function References({
             Which vendor answers for this code. Named outright and not "the Provider", so the strip
             can say where the figure came from — the only reason a Reference is allowed a source
             the rest of the service does not use. A vendor this build cannot reach is refused here
-            with that reason, rather than becoming a permanent dash.
+            too, with that reason.
           </FieldDescription>
           <FieldDescription>
             Only some vendors say how fresh a figure is. <strong>ibkr</strong> reports which data

@@ -95,9 +95,12 @@ for (const arrangement of ["desk", "phone"] as const) {
       fireEvent.click(within(d).getByRole("button", { name: "edit" }));
       const form = within(d).getByRole("form", { name: "edit 1231_IC" });
       expect(within(form).queryByLabelText(/strike|name/)).toBeNull();
-      expect(form.textContent).toMatch(/the service does not edit them/);
+      expect(form.textContent).toMatch(/The name, the contracts and their sides stay as recorded\./);
       // a wrong name is not worth the samples; delete-and-add-again is for wrong LEGS, and says the cost
-      expect(form.textContent).toMatch(/A wrong name cannot be changed, and the daily samples are worth more than the name/);
+      expect(form.textContent).toMatch(/Keep a wrong name: the daily samples are worth more than it\./);
+      // said once: "the service does not edit them" repeated "stay as recorded", and the quantities
+      // are the fields just above the note (2026-11-17)
+      expect(form.textContent).not.toMatch(/does not edit them|cannot be changed|corrected above/);
       expect(form.textContent).toMatch(/A wrong strike or side is a different holding: delete it and add it again — which deletes its daily samples for good/);
       expect(form.textContent).toMatch(/its 1 rule is kept/);
       expect(form.textContent).not.toMatch(/Recorded wrongly\? Delete it/);
@@ -276,7 +279,10 @@ for (const arrangement of ["desk", "phone"] as const) {
       const ask = within(d).getByRole("group", { name: "delete 1231_IC?" });
       expect(ask.textContent).toMatch(/daily samples are deleted with it/);
       expect(ask.textContent).toMatch(/cannot be re-entered/);
-      expect(ask.textContent).toMatch(/If this was a real trade, close it instead/);
+      expect(ask.textContent).toMatch(/If this was a real trade, closing keeps all of it\./);
+      // "close it instead" is the button's, said once (2026-11-17)
+      expect(ask.textContent!.match(/close it instead/g)).toHaveLength(1);
+      expect(within(ask).getByRole("button", { name: "close it instead" })).toBeTruthy();
       expect(writes(s)).toEqual([]);
       fireEvent.click(within(ask).getByRole("button", { name: "keep it" }));
       expect(within(d).queryByRole("group", { name: "delete 1231_IC?" })).toBeNull();

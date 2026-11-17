@@ -37,7 +37,7 @@ async function openDesk(width = 1440, spreads = { status: 201, body: ADDED as ob
   return sent;
 }
 
-const panel = () => screen.getByRole("dialog", { name: "Add a spread or contract" });
+const panel = () => screen.getByRole("dialog", { name: "Add" });
 /** What a spread's preview says its maximum loss is. */
 const maxLoss = (n: number) => [...document.querySelectorAll(`[data-spread="${n}"] .nx-payoff-kv div`)]
   .find((d) => d.querySelector("dt")?.textContent === "max loss")?.querySelector("dd")?.textContent ?? null;
@@ -67,7 +67,7 @@ describe("adding a condor on the desk", () => {
     expect(body.strike_date).toBe("2026-12-18");
     expect(body.spreads.map((s) => [s.held, s.monitors.length])).toEqual([[true, 2], [true, 2]]);
     // saved: the panel closes and the page says what it made
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add a spread or contract" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Add" })).toBeNull());
     expect(await screen.findByText("added 2 holdings and 4 rules")).toBeTruthy();
   });
 });

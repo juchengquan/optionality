@@ -47,8 +47,11 @@ export function LevelChip({ holding, session }: { holding: Holding; session: boo
 }
 
 /** One rule as a line: what it watches in its own sentence, and its state's chip when it has one. */
-export function RuleLine({ entry, marked = true, own = false, children }: {
+export function RuleLine({ entry, marked = true, own = false, within, children }: {
   entry: Entry;
+  /** the name of the card or sheet the line sits in: a rule's name is not drawn where it is that
+   *  name — "1231_8050" under 1231_8050's own heading (2026-11-17) — and stays where it is a leg's */
+  within?: string;
   /** the rule a sheet is OF: its chip and its fault are the sheet's level section's, said once
    *  (review of #420) */
   own?: boolean;
@@ -61,11 +64,9 @@ export function RuleLine({ entry, marked = true, own = false, children }: {
   const state = ruleState(entry);
   return (
     <li className="nxp-rule" data-ref={marked ? entry.id : undefined} data-state={state ?? "calm"}>
-      <span className="nxp-rule-name">{entryName(entry)}</span>
+      {entryName(entry) === within ? null : <span className="nxp-rule-name">{entryName(entry)}</span>}
       <span className="nxp-sentence"><RuleWords entry={entry} /></span>
       {state && !own ? <Chip state={state} /> : null}
-      {/* how far it has come, as a watch card draws it (part K) */}
-      <Progress entry={entry} />
       {entry.error && !own ? <span className="nxp-error">{entry.error}</span> : null}
       {children}
     </li>
@@ -99,7 +100,7 @@ export function HoldingCard({ placed, quotes, monitors, privacy, session, onOpen
         <div><dt>{SHORT_DELTA}</dt><dd><ShortDeltaWords holding={holding} quotes={quotes} monitors={monitors} /></dd></div>
       </dl>
       <HoldingStrip holding={holding} />
-      {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}
+      {rules.length > 0 ? <ul className="nxp-rules">{rules.map((r) => <RuleLine key={r.id} entry={r} within={holding.name} />)}</ul> : null}
     </article>
   );
 }
@@ -116,21 +117,6 @@ function CostAndPace({ holding }: { holding: Holding }) {
         {v.cost}{" "}<span data-outcome={paceOutcome(holding.schedule?.pace_gap)}>{v.gap}</span>
       </span>
     </>
-  );
-}
-
-/** How far a rule's figure has come toward its threshold, coloured by the rule's state. With NO
- *  figure there is no bar at all: an empty bar would read as "far from it", and the sentence
- *  beside it already says "no figure". */
-export function Progress({ entry }: { entry: Entry }) {
-  if (entry.fill === null || entry.fill === undefined) return null;
-  const fill = Math.max(0, Math.min(100, entry.fill));
-  return (
-    <div className="nxp-progress" role="progressbar" aria-label="toward its threshold"
-         aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(fill)}
-         data-state={ruleState(entry) ?? "calm"}>
-      <span style={{ width: `${fill}%` }} />
-    </div>
   );
 }
 
@@ -157,11 +143,10 @@ export function RuleCard({ entry, under, overlap = null, onOpen }: {
         <div data-value=""><dt>{heldSpreadValue(entry, overlap) ? "cost to close" : "value"}</dt><dd>{cells.value}</dd></div>
         <div data-delta=""><dt>Δ</dt><dd>{cells.delta}</dd></div>
       </dl>
-      <Progress entry={entry} />
       <p className="nxp-sentence"><RuleWords entry={entry} /></p>
       {entry.error ? <p className="nxp-error">{entry.error}</p> : null}
       {entry.legs ? <StrikeStrip strip={stripOfEntry(entry)!} /> : null}
-      {under.length > 0 ? <ul className="nxp-rules">{under.map((r) => <RuleLine key={r.id} entry={r} />)}</ul> : null}
+      {under.length > 0 ? <ul className="nxp-rules">{under.map((r) => <RuleLine key={r.id} entry={r} within={entryName(entry)} />)}</ul> : null}
     </article>
   );
 }

@@ -90,7 +90,7 @@ function HoldingDetail({ holding, rules, quotes, monitors, privacy, session, wri
         <HoldingSections surface="phone" holding={holding} rules={rules} quotes={quotes} monitors={monitors}
                          privacy={privacy} session={session} writes={writes}
                          strip={<HoldingStrip holding={holding} />}
-                         ruleLine={(r, own) => <EditableLine key={r.id} entry={r} own={own} />} />
+                         ruleLine={(r, own) => <EditableLine key={r.id} entry={r} own={own} within={holding.name} />} />
       </div>
     </>
   );
@@ -107,16 +107,16 @@ function RuleDetail({ entry, under, overlap = null, session, privacy }: {
       </SheetHeader>
       <div className="nxp-sheet-body">
         <RuleSections surface="phone" entry={entry} under={under} overlap={overlap} privacy={privacy} session={session}
-                      ruleLine={(r, own) => <EditableLine key={r.id} entry={r} own={own} />} />
+                      ruleLine={(r, own) => <EditableLine key={r.id} entry={r} own={own} within={entryName(entry)} />} />
       </div>
     </>
   );
 }
 
 /** A rule in the sheet with its controls under it (#292). */
-function EditableLine({ entry, own = false }: { entry: Entry; own?: boolean }) {
+function EditableLine({ entry, own = false, within }: { entry: Entry; own?: boolean; within: string }) {
   return (
-    <RuleLine entry={entry} marked={false} own={own}>
+    <RuleLine entry={entry} marked={false} own={own} within={within}>
       <MonitorControls rule={ruleOfEntry(entry)} served={entry} />
     </RuleLine>
   );
