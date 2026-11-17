@@ -47,12 +47,13 @@ describe("the cards, on the owner's book", () => {
     ]);
     expect(refs(region("Book"))).toEqual(expected);
     expect(expected).toEqual([
-      "w-dec04", "h-calls", "r-calls", "h-puts", "w-dec18", "w-dec18-delta", "h-ic", "r-ic", "w-dec31", "w-lone",
+      "w-dec04", "h-calls", "r-calls", "h-puts", "w-dec18", "h-ic", "r-ic", "w-dec31", "w-dec18-delta", "w-lone",
     ]);
     expect(screen.queryByRole("region", { name: "Holdings" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Watchlist" })).toBeNull();
-    const spread = card("w-dec18");
-    expect(within(spread).getByText(/\|Δ\| ≥ 0\.20 — now/)).toBeTruthy();
+    // a short leg's delta is a card of its own, not a line on its spread's (2026-11-17)
+    expect(within(card("w-dec18")).queryByText(/\|Δ\| ≥ 0\.20 — now/)).toBeNull();
+    expect(within(card("w-dec18-delta")).getAllByText(/\|Δ\| ≥ 0\.20/).length).toBeGreaterThan(0);
   });
 
   it("group it by expiry, under ONE heading per expiry in each of Spreads and Contracts", () => {
@@ -60,9 +61,9 @@ describe("the cards, on the owner's book", () => {
     const groups = [...region("Spreads").querySelectorAll<HTMLElement>("[data-expiry]")].map((g) => g.dataset.expiry);
     expect(groups).toEqual(["2026-12-04", "2026-12-18", "2026-12-31"]);
     expect([...region("Contracts").querySelectorAll<HTMLElement>("[data-expiry]")].map((g) => g.dataset.expiry))
-      .toEqual(["2026-12-31"]);
+      .toEqual(["2026-12-18", "2026-12-31"]);
     // the expiry as the page writes a date, and its DTE said once, here (parts F and K)
-    expect(within(region("Book")).getAllByRole("heading", { name: /20261218/ })).toHaveLength(1);
+    expect(within(region("Spreads")).getAllByRole("heading", { name: /20261218/ })).toHaveLength(1);
   });
 
   it("sit a condor's two cards together, the calls first", () => {
@@ -268,12 +269,12 @@ describe("the detail sheet", () => {
     expect(within(sheet).getByText(/\|value\| ≥ 4\.00 — now/)).toBeTruthy();
   });
 
-  it("opens from a watchlist card with its sentence and the leg rules under it", async () => {
+  it("opens from a watchlist card with its sentence, and no leg rule under it (2026-11-17)", async () => {
     draw();
     fireEvent.click(within(card("w-dec18")).getByRole("button", { name: /details of 1218_P7150/ }));
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByText(/\|value\| ≥ 6\.00 — now/)).toBeTruthy();
-    expect(within(sheet).getByText(/\|Δ\| ≥ 0\.20 — now/)).toBeTruthy();
+    expect(within(sheet).queryByText(/\|Δ\| ≥ 0\.20 — now/)).toBeNull();
   });
 
   it("closes on Back without leaving the page", async () => {
@@ -443,8 +444,8 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   const note = (ref: string) => card(ref).querySelector<HTMLElement>("[data-overlap]")?.textContent ?? null;
   const OVERLAP_ORDER = [
     "h-8050", "r-8050", "h-ic", "r-ic-calls", "h-7200",
-    "r-8100", "w-8150-delta", "w-7700", "r-ratio",
-    "h-7700", "r-7700", "r-8050-delta",
+    "r-8100", "w-7700", "r-ratio",
+    "h-7700", "r-7700", "r-8050-delta", "w-8150-delta",
   ];
 
   it("is a card among the watched spreads with no note on it, and the holding's card keeps its own rules", () => {

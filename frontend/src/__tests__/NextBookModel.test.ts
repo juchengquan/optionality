@@ -57,10 +57,10 @@ describe("the watchlist", () => {
     expect(all.every((e) => !e.held)).toBe(true);
   });
 
-  it("sits a short leg's delta rule under its spread", () => {
+  it("draws a short leg's delta rule as a row of its own, not under its spread (2026-11-17)", () => {
     const dec18 = book.watchlist[1]!;
-    expect(dec18.items.map((i) => i.entry.id)).toEqual(["w-dec18"]);
-    expect(ids(dec18.items[0]!.under)).toEqual(["w-dec18-delta"]);
+    expect(dec18.items.map((i) => i.entry.id)).toEqual(["w-dec18", "w-dec18-delta"]);
+    expect(dec18.items.every((i) => i.under.length === 0)).toBe(true);
   });
 
   it("lets a rule that matches no spread stand alone", () => {
@@ -86,7 +86,7 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
   it("is drawn in the watchlist when it names a contract its holdings do not hold", () => {
     expect(under("h-8050")).toEqual(["r-8050"]);
     // the delta on its short leg is a contract row of its own (2026-11-17), its expiry's held one first
-    expect(items().map((i) => i.entry.id)).toEqual(["r-8050-delta", "r-8100", "w-7700", "r-ratio"]);
+    expect(items().map((i) => i.entry.id)).toEqual(["r-8050-delta", "r-8100", "w-8150-delta", "w-7700", "r-ratio"]);
   });
 
   it("keeps under the holding every rule on nothing but what it holds", () => {
@@ -109,8 +109,9 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     expect(note("r-ratio")).toBe("contains 1231_7200's C7200 and C7250");
   });
 
-  it("carries the leg rules of a moved combo under it, as a watched spread's", () => {
-    expect(items().find((i) => i.entry.id === "r-8100")!.under.map((r) => r.id)).toEqual(["w-8150-delta"]);
+  it("carries no leg rule under a moved combo: a leg's rule is a contract row (2026-11-17)", () => {
+    expect(items().find((i) => i.entry.id === "r-8100")!.under).toEqual([]);
+    expect(items().map((i) => i.entry.id)).toContain("w-8150-delta");
   });
 
   it("leaves a holding with no rule left still drawn", () => {
@@ -130,7 +131,7 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("gives every watched rule nothing held no note", () => {
     const b = placeBook(QUOTES, HOLDINGS, MONITORS);
-    expect(b.watchlist.flatMap((g) => g.items).map((i) => i.overlap)).toEqual([null, null, null, null]);
+    expect(b.watchlist.flatMap((g) => g.items).map((i) => i.overlap)).toEqual([null, null, null, null, null]);
   });
 });
 

@@ -53,6 +53,10 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
   // on a holding that is its first rule's "edit", far down — the sheet opened 905px into its 1559 on
   // the live book (2026-11-17), at "on pace", not at the top
   const title = useRef<HTMLHeadingElement>(null);
+  // closed, the focus goes back to the card that opened it; where that card is gone — its rule
+  // muted or deleted from its own sheet, as a leg's rule is since 2026-11-17 — to the book's
+  // heading, never the body, where the next Tab would start from the top
+  const handBack = () => (last.current && cardOf(refOf(last.current)) ? true : bookHeading());
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}
@@ -60,7 +64,7 @@ export function DetailSheet({ subject, onClose, quotes, monitors, privacy, entry
       {/* drawn in a portal OUTSIDE .nx, so it carries the page's colour tokens itself (next.css:
           .nx-tokens) and the two settings they read */}
       <SheetContent side="bottom" className="nx-tokens nxp-sheet" data-up={readUp()} data-entry={entryStyle}
-                    data-stale={stale ? "" : undefined} initialFocus={title}>
+                    data-stale={stale ? "" : undefined} initialFocus={title} finalFocus={handBack}>
         {shown ? (
           <DetailBoundary key={shown.kind === "holding" ? shown.holding.id : shown.entry.id} what={shown.kind}>
             {shown.kind === "holding" ? (
@@ -138,6 +142,18 @@ function refOf(subject: Subject): string {
  *  sheet's scroll lock has let go, which puts the page back where it was — done sooner, that undoes
  *  it — and not at all where the card has left the book (a close says so itself, `ClosedResult`).
  *  "nearest", so a card already in view does not move. */
+/** The card drawn for `ref`, if it is still in the book. */
+function cardOf(ref: string): HTMLElement | null {
+  return [...document.querySelectorAll<HTMLElement>(".nx [data-ref]")].find((el) => el.dataset.ref === ref) ?? null;
+}
+
+/** The book's heading, made focusable: where the focus goes when the card a sheet came from is gone. */
+function bookHeading(): HTMLElement | null {
+  const h = document.querySelector<HTMLElement>(".nx .nxp-book h2");
+  if (h && !h.hasAttribute("tabindex")) h.setAttribute("tabindex", "-1");
+  return h;
+}
+
 function bringBack(ref: string): void {
   const started = performance.now();
   const step = () => {
@@ -145,8 +161,7 @@ function bringBack(ref: string): void {
       requestAnimationFrame(step);
       return;
     }
-    const card = [...document.querySelectorAll<HTMLElement>(".nx [data-ref]")].find((el) => el.dataset.ref === ref);
-    card?.scrollIntoView?.({ block: "nearest" });
+    cardOf(ref)?.scrollIntoView?.({ block: "nearest" });
   };
   requestAnimationFrame(step);
 }

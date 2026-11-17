@@ -54,13 +54,14 @@ async function twoPolls(svc: PageService): Promise<number> {
   return svc.count("/quotes") - before;
 }
 
-/** Where the spread 1218_P7150's rules are: the phone's sheet, or the desk's inspector. */
+/** Where the short leg's rule 20261218 P7150 Δ is: its own sheet on the phone, or its own inspector on
+ *  the desk — a contract row since 2026-11-17, no longer under the spread 1218_P7150. */
 async function openSpread(arrangement: Arrangement): Promise<HTMLElement> {
   if (arrangement === "phone") {
-    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
+    fireEvent.click(await screen.findByRole("button", { name: "details of 20261218 P7150" }));
     return screen.findByRole("dialog");
   }
-  fireEvent.click(await screen.findByRole("button", { name: "1218_P7150" }));
+  fireEvent.click(await screen.findByRole("button", { name: "20261218 P7150" }));
   return screen.findByRole("complementary", { name: /^inspector/ });
 }
 

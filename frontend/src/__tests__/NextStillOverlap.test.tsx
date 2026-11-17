@@ -33,11 +33,11 @@ describe.each([false, true])("the picture, privacy %s", (privacy) => {
     const book = [...namesIn("Spreads"), ...namesIn("Contracts")];
     // Spreads: the held spreads first, "held" in the name cell, their own rule on their row; then
     // the combos that name a contract nobody holds, as watched spreads. Contracts: the holding of one
-    // call, then the delta on 1231_8050's short leg, a contract row of its own (2026-11-17)
+    // call, then every leg's delta, a contract row of its own (2026-11-17), the held leg's first
     expect(book).toEqual([
       "1231_8050 held", "1231_IC held", nameOf("r-ic-calls"),
-      "1231_7200 held", nameOf("r-8100"), nameOf("w-8150-delta"), nameOf("w-7700"), nameOf("r-ratio"),
-      "1231_7700 held", nameOf("r-8050-delta"),
+      "1231_7200 held", nameOf("r-8100"), nameOf("w-7700"), nameOf("r-ratio"),
+      "1231_7700 held", nameOf("r-8050-delta"), nameOf("w-8150-delta"),
     ]);
     // no bracket note anywhere in the table (#400)
     for (const n of book) expect(n).not.toMatch(/[()]|shares|contains/);
