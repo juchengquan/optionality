@@ -105,7 +105,8 @@ function ofRow(row: DeskRow): Findable {
     // too; its detail stays the holding's
     const own = ownRule(h, row.rules);
     if (!own) return found;
-    const watches = [...tokens(SPOKEN[own.field] ?? own.field), "spread"];
+    // and as a rule: "7300 monitor" lands on the row that draws it
+    const watches = [...tokens(SPOKEN[own.field] ?? own.field), ...(own.legs ? ["spread"] : []), ...RULE_SYNONYMS];
     return { ...found, words: [...new Set([...found.words, ...watches])] };
   }
   if (row.kind === "rule") {

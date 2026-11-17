@@ -6,7 +6,7 @@
  *     lone watched contracts — the label only where the expiry has some.
  *  3. "held" after a holding's name, heard in its name too; a watched row carries none.
  *  4. A holding's own rule (the combo named as it is) on its row; a second rule still a row under it.
- *  5. A leg's rule under its watched spread, and a watched contract on a HOLDING's leg under it.
+ *  5. A leg's rule under its watched spread; a contract rule on a held leg under its holding.
  *  6. The overlap note beside the holding it names, in the same expiry.
  *  7. One empty-state line for an empty book, none for a book with only one of the two.
  *  The model's order is `NextOneBookModel.test.ts`'s; j and k's is `NextDeskKeys.test.tsx`'s.
@@ -14,12 +14,15 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import type { Entry, Monitor } from "../shared/api";
+import type { Entry, Holding, Monitor } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
 import { PhoneBook } from "../phone/PhoneBook";
 import { plainView, toMarkdown, type PlainInput } from "../snapshot/plain";
-import { entry, HOLDINGS, monitor, MONITORS, QUOTES } from "../testing/ownerBook";
+import { tableRows } from "../desk/columns";
+import { ownRule, placeBook } from "../placement";
+import { entry, holding, HOLDINGS, monitor, MONITORS, QUOTES, side } from "../testing/ownerBook";
+import { readMarkdown } from "../testing/plainRead";
 import { OVERLAP_HOLDINGS, OVERLAP_MONITORS, OVERLAP_QUOTES } from "../testing/overlapBook";
 
 afterEach(() => {
@@ -33,10 +36,12 @@ const SECOND: Entry = entry("r-calls-short", {
   threshold: 0.3, watched: 0.33, distance: -0.03, held: true, scope: "leg",
   positions: [{ id: "h-calls", name: "1218_C7300" }], quote: { name: "SPXW 261218 7300.00C", option_delta: 0.33 },
 });
-/** A watched contract on the held put spread's short leg, which the service links to nothing. */
+/** A delta rule on the held put spread's short leg, as the service serves one: held, and linked to
+ *  the holding with scope leg (`holdsAnyOf`, `adoptOrphanMonitors`). */
 const ON_LEG: Entry = entry("w-p6400", {
   code: "US.SPXW261218P6400000", strike_date: "2026-12-18", option_type: "PUT", field: "option_delta",
-  threshold: 0.3, watched: -0.21, distance: 0.09, quote: { name: "SPXW 261218 6400.00P", option_delta: -0.21 },
+  threshold: 0.3, watched: -0.21, distance: 0.09, held: true, scope: "leg",
+  positions: [{ id: "h-puts", name: "1218_P6400" }], quote: { name: "SPXW 261218 6400.00P", option_delta: -0.21 },
 });
 const MORE_QUOTES = [...QUOTES, SECOND, ON_LEG];
 const MORE_MONITORS: Monitor[] = [...MONITORS, monitor(SECOND.id, { code: SECOND.code }), monitor(ON_LEG.id, { code: ON_LEG.code })];
@@ -48,12 +53,12 @@ function props(over: Partial<BookProps> = {}): BookProps {
   };
 }
 
-function plain(over: Partial<BookProps> = {}) {
+function plain(over: Partial<BookProps> = {}, hidden: ReadonlySet<string> = new Set()) {
   const p = props(over);
   const input: PlainInput = {
     quotes: p.quotes, monitors: p.monitors, holdings: p.holdings, holdingsError: p.holdingsError,
     holdingsAt: p.holdingsAt, session: p.session, privacy: p.privacy, needs: [], health: null, polledAt: null,
-    error: null, references: [], hidden: new Set(), takenAt: new Date("2026-11-16T15:00:00Z"),
+    error: null, references: [], hidden, takenAt: new Date("2026-11-16T15:00:00Z"),
   };
   return plainView(input);
 }
@@ -222,7 +227,7 @@ describe("4. a holding's own rule on its row, a second rule still a row under it
   });
 });
 
-describe("5. a leg's rule under its spread, and a watched contract on a held leg under the holding", () => {
+describe("5. a leg's rule under its spread, and a contract rule on a held leg under the holding", () => {
   it("on the desk", () => {
     render(<DeskBook {...props()} />);
     expect(deskRow("w-dec18")!.closest("li")!.contains(deskRow("w-dec18-delta"))).toBe(true);
@@ -274,6 +279,198 @@ describe("7. one line for an empty book, none for a book with one half", () => {
       render(<PhoneBook {...props(over)} />);
       expect(lines(), "phone").toEqual(said);
       expect(plain(over).sections[0]!.notes, "picture").toEqual(said);
+    });
+  }
+});
+
+describe("4. a holding's own rule in the picture, where the rule's column is hidden", () => {
+  it("is said in the holding's name cell, in its sentence; with the column shown, in its rule cell alone", () => {
+    const hidden = plain({}, new Set(["alarm"]));
+    const rows = hidden.sections[0]!.groups.flatMap((g) => g.rows);
+    expect(hidden.sections[0]!.columns).not.toContain("rule");
+    expect(rows.map((r) => r[0])).toContain("1218_C7300 held — |value| ≥ 4.00 — now 4.40, past it by 0.40");
+    // a holding with no own rule says its name alone, and a rule's own row is unchanged
+    expect(rows.map((r) => r[0])).toContain("1218_P6400 held");
+    expect(rows.map((r) => r[0])).toContain("20261218 7300C");
+    const text = toMarkdown(hidden);
+    expect(text).toContain("| 1218_C7300 held — \\|value\\| ≥ 4.00 — now 4.40, past it by 0.40 |");
+    // shown, the name is the name
+    expect(plain().sections[0]!.groups.flatMap((g) => g.rows).map((r) => r[0])).toContain("1218_C7300 held");
+  });
+});
+
+describe("the row's colour: the most serious of the holding's Level and its own rule (the owner, 2026-11-17)", () => {
+  type Level = "stop" | "target" | "manage" | null;
+  type Own = "ringing" | "fault" | null;
+  const schedule = (level: Level) => (level === null ? null : {
+    dte_at_open: 45, on_pace: 1, pace_gap: 0, target: 1, stop: 4, target_dte: 10, manage_by_dte: 21,
+    reached: level === "manage" ? null : level, manage_by_due: level === "manage",
+  });
+  const book = (level: Level, own: Own) => props({
+    holdings: HOLDINGS.map((h) => (h.id === "h-calls" ? { ...h, schedule: schedule(level) } as Holding : h)),
+    quotes: MORE_QUOTES.map((q) => (q.id === "r-calls"
+      ? { ...q, triggered: own === "ringing", error: own === "fault" ? "its figure never arrives" : undefined } : q)),
+  });
+  const cases: [Level, Own, string][] = [
+    [null, null, "calm"], ["target", null, "target"], ["manage", null, "manage"], ["stop", null, "stop"],
+    [null, "ringing", "alarm"], [null, "fault", "fault"],
+    ["target", "ringing", "alarm"], ["manage", "ringing", "alarm"], ["stop", "ringing", "stop"],
+    ["target", "fault", "fault"], ["manage", "fault", "fault"], ["stop", "fault", "fault"],
+  ];
+  for (const [level, own, state] of cases) {
+    it(`${level ?? "no Level"} with its own rule ${own ?? "calm"}: ${state}, on the desk and the phone`, () => {
+      render(<DeskBook {...book(level, own)} />);
+      expect(deskRow("h-calls")!.dataset.state).toBe(state);
+      cleanup();
+      render(<PhoneBook {...book(level, own)} />);
+      // the phone tints a stop as it does a ring; a calm Level is no state of its own there either
+      expect(card("h-calls").dataset.state).toBe(state);
+    });
+  }
+});
+
+describe("6. each rule drawn once, its second place a note (the owner, 2026-11-17)", () => {
+  const OTHER = { ...QUOTES.find((q) => q.id === "w-dec18")!, id: "w-dec18b", code: "1218_P7150b",
+    legs: [{ sign: -1, option_type: "PUT", strike: 7150 }, { sign: 1, option_type: "PUT", strike: 7050 }] } as Entry;
+  const twoSpreads = [...MORE_QUOTES.map((q) => (q.id === "w-dec18-delta" ? { ...q, in_combos: ["w-dec18", "w-dec18b"] } : q)), OTHER];
+  const CONDOR = entry("r-condor", { code: "1218_IC", strike_date: "2026-12-18", held: true, scope: "all",
+    legs: [{ sign: -1, option_type: "CALL", strike: 7300 }, { sign: 1, option_type: "CALL", strike: 7350 },
+           { sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 }] as never,
+    positions: [{ id: "h-calls", name: "1218_C7300" }, { id: "h-puts", name: "1218_P6400" }] });
+
+  it("on the desk: one row, under the first; a quiet note under the second, not a row", () => {
+    render(<DeskBook {...props({ quotes: [...twoSpreads, CONDOR] })} />);
+    for (const id of ["w-dec18-delta", "r-condor"]) {
+      expect(deskRows().filter((r) => r.dataset.ref === id)).toHaveLength(1);
+    }
+    expect(deskRow("w-dec18")!.closest("li")!.contains(deskRow("w-dec18-delta"))).toBe(true);
+    expect(deskRow("h-calls")!.closest("li")!.contains(deskRow("r-condor"))).toBe(true);
+    const notes = [...document.querySelectorAll<HTMLElement>("[data-also]")];
+    expect(notes.map((n) => n.textContent)).toEqual(["1218_IC also in 1218_C7300", "20261218 7150P also in 1218_P7150"]);
+    expect(deskRow("h-puts")!.closest("li")!.contains(notes[0]!)).toBe(true);
+    expect(deskRow("w-dec18b")!.closest("li")!.contains(notes[1]!)).toBe(true);
+    for (const n of notes) {
+      expect(n.closest("[data-ref]")).toBeNull();
+      expect(n.querySelector("button, [tabindex]")).toBeNull();
+    }
+  });
+
+  it("on the phone: one line, on the first card; a note on the second", () => {
+    render(<PhoneBook {...props({ quotes: [...twoSpreads, CONDOR] })} />);
+    for (const id of ["w-dec18-delta", "r-condor"]) {
+      expect([...document.querySelectorAll<HTMLElement>("[data-ref]")].filter((e) => e.dataset.ref === id)).toHaveLength(1);
+    }
+    expect(card("h-puts").querySelector("[data-also]")!.textContent).toBe("1218_IC also in 1218_C7300");
+    expect(card("w-dec18b").querySelector("[data-also]")!.textContent).toBe("20261218 7150P also in 1218_P7150");
+  });
+
+  it("in the inspector, still listed under each: it is a rule about both", () => {
+    render(<DeskBook {...props({ quotes: [...twoSpreads, CONDOR] })} />);
+    fireEvent.click(within(deskRow("h-puts")!).getByRole("button", { name: "1218_P6400 held" }));
+    const insp = screen.getByRole("complementary", { name: "inspector: 1218_P6400" });
+    expect(insp.textContent).toContain("|value| ≥ 6.00");
+  });
+});
+
+// ---- every rule and holding once, on every surface, over books shaped as the service shapes them
+
+/** A small seeded generator, so a failure names a book that can be made again. */
+function rng(seed: number) {
+  let x = seed >>> 0 || 1;
+  return () => { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 2 ** 32; };
+}
+
+function serviceBook(seed: number): { quotes: Entry[]; holdings: Holding[]; monitors: Monitor[] } {
+  const r = rng(seed);
+  const pick = <T,>(xs: readonly T[]) => xs[Math.floor(r() * xs.length)]!;
+  const dates = ["2026-12-04", "2026-12-18", "2026-12-31"];
+  const code = (date: string, t: "CALL" | "PUT", k: number) => `US.SPXW${date.slice(2).replaceAll("-", "")}${t[0]}${k}000`;
+  const contract = (id: string, date: string, t: "CALL" | "PUT", k: number, over: Partial<Entry> = {}) => entry(id, {
+    code: code(date, t, k), strike_date: date, option_type: t, field: "option_delta", threshold: 0.2, watched: 0.1,
+    distance: 0.1, quote: { name: `SPXW ${date.slice(2).replaceAll("-", "")} ${k}.00${t[0]}`, option_delta: 0.1 }, ...over,
+  });
+  const holdings: Holding[] = [];
+  const quotes: Entry[] = [];
+  let k = 6000;
+  for (let i = 0; i < Math.floor(r() * 5); i++) {
+    const date = pick(dates);
+    const t = r() < 0.5 ? "CALL" : "PUT";
+    k += 50;
+    const h = holding(`h${i}`, { name: `H${i}`, strike_date: date, legs: [side("short", t, k), side("long", t, k + 50)] });
+    holdings.push(h);
+    const to = [{ id: h.id, name: h.name }];
+    const legs = [{ sign: -1, option_type: t, strike: k }, { sign: 1, option_type: t, strike: k + 50 }];
+    // its value rule, named as it or renamed; sometimes a delta rule over all of it as well
+    if (r() < 0.8) quotes.push(entry(`own${i}`, { code: r() < 0.7 ? h.name : `stop ${i}`, strike_date: date, legs: legs as never, held: true, scope: "all", positions: to }));
+    if (r() < 0.3) quotes.push(entry(`d${i}`, { code: `${h.name} delta`, field: "option_delta", strike_date: date, legs: legs as never, held: true, scope: "all", positions: to }));
+    // a rule on its short leg, held and linked
+    if (r() < 0.5) quotes.push(contract(`leg${i}`, date, t, k, { held: true, scope: "leg", positions: to }));
+  }
+  // a rule over two holdings on one expiry: a condor held as two spreads
+  for (const date of dates) {
+    const two = holdings.filter((h) => h.strike_date === date).slice(0, 2);
+    if (two.length === 2 && r() < 0.7) {
+      quotes.push(entry(`c-${date}`, { code: `IC ${date}`, strike_date: date, held: true, scope: "all",
+        legs: [...two[0]!.legs, ...two[1]!.legs].map((l) => ({ sign: l.side === "short" ? -1 : 1, option_type: l.option_type, strike: l.strike })) as never,
+        positions: two.map((h) => ({ id: h.id, name: h.name })) }));
+    }
+  }
+  // watched spreads, their leg rules (in one or two of them), and lone contracts
+  const watched: Entry[] = [];
+  for (let i = 0; i < Math.floor(r() * 5); i++) {
+    const date = pick(dates);
+    k += 50;
+    const w = entry(`w${i}`, { code: `W${i}`, strike_date: date,
+      legs: [{ sign: -1, option_type: "PUT", strike: k }, { sign: 1, option_type: "PUT", strike: k - 50 }] as never });
+    watched.push(w);
+    quotes.push(w);
+  }
+  for (let i = 0; i < Math.floor(r() * 4); i++) {
+    const date = pick(dates);
+    const homes = watched.filter((w) => w.strike_date === date);
+    const into = homes.filter(() => r() < 0.6).map((w) => w.id);
+    k += 50;
+    quotes.push(contract(`c${i}`, date, "PUT", k, { in_combos: into }));
+  }
+  const monitors = quotes.map((q) => monitor(q.id, { code: q.code, strike_date: q.strike_date }));
+  return { quotes, holdings, monitors };
+}
+
+describe("6. every rule and every holding once, on the desk, the phone, the picture and the text", () => {
+  for (let seed = 1; seed <= 60; seed++) {
+    it(`book ${seed}`, () => {
+      const b = serviceBook(seed);
+      const all = new Set([...b.holdings.map((h) => h.id), ...b.quotes.map((q) => q.id)]);
+      const placed = placeBook(b.quotes, b.holdings, b.monitors);
+      const own = new Set(placed.book.flatMap((g) => g.held.flat())
+        .map((p) => ownRule(p.holding, p.rules)?.id).filter((x): x is string => Boolean(x)));
+      const once = (ids: string[], what: string) => {
+        expect(ids.length, `${what}: an id twice\n${ids.join(" ")}`).toBe(new Set(ids).size);
+      };
+      // j and k walk these
+      const keyed = tableRows(placed).map((r) => (r.kind === "holding" ? r.holding.id : r.kind === "rule" ? r.entry.id : r.monitor.id));
+      once(keyed, "rows");
+      render(<DeskBook {...props(b)} />);
+      const desk = deskRows().map((r) => r.dataset.ref!);
+      once(desk, "desk");
+      expect(desk).toEqual(keyed);
+      expect(new Set([...desk, ...own])).toEqual(all);
+      for (const id of own) expect(desk).not.toContain(id);
+      cleanup();
+      render(<PhoneBook {...props(b)} />);
+      const phone = [...document.querySelectorAll<HTMLElement>(".nxp-book [data-ref]")].map((e) => e.dataset.ref!);
+      once(phone, "phone");
+      expect(new Set(phone)).toEqual(all);
+      cleanup();
+      const view = plain(b);
+      const rows = view.sections[0]!.groups.flatMap((g) => g.rows).filter((r) => r[0] !== "contracts");
+      expect(rows.length, "picture").toBe(all.size - own.size);
+      const text = readMarkdown(toMarkdown(view)).sections[0]!.rows;
+      const headings = view.sections[0]!.groups.filter((g) => g.heading !== null).length;
+      const labels = view.sections[0]!.groups.flatMap((g) => g.rows).length - rows.length;
+      // the header row, a row per heading and per label, and the rows
+      const groups = view.sections[0]!.groups.length;
+      expect(text.length, "text").toBe(groups === 0 ? 0 : 1 + headings + labels + rows.length);
     });
   }
 });

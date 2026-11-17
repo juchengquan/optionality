@@ -16,7 +16,7 @@
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { DASH, heldLeg, legText, shortFirst, signedLeg, type WrittenLeg } from "../shared/format";
 import { delta, money, percent, points } from "../shared/numbers";
-import { ownRule, type BookModel } from "../placement";
+import { drawnUnder, ownRule, type BookModel, type PlacedHolding } from "../placement";
 import {
   entryName, isEntrySignal, monitorName, QUARANTINED, sentence, shapeOf, shortDistance, shortRule, shortSentence, storedRuleWords,
 } from "../needs";
@@ -125,11 +125,11 @@ export function tableRows(placed: BookModel): DeskRow[] {
   for (const g of placed.book) {
     for (const p of g.held.flat()) {
       out.push({ kind: "holding", holding: p.holding, rules: p.rules });
-      for (const entry of subRules(p.holding, p.rules)) out.push({ kind: "rule", entry, nested: true });
+      for (const entry of subRules(p)) out.push({ kind: "rule", entry, nested: true });
     }
     for (const i of [...g.spreads, ...g.contracts]) {
       out.push({ kind: "rule", entry: i.entry, nested: false, overlap: i.overlap });
-      for (const entry of i.under) out.push({ kind: "rule", entry, nested: true });
+      for (const entry of drawnUnder(i.under, i.elsewhere)) out.push({ kind: "rule", entry, nested: true });
     }
   }
   for (const entry of placed.unplaced) out.push({ kind: "rule", entry, nested: false });
@@ -137,10 +137,10 @@ export function tableRows(placed: BookModel): DeskRow[] {
   return out;
 }
 
-/** The rules drawn as rows under a holding: every rule about it but its own, which its row draws. */
-export function subRules(holding: Holding, rules: readonly Entry[]): Entry[] {
-  const own = ownRule(holding, rules);
-  return rules.filter((r) => r !== own);
+/** The rules drawn as rows under a holding: every rule about it but its own, which its row draws,
+ *  and any drawn under an earlier holding (`elsewhere`). */
+export function subRules(p: PlacedHolding): Entry[] {
+  return drawnUnder(p.rules, p.elsewhere, ownRule(p.holding, p.rules));
 }
 
 /** The rule a row draws in its rule column: a rule row's own, a holding's OWN rule (2026-11-17). */
@@ -179,6 +179,20 @@ export function ownAttentionOf(row: DeskRow): "fault" | "entry" | "alarm" | null
   if (row.kind !== "holding") return null;
   const own = ownRule(row.holding, row.rules);
   return own ? attentionOf({ kind: "rule", entry: own, nested: false }) as "fault" | "entry" | "alarm" | null : null;
+}
+
+/** How serious each state a row can be in is (the owner, 2026-11-17): a holding's row is drawn in
+ *  the most serious of its Level's and its own rule's — a fault, then ringing or at stop, then
+ *  manage-by, then at target. On a tie the Level's name is kept (stop and ringing draw alike). */
+const SEVERITY: Record<string, number> = { fault: 4, alarm: 3, stop: 3, entry: 2, manage: 2, target: 1 };
+
+/** The state a row is drawn in — its tint, a fault's strike-through — and the phone's card too. */
+export function rowState(row: DeskRow): string {
+  const level = attentionOf(row);
+  const own = ownAttentionOf(row);
+  if (level === null) return own ?? "calm";
+  if (own === null) return level;
+  return SEVERITY[own]! > SEVERITY[level]! ? own : level;
 }
 
 /** The chip's words, which are also what the measuring counts. */

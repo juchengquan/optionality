@@ -38,9 +38,13 @@ describe("what it finds", () => {
   it("calls a rule a rule, and still finds one by the word it was called (part G)", () => {
     const rules = book.filter((f) => f.kind.endsWith("rule")).map((f) => f.ref);
     expect(rules.length).toBeGreaterThan(3);
-    // "monitor" finds every rule, and nothing that is not one
-    expect(find("monitor")).toEqual(rules);
-    expect(find("rule")).toEqual(rules);
+    // "monitor" finds every rule, and the holdings whose own rule their row draws (2026-11-17) — no
+    // holding without one, and no watched spread
+    const withOwn = ["h-calls", "h-ic"];
+    const order = book.map((f) => f.ref).filter((r) => rules.includes(r) || withOwn.includes(r));
+    expect(find("monitor")).toEqual(order);
+    expect(find("rule")).toEqual(order);
+    expect(find("monitor")).not.toContain("h-puts");
     expect(book.map((f) => f.detail).join(" ")).not.toMatch(/monitor/i);
     // and the action that edits one answers to either word
     const edit = paletteActions({ choice: "auto", selected: null }).find((a) => a.key === "edit-monitor")!;
@@ -237,7 +241,7 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
 
   it("is found where the table draws it, in the watchlist after the holdings, and jumps there", () => {
     expect(refs(found)).toEqual([
-      "h-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
+      "h-8050", "r-8050-delta", "h-7700", "h-ic", "r-ic-calls", "h-7200",
       "r-8100", "w-8150-delta", "w-7700", "r-ratio",
     ]);
   });

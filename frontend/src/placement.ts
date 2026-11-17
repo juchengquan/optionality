@@ -21,18 +21,33 @@
  *    is untouched: only where the rule is DRAWN changes. A single-contract rule, and a combo on
  *    nothing but held contracts — the holding's own value rule, or a wing of a held condor, which
  *    watches risk on something held — stay under it;
- *  - a holding's OWN rule — the combo named as the holding is (`ownRule`) — is drawn on the
- *    holding's row, not under it: the row named the same twice said one thing twice (2026-11-17);
- *  - a watched single contract that is a leg of a HOLDING, and of no watched spread, sits under
- *    the holding, as a leg's rule sits under its watched spread (2026-11-17).
+ *  - a holding's OWN rule (`ownRule`) is drawn on the holding's row, not under it: the row named
+ *    the same twice said one thing twice (2026-11-17);
+ *  - every rule is drawn ONCE (2026-11-17): a leg rule in two watched spreads, or a rule linked to
+ *    two drawn holdings, sits under the first by the book's order, and the other place says
+ *    "also in <the first>" (`elsewhere`).
+ *
+ *  A single-contract rule on a held leg needs no rule here: the service marks it held and links it
+ *  to the holding (`holdsAnyOf`, `adoptOrphanMonitors`), so it sits under it with the others.
  */
 import type { Entry, Holding, Monitor } from "./shared/api";
 import { entryName, isEntrySignal, QUARANTINED } from "./needs";
 
+/** A rule drawn under an earlier place in the book, and that place's name: where it is met again
+ *  the page draws a short note, "also in 1218_IC", and no second row (the owner, 2026-11-17). */
+export interface Elsewhere {
+  entry: Entry;
+  in: string;
+}
+
 /** A holding and the rules about it. */
 export interface PlacedHolding {
   holding: Holding;
+  /** every rule about it, its own first: what its inspector or sheet lists */
   rules: Entry[];
+  /** those of `rules` drawn under an earlier holding (a condor rule over a condor held as two
+   *  spreads): the book draws each rule once, under the first place it sits by the book's order */
+  elsewhere?: Elsewhere[];
 }
 
 /** One expiry's holdings. Each row is a bracket: one holding, or a condor's call and put spreads. */
@@ -44,7 +59,10 @@ interface HoldingGroup {
 /** A watched rule and the single-contract rules that sit under it (empty for most). */
 export interface PlacedRule {
   entry: Entry;
+  /** every leg rule under it: what its inspector or sheet lists */
   under: Entry[];
+  /** those of `under` drawn under an earlier watched spread (a leg in two spreads) */
+  elsewhere?: Elsewhere[];
   /** for a combo that only partly overlaps a holding, what it shares and with whom
    *  (`overlapOf`): "shares C8100 with 1231_8050"; null for everything else */
   overlap: string | null;
@@ -98,9 +116,6 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
   const nested = (e: Entry) => !e.legs && e.in_combos.some((id) => ids.has(id));
   const under = (combo: Entry) =>
     combo.legs ? watched.filter((e) => !e.legs && e.in_combos.includes(combo.id)) : [];
-  // a lone watched contract on a drawn holding's leg sits under that holding (2026-11-17)
-  const onLeg = (e: Entry) => (e.legs || !isEntrySignal(e) || nested(e) ? null
-    : (holdings ?? []).find((h) => h.strike_date === e.strike_date && holdsContract(h, e.code)) ?? null);
 
   const off = monitors.filter((m) => !m.enabled);
   const quarantine = (m: Monitor) => m.disabled_reason !== null && m.disabled_reason in QUARANTINED;
@@ -108,19 +123,20 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
   const holdingGroups: HoldingGroup[] = byExpiry(holdings ?? []).map(([expiry, group]) => ({
     expiry,
     rows: brackets(group).map((row) => row.map((holding) => {
-      const rules = quotes.filter((e) =>
-        (overlap(e) === null && e.positions.some((p) => p.id === holding.id)) || onLeg(e)?.id === holding.id);
+      const rules = quotes.filter((e) => overlap(e) === null && e.positions.some((p) => p.id === holding.id));
       // its own rule first: the one its row draws, then every other
       const own = ownRule(holding, rules);
       return { holding, rules: own ? [own, ...rules.filter((r) => r !== own)] : rules };
     })),
   }));
-  const watchGroups: WatchGroup[] = byExpiry(watched.filter((e) => !nested(e) && onLeg(e) === null)).map(([expiry, group]) => ({
+  const watchGroups: WatchGroup[] = byExpiry(watched.filter((e) => !nested(e))).map(([expiry, group]) => ({
     expiry, items: group.map((entry) => ({ entry, under: under(entry), overlap: overlap(entry) })),
   }));
 
+  const book = oneBook(holdingGroups, watchGroups);
+  drawOnce(book);
   return {
-    book: oneBook(holdingGroups, watchGroups),
+    book,
     holdings: holdingGroups,
     unplaced,
     watchlist: watchGroups,
@@ -146,20 +162,44 @@ function oneBook(holdings: HoldingGroup[], watchlist: WatchGroup[]): ExpiryBook[
   });
 }
 
-/** A holding's OWN rule: the combo among the rules about it that is named as the holding is — the
- *  value rule the add form makes with it, "1231_8050" on 1231_8050. Its row draws it (2026-11-17),
- *  where it was a row of its own under the holding named the same; any other rule stays a row
- *  under it. The first such, where (oddly) there are two. */
-export function ownRule(holding: { name: string }, rules: readonly Entry[]): Entry | null {
-  return rules.find((r) => Boolean(r.legs) && entryName(r) === holding.name) ?? null;
+/** Marks, in the book's order, each rule met under a second place as drawn under the first. */
+function drawOnce(book: ExpiryBook[]): void {
+  const first = new Map<string, string>();
+  const place = (rules: readonly Entry[], name: string, skip: Entry | null): Elsewhere[] => {
+    const out: Elsewhere[] = [];
+    for (const r of rules) {
+      if (r === skip) continue;
+      const at = first.get(r.id);
+      if (at === undefined) first.set(r.id, name);
+      else out.push({ entry: r, in: at });
+    }
+    return out;
+  };
+  for (const g of book) {
+    for (const p of g.held.flat()) p.elsewhere = place(p.rules, p.holding.name, ownRule(p.holding, p.rules));
+    for (const i of [...g.spreads, ...g.contracts]) i.elsewhere = place(i.under, entryName(i.entry), null);
+  }
 }
 
-/** Whether a holding holds the contract a moomoo code names (`US.SPXW261218P7150000`). */
-function holdsContract(h: Holding, code: string): boolean {
-  const m = /([CP])(\d{4,})$/.exec(code);
-  if (!m) return false;
-  const strike = Number(m[2]) / 1000;
-  return h.legs.some((l) => l.option_type[0] === m[1] && l.strike === strike);
+/** What the book draws under a holding or a watched spread: its rules, less any drawn under an
+ *  earlier place (`elsewhere`) and, for a holding, less its own rule, which its row draws. */
+export function drawnUnder(rules: readonly Entry[], elsewhere: readonly Elsewhere[] | undefined, own: Entry | null = null): Entry[] {
+  const away = new Set((elsewhere ?? []).map((e) => e.entry.id));
+  return rules.filter((r) => r !== own && !away.has(r.id));
+}
+
+/** The note where a rule is met again: "20261218 7150P also in 1218_P7150". */
+export const alsoWords = (e: Elsewhere) => `${entryName(e.entry)} also in ${e.in}`;
+
+/** A holding's OWN rule (2026-11-17): the one rule the service links to this holding alone over
+ *  ALL of it (`scope` "all", `positions` exactly this holding — the fact its `schedule` comes from),
+ *  a price rule (`mid_price`) before any other, and among those the one named as the holding: the
+ *  value rule the add form makes with it. Its row draws it, where it was a row of its own named the
+ *  same; any other rule stays a row under it. A rule renamed is still its own. */
+export function ownRule(holding: { id: string; name: string }, rules: readonly Entry[]): Entry | null {
+  const mine = rules.filter((r) => r.scope === "all" && r.positions.length === 1 && r.positions[0]!.id === holding.id);
+  const rank = (r: Entry) => (r.field === "mid_price" ? 0 : 2) + (entryName(r) === holding.name ? 0 : 1);
+  return [...mine].sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
 /** What a rule's or a holding's contracts are, enough to compare them: an expiry and its legs. */

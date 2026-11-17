@@ -20,12 +20,12 @@ import { costAndPace, paceOutcome } from "../pace";
 import type { HoldingWrites } from "../HoldingActions";
 import { DetailBoundary } from "../DetailBoundary";
 import { keptHolding, STALE_WORDS } from "../kept";
-import { NOTHING, placeBook, type BookModel, type PlacedRule } from "../placement";
+import { alsoWords, drawnUnder, NOTHING, placeBook, type BookModel, type Elsewhere, type PlacedRule } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
   ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, distanceShort, HELD, heldSpread, ownAttentionOf, RETIRED_KEYS, rowId, rowLegs,
-  rowName, rowStrip, ruleOfRow, subRules, tableRows,
+  rowName, rowState, rowStrip, ruleOfRow, subRules, tableRows,
   type DeskColumn, type DeskRow,
 } from "./columns";
 import { SpxNote, StrikeStrip } from "../StrikeStrip";
@@ -279,7 +279,8 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
               <li key={bracket.map((p) => p.holding.id).join("+")}
                   data-bracket={bracket.length === 2 ? "condor" : undefined}>
                 <ul>
-                  {bracket.map(({ holding, rules }, i) => {
+                  {bracket.map((placed, i) => {
+                    const { holding, rules } = placed;
                     // drawn in pieces on the rows it passes, so it runs from the first holding's
                     // row to the second's whatever rules sit under either
                     const paired = bracket.length === 2;
@@ -288,8 +289,9 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
                         <Row row={{ kind: "holding", holding, rules }} ctx={ctx}
                              bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} />
                         {/* its own rule is on its row: only the others are rows under it */}
-                        {subRules(holding, rules).map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx}
-                                                                  bracket={paired && i === 0 ? "through" : undefined} />)}
+                        {subRules(placed).map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx}
+                                                          bracket={paired && i === 0 ? "through" : undefined} />)}
+                        <AlsoNotes elsewhere={placed.elsewhere} />
                       </li>
                     );
                   })}
@@ -337,14 +339,22 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
 }
 
 /** A watched spread or contract, its overlap note under it (#346), and the leg rules under it. */
-function Watched({ item: { entry, under, overlap }, ctx }: { item: PlacedRule; ctx: Ctx }) {
+function Watched({ item: { entry, under, overlap, elsewhere }, ctx }: { item: PlacedRule; ctx: Ctx }) {
   return (
     <li>
       <Row row={{ kind: "rule", entry, nested: false, overlap }} ctx={ctx} />
       <OverlapNote overlap={overlap} />
-      {under.map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
+      {drawnUnder(under, elsewhere).map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
+      <AlsoNotes elsewhere={elsewhere} />
     </li>
   );
+}
+
+/** A rule met again under a second place (the owner, 2026-11-17): a quiet note naming where its
+ *  row is, never a second row — nothing here is selected, focused or led to by a banner. */
+function AlsoNotes({ elsewhere }: { elsewhere: Elsewhere[] | undefined }) {
+  if (!elsewhere?.length) return null;
+  return <>{elsewhere.map((e) => <p key={e.entry.id} className="nx-meta nxd-also" data-also="">{alsoWords(e)}</p>)}</>;
 }
 
 /** What a spread in the watchlist shares with a holding it only partly overlaps (#346), under its
@@ -378,11 +388,9 @@ function Muted({ monitors }: { monitors: Monitor[] }) {
 
 // ---- a row
 
-/** The state a row is drawn in, which the row's tint and its chip answer to. */
-function stateOf(row: DeskRow): string {
-  // a holding's Level first, then its own rule's ringing or fault, drawn on its row (2026-11-17)
-  return attentionOf(row) ?? ownAttentionOf(row) ?? "calm";
-}
+/** The state a row is drawn in, which the row's tint and its chip answer to: for a holding, the
+ *  more serious of its Level's and its own rule's (`rowState`, 2026-11-17). */
+const stateOf = rowState;
 
 function Row({ row, ctx, bracket }: { row: DeskRow; ctx: Ctx; bracket?: "top" | "through" | "bottom" }) {
   const id = rowId(row);

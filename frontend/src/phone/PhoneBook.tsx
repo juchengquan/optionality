@@ -103,9 +103,9 @@ export function PhoneBook({
                   ))}
                 </li>
               ))}
-              {g.spreads.map(({ entry, under, overlap }) => (
+              {g.spreads.map(({ entry, under, overlap, elsewhere }) => (
                 <li key={entry.id}>
-                  <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
+                  <RuleCard entry={entry} under={under} overlap={overlap} elsewhere={elsewhere} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
                 </li>
               ))}
             </ul>
@@ -113,9 +113,9 @@ export function PhoneBook({
               <>
                 <p className="nxp-meta nxp-sub" data-sub="contracts">contracts</p>
                 <ul className="nxp-cards">
-                  {g.contracts.map(({ entry, under, overlap }) => (
+                  {g.contracts.map(({ entry, under, overlap, elsewhere }) => (
                     <li key={entry.id}>
-                      <RuleCard entry={entry} under={under} overlap={overlap} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
+                      <RuleCard entry={entry} under={under} overlap={overlap} elsewhere={elsewhere} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
                     </li>
                   ))}
                 </ul>

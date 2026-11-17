@@ -112,9 +112,10 @@ describe("one table: one book, by expiry (2026-11-17)", () => {
 
 describe("what each row says", () => {
   it("gives a held spread's rule its cost to close, positive as its holding's, and never its signed value (2026-11-16)", () => {
-    // a SECOND rule on the held spread, named apart from it, so its row is drawn under the holding
+    // a rule on the held spread that is not its own (scope leg, as a wing's is), so its row is
+    // drawn under the holding
     const held = (cost: number | null) => QUOTES.map((q) => q.id === "r-calls"
-      ? { ...q, code: "1218_C7300 stop", combo_value: -4.4, cost_to_close: cost } : q);
+      ? { ...q, code: "1218_C7300 stop", scope: "leg", combo_value: -4.4, cost_to_close: cost } : q);
     render(<DeskBook {...props({ quotes: held(4.4) })} />);
     expect(cellText("r-calls", "value")).toBe("4.40");
     // and is read as what it says, to a reader that does not see the header
@@ -690,7 +691,8 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     // the held spreads first, each with the rules under it but its own value rule, on its row;
     // then the watched spreads, the three that name a contract no holding holds among them
     expect(order()).toEqual([
-      "h-8050", "r-8050-delta", "h-7700", "r-7700", "h-ic", "r-ic-calls", "h-7200",
+      // 1231_7700's own mid rule is its row's, as 1231_8050's value rule is
+      "h-8050", "r-8050-delta", "h-7700", "h-ic", "r-ic-calls", "h-7200",
       "r-8100", "w-8150-delta", "w-7700", "r-ratio",
     ]);
     // each names a contract its holding does not hold: C8150, C7750, a second C7250

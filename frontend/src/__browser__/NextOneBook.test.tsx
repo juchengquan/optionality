@@ -1,4 +1,4 @@
-/** The one book on the desk, in a real layout engine (2026-11-17): at 900, 1024 and 1440px, the
+/** The one book on the desk, in a real layout engine (2026-11-17): at 900, 1024, 1280 and 1440px, the
  *  inspector shut and open, nothing is pushed sideways, every row stays inside the table, and the
  *  "held" tag and the "contracts" label are drawn, inside the table and uncovered — the widest name
  *  cell now carries a Level's chip, its own rule's chip and distance as well as the tag. The
@@ -19,7 +19,7 @@ afterEach(async () => {
 const table = () => document.querySelector<HTMLElement>(".nxd-table")!;
 const row = (id: string) => document.querySelector<HTMLElement>(`.nxd-row[data-ref="${id}"]`)!;
 
-describe.each([900, 1024, 1440])("at %ipx", (width) => {
+describe.each([900, 1024, 1280, 1440])("at %ipx", (width) => {
   for (const open of [false, true]) {
     it(`draws the one book inside the table, the inspector ${open ? "open" : "shut"}`, async () => {
       await page.viewport(width, 900);

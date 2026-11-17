@@ -23,10 +23,10 @@ import { DASH, freshnessWords } from "../shared/format";
 import { GROUPS, headingOf, reasonLabel } from "../shared/groups";
 import { drawnReadings, referenceWords } from "../shared/readings";
 
-import { HELD, PINNED, PLAIN_COLUMNS, rowName, rowStrip, subRules, type DeskColumn, type DeskRow } from "../desk/columns";
+import { HELD, PINNED, PLAIN_COLUMNS, rowName, rowStrip, ruleOfRow, subRules, type DeskColumn, type DeskRow } from "../desk/columns";
 import { closedLineText, levelWords } from "../levels";
-import { monitorName, storedRuleWords, type Need } from "../needs";
-import { NOTHING, placeBook, type PlacedHolding } from "../placement";
+import { monitorName, sentence, storedRuleWords, type Need } from "../needs";
+import { drawnUnder, NOTHING, placeBook, type PlacedHolding } from "../placement";
 import { servedWhen, type MarketPhase } from "../session";
 import { ET, weekdayDate, writtenDate, zoneName } from "../shared/times";
 import { compactWords, nearest, strikeName } from "../strip";
@@ -150,8 +150,16 @@ export function plainView(input: PlainInput): PlainView {
 
   // a name with no note beside it (#400): the page keeps its overlap note, the table does not. A
   // holding's name carries its "held" tag, as on the screen (2026-11-17)
-  const row = (r: DeskRow) => columns.map((c) => c.key === PINNED
-    ? (r.kind === "holding" ? `${rowName(r)} ${HELD}` : rowName(r)) : cellOf(c, r, privacy));
+  // Where the rule's column is hidden, a holding's own rule — drawn on its row since 2026-11-17, with
+  // no row of its own — is said in its name cell, in its sentence, as the desk's name cell says its
+  // distance: hidden with the column, it would be in neither
+  const ruleShown = columns.some((c) => c.key === "alarm");
+  const nameOf = (r: DeskRow) => {
+    if (r.kind !== "holding") return rowName(r);
+    const own = ruleShown ? null : ruleOfRow(r);
+    return own ? `${rowName(r)} ${HELD} — ${sentence(own)}` : `${rowName(r)} ${HELD}`;
+  };
+  const row = (r: DeskRow) => columns.map((c) => c.key === PINNED ? nameOf(r) : cellOf(c, r, privacy));
   const header = (cols: readonly DeskColumn[]) => ({
     columns: cols.map((c) => LABELS[c.key] ?? c.label),
     align: cols.map((c): "left" | "right" => FIGURE_COLUMNS.has(c.key) ? "right" : "left"),
@@ -170,16 +178,17 @@ export function plainView(input: PlainInput): PlainView {
     rows: [
       ...g.held.flat().flatMap((p: PlacedHolding) => [
         row({ kind: "holding", holding: p.holding, rules: p.rules }),
-        ...subRules(p.holding, p.rules).map((e) => row({ kind: "rule", entry: e, nested: true })),
+        ...subRules(p).map((e) => row({ kind: "rule", entry: e, nested: true })),
       ]),
-      ...g.spreads.flatMap(({ entry, under, overlap }) => [
+      // each rule once (2026-11-17): a leg rule met under a second spread is not written again
+      ...g.spreads.flatMap(({ entry, under, overlap, elsewhere }) => [
         row({ kind: "rule", entry, nested: false, overlap }),
-        ...under.map((e) => row({ kind: "rule", entry: e, nested: true })),
+        ...drawnUnder(under, elsewhere).map((e) => row({ kind: "rule", entry: e, nested: true })),
       ]),
       ...(g.contracts.length > 0 ? [subLabel("contracts")] : []),
-      ...g.contracts.flatMap(({ entry, under }) => [
+      ...g.contracts.flatMap(({ entry, under, elsewhere }) => [
         row({ kind: "rule", entry, nested: false }),
-        ...under.map((e) => row({ kind: "rule", entry: e, nested: true })),
+        ...drawnUnder(under, elsewhere).map((e) => row({ kind: "rule", entry: e, nested: true })),
       ]),
     ],
   }));

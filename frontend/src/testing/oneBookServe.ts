@@ -1,5 +1,5 @@
 /** The owner-shaped book of the one-book layout suites (2026-11-17), served to the page, with a
- *  second rule under a held spread and a watched contract on a held leg so every part of an expiry
+ *  second rule under a held spread and a rule on a held leg so every part of an expiry
  *  is drawn: held spreads (their own rule on their row), a rule under one, watched spreads, the
  *  "contracts" label and a lone contract. Test support: the two `__browser__/NextOneBook` files import it. */
 import { entry, HOLDINGS, monitor, MONITORS, payoffAnswer, QUOTES, samplesAnswer, volAnswer } from "./ownerBook";
@@ -16,9 +16,11 @@ const SECOND = entry("r-calls-short", {
   threshold: 0.3, watched: 0.33, distance: -0.03, held: true, scope: "leg",
   positions: [{ id: "h-calls", name: "1218_C7300" }], quote: { name: "SPXW 261218 7300.00C", option_delta: 0.33 },
 });
+/** As the service serves a rule on a held leg: held, linked to the holding with scope leg. */
 const ON_LEG = entry("w-p6400", {
   code: "US.SPXW261218P6400000", strike_date: "2026-12-18", option_type: "PUT", field: "option_delta",
-  threshold: 0.3, watched: -0.21, distance: 0.09, quote: { name: "SPXW 261218 6400.00P", option_delta: -0.21 },
+  threshold: 0.3, watched: -0.21, distance: 0.09, held: true, scope: "leg",
+  positions: [{ id: "h-puts", name: "1218_P6400" }], quote: { name: "SPXW 261218 6400.00P", option_delta: -0.21 },
 });
 /** Each holding with a Level reached, so the widest chips are drawn beside "held". */
 const levelled = HOLDINGS.map((h) => ({

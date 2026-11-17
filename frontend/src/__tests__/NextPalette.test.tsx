@@ -180,14 +180,17 @@ describe("finding by text", () => {
     await waitFor(() => expect(inspector()!.contains(document.activeElement)).toBe(true));
   });
 
-  it("lands on a holding, on a holding by what its own rule watches, and on a quarantined rule", async () => {
+  it("lands on a holding, on a holding's own rule (its row), and on a quarantined rule", async () => {
     const { user } = await open();
     await run(user, "1231_IC holding");
     await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1231_IC"));
-    // the holding's own rule is drawn on its row (2026-11-17): found, and landed on, as the holding
-    await run(user, "7300 price");
-    await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300"));
-    expect(row("h-calls").hasAttribute("data-selected")).toBe(true);
+    // the holding's own rule is drawn on its row (2026-11-17): found, as a rule or by what it
+    // watches, and landed on, as the holding
+    for (const q of ["7300 Monitor", "7300 price"]) {
+      await run(user, q);
+      await waitFor(() => expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300"));
+      expect(row("h-calls").hasAttribute("data-selected")).toBe(true);
+    }
     await run(user, "8300");
     await waitFor(() => expect(row("q-unknown").hasAttribute("data-selected")).toBe(true));
   });

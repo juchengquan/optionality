@@ -1171,16 +1171,29 @@ not linked: a watch rule is no holding's, and `placeBook` decides what sits wher
 - **A "held" tag after a holding's name**, small and muted; a watched row carries none. A screen
   reader hears it in the row's name (`1231_8050 held`, `details of 1231_8050 held` on the phone);
   the inspector's and the sheet's heading stay the holding's name alone.
-- **A holding's own rule on its row.** The combo among its rules named as the holding is
-  (`ownRule`: the value rule the add form makes with it) is drawn in the holding's rule cell — its
-  short form and arrowed distance, and, where the rule's column drops, the distance in the name
-  cell (#423). Its ringing or fault chip is drawn on the holding's row beside the Level's, and its
-  row is gone. Any other rule about the holding is still a row under it; the inspector's and the
+- **A holding's own rule on its row.** `ownRule`: the rule the service links to this holding
+  alone over all of it (`scope` "all", `positions` exactly this holding — what its `schedule` is
+  built from), a price rule before any other, the one named as the holding only breaking a tie; a
+  rule renamed is still its own. It is drawn in the holding's rule cell — its short form and
+  arrowed distance, and, where the rule's column drops, the distance in the name cell (#423); the
+  saved picture and Copy as text, with the rule's column hidden, put its sentence in the name cell
+  (`1218_C7300 held — |value| ≥ 4.00 — now 4.40, past it by 0.40`). Its ringing or fault chip is
+  drawn on the holding's row beside the Level's, and its row is gone. Any other rule about the holding is still a row under it; the inspector's and the
   sheet's Rules section list every rule, its own first. The phone's card already drew the rule's
   line without its name (2026-11-17); its own rule is now that card's first line.
-- **A leg's rule sits under its spread**, as before; by the same rule a watched contract on a
-  HOLDING's leg, which no watched spread has, sits under the holding (`20261218 6800P` under the
-  holding with −P6800). The overlap note (`shares C8100 with 1231_8050`, #346) stays under its
+- **The row's colour is the most serious** of the holding's Level and its own rule (the owner,
+  2026-11-17): a fault (the name struck through) before ringing or at stop, before manage-by,
+  before at target — on the desk's row and the phone's card alike (`rowState`).
+- **A leg's rule sits under its spread**, as before; a contract rule on a held leg already sits
+  under its holding, since the service marks it held and links it (`holdsAnyOf`,
+  `adoptOrphanMonitors`), and on a roll day, unlinked but held, among the rules on held contracts.
+- **Every rule is drawn once** (the owner, 2026-11-17; on main a leg rule in two watched spreads,
+  and a combo linked to two drawn holdings — a condor rule over a condor held as two spreads — were
+  drawn under both): under the first place by the book's order, and at the other a short muted
+  note, `1218_IC also in 1218_C7300`, which is no row, takes no focus and carries no `data-ref`. So
+  j and k, the palette and a banner each meet one row per rule. The inspector and the sheet still
+  list it under both. The picture and the text write it once and no note, as they write no overlap
+  note (#400). The overlap note (`shares C8100 with 1231_8050`, #346) stays under its
   watched spread, now in the same expiry as the holding it names.
 - **The phone, the saved picture and Copy as text follow the same order.** The picture is one
   `Book` section with every ticked column (blank on a watched row), the name cell of a holding
@@ -1191,7 +1204,7 @@ not linked: a watch rule is no holding's, and `placeBook` decides what sits wher
   `valuing…` while the holdings are not valued, and a failed valuation's words, as before.
 - **The keys and the palette follow it.** j and k walk the rows in the one book's order
   (`tableRows`). The palette finds what the table draws, so a holding's own rule is found as the
-  holding — by what it watches too (`price`, `spread`) — and "Edit the selected rule" on a holding
+  holding — by what it watches too (`price`, `spread`), and as a `rule` or `monitor` — and "Edit the selected rule" on a holding
   with an own rule opens that rule's editor in its inspector.
 - **The fitting** counts the tag and the own rule's chip in the name column. Where even the name
   alone is wider than the table (a holding at stop with its rule ringing, beside the inspector at
@@ -1200,6 +1213,8 @@ not linked: a watch rule is no holding's, and `placeBook` decides what sits wher
   the said-once guard, the date and time standards (#420, #424), and the bot.
 
 Held by `NextOneBookModel.test.ts` (the model), `NextOneBook.test.tsx` (each decision on the desk,
-the phone and the picture with its text), `NextDeskKeys.test.tsx` (the keys' order), and the
-browser's `NextOneBook*.test.tsx` (nothing sideways at 900, 1024 and 1440px with the inspector
-shut and open, and under the iPhone 13 profile).
+the phone and the picture with its text, each pairing of a Level and an own rule's state, and 60
+seeded books shaped as the service shapes them, each holding and rule once on every surface),
+`NextDeskKeys.test.tsx` (the keys' order), and the browser's `NextOneBook*.test.tsx` (nothing
+sideways at 900, 1024, 1280 and 1440px with the inspector shut and open, and under the iPhone 13
+profile).
