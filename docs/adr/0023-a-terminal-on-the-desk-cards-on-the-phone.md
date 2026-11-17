@@ -218,8 +218,12 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
   the far wings by 9–23% under a naive model. Never draw what the system does not know.
 - **The burndown** draws the daily samples against the planned decay of ADR 0011. A point that is
   not a close (`observed_at`, ADR 0011's amendment) is marked as such. *(Since #395 the IV chart
-  and "SPX against the strikes" beneath it share its crosshair: a day pointed at in any of the
-  three is crossed in all three, each with its own readout.)*
+  beneath it shares its crosshair: a day pointed at in either is crossed in both, each with its
+  own readout. Amended 2026-11-17, #430: the history is TWO panels, the burndown and the IV
+  chart. A third, "SPX against the strikes" — SPX each day against the holding's strikes, with
+  each short strike's distance in points and σ — was removed by the owner's decision, and #431
+  stopped the samples routes serving each day's `short_strikes`, which only it read. Each day
+  still carries `spx`; the strike strip and the price map, which read today's, are unchanged.)*
 
 ### How it ships
 
@@ -592,12 +596,13 @@ The owner's decisions of 2026-11-15, built on ADR 0011's watch samples:
 
 - **A watched row has a history**, in the desk's inspector and the phone's sheet, opened as a
   holding's is (open outside the session, shut in it): its value each day against its price rule's
-  threshold, its legs' IV, and SPX against its strikes — the holding's three panels on #399's one
-  crosshair. The value is drawn as the price rule compares it (its size under `abs`, the figure
-  under `signed`); with no price rule, a spread watched only on its delta, its size and no threshold.
+  threshold and its legs' IV — the holding's two panels on #399's one crosshair (three until
+  2026-11-17, when "SPX against its strikes" was removed, #430). The value is drawn as the price
+  rule compares it (its size under `abs`, the figure under `signed`); with no price rule, a spread
+  watched only on its delta, its size and no threshold.
   In points per contract: a watched row has no count and no money.
 - **One chart, more lines as more is known.** Recorded as held, the same contracts' watch days are
-  drawn in the holding's burndown, IV and SPX panels BEFORE its own, faint, with a rule where it was
+  drawn in the holding's burndown and IV panels BEFORE its own, faint, with a rule where it was
   entered, and every readout says "before entry". The plan, the Target and the Stop start at Opened.
 - **The payoff and the value cell fall back to the last close.** A watched spread's payoff is drawn
   at its last close out of the session, always — never at a value quoted out of it — and in the
@@ -1148,6 +1153,23 @@ prose — and the bot's `Fri 13 Nov` and ISO.
   `/monitors` on the owner's book or in a door scenario cuts a contract. The bot's by its tests and the door scenarios; the domain's
   by its golden cases.
 
+
+## Amended 2026-11-17: a derived name's date is YYYYMMDD too
+
+The owner, 2026-11-17, after the date format above: the name the add form SUGGESTS — blank name,
+`derivedName` (`add.ts`) and `contractName` (`contract.ts`) — starts with the expiry as `YYYYMMDD`
+(`20261218_P7150`, `20261218_P7150_P7100`, `20261218_+C7300_-2C7350_+C7400`), where it was the month
+and day (`1218_…`). A name the owner typed is still his and untouched. Since the derived name is the
+value rule's CODE, a watch rule saved under an OLD derived name is no longer the one a held spread of
+that shape replaces (#293, #322); the live book held none when this changed (its three combos all
+carry typed names, checked read-only on 2026-11-17). Held by the add, contract and record-as-held
+suites, which state the new names.
+
+The other item raised beside it — the rule editor's `expired` taken from the UTC date — was looked
+at and left: the sweep judges expiry by the same UTC date (`sweeper.ts`, `utcDate`), so the page
+agrees with the service to the minute, and that minute (19:00 New York on the expiry day) is after
+the contract's last trade at the 16:00 close; the evening session trades the next expiry. A New
+York date on the page alone would make the two disagree.
 
 ## Amended 2026-11-17: one book — holdings and watches together, by expiry
 

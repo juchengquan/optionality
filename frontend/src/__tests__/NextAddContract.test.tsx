@@ -147,7 +147,7 @@ describe("a watched contract", () => {
     expect(posted()[0]).toEqual({
       strike_date: "2026-12-18",
       spreads: [{
-        name: "1218_P7150", held: false, legs: [{ side: "short", option_type: "PUT", strike: 7150 }], monitors: [RULE],
+        name: "20261218_P7150", held: false, legs: [{ side: "short", option_type: "PUT", strike: 7150 }], monitors: [RULE],
       }],
     });
     expect(onSaved.mock.calls[0]![0]).toEqual(ADDED);
@@ -254,7 +254,7 @@ describe("a held contract", () => {
     expect(posted()[0]).toEqual({
       strike_date: "2026-12-18",
       spreads: [{
-        name: "1218_P7150", held: true, legs: [{ side: "long", option_type: "PUT", strike: 7150 }],
+        name: "20261218_P7150", held: true, legs: [{ side: "long", option_type: "PUT", strike: 7150 }],
         entry: -5.2, contracts: 2, opened_at: "2026-11-10", monitors: [RULE],
       }],
     });
@@ -340,11 +340,11 @@ describe("a refusal", () => {
   });
 
   it("of a holding's name taken is said beside the name, and one request was all it took", async () => {
-    answer = { status: 409, body: { detail: "position '1218_P7150' already exists" } };
+    answer = { status: 409, body: { detail: "position '20261218_P7150' already exists" } };
     const { onSaved } = hold();
     fireEvent.click(screen.getByRole("button", { name: /^Record/ }));
     const alert = await screen.findByRole("alert");
-    expect(alert.textContent).toBe("position '1218_P7150' already exists");
+    expect(alert.textContent).toBe("position '20261218_P7150' already exists");
     expect(screen.getByLabelText("name").getAttribute("aria-describedby")).toBe(alert.id);
     expect(writes().map((a) => a.what)).toEqual(["POST /spreads"]);
     expect(onSaved).not.toHaveBeenCalled();

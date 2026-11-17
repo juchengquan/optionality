@@ -52,7 +52,7 @@ describe("a single-contract Monitor on the desk", () => {
         body: {
           strike_date: "2026-12-18",
           spreads: [{
-            name: "1218_P7150", held: false, legs: [{ side: "short", option_type: "PUT", strike: 7150 }],
+            name: "20261218_P7150", held: false, legs: [{ side: "short", option_type: "PUT", strike: 7150 }],
             monitors: [{ option_type: "PUT", strike: 7150, field, threshold: 0.15, direction: "above", compare: "abs" }],
           }],
         },
@@ -90,7 +90,7 @@ describe("a lone contract held, on the desk", () => {
     expect(writes.map((w) => w.what)).toEqual(["POST /spreads"]);
     expect(await screen.findByText("added 1 holding and 1 rule")).toBeTruthy();
     // the book read again: the holding is a row of it, by the name the form gave it
-    const row = await screen.findByText("1218_P7150");
+    const row = await screen.findByText("20261218_P7150");
     expect(row.closest(".nx-main")).not.toBeNull();
   });
 });

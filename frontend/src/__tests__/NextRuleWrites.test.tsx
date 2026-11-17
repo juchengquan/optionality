@@ -400,7 +400,7 @@ describe("through the page, against a service that writes", () => {
     expect(within(form).getByRole("button", { name: "I hold it" }).getAttribute("aria-pressed")).toBe("true");
     expect([value(form, "expiry"), value(form, "strike"), value(form, "what it watches"), value(form, "compare"),
       value(form, "threshold"), value(form, "name"), value(form, "opened")])
-      .toEqual(["2026-12-31", "8000", "option_delta", "abs", "0.1", "1231_C8000", "2026-11-10"]);
+      .toEqual(["2026-12-31", "8000", "option_delta", "abs", "0.1", "20261231_C8000", "2026-11-10"]);
     expect(within(form).getByRole("button", { name: "CALL" }).getAttribute("aria-pressed")).toBe("true");
     expect(within(within(form).getByRole("group", { name: "side" })).getByRole("button", { name: "short" })
       .getAttribute("aria-pressed")).toBe("true");
@@ -411,13 +411,13 @@ describe("through the page, against a service that writes", () => {
     expect(writes[0]!.body).toEqual({
       strike_date: "2026-12-31",
       spreads: [{
-        name: "1231_C8000", held: true, legs: [{ side: "short", option_type: "CALL", strike: 8000 }],
+        name: "20261231_C8000", held: true, legs: [{ side: "short", option_type: "CALL", strike: 8000 }],
         entry: 0.8, contracts: 1, opened_at: "2026-11-10",
         monitors: [{ option_type: "CALL", strike: 8000, field: "option_delta", threshold: 0.1, direction: "above", compare: "abs" }],
       }],
     });
     expect(await screen.findByText("added 1 holding and 1 rule, replacing 1 watch rule")).toBeTruthy();
-    await screen.findByRole("button", { name: "details of 1231_C8000 held" });
+    await screen.findByRole("button", { name: "details of 20261231_C8000 held" });
   });
 
   it("records a watched ratio from the desk's inspector: its signs and quantities kept, the Entry focused", async () => {
@@ -526,16 +526,16 @@ describe("through the page, against a service that writes", () => {
 
   it("names a watched contract's holding apart from a closed one of the same name", async () => {
     NOW();
-    const writes = serveRuleEdits({}, [], { names: ["1231_C8000"] });
+    const writes = serveRuleEdits({}, [], { names: ["20261231_C8000"] });
     render(<Next />);
     fireEvent.click(await screen.findByRole("button", { name: "details of 20261231 C8000" }));
     fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "record 20261231 C8000 Δ as held" }));
     const form = within(await addSheet()).getByRole("form", { name: "add one contract" });
-    expect(value(form, "name")).toBe("1231_C8000-2");
+    expect(value(form, "name")).toBe("20261231_C8000-2");
     fireEvent.change(within(form).getByLabelText("entry"), { target: { value: "0.8" } });
     fireEvent.click(within(form).getByRole("button", { name: "Record holding + 1 rule" }));
     await waitFor(() => expect(writes).toHaveLength(1));
-    expect((writes[0]!.body as { spreads: { name: string }[] }).spreads[0]!.name).toBe("1231_C8000-2");
+    expect((writes[0]!.body as { spreads: { name: string }[] }).spreads[0]!.name).toBe("20261231_C8000-2");
   });
 
   it("says before saving that a watched spread's name is a holding's already, and what renaming does", async () => {

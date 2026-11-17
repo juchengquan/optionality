@@ -71,7 +71,7 @@ export function newContract(today: string): ContractDraft {
   };
 }
 
-/** `1218_P7150`: named as `add.ts` names a spread, with its one leg — the strike as the NUMBER it
+/** `20261218_P7150`: named as `add.ts` names a spread, with its one leg — the strike as the NUMBER it
  *  parses to, so "+7150", "7150.0" and "07150" all name the one contract they mean. */
 export const contractName = (expiry: string, type: OptionType, strike: number) =>
   derivedName(expiry, [{ option_type: type, strike: String(strike) }]);
@@ -84,7 +84,7 @@ export function contractOfCode(code: string): { option_type: OptionType; strike:
 }
 
 /** `name`, or the first of `name-2`, `name-3`… that no holding on record has: a holding's name is
- *  unique across closed ones too, so a closed `1231_C8000` makes the next one `1231_C8000-2`. */
+ *  unique across closed ones too, so a closed `20261231_C8000` makes the next one `20261231_C8000-2`. */
 export function uniqueName(name: string, taken: string[]): string {
   const names = new Set(taken);
   if (!names.has(name)) return name;
