@@ -997,15 +997,16 @@ describe("a combo drawn in the Watchlist because it names a contract its holding
 });
 
 describe("the book", () => {
-  it("sits a short leg's delta rule under the spread that holds its contract", async () => {
+  it("draws a short leg's delta rule as a row of its own, not under its spread (2026-11-17)", async () => {
     at(SESSION);
     await open();
     const row = document.querySelector('[data-ref="w1"]')!;
     expect(row.textContent).toContain("|value| ≥ 6.01 — now 2.00, 4.01 away");
     expect(document.querySelector('[data-ref="w2"]')!.textContent)
       .toContain("|Δ| ≥ 0.20 — now −0.150, 0.050 away");
-    // nested: inside the spread's own list item, not beside it
-    expect(row.closest("li")!.contains(document.querySelector('[data-ref="w2"]'))).toBe(true);
+    // a contract row of its own, in Contracts: not inside the spread's list item
+    expect(row.closest("li")!.contains(document.querySelector('[data-ref="w2"]'))).toBe(false);
+    expect(document.querySelector('[data-ref="w2"]')!.closest('[data-section="contracts"]')).toBeTruthy();
   });
 
   it("hides the money and keeps the share captured when privacy is on", async () => {

@@ -49,10 +49,12 @@ describe("one table: one book, by expiry (2026-11-17)", () => {
       // 12-04: watched only
       "w-dec04",
       // 12-18: the condor held as two spreads, calls first, each rule its own row's; then the
-      // watched spread with its short leg's delta under it
-      "h-calls", "h-puts", "w-dec18", "w-dec18-delta",
-      // 12-31: the 4-leg condor, then the watched spread, then the lone contract
-      "h-ic", "w-dec31", "w-lone",
+      // watched spread, nothing under it
+      "h-calls", "h-puts", "w-dec18",
+      // 12-31: the 4-leg condor, then the watched spread
+      "h-ic", "w-dec31",
+      // Contracts: the short leg's delta at 12-18, a row of its own (2026-11-17); the lone contract
+      "w-dec18-delta", "w-lone",
       // the rule the service switched off, after the book
       "q-unknown",
     ]);
@@ -61,7 +63,7 @@ describe("one table: one book, by expiry (2026-11-17)", () => {
     expect(screen.queryByRole("region", { name: "Watchlist" })).toBeNull();
     expect([...document.querySelectorAll(".nxd-part")].map((x) => [
       x.querySelector("h2")!.textContent, ...[...x.querySelectorAll(".nxd-expiry h3")].map((h) => h.textContent)]))
-      .toEqual([["Spreads", "20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"], ["Contracts", "20261231 · 38 DTE"]]);
+      .toEqual([["Spreads", "20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"], ["Contracts", "20261218 · 38 DTE", "20261231 · 38 DTE"]]);
   });
 
   it("joins a condor's two spreads with a bracket, and keeps a 4-leg holding one row", () => {
@@ -87,11 +89,12 @@ describe("one table: one book, by expiry (2026-11-17)", () => {
     expect(legMarks(cell("h-calls", "legs")!)).toHaveLength(2);
   });
 
-  it("sits a short leg's delta rule under its spread, and a rule matching no spread alone", () => {
+  it("draws a short leg's delta rule as a row of its own in Contracts, as a rule matching no spread (2026-11-17)", () => {
     render(<DeskBook {...props()} />);
     const spread = row("w-dec18").closest("li")!;
-    expect(spread.contains(row("w-dec18-delta"))).toBe(true);
-    expect(row("w-dec18-delta").dataset.nested).toBe("");
+    expect(spread.contains(row("w-dec18-delta"))).toBe(false);
+    expect(row("w-dec18-delta").dataset.nested).toBeUndefined();
+    expect(row("w-dec18-delta").closest('[data-section="contracts"]')).toBeTruthy();
     // w-lone is a contract no watched spread holds: its own item, nested under nothing
     expect(row("w-lone").closest("li")!.querySelectorAll(".nxd-row")).toHaveLength(1);
     expect(row("w-lone").dataset.nested).toBeUndefined();
@@ -304,7 +307,7 @@ describe("the inspector", () => {
     const insp = screen.getByRole("complementary", { name: "inspector: 1218_P7150" });
     expect(insp.getAttribute("aria-modal")).toBeNull();
     expect(insp.closest("[data-poll]")).toBeNull();
-    expect(insp.textContent).toContain("|Δ| ≥ 0.20 — now −0.170, 0.030 away");
+    expect(insp.textContent).toMatch(/\|value\| ≥ /);
     // another row is still one click away
     fireEvent.click(within(row("w-dec31")).getByRole("button", { name: "1231_C7600" }));
     expect(screen.getByRole("complementary", { name: "inspector: 1231_C7600" })).toBeTruthy();
@@ -695,8 +698,8 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     // delta on 1231_8050's short leg, a contract row of its own (2026-11-17)
     expect(order()).toEqual([
       "h-8050", "h-ic", "r-ic-calls", "h-7200",
-      "r-8100", "w-8150-delta", "w-7700", "r-ratio",
-      "h-7700", "r-8050-delta",
+      "r-8100", "w-7700", "r-ratio",
+      "h-7700", "r-8050-delta", "w-8150-delta",
     ]);
     // each names a contract its holding does not hold: C8150, C7750, a second C7250
     for (const id of ["r-8100", "w-7700", "r-ratio"]) expect(row(id).dataset.nested).toBeUndefined();

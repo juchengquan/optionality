@@ -100,8 +100,9 @@ describe("the cards", () => {
 
   it("give every control a 44pt target, each card's included", async () => {
     await show();
-    // three holdings and four watched rules: every card is a target, and is measured as one
-    expect(document.querySelectorAll(".nxp-open").length).toBe(7);
+    // three holdings and five watched rules — a short leg's delta a card of its own since
+    // 2026-11-17: every card is a target, and is measured as one
+    expect(document.querySelectorAll(".nxp-open").length).toBe(8);
     expect(tooSmall()).toEqual([]);
   });
 

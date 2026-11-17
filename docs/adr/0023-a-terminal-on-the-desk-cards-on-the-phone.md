@@ -1217,6 +1217,12 @@ not linked: a watch rule is no holding's, and `placeBook` decides what sits wher
   (`heldLeg`, `placement.ts`). The service's link is untouched: only where the rule is drawn
   changes, and the holding's Δ still falls back to that rule's figure where the service sent none
   (`legRules`). On a holding of ONE contract, itself in Contracts, the rule stays under it.)*
+  *(And again the same day, by the owner's decision: EVERY single-contract rule is a row of its own
+  in Contracts — a leg of a WATCHED spread too — so a spread's card or row draws nothing under it
+  (its `under` is always empty) and a leg rule in two watched spreads needs no "also in" note. The
+  spread keeps its short strike's Δ on its strike strip. A sheet opened from a rule's own card,
+  closed because the rule was muted or deleted there, hands the focus to the book's heading rather
+  than the body.)*
 - **Every rule is drawn once** (the owner, 2026-11-17; on main a leg rule in two watched spreads,
   and a combo linked to two drawn holdings — a condor rule over a condor held as two spreads — were
   drawn under both): under the first place by the book's order, and at the other a short muted

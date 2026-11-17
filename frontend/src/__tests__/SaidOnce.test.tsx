@@ -305,11 +305,14 @@ for (const arrangement of ["desk", "phone"] as const) {
         expect(card.querySelector("[data-ref='r-calls'] .nxp-sentence")).toBeTruthy();
         // a rule over more than this holding keeps its name: it is not the card's
         expect(card.querySelector("[data-ref='r-condor'] .nxp-rule-name")!.textContent).not.toBe("1218_C7300");
-        // a watched spread's leg rule keeps its own name
+        // a watched spread has no leg rule under it to name (2026-11-17): the leg's rule is a card
+        // of its own, whose heading is its name, said once there
         const watch = document.querySelector("[data-ref='w-dec18']")!;
-        expect([...watch.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["20261218 P7150"]);
+        expect([...watch.querySelectorAll(".nxp-rule-name")]).toEqual([]);
+        const leg = document.querySelector("[data-ref='w-dec18-delta']")!;
+        expect(count(leg.textContent!, "20261218 P7150")).toBe(1);
         const sheet = await detail(arrangement, "1218_P7150");
-        expect([...sheet.querySelectorAll(".nxp-rule-name")].map((n) => n.textContent)).toEqual(["20261218 P7150"]);
+        expect([...sheet.querySelectorAll(".nxp-rule-name")]).toEqual([]);
       } else {
         // the desk's inspector never drew a rule's name in Rules: held to that
         const d = await detail(arrangement, "1218_P7150");

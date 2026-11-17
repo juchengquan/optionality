@@ -377,12 +377,15 @@ describe("while a write is in flight, and after it", () => {
     onTestFinished(() => { vi.useRealTimers(); });
     const writes = serveEditing();
     render(<Next />);
-    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
+    // a holding's sheet, which stays when its own rule goes (a spread's leg rules are rows of their
+    // own since 2026-11-17, and a sheet whose subject is the rule closes with it)
+    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_C7300 held" }));
     const sheet = await screen.findByRole("dialog");
-    fireEvent.click(within(sheet).getByRole("button", { name: "delete 20261218 P7150 Δ" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "delete 1218_C7300 value" }));
     fireEvent.click(within(sheet).getByRole("button", { name: "delete it" }));
     await waitFor(() => expect(writes).toHaveLength(1));
-    await until(() => expect(document.activeElement).toBe(within(sheet).getByRole("heading", { name: "1218_P7150" })));
+    await until(() => expect(document.activeElement?.tagName).toMatch(/^H[234]$/));
+    expect(sheet.contains(document.activeElement)).toBe(true);
   });
 
   /** The race #350 captured under load, made to happen every time: the write lands inside an `act`
@@ -539,12 +542,16 @@ describe("from both arrangements", () => {
   const wrap = (a: MonitorActions, ui: React.ReactNode) =>
     render(<MonitorActionsContext.Provider value={a}>{ui}</MonitorActionsContext.Provider>);
 
-  it("edits a rule from the desk's inspector, its own and the leg's under it", async () => {
+  it("edits a rule from the desk's inspector: a spread's own, and a leg's from its own row", async () => {
     const { value, sent } = actions();
     wrap(value, <DeskBook {...book()} />);
     fireEvent.click(screen.getByRole("button", { name: "1218_P7150" }));
-    const inspector = screen.getByRole("complementary", { name: /^inspector/ });
+    let inspector = screen.getByRole("complementary", { name: /^inspector/ });
     expect(within(inspector).getByRole("button", { name: "edit 1218_P7150 value" })).toBeTruthy();
+    // the leg's rule is not under the spread (2026-11-17): it is a contract row of its own
+    expect(within(inspector).queryByRole("button", { name: "mute 20261218 P7150 Δ" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "20261218 P7150" }));
+    inspector = screen.getByRole("complementary", { name: /^inspector/ });
     fireEvent.click(within(inspector).getByRole("button", { name: "mute 20261218 P7150 Δ" }));
     await waitFor(() => expect(sent).toEqual([{ what: "PATCH", id: DELTA.id, body: { enabled: false } }]));
   });
@@ -566,8 +573,13 @@ describe("from both arrangements", () => {
     const { value, sent } = actions();
     wrap(value, <div className="nx"><PhoneBook {...book()} /></div>);
     fireEvent.click(screen.getByRole("button", { name: "details of 1218_P7150" }));
-    const sheet = await screen.findByRole("dialog");
+    let sheet = await screen.findByRole("dialog");
     fireEvent.click(within(sheet).getByRole("button", { name: "mute 1218_P7150 value" }));
+    fireEvent.click(within(sheet).getByRole("button", { name: "close sheet" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // the leg's rule from its own card's sheet: a contract row since 2026-11-17
+    fireEvent.click(screen.getByRole("button", { name: "details of 20261218 P7150" }));
+    sheet = await screen.findByRole("dialog");
     fireEvent.click(within(sheet).getByRole("button", { name: "mute 20261218 P7150 Δ" }));
     await waitFor(() => expect(sent).toHaveLength(2));
     expect(sent.map((s) => s.id)).toEqual([SPREAD.id, DELTA.id]);
@@ -588,7 +600,7 @@ describe("from both arrangements", () => {
     // the sheet's own dismissal does not ask whether the key was handled: Escape must stop here
     const { value } = actions();
     wrap(value, <div className="nx"><PhoneBook {...book()} /></div>);
-    fireEvent.click(screen.getByRole("button", { name: "details of 1218_P7150" }));
+    fireEvent.click(screen.getByRole("button", { name: "details of 20261218 P7150" }));
     const sheet = await screen.findByRole("dialog");
     fireEvent.click(within(sheet).getByRole("button", { name: "edit 20261218 P7150 Δ" }));
     fireEvent.keyDown(within(sheet).getByLabelText("threshold"), { key: "Escape" });
@@ -627,8 +639,8 @@ describe("the page after a save", () => {
       return new Promise((r) => held.push(() => r(answer)));
     }) as typeof fetch;
     render(<Next />);
-    // jsdom's window is the phone's width: the rule is reached through its spread's sheet
-    fireEvent.click(await screen.findByRole("button", { name: "details of 1218_P7150" }));
+    // jsdom's window is the phone's width: the rule is reached through its own card's sheet
+    fireEvent.click(await screen.findByRole("button", { name: "details of 20261218 P7150" }));
     const sheet = await screen.findByRole("dialog");
 
     hold = true;

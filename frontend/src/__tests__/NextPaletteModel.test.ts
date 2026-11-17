@@ -17,7 +17,7 @@ describe("what it finds", () => {
   it("is every row of the table in the order drawn, then the muted and expired rules", () => {
     expect(refs(book)).toEqual([
       // the one book, by expiry (2026-11-17): a holding's own rule is its row's, so not apart
-      "w-dec04", "h-calls", "h-puts", "w-dec18", "w-dec18-delta", "h-ic", "w-dec31", "w-lone",
+      "w-dec04", "h-calls", "h-puts", "w-dec18", "h-ic", "w-dec31", "w-dec18-delta", "w-lone",
       // the folded list, as it is drawn: by expiry
       "q-unknown", "m-expired", "m-muted",
     ]);
@@ -243,8 +243,8 @@ describe("a combo that only partly overlaps a holding (#346)", () => {
     // in the table's order: Spreads, then Contracts, where the holding of one call is (2026-11-17)
     expect(refs(found)).toEqual([
       "h-8050", "h-ic", "r-ic-calls", "h-7200",
-      "r-8100", "w-8150-delta", "w-7700", "r-ratio",
-      "h-7700", "r-8050-delta",
+      "r-8100", "w-7700", "r-ratio",
+      "h-7700", "r-8050-delta", "w-8150-delta",
     ]);
   });
 

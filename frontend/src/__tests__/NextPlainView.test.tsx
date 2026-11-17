@@ -111,14 +111,16 @@ describe("the table", () => {
     expect(view.sections.map((s) => s.title)).toEqual(["Spreads", "Contracts", "Muted and expired"]);
     expect(view.sections[0]!.groups.map((g) => g.heading)).toEqual(["20261204 · 38 DTE", "20261218 · 38 DTE", "20261231 · 38 DTE"]);
     // the quarantined follow the book, as on the page: after its last section's expiries
-    expect(view.sections[1]!.groups.map((g) => g.heading)).toEqual(["20261231 · 38 DTE", "Quarantined — switched off by the service"]);
+    expect(view.sections[1]!.groups.map((g) => g.heading))
+      .toEqual(["20261218 · 38 DTE", "20261231 · 38 DTE", "Quarantined — switched off by the service"]);
     // each expiry's held spreads ("held" in the name cell, their own rule on their row), then its
     // watched spreads; the lone contracts in a table of their own, with no label row
     expect(bookRows(view).map((r) => r[0])).toEqual([
       "1204_P6900",
-      "1218_C7300 held", "1218_P6400 held", "1218_P7150", "20261218 P7150",
+      "1218_C7300 held", "1218_P6400 held", "1218_P7150",
       "1231_IC held", "1231_C7600",
-      "20261231 C8000",
+      // Contracts: a short leg's delta a row of its own (2026-11-17), then the lone contract
+      "20261218 P7150", "20261231 C8000",
       "20261211 C8000",
     ]);
     expect(bookRows(view).some((r) => r[0] === "contracts")).toBe(false);
@@ -309,8 +311,9 @@ describe("the minus, in the picture and in the text (the owner, 2026-11-16)", ()
     // a figure: −$240 and −0.330 drawn, -$240 and -0.330 written
     expect([rowIn(picture)[pnl!], rowIn(picture)[delta!]]).toEqual(["\u2212$240", "0.330"]);
     expect(rowIn(text)[pnl!]).toBe("-$240");
-    const short = sectionOf(plainView(given), "Spreads");
-    const lone = readMarkdown(toMarkdown(plainView(given))).sections[0]!.rows.find((r) => r[0] === "20261218 P7150")!;
+    // a short leg's delta, a contract row since 2026-11-17: in the Contracts table
+    const short = sectionOf(plainView(given), "Contracts");
+    const lone = readMarkdown(toMarkdown(plainView(given))).sections[1]!.rows.find((r) => r[0] === "20261218 P7150")!;
     expect(lone[short.columns.indexOf("Δ")]).toBe("-0.170");
     // words keep the true minus in both: a leg, and a rule's sentence
     expect(rowIn(text)[legs!]).toBe("\u2212C7300 +C7350");
@@ -362,8 +365,9 @@ describe("the picture and the text, one builder", () => {
     expect(md).toContain("\n## Contracts\n\n| name | legs | value |");
     expect(md).not.toMatch(/## (Holdings|Watchlist)/);
     expect(md).toContain("\n| 20261218 · 38 DTE |  |  |");
-    // each expiry's heading once in a table, and no label row: Contracts is a table of its own
-    expect(md.match(/\n\| 20261218 · 38 DTE \|/g)).toHaveLength(1);
+    // each expiry's heading once in a table — 20261218 in both, Spreads and Contracts — and no label
+    // row: Contracts is a table of its own
+    expect(md.match(/\n\| 20261218 · 38 DTE \|/g)).toHaveLength(2);
     expect(md).not.toContain("\n| contracts |");
     expect(md).toContain("\n| 1231_IC held | ");
     // the References a nested list, one a line (#400)
