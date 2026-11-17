@@ -3,22 +3,18 @@
  *  it does not reach — where the crosshair's tooltip goes, and what it and the status line say.
  *
  *  Pure, so each is tested without a chart; the chart only draws what these decide. */
-import { fixed, moneyPlain, tick } from "./shared/numbers";
+import { fixed, tick } from "./shared/numbers";
 import { scaleLinear } from "@visx/scale";
 
 import type { Sample, Samples } from "./shared/api";
 import { writtenDate } from "./shared/times";
 import { paceOutcome, paceWords } from "./pace";
 
-/** How a Cost to close is said: money across the contracts at the contract size the valuation
- *  served, and points per contract without one — or under privacy, which hides dollars and anything
- *  across the contracts held but keeps the per-contract points, as the table's value column, the
- *  inspector's Entry, Target and Stop and the payoff do (the owner's call, #395). */
+/** How a Cost to close is said: always the spread's own value in points per contract — never money
+ *  across the contracts held (the owner, 2026-11-17), as the table's value column, the inspector's
+ *  Entry, Target and Stop and the payoff's extremes say it. It was dollars across the contracts
+ *  until then, and points only under privacy (#395), which therefore changes nothing here now. */
 export interface Unit {
-  size: number;
-  contracts: number;
-  money: boolean;
-  hidden: boolean;
   /** what the figure is called in the readouts: "to close" for a holding, "value" for a watched
    *  row's history (#402) */
   what?: string;
@@ -31,28 +27,13 @@ export interface Unit {
 export type PricedSample = Sample & { cost_to_close: number };
 export const hasCost = (s: Sample): s is PricedSample => s.cost_to_close !== null;
 
-/** Whether a figure is said as money across the contracts: never under privacy. */
-const inMoney = (unit: Unit) => unit.money && !unit.hidden;
+/** A figure as the chart says it: the points alone — its heading says "points … per contract" once,
+ *  and a "pts" on each figure wrapped the tooltip at 272px onto the day it describes. */
+export const say = (points: number): string => fixed(points, 2);
 
-export function say(points: number, unit: Unit): string {
-  if (inMoney(unit)) return moneyPlain(points * unit.contracts * unit.size);
-  return `${fixed(points, 2)} pts`;
-}
-
-/** An axis label: as `say`, without the "pts" a tick has no room for, and to no more places than
- *  the tick needs. */
-function tickWords(points: number, unit: Unit): string {
-  if (inMoney(unit)) return moneyPlain(points * unit.contracts * unit.size);
-  return tick(points);
-}
-
-/** What the chart's money is: across the contracts at the contract size, or per contract in points
- *  — said beside every figure, so it cannot read as the inspector's per-contract Cost to close in
- *  another unit. Per contract under privacy, which never says the count. */
-export function scopeWords(unit: Unit): string {
-  if (!inMoney(unit)) return "per contract";
-  return `${unit.contracts} contract${unit.contracts === 1 ? "" : "s"}`;
-}
+/** What the chart's figures are: per contract, said once, in its heading — beside every figure it
+ *  wrapped the tooltip at 272px onto the day it describes. */
+export const SCOPE_WORDS = "per contract";
 
 /** "20261103": a market date as every date is written (`times.writtenDate`), by string, so no zone
  *  can move it — the way the service writes the days in its reasons. */
@@ -111,11 +92,10 @@ function gapOf(s: PricedSample) {
 
 /** What the crosshair's tooltip says of a day, line by line. */
 export function tipLines(s: PricedSample, unit: Unit) {
-  const scope = scopeWords(unit);
   return {
     day: `${dayWords(s.observed_on)} · ${s.dte} DTE`,
-    cost: `${unit.what ?? "to close"}${scope === null ? "" : `, ${scope}`}: ${say(s.cost_to_close, unit)}`,
-    pace: s.on_pace === null ? null : `on pace ${say(s.on_pace, unit)}`,
+    cost: `${unit.what ?? "to close"}: ${say(s.cost_to_close)}`,
+    pace: s.on_pace === null ? null : `on pace ${say(s.on_pace)}`,
     gap: gapOf(s),
     why: whyShort(s),
     corrected: s.before_correction ? CORRECTED_WORDS : null,
@@ -127,8 +107,7 @@ export function tipLines(s: PricedSample, unit: Unit) {
 /** What the tooltip says of today's valuation: a stop of the crosshair's of its own, after the last
  *  day, since it is drawn apart from the closes and has no plan or reason of its own. */
 export function nowLines(now: { dte: number; cost: number }, unit: Unit) {
-  const scope = scopeWords(unit);
-  return { day: `valued now · ${now.dte} DTE`, cost: `${unit.what ?? "to close"}${scope === null ? "" : `, ${scope}`}: ${say(now.cost, unit)}` };
+  return { day: `valued now · ${now.dte} DTE`, cost: `${unit.what ?? "to close"}: ${say(now.cost)}` };
 }
 
 /** What the burndown says of a day the shared crosshair stops on with no Cost to close (#380,
@@ -247,9 +226,8 @@ function nowOf(holding: Valued) {
  *  at nice ticks. NOT to the Stop: at twice the Entry it set the top and squeezed every line into
  *  the bottom third (#360). A Stop above the scale is marked at its top edge (`off`)
  *  rather than drawn, and one inside it is drawn where it is. `L` is the left margin the labels
- *  need. Under privacy they are points per contract (#395): the dollar labels, and a gutter as wide
- *  as they would be, are never drawn. */
-export function valueAxis(served: Samples, holding: Valued, unit: Unit, also: number[] = []) {
+ *  need, in points per contract. */
+export function valueAxis(served: Samples, holding: Valued, also: number[] = []) {
   const { levels, plan, samples } = served;
   const now = nowOf(holding);
   // `also`: a watched row's threshold, drawn against its value (#402), and a holding's Entry, drawn
@@ -271,7 +249,8 @@ export function valueAxis(served: Samples, holding: Valued, unit: Unit, also: nu
   const stop = levels?.stop == null ? null
     // never below: a Stop is a credit's, above its Entry, and the scale always holds 0
     : { value: levels.stop, off: levels.stop > top ? "above" as const : null };
-  const labels = ticks.map((v) => tickWords(v, unit));
+  // without the "pts" a tick has no room for, and to no more places than the tick needs
+  const labels = ticks.map(tick);
   const L = Math.ceil(Math.max(...labels.map(textWidth), 16)) + 10;
   return { lo: bottom, hi: top, ticks, labels, stop, now, L };
 }

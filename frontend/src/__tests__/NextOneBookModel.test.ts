@@ -53,10 +53,6 @@ describe("the book in two sections (the owner, 2026-11-17)", () => {
     expect(book).toEqual([...expiries("spreads"), ...expiries("contracts")]);
   });
 
-  it("draws nothing under a watched spread: a leg's rule is a contract row (2026-11-17)", () => {
-    expect(book.flatMap((g) => g.spreads.flatMap((i) => i.under))).toEqual([]);
-  });
-
   it("says each expiry's DTE from its first row", () => {
     expect(book.map((g) => g.dte)).toEqual([38, 38, 38, 38, 38]);
   });
@@ -93,13 +89,12 @@ describe("a single-contract rule on a leg of a held spread (the owner, 2026-11-1
     expect(ids(calls.rules)).toEqual(["r-calls"]);
     expect(contracts.expiries.map((g) => g.expiry)).toEqual(["2026-12-18", "2026-12-31"]);
     // first at its expiry, before the watched leg rule of the same day
-    expect(contracts.expiries[0]!.contracts.map((i) => [i.entry.id, i.under]))
-      .toEqual([["r-calls-delta", []], ["w-dec18-delta", []]]);
+    expect(contracts.expiries[0]!.contracts.map((i) => i.entry.id)).toEqual(["r-calls-delta", "w-dec18-delta"]);
   });
 
-  it("sits under no watched spread it is also a leg of", () => {
+  it("is no row of the Spreads section, though a watched spread is also a leg of it", () => {
     const spreads = sections.find((x) => x.kind === "spreads")!;
-    expect(spreads.expiries.flatMap((g) => g.spreads.flatMap((i) => ids(i.under)))).toEqual([]);
+    expect(spreads.expiries.flatMap((g) => g.spreads.map((i) => i.entry.id))).not.toContain("r-calls-delta");
   });
 
   it("comes before the watched contracts of its expiry: the held rows first", () => {
@@ -213,7 +208,6 @@ describe("a contract rule on a held leg, as the service serves it (in Contracts 
     const both = { ...onLeg, in_combos: ["w-dec18"] };
     const b = placeBook([...QUOTES, both], HOLDINGS, MONITORS);
     expect(contractsOf(b)).toContain("r-p6400");
-    expect(ids(b.book[1]!.spreads[0]!.under)).toEqual([]);
   });
 
   it("is a rule on held contracts while the holdings are not valued", () => {
@@ -229,8 +223,7 @@ describe("each rule drawn once (2026-11-17)", () => {
       legs: [{ sign: -1, option_type: "PUT", strike: 7150 }, { sign: 1, option_type: "PUT", strike: 7050 }] } as never;
     const leg = QUOTES.map((q) => (q.id === "w-dec18-delta" ? { ...q, in_combos: ["w-dec18", "w-dec18b"] } : q));
     const { book } = placeBook([...leg, other], HOLDINGS, MONITORS);
-    const [a, b] = book[1]!.spreads;
-    for (const s of [a!, b!]) expect([s.under, s.elsewhere]).toEqual([[], []]);
+    expect(book[1]!.spreads.map((s) => s.entry.id)).toEqual(["w-dec18", "w-dec18b"]);
     expect(book.flatMap((g) => g.contracts.map((i) => i.entry.id)).filter((id) => id === "w-dec18-delta")).toHaveLength(1);
   });
 

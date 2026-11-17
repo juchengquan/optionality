@@ -51,13 +51,13 @@ function serve(id: string, samples: Samples = SAMPLES[id]!) {
 }
 
 async function draw(id: string, width: number,
-  { samples, privacy = false }: { samples?: Samples; privacy?: boolean } = {}) {
+  { samples }: { samples?: Samples } = {}) {
   // room for the widest box, so the page's own width is never what pushes it sideways
   await page.viewport(Math.max(width, 400) + 40, 900);
   serve(id, samples);
   render(
     <div className="nx" style={{ width, padding: 0 }}>
-      <HoldingHistory holding={holdingOf(id) as Holding} privacy={privacy} />
+      <HoldingHistory holding={holdingOf(id) as Holding} />
     </div>,
   );
   await settle();
@@ -125,12 +125,11 @@ describe("the burndown fits, and its tooltip stays inside it", () => {
     ["h-calls", undefined], ["h-puts", undefined], ["h-ic", undefined], ["h-calls", MISSED], ["h-calls", CORRECTED],
     ["h-calls", CORRECTED_LATE],
   ] as const;
-  for (const width of [272, 400, 900]) for (const [id, samples] of cases) for (const privacy of [false, true]) {
+  for (const width of [272, 400, 900]) for (const [id, samples] of cases) {
     const what = `${id}${samples === MISSED ? " with a missed day" : samples === CORRECTED ? " with a quantity corrected"
-      : samples === CORRECTED_LATE ? " corrected on its expiry day" : ""}`
-      + `${privacy ? ", privacy on" : ""}`;
+      : samples === CORRECTED_LATE ? " corrected on its expiry day" : ""}`;
     it(`at ${width}px: ${what}`, async () => {
-      const { chart, svg } = await draw(id, width, { samples, privacy });
+      const { chart, svg } = await draw(id, width, { samples });
       expect(svg.getBoundingClientRect().width).toBe(width);
       // the correction's rule is drawn, inside the plot, wherever the chart is this wide (#359)
       if (samples === CORRECTED || samples === CORRECTED_LATE) expect(svg.querySelector("[data-corrected-on] text")?.textContent).toBe("qty corrected");
@@ -173,9 +172,9 @@ describe("the tooltip's measured height", () => {
 });
 
 describe("the two charts put a day at one x (#327)", () => {
-  for (const width of [272, 400, 900]) for (const privacy of [false, true]) {
-    it(`at ${width}px${privacy ? ", privacy on" : ""}`, async () => {
-      await draw("h-puts", width, { privacy });
+  for (const width of [272, 400, 900]) {
+    it(`at ${width}px`, async () => {
+      await draw("h-puts", width);
       const centre = (el: Element | null) => {
         const r = el!.getBoundingClientRect();
         return r.left + r.width / 2;
@@ -194,7 +193,7 @@ describe("a Stop beyond the scale", () => {
   it("is marked at the plot's top edge, inside the chart, rather than stretching the axis", async () => {
     const { svg } = await draw("h-puts", 272);
     const stop = svg.querySelector("[data-level='stop'][data-off='above']")!;
-    expect(stop.textContent).toMatch(/^▲ stop \$/);
+    expect(stop.textContent).toMatch(/^▲ stop \d+\.\d\d$/);
     const line = stop.querySelector("line")!.getBoundingClientRect();
     const plot = svg.querySelector("[data-grid]")!.getBoundingClientRect();
     expect(line.top).toBeCloseTo(plot.top, 0);
