@@ -126,18 +126,7 @@
             "legs_delta": {
               "US.SPXW261218C7300000": 0.22
             },
-            "spx": null,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": 0.22,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              }
-            ]
+            "spx": null
           }
         ]
       }

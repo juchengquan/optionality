@@ -855,12 +855,10 @@ describe("a watched rule's daily closes (#402)", () => {
         observed_on: "2026-10-01", observed_at: "2026-10-02 04:14:00+08:00", timing: "close", dte: 31,
         price: 3, legs_iv: { [spreadCodes()[0]!]: 12, [spreadCodes()[1]!]: 12 }, legs_vega: null,
         legs_delta: null, spx: 6600,
-        // minus is short: the 8150 call
-        short_strikes: [expect.objectContaining({ strike: 8150, points: 1550 })],
       },
       {
         observed_on: "2026-10-02", observed_at: "2026-10-03 09:00:00+08:00", timing: "after-close", dte: 30,
-        price: null, legs_iv: null, legs_vega: null, legs_delta: null, spx: null, short_strikes: [expect.any(Object)],
+        price: null, legs_iv: null, legs_vega: null, legs_delta: null, spx: null,
       },
     ]);
   });
@@ -889,13 +887,14 @@ describe("a watched rule's daily closes (#402)", () => {
       .toEqual([-3]);
   });
 
-  it("serves a single contract's history as its mid, its own strike placed", async () => {
+  it("serves a single contract's history as its mid", async () => {
     start();
     const id = (await body(await post(single({ strike: 8100 })))).id;
     watched([codeOf("CALL", 8100)], "2026-10-01", 31, [5], "2026-10-01 20:14:00.000000");
     const [day] = (await body(await h.call(`/monitors/${id}/samples`))).samples;
     expect(day.price).toBe(5);
-    expect(day.short_strikes.map((s: { strike: number }) => s.strike)).toEqual([8100]);
+    // the strikes are the page's strike strip's, from /quotes: a day carries none (2026-11-17)
+    expect(day).not.toHaveProperty("short_strikes");
   });
 
   it("answers an empty history for a rule whose contracts were never recorded", async () => {

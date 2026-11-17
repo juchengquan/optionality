@@ -136,18 +136,7 @@
               "US.SPXW261218C7300000": 0.22,
               "US.SPXW261218C7350000": 0.16
             },
-            "spx": 6812.5,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": 0.22,
-                "points": 487.5,
-                "sigma": 1.44,
-                "one_sigma": 339.05
-              }
-            ]
+            "spx": 6812.5
           },
           {
             "observed_on": "2026-11-06",
@@ -161,18 +150,7 @@
             },
             "legs_vega": null,
             "legs_delta": null,
-            "spx": null,
-            "short_strikes": [
-              {
-                "code": "US.SPXW261218C7300000",
-                "option_type": "CALL",
-                "strike": 7300,
-                "delta": null,
-                "points": null,
-                "sigma": null,
-                "one_sigma": null
-              }
-            ]
+            "spx": null
           }
         ]
       }

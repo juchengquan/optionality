@@ -18,10 +18,8 @@ import {
   closeSample, inSession, marketDate, sampleTiming, takenInSession, valuedTiming, type SampleTiming,
   type ValuedTiming,
 } from "optionality/domain/expiry";
-import { buildSpxCode } from "optionality/domain/contract";
 import { monitorLegCodes, monitorValue, type Monitor } from "optionality/domain/monitor";
 import { costToClose, positionLegCodes, type ByCode, type Position } from "optionality/domain/position";
-import { strikeDistances, type StrikeDistance } from "optionality/domain/quote";
 import { findWatchSample, listWatchSamples, recentPricedWatchSamples } from "./db/queries/index.ts";
 import type { PositionRow, WatchSampleRow } from "./db/rows.ts";
 import { displayStored, fromSqlDatetime } from "./db/time.ts";
@@ -67,8 +65,7 @@ function dayRecords(day: WatchSampleRow): ByCode {
   return records;
 }
 
-/** One stored day as a chart reads it: its figures, the value its reader gives it, and the shorts
- *  placed against that day's SPX. */
+/** One stored day as a chart reads it: its figures and the value its reader gives it. */
 export interface WatchDay {
   observed_on: string;
   /** in DISPLAY_TZ; null only where the stored stamp cannot be read (`timing` is then unrecorded) */
@@ -83,11 +80,10 @@ export interface WatchDay {
   legs_vega: Record<string, number> | null;
   legs_delta: Record<string, number> | null;
   spx: number | null;
-  short_strikes: StrikeDistance[];
 }
 
 function days(
-  rows: WatchSampleRow[], value: (records: ByCode) => number | null, shorts: string[], tz: string,
+  rows: WatchSampleRow[], value: (records: ByCode) => number | null, tz: string,
 ): WatchDay[] {
   return rows.map((s) => {
     const timing = sampleTiming(s.observed_at);
@@ -103,7 +99,6 @@ function days(
       legs_vega: storedLegMap(s.legs_vega),
       legs_delta: storedLegMap(s.legs_delta),
       spx: s.spx,
-      short_strikes: strikeDistances(shorts, records, s.spx, s.dte),
     };
   });
 }
@@ -113,18 +108,10 @@ function days(
 const rulePrice = (monitor: Monitor) => (records: ByCode) =>
   monitorValue({ ...monitor, field: "mid_price" }, records);
 
-/** The strikes a rule's history places against SPX: a combo's short legs (minus is short, as the
- *  watchlist's own `short_strikes`), and a single contract's own strike. */
-function ruleShorts(monitor: Monitor): string[] {
-  if (!monitor.legs || monitor.legs.length === 0) return [monitor.code];
-  const codes = monitorLegCodes(monitor);
-  return monitor.legs.flatMap((l, i) => (l.sign < 0 ? [codes[i]!] : []));
-}
-
 /** Every day stored for the contracts a rule watches, oldest first, valued under its signs. */
 export function ruleHistory(db: DatabaseSync, monitor: Monitor, tz: string): WatchDay[] {
   const rows = listWatchSamples(db, contractSetKey(monitorLegCodes(monitor)));
-  return days(rows, rulePrice(monitor), ruleShorts(monitor), tz);
+  return days(rows, rulePrice(monitor), tz);
 }
 
 /** The day a rule's price is drawn at with no live one: its latest close (`closeSample` — the latest
@@ -214,9 +201,7 @@ export function beforeEntry(
   const before = enteredOn(row);
   const rows = listWatchSamples(db, contractSetKey(positionLegCodes(position)))
     .filter((s) => s.observed_on < before);
-  const shorts = position.legs.filter((l) => l.side === "short")
-    .map((l) => buildSpxCode(position.strike_date, l.option_type, l.strike));
-  return days(rows, (records) => costToClose(position, records), shorts, tz);
+  return days(rows, (records) => costToClose(position, records), tz);
 }
 
 /** The entry day's close as it was WATCHED (#402, owner's decision of 2026-11-15): where the
@@ -235,8 +220,6 @@ export function entryClose(
   if (mine === undefined || mine.cost_to_close !== null) return null;
   const watched = findWatchSample(db, contractSetKey(positionLegCodes(position)), on);
   if (watched === undefined) return null;
-  const shorts = position.legs.filter((l) => l.side === "short")
-    .map((l) => buildSpxCode(position.strike_date, l.option_type, l.strike));
-  const [day] = days([watched], (records) => costToClose(position, records), shorts, tz);
+  const [day] = days([watched], (records) => costToClose(position, records), tz);
   return day!.value === null ? null : day!;
 }

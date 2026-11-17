@@ -776,13 +776,11 @@ class TestAWatchedRulesDailyCloses:
         assert data["contracts"] == codes
         assert data["price_rule"] == {"id": id_, "threshold": 1.5, "direction": "above", "compare": "abs"}
         first, second = data["samples"]
-        assert {k: v for k, v in first.items() if k != "short_strikes"} == {
+        assert first == {
             "observed_on": "2026-10-01", "observed_at": "2026-10-02 04:14:00+08:00", "timing": "close", "dte": 31,
             "price": 3, "legs_iv": dict.fromkeys(codes, 12), "legs_vega": None, "legs_delta": None, "spx": 6600,
         }  # fmt: skip
-        # minus is short: the 8150 call
-        assert [[s["strike"], s["points"]] for s in first["short_strikes"]] == [[8150, 1550]]
-        assert {k: v for k, v in second.items() if k != "short_strikes"} == {
+        assert second == {
             "observed_on": "2026-10-02", "observed_at": "2026-10-03 09:00:00+08:00", "timing": "after-close",
             "dte": 30, "price": None, "legs_iv": None, "legs_vega": None, "legs_delta": None, "spx": None,
         }  # fmt: skip
@@ -820,13 +818,14 @@ class TestAWatchedRulesDailyCloses:
         ).json()["id"]
         assert [s["price"] for s in (await h.call(f"/monitors/{other}/samples")).json()["samples"]] == [-3]
 
-    async def test_serves_a_single_contracts_history_as_its_mid_its_own_strike_placed(self, start):
+    async def test_serves_a_single_contracts_history_as_its_mid(self, start):
         h, _ = self.start_closed(start)
         id_ = (await post(h, single(strike=8100))).json()["id"]
         self.watched(h, [self.code_of("CALL", 8100)], "2026-10-01", 31, [5], "2026-10-01 20:14:00.000000")
         (day,) = (await h.call(f"/monitors/{id_}/samples")).json()["samples"]
         assert day["price"] == 5
-        assert [s["strike"] for s in day["short_strikes"]] == [8100]
+        # the strikes are the page's strike strip's, from /quotes: a day carries none (2026-11-17)
+        assert "short_strikes" not in day
 
     async def test_answers_an_empty_history_for_a_rule_whose_contracts_were_never_recorded(self, start):
         h, _ = self.start_closed(start)

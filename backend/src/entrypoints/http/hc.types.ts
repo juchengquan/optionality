@@ -253,8 +253,6 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["on_pace"], number | null>>,
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["legs_iv"], Record<string, number> | null>>,
   Checked<Exactly<Ok<E["samples"]>["samples"][number]["spx"], number | null>>,
-  // each day's short strikes against that day's SPX, which the history's SPX readout shows (#395)
-  Checked<Exactly<Ok<E["samples"]>["samples"][number]["short_strikes"], StrikeDistance[]>>,
   // the days watched before entry carry the same shape, so the burndown draws them as one series (#402)
   Checked<Exactly<Ok<E["samples"]>["before_entry"][number]["cost_to_close"], number | null>>,
   // a watched rule's history: its price each day, and the price rule its value is drawn against
