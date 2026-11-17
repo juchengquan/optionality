@@ -117,16 +117,16 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     await waitFor(() => expect(chart.querySelector("[data-level='stop']")).toBeTruthy());
     expect(chart.querySelector("[data-level='target']")).toBeTruthy();
     expect(chart.querySelector("[data-level='manage-by']")?.textContent).toContain("manage-by 21");
-    // money, at the contract size the valuation served (100): a 2.00 credit's target is 1.00
-    expect(chart.querySelector("[data-level='target']")?.textContent).toContain("$100");
+    // the spread's own value, in points per contract (2026-11-17): a 2.00 credit's target is 1.00
+    expect(chart.querySelector("[data-level='target']")?.textContent).toBe("target 1.00");
   });
 
   it("draws the Entry across the chart, where the cost to close started (the owner, 2026-11-17)", async () => {
     const { insp } = await inspect("h-calls", "1218_C7300");
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelector("[data-level='entry']")).toBeTruthy());
-    // a 2.00 credit, one contract at the size the valuation served: $200
-    expect(chart.querySelector("[data-level='entry']")!.textContent).toBe("entry $200");
+    // a 2.00 credit, said as the spread's value per contract
+    expect(chart.querySelector("[data-level='entry']")!.textContent).toBe("entry 2.00");
     // drawn where the cost to close of 2.00 would be: on the plan's first corner, the Entry at open
     const line = chart.querySelector("[data-level='entry'] line")!;
     const [, y0] = corners(chart.querySelector("[data-plan]"))[0]!;
@@ -164,19 +164,21 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(within(chart).getByRole("status").textContent).toMatch(/whether it was the close is not known/);
   });
 
-  it("says points per contract under privacy, never a $ figure, and keeps the shape", async () => {
+  it("says points per contract, privacy or not, never a $ figure, and keeps the shape", async () => {
     const shown = await inspect("h-calls", "1218_C7300");
     const before = await burndownOf(shown.insp);
     await waitFor(() => expect(before.querySelector("[data-costs]")).toBeTruthy());
     const shape = corners(before.querySelector("[data-costs]"));
-    expect(before.querySelector("[data-axis='y']")?.textContent).toMatch(/\$/);
+    expect(before.querySelector("[data-axis='y']")?.textContent).not.toMatch(/\$/);
+    expect(before.textContent).not.toMatch(/\$/);
+    expect(within(before).getByText("points to close, per contract")).toBeTruthy();
     cleanup();
 
     const hidden = await inspect("h-calls", "1218_C7300", { privacy: true });
     const chart = await burndownOf(hidden.insp);
     await waitFor(() => expect(chart.querySelector("[data-costs]")).toBeTruthy());
     // the same heights, and the same spacing across the width the plot has: the axis is the same
-    // scale, labelled in points per contract rather than in dollars across the contracts (#395)
+    // scale, labelled in points per contract (#395)
     const kept = corners(chart.querySelector("[data-costs]"));
     expect(kept.map(([, y]) => y)).toEqual(shape.map(([, y]) => y));
     const spacing = (pts: [number, number][]) =>
@@ -188,8 +190,8 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(within(chart).getByText("points to close, per contract")).toBeTruthy();
     pointAt(chart, dayOf(chart, "[data-sample='2026-11-09']"));
     // h-calls on 20261109: 4.10 per contract — never $410
-    expect(within(chart).getByRole("status").textContent).toMatch(/^20261109 · 39 DTE · to close, per contract: 4\.10 pts · on pace \d\.\d\d pts · behind by/);
-    expect(tipOf(chart)?.textContent).toMatch(/to close, per contract: 4\.10 pts/);
+    expect(within(chart).getByRole("status").textContent).toMatch(/^20261109 · 39 DTE · to close: 4\.10 · on pace \d\.\d\d · behind by/);
+    expect(tipOf(chart)?.textContent).toMatch(/to close: 4\.10/);
     expect(tipOf(chart)?.textContent).not.toMatch(/\$/);
     expect(tipOf(chart)?.querySelector("[data-outcome]")?.textContent).toMatch(/^(behind|ahead) by \d\.\d\d$/);
   });
@@ -214,18 +216,18 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(tipOf(chart)?.querySelector(".nx-bd-tip-why")).toBeNull();
   });
 
-  it("says its money's scope, so it cannot read as the inspector's cost to close per contract", async () => {
-    // the 4-leg condor is held twice over: a Level is the per-contract figure × 2 × 100
+  it("says the combo's value per contract, never multiplied by the count held (2026-11-17)", async () => {
+    // the 4-leg condor is held twice over: every figure is still the condor's own, per contract
     const { insp } = await inspect("h-ic", "1231_IC");
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelector("[data-level='target']")).toBeTruthy());
-    expect(chart.querySelector("[data-level='target']")?.textContent).toBe("target $500");
-    expect(chart.querySelector("[data-level='entry']")?.textContent).toBe("entry $1,000");
-    expect(within(chart).getByText("$ to close, 2 contracts")).toBeTruthy();
+    expect(chart.querySelector("[data-level='target']")?.textContent).toBe("target 2.50");
+    expect(chart.querySelector("[data-level='entry']")?.textContent).toBe("entry 5.00");
+    expect(within(chart).getByText("points to close, per contract")).toBeTruthy();
     pointAt(chart, dayOf(chart, ""));
     expect(within(chart).getByRole("status").textContent)
-      .toMatch(/· to close, 2 contracts: \$1,000 · on pace \$1,000 · on pace —/);
-    expect(tipOf(chart)?.textContent).toMatch(/to close, 2 contracts: \$1,000/);
+      .toMatch(/· to close: 5\.00 · on pace 5\.00 · on pace —/);
+    expect(tipOf(chart)?.textContent).not.toMatch(/contracts|\$/);
   });
 
   it("says no count and no $ under privacy: points per contract", async () => {
@@ -235,7 +237,7 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     expect(within(chart).queryByText(/contracts/)).toBeNull();
     pointAt(chart, dayOf(chart, ""));
     expect(within(chart).getByRole("status").textContent)
-      .toMatch(/· to close, per contract: 5\.00 pts · on pace 5\.00 pts · on pace —/);
+      .toMatch(/· to close: 5\.00 · on pace 5\.00 · on pace —/);
     expect(tipOf(chart)?.textContent).not.toMatch(/contracts|\$/);
   });
 
@@ -267,9 +269,9 @@ describe("the burndown, in the desk's inspector outside the session", () => {
       for (const n of across) expect(said.replace(/[\d.,]+%/g, "").split(/[^\d.,]/)).not.toContain(n);
     }
     // and it does say the per-contract figures: the valuation now, the Target and the Stop
-    expect(carried()).toContain(`to close, per contract: ${perContract.at(-1)!.toFixed(2)} pts`);
-    expect(chart.querySelector("[data-level='target']")?.textContent).toBe(`target ${served.levels!.target!.toFixed(2)} pts`);
-    expect(chart.querySelector("[data-level='entry']")?.textContent).toBe(`entry ${HOLDINGS.find((h) => h.id === "h-ic")!.entry!.toFixed(2)} pts`);
+    expect(carried()).toContain(`to close: ${perContract.at(-1)!.toFixed(2)}`);
+    expect(chart.querySelector("[data-level='target']")?.textContent).toBe(`target ${served.levels!.target!.toFixed(2)}`);
+    expect(chart.querySelector("[data-level='entry']")?.textContent).toBe(`entry ${HOLDINGS.find((h) => h.id === "h-ic")!.entry!.toFixed(2)}`);
   });
 
   it("is one stop for the keyboard, its arrows moving from day to day and the line saying each", async () => {
@@ -315,10 +317,10 @@ describe("the burndown, in the desk's inspector outside the session", () => {
     await waitFor(() => expect(chart.querySelector("[data-axis='y']")).toBeTruthy());
     const labels = [...chart.querySelectorAll("[data-axis='y'] text")].map((t) => t.textContent);
     // each value once: with every figure at or below zero the top IS zero, and named twice it was
-    // two "$0" drawn over each other
+    // two "0" drawn over each other
     expect(new Set(labels).size).toBe(labels.length);
-    expect(labels.at(-1)).toBe("$0");
-    expect(labels[0]).toMatch(/^\u2212\$\d/);
+    expect(labels.at(-1)).toBe("0");
+    expect(labels[0]).toMatch(/^\u2212\d/);
   });
 
   it("breaks the line across a missed session rather than joining the days either side", async () => {
@@ -455,8 +457,8 @@ describe("the crosshair (#360)", () => {
     const lines = [...tip.children].map((l) => l.textContent);
     // h-calls is a single call spread with a contract size of 100, behind pace
     expect(lines[0]).toBe("20261109 · 39 DTE");
-    expect(lines[1]).toMatch(/^to close, 1 contract: \$410$/);
-    expect(lines[2]).toMatch(/^on pace \$\d+ · behind by \d\.\d\d$/);
+    expect(lines[1]).toBe("to close: 4.10");
+    expect(lines[2]).toMatch(/^on pace \d\.\d\d · behind by \d\.\d\d$/);
     const gap = tip.querySelector("[data-outcome]")!;
     expect(gap.getAttribute("data-outcome")).toBe("loss");
     // the status line says the same gap, for whoever cannot see the tooltip
@@ -581,9 +583,9 @@ describe("today's valuation on the crosshair (#360)", () => {
     fireEvent.keyDown(days, { key: "End" });
     expect(chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")).toBe("now");
     expect(chart.querySelector("[data-now]")?.hasAttribute("data-pointed")).toBe(true);
-    // h-calls is valued at 4.40 with 38 days to go, one contract at a size of 100
-    expect(within(chart).getByRole("status").textContent).toBe("valued now, 38 DTE: to close, 1 contract: $440");
-    expect(tipOf(chart)?.textContent).toBe("valued now · 38 DTEto close, 1 contract: $440");
+    // h-calls is valued at 4.40 with 38 days to go
+    expect(within(chart).getByRole("status").textContent).toBe("valued now, 38 DTE: to close: 4.40");
+    expect(tipOf(chart)?.textContent).toBe("valued now · 38 DTEto close: 4.40");
     fireEvent.keyDown(days, { key: "ArrowLeft" });
     expect(chart.querySelector("[data-crosshair]")?.getAttribute("data-crosshair")).toBe("2026-11-09");
   });
@@ -599,7 +601,7 @@ describe("today's valuation on the crosshair (#360)", () => {
   it("is said per contract in points under privacy", async () => {
     const chart = await chartOf({ privacy: true });
     fireEvent.keyDown(within(chart).getByRole("group", { name: /cost to close by day/ }), { key: "End" });
-    expect(within(chart).getByRole("status").textContent).toBe("valued now, 38 DTE: to close, per contract: 4.40 pts");
+    expect(within(chart).getByRole("status").textContent).toBe("valued now, 38 DTE: to close: 4.40");
     expect(tipOf(chart)?.textContent).not.toMatch(/\$|contracts/);
   });
 });
@@ -616,11 +618,11 @@ describe("the value axis (#360)", () => {
     await waitFor(() => expect(chart.querySelector("[data-level='stop']")).toBeTruthy());
     const stop = chart.querySelector("[data-level='stop']")!;
     expect(stop.getAttribute("data-off")).toBe("above");
-    expect(stop.textContent).toMatch(/^▲ stop \$\d/);
+    expect(stop.textContent).toMatch(/^▲ stop \d+\.\d\d$/);
     expect(Number(stop.querySelector("line")!.getAttribute("y1"))).toBe(topOf(chart));
     // no tick reaches it: the scale stops short of the Stop
-    const stopAt = SAMPLES["h-puts"]!.levels!.stop! * 100;
-    const ticks = [...chart.querySelectorAll("[data-axis='y'] text")].map((t) => Number(t.textContent!.replace(/[$,]/g, "")));
+    const stopAt = SAMPLES["h-puts"]!.levels!.stop!;
+    const ticks = [...chart.querySelectorAll("[data-axis='y'] text")].map((t) => Number(t.textContent!.replace(/\u2212/, "-")));
     expect(Math.max(...ticks)).toBeLessThan(stopAt);
   });
 
@@ -631,7 +633,7 @@ describe("the value axis (#360)", () => {
     await waitFor(() => expect(chart.querySelector("[data-level='stop']")).toBeTruthy());
     const stop = chart.querySelector("[data-level='stop']")!;
     expect(stop.hasAttribute("data-off")).toBe(false);
-    expect(stop.textContent).toBe("stop $400");
+    expect(stop.textContent).toBe("stop 4.00");
     expect(Number(stop.querySelector("line")!.getAttribute("y1"))).toBeGreaterThan(topOf(chart));
   });
 
@@ -639,7 +641,7 @@ describe("the value axis (#360)", () => {
     const { insp } = await inspect("h-puts", "1218_P6400", { privacy: true });
     const chart = await burndownOf(insp);
     await waitFor(() => expect(chart.querySelector("[data-level='stop']")).toBeTruthy());
-    expect(chart.querySelector("[data-level='stop']")?.textContent).toMatch(/^▲ stop \d+\.\d\d pts$/);
+    expect(chart.querySelector("[data-level='stop']")?.textContent).toMatch(/^▲ stop \d+\.\d\d$/);
   });
 });
 
@@ -904,7 +906,7 @@ describe("HistoryOnDemand opened by default (#371, for #372 and #374)", () => {
   });
 
   it("starts open and reads the samples once, at once, when told to", async () => {
-    render(<HistoryOnDemand holding={HOLDINGS[0]!} privacy={false} defaultOpen />);
+    render(<HistoryOnDemand holding={HOLDINGS[0]!} defaultOpen />);
     expect(screen.getByRole("button", { name: "History" }).getAttribute("aria-expanded")).toBe("true");
     await waitFor(() => expect(reads).toEqual(["/positions/h-puts/samples"]));
     // shut and opened again, it asks nothing more
@@ -916,7 +918,7 @@ describe("HistoryOnDemand opened by default (#371, for #372 and #374)", () => {
 
   for (const given of [{}, { defaultOpen: false }]) {
     it(`starts shut and reads nothing ${"defaultOpen" in given ? "when told not to open" : "by default"}`, async () => {
-      render(<HistoryOnDemand holding={HOLDINGS[0]!} privacy={false} {...given} />);
+      render(<HistoryOnDemand holding={HOLDINGS[0]!} {...given} />);
       expect(screen.getByRole("button", { name: "History" }).getAttribute("aria-expanded")).toBe("false");
       await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
       expect(reads).toEqual([]);
@@ -953,7 +955,7 @@ describe("one crosshair across the burndown and the IV chart (#395)", () => {
     }
     hover(iv, xOf(iv, 39));
     expect(tipText(burndown)[0]).toBe("20261109 · 39 DTE");
-    expect(tipText(burndown)[1]).toBe("to close, 1 contract: $410");
+    expect(tipText(burndown)[1]).toBe("to close: 4.10");
     // each leg's IV that day, named as the chart names it, with its type's colour (#391)
     expect(tipText(iv)).toEqual(["20261109 · 39 DTE", "−C7300 14.00%", "+C7350 13.25%"]);
     expect(legMarks(tipOf(iv)!)).toEqual(["−C7300 short CALL", "+C7350 long CALL"]);
@@ -980,7 +982,7 @@ describe("one crosshair across the burndown and the IV chart (#395)", () => {
     // the last stop is today's valuation, in both
     fireEvent.keyDown(keysOf(iv), { key: "End" });
     expect(all.map(crossed)).toEqual(["now", "now"]);
-    expect(said(burndown)).toBe("valued now, 38 DTE: to close, 1 contract: $440");
+    expect(said(burndown)).toBe("valued now, 38 DTE: to close: 4.40");
     expect(said(iv)).toBe("valued now · 38 DTE: no IV in the history for today's valuation");
     fireEvent.keyDown(keysOf(burndown), { key: "ArrowLeft" });
     expect(all.map(crossed)).toEqual(["2026-11-09", "2026-11-09"]);
@@ -1041,7 +1043,7 @@ describe("one crosshair across the burndown and the IV chart (#395)", () => {
       expect(tipOf(burndown)!.textContent).not.toMatch(/\$/);
       expect(all.map(crossed).every((c) => c !== undefined)).toBe(true);
     }
-    expect(said(burndown)).toBe("valued now, 38 DTE: to close, per contract: 4.40 pts");
+    expect(said(burndown)).toBe("valued now, 38 DTE: to close: 4.40");
     // IV in %, as with privacy off
     expect(said(iv)).toMatch(/no IV in the history/);
   });

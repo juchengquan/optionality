@@ -19,16 +19,17 @@
  *  - **A watched row has one too** (#402): its value against its price rule's threshold, its legs'
  *    IV and SPX against its strikes (`WatchedHistory`), asked for, kept and opened the same way.
  *
- *  Privacy is `HoldingHistory`'s. The saved image does not carry it: the still draws no history. */
+ *  Privacy changes nothing in it: every figure is points per contract (2026-11-17). The saved image
+ *  draws no history. */
 import { useId, useState } from "react";
 import { ChevronRight } from "lucide-react";
 
 import { HoldingHistory, WatchedHistory, type Charted } from "./History";
 import type { Entry } from "./shared/api";
 
-export function HistoryOnDemand({ holding, watched, privacy, defaultOpen = false }: {
+export function HistoryOnDemand({ holding, watched, defaultOpen = false }: {
   /** a holding's history, or a watched row's (`watched`): exactly one of the two */
-  holding?: Charted; watched?: Entry; privacy: boolean;
+  holding?: Charted; watched?: Entry;
   /** drawn open, its samples read at once; read once, when first drawn, not on a later change */
   defaultOpen?: boolean;
 }) {
@@ -44,8 +45,8 @@ export function HistoryOnDemand({ holding, watched, privacy, defaultOpen = false
         History
       </button>
       <div id={body} className="nx-hist-od-body" hidden={!open}>
-        {!opened ? null : holding ? <HoldingHistory holding={holding} privacy={privacy} />
-          : watched ? <WatchedHistory entry={watched} privacy={privacy} /> : null}
+        {!opened ? null : holding ? <HoldingHistory holding={holding} />
+          : watched ? <WatchedHistory entry={watched} /> : null}
       </div>
     </section>
   );

@@ -547,7 +547,7 @@ function Inspector({ id, row, session, privacy, rows, partners, onSelect, onClos
         {row.kind === "holding" ? <HoldingDetail row={row} session={session && !stale} privacy={privacy} partners={partners}
                                                  onSelect={onSelect} quotes={quotes} monitors={monitors} writes={writes} />
           : row.kind === "rule" ? <RuleDetail entry={row.entry} rows={rows} overlap={row.overlap ?? null}
-                                              session={session} privacy={privacy} />
+                                              session={session} />
             : <QuarantinedDetail row={row} />}
       </DetailBoundary>
     </aside>
@@ -583,14 +583,14 @@ function InspectorStrip({ holding, partner }: { holding: Holding; partner: Holdi
   return strip ? <StrikeStrip strip={strip} /> : null;
 }
 
-function RuleDetail({ entry, rows, overlap, session, privacy }: {
-  entry: Entry; rows: DeskRow[]; overlap: string | null; session: boolean; privacy: boolean;
+function RuleDetail({ entry, rows, overlap, session }: {
+  entry: Entry; rows: DeskRow[]; overlap: string | null; session: boolean;
 }) {
   const under = rows.filter((r): r is Extract<DeskRow, { kind: "rule" }> =>
     r.kind === "rule" && r.nested && !r.entry.legs && r.entry.in_combos.includes(entry.id) && !r.entry.held);
   return (
     <RuleSections surface="desk" entry={entry} under={under.map((r) => r.entry)} overlap={overlap}
-                  privacy={privacy} session={session}
+                  session={session}
                   ruleLine={(e, own) => <RuleItem key={e.id} entry={e} own={own} />} />
   );
 }

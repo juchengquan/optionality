@@ -30,12 +30,12 @@ function serve(id: string, samples: Samples = SAMPLES[id]!) {
 }
 
 /** The two panels, in order: the burndown, the IV chart. */
-async function draw(id: string, width: number, privacy = false) {
+async function draw(id: string, width: number) {
   // tall enough that no panel is ever scrolled to: a hover that scrolls the page moves the panels
   // under a mouse already placed, and Chrome's catch-up boundary events then let go of the day
   await page.viewport(Math.max(width, 400) + 40, 1400);
   serve(id);
-  render(<div className="nx" style={{ width, padding: 0 }}><HoldingHistory holding={holdingOf(id)} privacy={privacy} /></div>);
+  render(<div className="nx" style={{ width, padding: 0 }}><HoldingHistory holding={holdingOf(id)} /></div>);
   await settle();
   const panels = [".nx-bd", ".nx-iv"].map((sel) => document.querySelector<HTMLElement>(sel)!);
   expect(panels.every(Boolean), "both panels drawn").toBe(true);
@@ -52,9 +52,9 @@ const inside = (r: DOMRect, box: DOMRect) =>
   r.left >= box.left - 0.5 && r.right <= box.right + 0.5 && r.top >= box.top - 0.5 && r.bottom <= box.bottom + 0.5;
 
 describe("the two plot areas line up to the pixel", () => {
-  for (const width of [272, 400, 900]) for (const id of ["h-calls", "h-puts", "h-ic"]) for (const privacy of [false, true]) {
-    it(`at ${width}px: ${id}${privacy ? ", privacy on" : ""}`, async () => {
-      const panels = await draw(id, width, privacy);
+  for (const width of [272, 400, 900]) for (const id of ["h-calls", "h-puts", "h-ic"]) {
+    it(`at ${width}px: ${id}`, async () => {
+      const panels = await draw(id, width);
       const [b, ...rest] = panels.map(plotOf);
       for (const r of rest) {
         expect(Math.abs(r.left - b!.left)).toBeLessThan(0.5);

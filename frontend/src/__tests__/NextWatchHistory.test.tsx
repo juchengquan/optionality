@@ -137,7 +137,7 @@ describe("the entry day's watched close (#402)", () => {
   it("says whose close it is, in the burndown", async () => {
     holdingSamples = { ...costless, entry_close: entry };
     const h = HOLDINGS.find((x) => x.id === "h-calls")!;
-    render(<HistoryOnDemand holding={h} privacy={false} defaultOpen />);
+    render(<HistoryOnDemand holding={h} defaultOpen />);
     const chart = await screen.findByRole("group", { name: "burndown" });
     await waitFor(() => expect(chart.querySelector("[data-entry-close]")).toBeTruthy());
     fireEvent.keyDown(chart.querySelector(".nx-bd")!, { key: "Home" });
@@ -177,7 +177,7 @@ describe("what a watched spread's payoff is drawn at", () => {
 });
 
 describe("a watched row's history, drawn", () => {
-  const open = (entry: Entry) => render(<HistoryOnDemand watched={entry} privacy={false} defaultOpen />);
+  const open = (entry: Entry) => render(<HistoryOnDemand watched={entry} defaultOpen />);
 
   it("asks for its closes once, by the rule's id, and draws a point for each day with a price", async () => {
     open(watched("w-dec18"));
@@ -191,7 +191,7 @@ describe("a watched row's history, drawn", () => {
     open(watched("w-dec18"));
     const chart = await screen.findByRole("group", { name: "value against the threshold" });
     await waitFor(() => expect(chart.querySelector("[data-level='threshold']")).toBeTruthy());
-    expect(chart.querySelector("[data-level='threshold'] text")?.textContent).toBe("threshold 4.51 pts");
+    expect(chart.querySelector("[data-level='threshold'] text")?.textContent).toBe("threshold 4.51");
     // nothing of a holding's: no plan, no Target, no Stop
     expect(chart.querySelector("[data-plan], [data-level='target'], [data-level='stop']")).toBeNull();
   });
@@ -213,7 +213,7 @@ describe("a watched row's history, drawn", () => {
     const chart = screen.getByRole("group", { name: "value against the threshold" });
     fireEvent.keyDown(chart.querySelector(".nx-bd")!, { key: "End" });
     await waitFor(() => expect(iv.querySelector("[data-crosshair='2026-11-12']")).toBeTruthy());
-    expect(within(chart).getByRole("status").textContent).toMatch(/^20261112 · 36 DTE · value, per contract: 2\.75 pts/);
+    expect(within(chart).getByRole("status").textContent).toMatch(/^20261112 · 36 DTE · value: 2\.75/);
   });
 
   it("says so when nothing has been recorded yet", async () => {
@@ -234,7 +234,7 @@ describe("a holding's burndown with the days it was watched before entry", () =>
   it("draws them faint, before an 'entered' rule, and says what they are", async () => {
     holdingSamples = { ...own, before_entry: [watchDay(2), watchDay(1)] };
     const h = HOLDINGS.find((x) => x.id === "h-calls")!;
-    render(<HistoryOnDemand holding={h} privacy={false} defaultOpen />);
+    render(<HistoryOnDemand holding={h} defaultOpen />);
     const chart = await screen.findByRole("group", { name: "burndown" });
     await waitFor(() => expect(chart.querySelectorAll("[data-before-entry]")).toHaveLength(2));
     expect(chart.querySelector("[data-costs='before-entry']")).toBeTruthy();
@@ -250,7 +250,7 @@ describe("a holding's burndown with the days it was watched before entry", () =>
   it("draws none, and no rule, for a holding never watched", async () => {
     holdingSamples = own;
     const h = HOLDINGS.find((x) => x.id === "h-calls")!;
-    render(<HistoryOnDemand holding={h} privacy={false} defaultOpen />);
+    render(<HistoryOnDemand holding={h} defaultOpen />);
     const chart = await screen.findByRole("group", { name: "burndown" });
     await waitFor(() => expect(chart.querySelectorAll("[data-sample]").length).toBeGreaterThan(0));
     expect(chart.querySelector("[data-before-entry], [data-entered]")).toBeNull();
