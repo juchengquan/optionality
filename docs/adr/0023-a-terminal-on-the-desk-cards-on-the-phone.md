@@ -218,8 +218,12 @@ edges (09:30–16:15 New York) and "never hide a firing alarm" carry over.*
   the far wings by 9–23% under a naive model. Never draw what the system does not know.
 - **The burndown** draws the daily samples against the planned decay of ADR 0011. A point that is
   not a close (`observed_at`, ADR 0011's amendment) is marked as such. *(Since #395 the IV chart
-  and "SPX against the strikes" beneath it share its crosshair: a day pointed at in any of the
-  three is crossed in all three, each with its own readout.)*
+  beneath it shares its crosshair: a day pointed at in either is crossed in both, each with its
+  own readout. Amended 2026-11-17, #430: the history is TWO panels, the burndown and the IV
+  chart. A third, "SPX against the strikes" — SPX each day against the holding's strikes, with
+  each short strike's distance in points and σ — was removed by the owner's decision, and #431
+  stopped the samples routes serving each day's `short_strikes`, which only it read. Each day
+  still carries `spx`; the strike strip and the price map, which read today's, are unchanged.)*
 
 ### How it ships
 
@@ -592,12 +596,13 @@ The owner's decisions of 2026-11-15, built on ADR 0011's watch samples:
 
 - **A watched row has a history**, in the desk's inspector and the phone's sheet, opened as a
   holding's is (open outside the session, shut in it): its value each day against its price rule's
-  threshold, its legs' IV, and SPX against its strikes — the holding's three panels on #399's one
-  crosshair. The value is drawn as the price rule compares it (its size under `abs`, the figure
-  under `signed`); with no price rule, a spread watched only on its delta, its size and no threshold.
+  threshold and its legs' IV — the holding's two panels on #399's one crosshair (three until
+  2026-11-17, when "SPX against its strikes" was removed, #430). The value is drawn as the price
+  rule compares it (its size under `abs`, the figure under `signed`); with no price rule, a spread
+  watched only on its delta, its size and no threshold.
   In points per contract: a watched row has no count and no money.
 - **One chart, more lines as more is known.** Recorded as held, the same contracts' watch days are
-  drawn in the holding's burndown, IV and SPX panels BEFORE its own, faint, with a rule where it was
+  drawn in the holding's burndown and IV panels BEFORE its own, faint, with a rule where it was
   entered, and every readout says "before entry". The plan, the Target and the Stop start at Opened.
 - **The payoff and the value cell fall back to the last close.** A watched spread's payoff is drawn
   at its last close out of the session, always — never at a value quoted out of it — and in the
