@@ -93,7 +93,7 @@ function isSamples(body: unknown): boolean {
  *  none of them: no contract size, so its money is points per contract, and no "now". A watched row
  *  (#402) is drawn as a holding of one, with no valuation (`watchedCharted`). */
 export type Charted = Pick<Holding, "id" | "contracts" | "legs" | "strike_date" | "closed_on">
-  & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "valued_from">>;
+  & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "valued_from" | "entry">>;
 
 /** The crosshair the history's panels share (#395): the stop pointed at, kept under the holding it was
  *  pointed at in, so another holding drawn in the same place starts with none; and a tap outside
@@ -138,7 +138,7 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
         : null;
   return (
     <HistoryPanels id={holding.id} holding={holding} served={served} blank={blank} unit={unit} privacy={privacy}
-                   entry={holding.entry}
+                   entry={holding.entry ?? null}
                    title="Burndown" noCost="no day with a Cost to close yet: each was recorded out of hours, with no two-sided quote to price it" />
   );
 }
