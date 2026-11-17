@@ -169,8 +169,15 @@ def test_a_record_carries_exactly_the_typescripts_fields():
 def test_a_field_the_sdk_marks_absent_is_absent_as_in_the_typescript():
     # the SDK writes the STRING 'N/A' where the protobuf has no value — a one-sided book among them —
     # and pandas a NaN; the TypeScript's record leaves the key out, and so a backend must
-    row = {**_sdk_row(A), "bid_price": "N/A", "option_delta": float("nan"), "option_rho": None,
-           "suspension": False, "open_price": 0.0, "volume": 0}
+    row = {
+        **_sdk_row(A),
+        "bid_price": "N/A",
+        "option_delta": float("nan"),
+        "option_rho": None,
+        "suspension": False,
+        "open_price": 0.0,
+        "volume": 0,
+    }
     ctx = FakeContext(rows=[row])
     with opend.OpenD(connect=connect(ctx)) as od:
         [record] = od.fetch([A])
