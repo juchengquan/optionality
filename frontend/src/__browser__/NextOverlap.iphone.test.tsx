@@ -1,6 +1,7 @@
 /** A combo that only partly overlaps a holding, on a phone (#346), under Playwright's iPhone
- *  profile: its card is among the watched spreads with a note of what it shares, and the note fits the card
- *  at 390px — wrapped if it must, never pushing the page sideways. In the detail sheet too.
+ *  profile: its card is among the watched spreads in its holding's expiry, with no note on it (the
+ *  owner, 2026-11-17); its sheet says what it shares, wrapped to fit at 390px if it must, never
+ *  pushing the page sideways.
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -59,7 +60,7 @@ function inside(inner: Element, outer: Element): boolean {
 afterEach(cleanup);
 
 describe("under the iPhone profile", () => {
-  it("draws the partly overlapping combos as watched cards in their holding's expiry, each note inside its card", async () => {
+  it("draws the partly overlapping combos as watched cards in their holding's expiry, with no note on them", async () => {
     serveOverlap();
     render(<Next />);
     await settle();
@@ -68,15 +69,9 @@ describe("under the iPhone profile", () => {
     expect(document.documentElement.clientWidth).toBe(390);
     // the one book (2026-11-17): in the same expiry as the holdings they overlap, after them
     const expiry = card("h-8050").closest<HTMLElement>(".nxp-expiry")!;
-    for (const [ref, words] of [["r-8100", `shares C8100 with ${LONG}`], ["w-7700", "contains 1231_7700's C7700"]]) {
-      expect(expiry.contains(card(ref!))).toBe(true);
-      const note = card(ref!).querySelector<HTMLElement>("[data-overlap]")!;
-      expect(note.textContent).toBe(words);
-      expect(note.getBoundingClientRect().height).toBeGreaterThan(0);
-      // the long one is said whole, on more than one line
-      if (ref === "r-8100") expect(note.getBoundingClientRect().height).toBeGreaterThan(30);
-      expect(note.scrollWidth).toBeLessThanOrEqual(note.clientWidth + 0.5);
-      expect(inside(note, card(ref!))).toBe(true);
+    for (const ref of ["r-8100", "w-7700"]) {
+      expect(expiry.contains(card(ref))).toBe(true);
+      expect(card(ref).querySelector("[data-overlap]")).toBeNull();
     }
     expect(overflowsSideways()).toBe(false);
   });
@@ -91,6 +86,9 @@ describe("under the iPhone profile", () => {
     await settle();
     const note = sheet.querySelector<HTMLElement>("[data-overlap]")!;
     expect(note.textContent).toBe(`shares C8100 with ${LONG}`);
+    // said whole, on more than one line, inside the sheet
+    expect(note.getBoundingClientRect().height).toBeGreaterThan(30);
+    expect(note.scrollWidth).toBeLessThanOrEqual(note.clientWidth + 0.5);
     expect(inside(note, sheet)).toBe(true);
     expect(overflowsSideways()).toBe(false);
   });

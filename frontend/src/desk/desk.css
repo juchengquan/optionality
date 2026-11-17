@@ -67,20 +67,21 @@
   font-size: 0.875rem; font-weight: 700;
   border-bottom: 1px solid var(--nxd-line);
 }
+/* the book's two sections, Spreads and Contracts (2026-11-17): above their expiries' headings, in
+   the page's ink rather than the expiries' muted small caps */
+.nxd-part { margin-top: 0.75rem; }
+.nxd-part-head {
+  padding: 0.5rem 0.75ch 0.125rem; margin: 0;
+  font-size: 0.875rem; font-weight: 650;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+}
 .nxd-group {
   padding: 0.5rem 0.75ch 0.125rem;
   color: var(--muted-foreground);
   font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em;
 }
 .nxd-note { padding: 0.25rem 0.75ch; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
-/* the quiet label over an expiry's lone contracts (2026-11-17): quieter than the expiry's heading */
-.nxd-sub {
-  margin: 0;
-  padding: 0.375rem 0.75ch 0.125rem;
-  font-size: 0.6875rem;
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-}
-/* a rule met again under a second place: where its row is, in the overlap note's indent */
+/* a rule met again under a second place: where its row is, indented as a rule under a row */
 .nxd-also {
   margin: 0; padding: 0.1rem 0.75ch 0.3rem 2.75ch; border-bottom: 1px solid var(--nxd-line);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; overflow-wrap: anywhere;
@@ -88,15 +89,6 @@
 /* the desk's chips are a size down, the held one with them (next.css: .nx-held) */
 .nxd-row .nx-held { font-size: 0.6875rem; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
 
-/* what a spread in the watchlist shares with a holding (#346): under its row, in the row's indent,
-   wrapping rather than widening the table */
-.nxd-overlap {
-  margin: 0;
-  padding: 0.1rem 0.75ch 0.3rem 2.75ch;
-  border-bottom: 1px solid var(--nxd-line);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-  overflow-wrap: anywhere;
-}
 
 .nxd-row {
   min-height: var(--nxd-row);

@@ -79,48 +79,40 @@ export function PhoneBook({
 
   return (
     <div className="nx-book nxp-book">
-      {/* ONE book (2026-11-17): each expiry once, its held spreads, its watched spreads, then its
-          lone contracts under a quiet label */}
+      {/* the book in two sections (2026-11-17): Spreads, then Contracts, each by expiry */}
       <section aria-labelledby="nxp-book">
         <h2 id="nxp-book" className="sr-only">Book</h2>
         {status}
-        {placed.book.map((g) => (
-          <section key={g.expiry} className="nxp-expiry" data-expiry={g.expiry}>
-            <ExpiryHead expiry={g.expiry} dte={g.dte} />
-            <ul className="nxp-cards">
-              {g.held.map((row) => (
-                <li key={row.map((p) => p.holding.id).join("+")}>
-                  {row.length === 2 ? (
-                    <Condor row={row} privacy={privacy}>
-                      {row.map((p) => (
+        {placed.sections.map((s) => (
+          <section key={s.kind} className="nxp-part" data-section={s.kind} aria-labelledby={`nxp-part-${s.kind}`}>
+            <h2 id={`nxp-part-${s.kind}`}>{s.title}</h2>
+            {s.expiries.map((g) => (
+              <section key={g.expiry} className="nxp-expiry" data-expiry={g.expiry}>
+                <ExpiryHead expiry={g.expiry} dte={g.dte} />
+                <ul className="nxp-cards">
+                  {g.held.map((row) => (
+                    <li key={row.map((p) => p.holding.id).join("+")}>
+                      {row.length === 2 ? (
+                        <Condor row={row} privacy={privacy}>
+                          {row.map((p) => (
+                            <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
+                                         privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} spxSaid={spxSaid} />
+                          ))}
+                        </Condor>
+                      ) : row.map((p) => (
                         <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
                                      privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} spxSaid={spxSaid} />
                       ))}
-                    </Condor>
-                  ) : row.map((p) => (
-                    <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
-                                 privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} spxSaid={spxSaid} />
+                    </li>
                   ))}
-                </li>
-              ))}
-              {g.spreads.map(({ entry, under, overlap, elsewhere }) => (
-                <li key={entry.id}>
-                  <RuleCard entry={entry} under={under} overlap={overlap} elsewhere={elsewhere} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
-                </li>
-              ))}
-            </ul>
-            {g.contracts.length > 0 ? (
-              <>
-                <p className="nxp-meta nxp-sub" data-sub="contracts">contracts</p>
-                <ul className="nxp-cards">
-                  {g.contracts.map(({ entry, under, overlap, elsewhere }) => (
+                  {[...g.spreads, ...g.contracts].map(({ entry, under, overlap, elsewhere }) => (
                     <li key={entry.id}>
                       <RuleCard entry={entry} under={under} overlap={overlap} elsewhere={elsewhere} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
                     </li>
                   ))}
                 </ul>
-              </>
-            ) : null}
+              </section>
+            ))}
           </section>
         ))}
         {unplaced}

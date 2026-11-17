@@ -100,6 +100,10 @@ svg .nx-leg[data-side="short"] { font-weight: 600; }
   font-size: 0.75rem; font-weight: 600; white-space: nowrap;
 }
 .nx-chip svg { width: 0.85rem; height: 0.85rem; }
+/* what a spread that partly overlaps a holding shares (#346), in its inspector and sheet: a holding's
+   name is the owner's and may be one long word, so it wraps rather than widening the inspector — it
+   did, by 416px, once the inspector became the only place it is said (2026-11-17) */
+.nx-overlap { min-width: 0; overflow-wrap: anywhere; }
 /* "held" after a holding's name, as a chip (the owner, 2026-11-17: it was small muted text, and a
    holding is the thing on the page that stands out). The page's own ink as its fill, never a state's
    colour: green, amber and red each already mean something on a row, and this is a fact, not news */

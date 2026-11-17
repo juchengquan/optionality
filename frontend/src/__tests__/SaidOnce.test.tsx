@@ -267,7 +267,13 @@ for (const arrangement of ["desk", "phone"] as const) {
         fireEvent.click(document.querySelector<HTMLButtonElement>("[data-ref='h-calls'] .nxp-open")!);
         await settle();
         d = screen.getByRole("dialog");
-      } else d = await detail(arrangement, "1218_C7300");
+      } else {
+        // cut to its short leg it is a contract, drawn under Contracts, and its value rule — which now
+        // names a leg it does not hold — a spread under Spreads, above it: the holding's row, by ref
+        fireEvent.click(document.querySelector<HTMLButtonElement>("[data-ref='h-calls'] .nxd-name")!);
+        await settle();
+        d = screen.getByRole("complementary", { name: "inspector: 1218_C7300" });
+      }
       await waitFor(() => expect(d.querySelector("[aria-label='payoff at expiry'] dl")).toBeTruthy());
       expect(d.querySelector("[aria-label='strike strip']")).toBeNull();
       expect(count(seen(d), REASON)).toBe(1);

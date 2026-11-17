@@ -203,7 +203,8 @@ describe("in the picture and its Markdown", () => {
       session, privacy: false, needs: [], health: null, polledAt: null, error: null, references: [],
       hidden: new Set(), takenAt: session ? new Date("2026-11-16T15:00:00Z") : SUNDAY,
     });
-    const rows = readMarkdown(toMarkdown(view)).sections.find((s) => s.title === "Book")!.rows;
+    // the book's tables (2026-11-17), each with its header row first: the columns are the same in each
+    const rows = readMarkdown(toMarkdown(view)).sections.filter((s) => ["Spreads", "Contracts"].includes(s.title)).flatMap((s) => s.rows);
     const at = rows[0]!.indexOf("value");
     // the text writes a figure's minus as the hyphen (MARKDOWN_FIGURE_MINUS); the page, the true one
     return IDS.map((id) => rows.find((r) => r[0] === ROWS.find((x) => x.id === id)!.code)?.[at]?.replace(/^-/, "\u2212"));

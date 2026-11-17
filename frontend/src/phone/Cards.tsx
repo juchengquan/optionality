@@ -133,8 +133,8 @@ function CostAndPace({ holding }: { holding: Holding }) {
 /** A watched spread — or a single contract, or a rule on something held that no drawn holding
  *  owns — with its value and Δ as its desk row writes them (part K; out of the session a watchlist
  *  row's value is its last in-session price and when, #400), its rule's sentence with its arrowed
- *  distance and the rules that sit under it, and, for a spread that only partly overlaps a holding, what it
- *  shares and with whom (#346). */
+ *  distance and the rules that sit under it. What a spread that partly overlaps a holding shares (#346)
+ *  is said in its sheet, not on its card (the owner, 2026-11-17). */
 export function RuleCard({ entry, under, overlap = null, elsewhere, onOpen, spxSaid = false }: {
   entry: Entry; under: Entry[]; overlap?: string | null; onOpen: () => void;
   /** leg rules drawn under an earlier spread: a note each, no line (2026-11-17) */
@@ -152,7 +152,6 @@ export function RuleCard({ entry, under, overlap = null, elsewhere, onOpen, spxS
         {entry.legs ? <span className="nxp-legs"><Legs legs={entry.legs.map(signedLeg)} /></span> : null}
         {state ? <Chip state={state} /> : null}
       </header>
-      {overlap ? <p className="nxp-meta nxp-overlap" data-overlap="">{overlap}</p> : null}
       <dl className="nxp-facts nxp-watch-figs">
         <div data-value=""><dt>{heldSpreadValue(entry, overlap) ? "cost to close" : "value"}</dt><dd>{cells.value}</dd></div>
         <div data-delta=""><dt>Δ</dt><dd>{cells.delta}</dd></div>

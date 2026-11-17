@@ -1,7 +1,7 @@
-/** A combo that only partly overlaps a holding, on the desk (#346): drawn as a watched spread with a
- *  note of what it shares, in a real layout engine — the note sits under its own row, inside the
- *  table, and widens nothing from a 900px desk up. The behaviour is the jsdom suites'
- *  (`NextDesk.test.tsx`, `NextBookModel.test.ts`).
+/** A combo that only partly overlaps a holding, on the desk (#346): drawn as a watched spread in its
+ *  holding's expiry, in a real layout engine. What it shares is said in its inspector, not under its
+ *  row (the owner, 2026-11-17), and there it fits whatever the holding is called. The behaviour is
+ *  the jsdom suites' (`NextDesk.test.tsx`, `NextBookModel.test.ts`).
  */
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { page } from "@vitest/browser/context";
@@ -44,7 +44,6 @@ function serveOverlap(quotes: object[] = OVERLAP_QUOTES, holdings: object[] = OV
 
 const rowOf = (id: string) =>
   [...document.querySelectorAll<HTMLElement>(".nxd-row[data-ref]")].find((r) => r.dataset.ref === id)!;
-const noteOf = (id: string) => rowOf(id).closest("li")!.querySelector<HTMLElement>("[data-overlap]")!;
 
 /** Whether `inner` is drawn wholly inside `outer`, to half a pixel. */
 function inside(inner: Element, outer: Element): boolean {
@@ -56,7 +55,7 @@ function inside(inner: Element, outer: Element): boolean {
 afterEach(cleanup);
 
 describe.each([900, 1280, 2560])("on a %ipx desk", (width) => {
-  it("draws the partly overlapping combos as watched spreads in their holding's expiry, each note under its row and inside the table", async () => {
+  it("draws the partly overlapping combos as watched spreads in their holding's expiry, with no note in the table", async () => {
     await page.viewport(width, 900);
     serveOverlap();
     render(<Next />);
@@ -65,17 +64,11 @@ describe.each([900, 1280, 2560])("on a %ipx desk", (width) => {
     // the one book (2026-11-17): in the same expiry as the holdings they overlap, after them
     const expiry = rowOf("h-8050").closest<HTMLElement>(".nxd-expiry")!;
     const table = document.querySelector<HTMLElement>(".nxd-table")!;
-    for (const [id, words] of [["r-8100", "shares C8100 with 1231_8050"], ["w-7700", "contains 1231_7700's C7700"]]) {
-      expect(expiry.contains(rowOf(id!))).toBe(true);
-      expect(rowOf("h-8050").compareDocumentPosition(rowOf(id!)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      const note = noteOf(id!);
-      expect(note.textContent).toBe(words);
-      // seen, under its own row, and whole: no ellipsis, nothing cut
-      expect(note.getBoundingClientRect().height).toBeGreaterThan(0);
-      expect(note.getBoundingClientRect().top).toBeGreaterThanOrEqual(rowOf(id!).getBoundingClientRect().bottom - 0.5);
-      expect(note.scrollWidth).toBeLessThanOrEqual(note.clientWidth + 0.5);
-      expect(inside(note, table)).toBe(true);
+    for (const id of ["r-8100", "w-7700"]) {
+      expect(expiry.contains(rowOf(id))).toBe(true);
+      expect(rowOf("h-8050").compareDocumentPosition(rowOf(id)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
+    expect(table.querySelector("[data-overlap]")).toBeNull();
     expect(overflowsSideways()).toBe(false);
   });
 });
@@ -94,7 +87,7 @@ it("says the note in the inspector, which stays inside the page", async () => {
   expect(overflowsSideways()).toBe(false);
 });
 
-it("wraps a note too long for the table rather than widening it or cutting it, inspector open", async () => {
+it("wraps a note too long for the inspector rather than widening it or cutting it", async () => {
   // a holding named longer than the table is wide once the inspector takes its share of 900px
   const LONG = "1231_C8050_rolled_from_1218_after_the_CPI_print_then_again_on_the_FOMC_day_and_once_more";
   const rename = (p: { id: string; name: string }) => (p.id === "h-8050" ? { ...p, name: LONG } : p);
@@ -104,12 +97,13 @@ it("wraps a note too long for the table rather than widening it or cutting it, i
   serveOverlap(quotes, holdings);
   render(<Next />);
   await settle();
-  fireEvent.click(within(rowOf("w-7700")).getByRole("button", { name: "1231_C7700" }));
+  fireEvent.click(within(rowOf("r-8100")).getByRole("button", { name: "1231_8100" }));
   await settle();
-  const note = noteOf("r-8100");
+  const insp = screen.getByRole("complementary", { name: "inspector: 1231_8100" });
+  const note = insp.querySelector<HTMLElement>("[data-overlap]")!;
   expect(note.textContent).toBe(`shares C8100 with ${LONG}`);
   expect(note.scrollWidth).toBeLessThanOrEqual(note.clientWidth + 0.5);
   expect(note.getBoundingClientRect().height).toBeGreaterThan(30);
-  expect(inside(note, document.querySelector(".nxd-table")!)).toBe(true);
+  expect(inside(note, insp)).toBe(true);
   expect(overflowsSideways()).toBe(false);
 });

@@ -2,9 +2,8 @@
  *  either arrangement draws it (ADR 0023). The desk table (#289) and the phone cards (#290) both
  *  draw THIS, so they cannot group one book two ways — and so do the saved picture and Copy as text.
  *
- *  ONE book (the owner, 2026-11-17): holdings and watches together, each expiry once (`book`),
- *  and under it the held spreads, then the watched spreads, then the lone watched contracts. What
- *  sits where inside that:
+ *  ONE book in two sections (the owner, 2026-11-17): Spreads, then Contracts (`sections`), each by
+ *  expiry, holdings and watches together, the held rows first. What sits where inside that:
  *
  *  - a rule about a holding sits under that holding, because it is a risk on something owned;
  *  - a rule on nothing held is the watchlist, an entry signal on a candidate spread;
@@ -73,10 +72,9 @@ interface WatchGroup {
   items: PlacedRule[];
 }
 
-/** One expiry of the one book: its heading once, and under it the three parts in this order —
- *  the held spreads (each row a bracket, as `HoldingGroup`'s), the watched spreads with the leg
- *  rules under them, and the lone watched contracts, which the page draws under a quiet
- *  "contracts" label (2026-11-17). Each part keeps the order its rows arrived in. */
+/** One expiry of one section: its heading, and under it the held rows (each a bracket, as
+ *  `HoldingGroup`'s), then the watched rows — `spreads` in Spreads, `contracts` in Contracts, the
+ *  other always empty. Each part keeps the order its rows arrived in. */
 export interface ExpiryBook {
   expiry: string;
   /** days to the expiry, from whichever row of it came first */
@@ -86,8 +84,20 @@ export interface ExpiryBook {
   contracts: PlacedRule[];
 }
 
+/** One of the book's two sections (the owner, 2026-11-17): Spreads — every holding of more than one
+ *  contract and every watched spread, with the leg rules under them — then Contracts — a holding of
+ *  one contract and the lone watched contracts. Each by expiry; a section with nothing is left out. */
+export interface BookSection {
+  kind: "spreads" | "contracts";
+  title: string;
+  expiries: ExpiryBook[];
+}
+
 export interface BookModel {
-  /** the one book every surface draws: `holdings` and `watchlist` merged by expiry */
+  /** what every surface draws, in order: Spreads, then Contracts */
+  sections: BookSection[];
+  /** every expiry block of `sections`, in the order drawn: what finds a row by its id, orders j/k and
+   *  draws each rule once */
   book: ExpiryBook[];
   /** empty while the holdings are not valued: their rules are then `unplaced` */
   holdings: HoldingGroup[];
@@ -133,9 +143,11 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
     expiry, items: group.map((entry) => ({ entry, under: under(entry), overlap: overlap(entry) })),
   }));
 
-  const book = oneBook(holdingGroups, watchGroups);
+  const sections = twoSections(holdingGroups, watchGroups);
+  const book = sections.flatMap((s) => s.expiries);
   drawOnce(book);
   return {
+    sections,
     book,
     holdings: holdingGroups,
     unplaced,
@@ -145,21 +157,33 @@ export function placeBook(quotes: Entry[], holdings: Holding[] | null, monitors:
   };
 }
 
-/** The holdings and the watchlist as ONE book: each expiry once, earliest first, its held spreads,
- *  then its watched spreads, then its lone watched contracts. */
-function oneBook(holdings: HoldingGroup[], watchlist: WatchGroup[]): ExpiryBook[] {
-  const expiries = [...new Set([...holdings.map((g) => g.expiry), ...watchlist.map((g) => g.expiry)])].sort();
-  return expiries.map((expiry) => {
-    const held = holdings.find((g) => g.expiry === expiry)?.rows ?? [];
-    const items = watchlist.find((g) => g.expiry === expiry)?.items ?? [];
+/** The holdings and the watchlist as the book's two sections: Spreads, then Contracts, each by
+ *  expiry, earliest first. A holding goes by its legs — one contract is a contract, held or not —
+ *  and a condor's bracket is two spreads, so it is always in Spreads. */
+function twoSections(holdings: HoldingGroup[], watchlist: WatchGroup[]): BookSection[] {
+  const single = (row: PlacedHolding[]) => row.length === 1 && row[0]!.holding.legs.length === 1;
+  const section = (kind: BookSection["kind"], title: string, contract: boolean): BookSection => {
+    const held = holdings.map((g) => ({ expiry: g.expiry, rows: g.rows.filter((r) => single(r) === contract) }));
+    const watched = watchlist.map((g) => ({ expiry: g.expiry, items: g.items.filter((i) => !i.entry.legs === contract) }));
+    const expiries = [...new Set([...held, ...watched].filter((g) => ("rows" in g ? g.rows : g.items).length > 0)
+      .map((g) => g.expiry))].sort();
     return {
-      expiry,
-      dte: held[0]?.[0]?.holding.dte ?? items[0]!.entry.dte,
-      held,
-      spreads: items.filter((i) => Boolean(i.entry.legs)),
-      contracts: items.filter((i) => !i.entry.legs),
+      kind, title,
+      expiries: expiries.map((expiry) => {
+        const rows = held.find((g) => g.expiry === expiry)?.rows ?? [];
+        const items = watched.find((g) => g.expiry === expiry)?.items ?? [];
+        return {
+          expiry,
+          dte: rows[0]?.[0]?.holding.dte ?? items[0]!.entry.dte,
+          held: rows,
+          spreads: contract ? [] : items,
+          contracts: contract ? items : [],
+        };
+      }),
     };
-  });
+  };
+  return [section("spreads", "Spreads", false), section("contracts", "Contracts", true)]
+    .filter((s) => s.expiries.length > 0);
 }
 
 /** Marks, in the book's order, each rule met under a second place as drawn under the first. */

@@ -20,7 +20,7 @@ import { costAndPace, paceOutcome } from "../pace";
 import type { HoldingWrites } from "../HoldingActions";
 import { DetailBoundary } from "../DetailBoundary";
 import { keptHolding, STALE_WORDS } from "../kept";
-import { alsoWords, drawnUnder, NOTHING, placeBook, type BookModel, type Elsewhere, type PlacedRule } from "../placement";
+import { alsoWords, drawnUnder, NOTHING, placeBook, type BookModel, type Elsewhere, type ExpiryBook, type PlacedRule } from "../placement";
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
@@ -243,9 +243,8 @@ const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
 
 // ---- the sections
 
-/** The one book (the owner, 2026-11-17): no Holdings and Watchlist sections, each expiry's heading
- *  once, and under it its held spreads, its watched spreads, and its lone contracts after a quiet
- *  "contracts" label. What the book says before its rows — the session line, SPX's reason, a
+/** The book in two sections (the owner, 2026-11-17): Spreads, then Contracts, each by expiry, its
+ *  held rows first. What the book says before its rows — the session line, SPX's reason, a
  *  valuation's failure or that it is under way, and that there is nothing at all — is said once,
  *  above them. */
 function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, picker }: BookProps & {
@@ -271,42 +270,11 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
                       phase={phase ?? "closed"} className="nx-meta nxd-note" /> : null}
       {/* why SPX is not current, once for the book: its rows' strips draw the hollow dot (2026-11-17) */}
       <SpxNote reasons={bookSpxReasons(holdings, quotes)} className="nx-meta nxd-note" />
-      {placed.book.map((g) => (
-        <div key={g.expiry} className="nxd-expiry" data-expiry={g.expiry}>
-          <h3 className="nxd-group">{`${writtenDate(g.expiry)} · ${g.dte} DTE`}</h3>
-          <ul>
-            {g.held.map((bracket) => (
-              <li key={bracket.map((p) => p.holding.id).join("+")}
-                  data-bracket={bracket.length === 2 ? "condor" : undefined}>
-                <ul>
-                  {bracket.map((placed, i) => {
-                    const { holding, rules } = placed;
-                    // drawn in pieces on the rows it passes, so it runs from the first holding's
-                    // row to the second's whatever rules sit under either
-                    const paired = bracket.length === 2;
-                    return (
-                      <li key={holding.id}>
-                        <Row row={{ kind: "holding", holding, rules }} ctx={ctx}
-                             bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} />
-                        {/* its own rule is on its row: only the others are rows under it */}
-                        {subRules(placed).map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx}
-                                                          bracket={paired && i === 0 ? "through" : undefined} />)}
-                        <AlsoNotes elsewhere={placed.elsewhere} />
-                      </li>
-                    );
-                  })}
-                </ul>
-              </li>
-            ))}
-            {g.spreads.map((item) => <Watched key={item.entry.id} item={item} ctx={ctx} />)}
-          </ul>
-          {g.contracts.length > 0 ? (
-            <>
-              <p className="nx-meta nxd-sub" data-sub="contracts">contracts</p>
-              <ul>{g.contracts.map((item) => <Watched key={item.entry.id} item={item} ctx={ctx} />)}</ul>
-            </>
-          ) : null}
-        </div>
+      {placed.sections.map((s) => (
+        <section key={s.kind} className="nxd-part" data-section={s.kind} aria-labelledby={`nxd-part-${s.kind}`}>
+          <h2 id={`nxd-part-${s.kind}`} className="nxd-part-head">{s.title}</h2>
+          {s.expiries.map((g) => <Expiry key={g.expiry} g={g} ctx={ctx} />)}
+        </section>
       ))}
       {placed.unplaced.length > 0 ? (
         <div className="nxd-expiry" data-testid="unplaced">
@@ -338,12 +306,49 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
   );
 }
 
-/** A watched spread or contract, its overlap note under it (#346), and the leg rules under it. */
+/** One expiry of a section: its heading, its held rows (a condor's two spreads bracketed), then its
+ *  watched spreads or its lone contracts, whichever section it is in. */
+function Expiry({ g, ctx }: { g: ExpiryBook; ctx: Ctx }) {
+  return (
+    <div className="nxd-expiry" data-expiry={g.expiry}>
+      <h3 className="nxd-group">{`${writtenDate(g.expiry)} · ${g.dte} DTE`}</h3>
+      <ul>
+        {g.held.map((bracket) => (
+          <li key={bracket.map((p) => p.holding.id).join("+")}
+              data-bracket={bracket.length === 2 ? "condor" : undefined}>
+            <ul>
+              {bracket.map((placed, i) => {
+                const { holding, rules } = placed;
+                // drawn in pieces on the rows it passes, so it runs from the first holding's
+                // row to the second's whatever rules sit under either
+                const paired = bracket.length === 2;
+                return (
+                  <li key={holding.id}>
+                    <Row row={{ kind: "holding", holding, rules }} ctx={ctx}
+                         bracket={paired ? (i === 0 ? "top" : "bottom") : undefined} />
+                    {/* its own rule is on its row: only the others are rows under it */}
+                    {subRules(placed).map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx}
+                                                      bracket={paired && i === 0 ? "through" : undefined} />)}
+                    <AlsoNotes elsewhere={placed.elsewhere} />
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
+        {[...g.spreads, ...g.contracts].map((item) => <Watched key={item.entry.id} item={item} ctx={ctx} />)}
+      </ul>
+    </div>
+  );
+}
+
+/** A watched spread or contract and the leg rules under it. A spread that partly overlaps a holding
+ *  (#346) says what it shares in its inspector, not under its row: with spreads and contracts in
+ *  sections of their own the line was noise (the owner, 2026-11-17). */
 function Watched({ item: { entry, under, overlap, elsewhere }, ctx }: { item: PlacedRule; ctx: Ctx }) {
   return (
     <li>
       <Row row={{ kind: "rule", entry, nested: false, overlap }} ctx={ctx} />
-      <OverlapNote overlap={overlap} />
       {drawnUnder(under, elsewhere).map((e) => <Row key={e.id} row={{ kind: "rule", entry: e, nested: true }} ctx={ctx} />)}
       <AlsoNotes elsewhere={elsewhere} />
     </li>
@@ -357,11 +362,6 @@ function AlsoNotes({ elsewhere }: { elsewhere: Elsewhere[] | undefined }) {
   return <>{elsewhere.map((e) => <p key={e.entry.id} className="nx-meta nxd-also" data-also="">{alsoWords(e)}</p>)}</>;
 }
 
-/** What a spread in the watchlist shares with a holding it only partly overlaps (#346), under its
- *  row: names and contracts only, so privacy has nothing to hide in it. */
-function OverlapNote({ overlap }: { overlap: string | null | undefined }) {
-  return overlap ? <p className="nx-meta nxd-overlap" data-overlap="">{overlap}</p> : null;
-}
 
 /** Muted by hand, expired, or off with their holding: not news, so folded away, as the old page's
  *  muted tables were — with its words for why each is off. */
