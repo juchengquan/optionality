@@ -20,15 +20,15 @@
  *    observation times were kept is drawn faint: nothing says whether it was the close, so it is
  *    claimed neither way.
  *  - **Privacy** keeps the shape and drops every $ figure and everything across the contracts held:
- *    the burndown says points per contract instead (#395). The IV chart is in % and SPX's path in
- *    index points, which privacy keeps.
+ *    the burndown says points per contract instead (#395). The IV chart is in %, which privacy
+ *    keeps.
  *
- *  All three are drawn on visx at their measured width — the burndown (`BurndownChart.tsx`, #360),
- *  the IV chart here and SPX's path (`SpxPath.tsx`, #395) — and share ONE crosshair
- *  (`Crosshair.tsx`): hovering, tapping or stepping a day in any of them puts it on that day in all
- *  three, each saying the day in its own readout. What keeps a day at one x down all three is the
- *  margins they share (`Gutters`) and the one mapping they all use (`dayScale`), DTE from `span` at
- *  the left margin to 0 at the right.
+ *  Both are drawn on visx at their measured width — the burndown (`BurndownChart.tsx`, #360) and the
+ *  IV chart here — and share ONE crosshair (`Crosshair.tsx`): hovering, tapping or stepping a day in
+ *  either puts it on that day in both, each saying the day in its own readout. What keeps a day at
+ *  one x in both is the margins they share (`Gutters`) and the one mapping they use (`dayScale`),
+ *  DTE from `span` at the left margin to 0 at the right. SPX's path against the strikes was a third
+ *  panel (#298, #395) until 2026-11-17, when the owner dropped it.
  */
 import { askedFor } from "./asked";
 import { tick } from "./shared/numbers";
@@ -44,7 +44,6 @@ import { Burndown, runsOf, useWidth } from "./BurndownChart";
 import { CrossTip, dayScale, liveOf, pointedStop, stepped, usePanel, type Cross, type Gutters, type Panel } from "./Crosshair";
 import { ivLines, ivWords, MARK, nowDte, stopsOf, type IvLeg } from "./historyDays";
 import { legCode } from "./legs";
-import { SpxPath, spxGutter } from "./SpxPath";
 import {
   BEFORE_ENTRY_WORDS, beforeEntryDays, entryCloseDay, thresholdOf, watchedCharted, watchedSamples, withBeforeEntry,
 } from "./watchhistory";
@@ -94,9 +93,9 @@ function isSamples(body: unknown): boolean {
  *  none of them: no contract size, so its money is points per contract, and no "now". A watched row
  *  (#402) is drawn as a holding of one, with no valuation (`watchedCharted`). */
 export type Charted = Pick<Holding, "id" | "contracts" | "legs" | "strike_date" | "closed_on">
-  & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "spx" | "short_strikes" | "valued_from">>;
+  & Partial<Pick<Holding, "contract_size" | "cost_to_close" | "dte" | "valued_from">>;
 
-/** The crosshair the three panels share (#395): the stop pointed at, kept under the holding it was
+/** The crosshair the history's panels share (#395): the stop pointed at, kept under the holding it was
  *  pointed at in, so another holding drawn in the same place starts with none; and a tap outside
  *  every panel lets go of it. */
 function useCross(id: string, served: Samples | undefined, holding: Charted): Cross {
@@ -144,7 +143,7 @@ export function HoldingHistory({ holding, privacy }: { holding: Charted; privacy
 }
 
 /** A watched row's history (#402): its value each day against its price rule's threshold, its legs'
- *  IV and SPX against its strikes — the holding's three panels and their crosshair, from the watch
+ *  IV — the holding's two panels and their crosshair, from the watch
  *  history of the contracts it watches (`/monitors/{id}/samples`). In points per contract: a watched
  *  row has no count and no money of its own. */
 export function WatchedHistory({ entry, privacy }: { entry: Entry; privacy: boolean }) {
@@ -167,20 +166,20 @@ export function WatchedHistory({ entry, privacy }: { entry: Entry; privacy: bool
   );
 }
 
-/** The three panels of a history — the value by day, each leg's IV, SPX against the strikes — on
- *  one DTE axis with one crosshair, for a holding or a watched row. */
+/** The two panels of a history — the value by day and each leg's IV — on one DTE axis with one
+ *  crosshair, for a holding or a watched row. */
 function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCost, threshold = null }: {
   id: string; holding: Charted; served: Samples | undefined; blank: React.ReactNode; unit: Unit; privacy: boolean;
   title: string; noCost: string; threshold?: number | null;
 }) {
   const cross = useCross(id, served, holding);
   const before = served ? beforeEntryDays(served) : new Set<string>();
-  // one pair of margins for all three charts, so a DTE is at the same x in each (#298)
+  // one pair of margins for both charts, so a DTE is at the same x in each (#298)
   const axis = blank !== null || !served ? null : valueAxis(served, holding, unit, threshold === null ? [] : [threshold]);
   const gutters: Gutters | null = axis === null || !served ? null : (() => {
     const iv = ivAxis(served, holding);
     return {
-      L: Math.max(axis.L, iv?.L ?? 0, spxGutter(holding)),
+      L: Math.max(axis.L, iv?.L ?? 0),
       R: Math.max(R, iv?.RL ?? 0),
     };
   })();
@@ -213,10 +212,6 @@ function HistoryPanels({ id, holding, served, blank, unit, privacy, title, noCos
           <IvChart served={served} holding={holding} gutters={gutters!} cross={cross} before={before} />
         </section>
       ) : null}
-      {/* where SPX was against the strikes (#298), from the same answer — nothing more is asked —
-          and on the burndown's DTE window, so the days line up */}
-      {blank === null && served ? <SpxPath served={served} holding={holding} span={dteWindow(served)} gutters={gutters!}
-                                                    cross={cross} before={before} /> : null}
     </>
   );
 }

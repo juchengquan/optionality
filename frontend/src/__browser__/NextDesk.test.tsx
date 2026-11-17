@@ -362,9 +362,9 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
       if (when === "in session") await userEvent.click(toggle);
       await settle();
       const charts = [...insp.querySelectorAll<SVGSVGElement>(".nx-hist svg")];
-      // worth nothing unless every chart is there to be measured, at a usable size: the burndown,
-      // the IV chart and where SPX was against the strikes (#298)
-      expect(charts).toHaveLength(3);
+      // worth nothing unless every chart is there to be measured, at a usable size: the burndown and
+      // the IV chart
+      expect(charts).toHaveLength(2);
       for (const svg of charts) {
         expect(svg.getBoundingClientRect().width).toBeGreaterThan(200);
         expect(clipped(svg)).toEqual([]);
@@ -428,7 +428,7 @@ describe("the burndown and the IV chart fit in the inspector: open outside the s
     await userEvent.click(toggle);
     await settle();
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(insp.querySelectorAll(".nx-hist svg")).toHaveLength(3);
+    expect(insp.querySelectorAll(".nx-hist svg")).toHaveLength(2);
     // shut, it takes no room: nothing of it is drawn
     await userEvent.click(toggle);
     await settle();

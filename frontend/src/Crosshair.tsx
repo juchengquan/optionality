@@ -36,7 +36,7 @@ export interface Cross {
   point: (at: number | null, by: Panel) => void;
   plots: React.RefObject<Set<HTMLElement>>;
   /** the panel being driven — focused, pointed into, or the last to move the crosshair. Its status
-   *  line alone is live: one key moves all three, and three polite regions said it three times
+   *  line alone is live: one key moves every panel, and a polite region each said it once per panel
    *  (#399's review) */
   driver: Panel;
   drive: (by: Panel) => void;

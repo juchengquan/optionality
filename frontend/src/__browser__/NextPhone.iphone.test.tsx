@@ -245,7 +245,7 @@ describe("a holding's history in its sheet: on demand in session (#353), open ou
   for (const [ref, days, session] of [
     ["h-calls", 7, true], ["h-ic", 2, true], ["h-calls", 7, false], ["h-ic", 2, false],
   ] as const) {
-    it(`draws ${ref}'s three charts inside the screen ${session ? "when opened in session" : "at once outside the session"}, every target still 44pt`, async () => {
+    it(`draws ${ref}'s two charts inside the screen ${session ? "when opened in session" : "at once outside the session"}, every target still 44pt`, async () => {
       if (!session) outsideTheSession();
       await show();
       await userEvent.click(within(card(ref)).getByRole("button", { name: /details of/ }));
@@ -257,7 +257,7 @@ describe("a holding's history in its sheet: on demand in session (#353), open ou
         expect(sheet.querySelector(".nx-hist")).toBeNull();
         await userEvent.click(toggle);
       }
-      await waitFor(() => expect(sheet.querySelectorAll(".nx-hist svg")).toHaveLength(3));
+      await waitFor(() => expect(sheet.querySelectorAll(".nx-hist svg")).toHaveLength(2));
       await settle();
       expect(sheet.querySelectorAll("[data-sample]")).toHaveLength(days);
       for (const svg of sheet.querySelectorAll<SVGSVGElement>(".nx-hist svg")) {

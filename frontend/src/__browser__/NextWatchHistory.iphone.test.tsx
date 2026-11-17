@@ -1,7 +1,7 @@
 /** A watched spread's history (#402) on the phone, under Playwright's iPhone profile — touch,
  *  `isMobile`, a 390px screen — in its sheet, whose history is open from the start outside the
- *  session: the three plot areas aligned to the pixel inside the screen, and a real finger (Chrome's
- *  own touch events, through CDP) tapping any panel crossing the day in all three, each readout
+ *  session: the two plot areas aligned to the pixel inside the screen, and a real finger (Chrome's
+ *  own touch events, through CDP) tapping either panel crossing the day in both, each readout
  *  inside its own panel. The desk's widths are `NextWatchHistory.test.tsx`'s. */
 /// <reference types="@vitest/browser/providers/playwright" />
 import { cdp, userEvent } from "@vitest/browser/context";
@@ -35,7 +35,7 @@ function serveOwnerBook(): void {
   }) as unknown as typeof fetch;
 }
 
-/** The watched put spread's sheet outside the session, its three panels drawn. */
+/** The watched put spread's sheet outside the session, its two panels drawn. */
 async function review() {
   vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // a Sunday: outside the session
   serveOwnerBook();
@@ -45,7 +45,7 @@ async function review() {
   const sheet = await screen.findByRole("dialog");
   await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)));
   const panels = await waitFor(() => {
-    const found = [".nx-bd", ".nx-iv", ".nx-spxp"].map((sel) => sheet.querySelector<HTMLElement>(sel));
+    const found = [".nx-bd", ".nx-iv"].map((sel) => sheet.querySelector<HTMLElement>(sel));
     if (!found.every((p) => p?.querySelector("circle"))) throw new Error("not drawn yet");
     return found as HTMLElement[];
   });
@@ -83,14 +83,14 @@ describe("a watched spread's history on the phone", () => {
     expect(overflowsSideways()).toBe(false);
   });
 
-  it("crosses the day a finger taps in any panel in all three, each readout inside its panel", async () => {
+  it("crosses the day a finger taps in either panel in both, each readout inside its panel", async () => {
     const { panels } = await review();
-    for (const [i, on] of [[1, "2026-11-06"], [2, "2026-11-09"], [0, "2026-11-05"]] as const) {
+    for (const [i, on] of [[1, "2026-11-06"], [0, "2026-11-09"], [1, "2026-11-05"]] as const) {
       const panel = panels[i]!;
       panel.scrollIntoView({ block: "center" });
       await settle();
       await tap({ x: dayX(panels, on), y: panel.getBoundingClientRect().top + 20 });
-      expect(crossed(panels)).toEqual([on, on, on]);
+      expect(crossed(panels)).toEqual([on, on]);
       for (const p of panels) {
         const t = p.querySelector("[data-tip]")!.getBoundingClientRect(), c = p.getBoundingClientRect();
         expect(t.left >= c.left - 0.5 && t.right <= c.right + 0.5 && t.top >= c.top - 0.5 && t.bottom <= c.bottom + 0.5)
