@@ -194,7 +194,7 @@
       "params": {
         "name": "holding_history",
         "arguments": {
-          "id": "../quotes"
+          "id": "dec-condor\n"
         }
       }
     }
@@ -209,7 +209,7 @@
           "content": [
             {
               "type": "text",
-              "text": "argument \"id\" must be a string matching ^[A-Za-z0-9_-]{1,64}$"
+              "text": "argument \"id\" must be a string matching ^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]{1,64}$"
             }
           ],
           "isError": true

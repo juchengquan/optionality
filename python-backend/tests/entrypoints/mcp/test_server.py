@@ -303,19 +303,25 @@ class TestTheTools:
         assert answer["text"].startswith('{"data":{"db":true,"golden_cases":')
         assert '": ' not in answer["text"]
 
-    async def test_refuse_an_id_that_is_not_one_of_the_service_s_in_words_an_agent_can_correct(self, mcp):
+    async def test_refuse_an_id_or_a_name_that_is_not_one_of_the_service_s_in_words_an_agent_can_correct(self, mcp):
         m = mcp()
         missing = await m.call("holding_history", {"id": "nope"})
-        assert missing["isError"] is True
-        assert missing["text"] == "GET /positions/nope/samples answered 404: position not found"
+        assert (missing["isError"], missing["text"]) == (
+            True,
+            "no holding is \"nope\": tried it as a holding's id and as its name. positions lists every holding's id",
+        )
         monitor = await m.call("monitor_history", {"id": "nope"})
-        assert monitor["isError"] is True
-        assert monitor["text"] == "GET /monitors/nope/samples answered 404: monitor not found"
+        assert (monitor["isError"], monitor["text"]) == (
+            True,
+            "no rule is \"nope\": tried it as a rule's id, as its code or combo name. watchlist lists every rule's id",
+        )
 
     async def test_refuse_arguments_that_are_not_the_tool_s_before_asking_the_api_anything(self, mcp):
         m = mcp()
-        bad = await m.call("holding_history", {"id": "../settings"})
-        assert (bad["isError"], bad["text"]) == (True, 'argument "id" must be a string matching ^[A-Za-z0-9_-]{1,64}$')
+        pattern = "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]{1,64}$"
+        for given in ["dec\u0000condor", "dec\ncondor", "dec\u009fcondor", "x" * 65, "", "dec \U0001f985"]:
+            bad = await m.call("holding_history", {"id": given})
+            assert (bad["isError"], bad["text"]) == (True, f'argument "id" must be a string matching {pattern}'), given
         assert (await m.call("holding_history", {"id": 7}))["isError"] is True
         assert (await m.call("holding_history"))["text"] == 'missing argument "id"'
         assert (await m.call("holding_history", {"id": "a", "at": "b"}))[
@@ -340,6 +346,170 @@ class TestTheTools:
         assert answer["isError"] is True
         assert answer["text"].startswith("GET /quotes answered 502: ")
         assert "ECONNREFUSED" in answer["text"]
+
+
+PUT_RULE = {
+    "strike_date": EXPIRY,
+    "option_type": "PUT",
+    "strike": 7100,
+    "field": "option_delta",
+    "threshold": 0.15,
+    "direction": "above",
+}
+COMBO = {
+    "name": "1218-6800",
+    "strike_date": EXPIRY,
+    "field": "mid_price",
+    "threshold": 2.5,
+    "direction": "above",
+    "legs": [{"sign": -1, "option_type": "PUT", "strike": 7100}, {"sign": 1, "option_type": "PUT", "strike": 7075}],
+}
+
+
+def _box(read):
+    return Toolbox(read, lambda: __import__("harness").NOW, "UTC")
+
+
+class TestTheHistoryToolsTakeANameAsWellAsAnId:
+    # An agent asked "how has 1218-6800 moved?" called monitor_history with the name, got a 404, and
+    # recovered only by searching the watchlist for the id (2026-11-18): one call, not three.
+
+    async def names(self, m):
+        """`book`, plus a second rule on the short put (its price beside its Δ), a combo, and a closed holding."""
+        ids = await m.book()
+        put_delta = await m.created(await m.h.call("/monitors", **json_body(PUT_RULE)))
+        put_price = await m.created(
+            await m.h.call("/monitors", **json_body({**PUT_RULE, "field": "mid_price", "threshold": 9.5}))
+        )
+        combo_rule = await m.created(await m.h.call("/monitors", **json_body(COMBO)))
+        closed = await m.created(await m.h.call("/positions", **json_body({**CONDOR, "name": "oct-condor"})))
+        shut = await m.h.call(f"/positions/{closed}/close", **json_body({"exit": 1.25, "closed_on": "2026-10-01"}))
+        assert shut.status_code == 200, shut.text
+        m.asked.clear()
+        return {**ids, "put_delta": put_delta, "put_price": put_price, "combo": combo_rule, "closed": closed}
+
+    async def same(self, m, name, given, id):
+        """The answer `given` reads, held to the GET by `id`'s own: the same data, `source` naming the id."""
+        path = f"/positions/{id}/samples" if name == "holding_history" else f"/monitors/{id}/samples"
+        answer = await m.call(name, {"id": given})
+        assert answer["isError"] is False, f"{given}: {answer['text']}"
+        assert answer["source"] == f"GET {path}", given
+        assert answer["data"] == (await m.h.call(path)).json(), given
+
+    async def test_read_a_holding_by_its_id_or_its_name_open_or_closed(self, mcp):
+        m = mcp()
+        ids = await self.names(m)
+        await self.same(m, "holding_history", ids["position"], ids["position"])
+        await self.same(m, "holding_history", "1016_IC", ids["position"])
+        await self.same(m, "holding_history", "  1016_IC ", ids["position"])
+        await self.same(m, "holding_history", "oct-condor", ids["closed"])
+        assert m.asked == []
+
+    async def test_read_a_rule_by_its_id_its_code_as_stored_or_its_contract_as_the_page_and_the_bot_write_it(self, mcp):
+        m = mcp()
+        ids = await self.names(m)
+        await self.same(m, "monitor_history", ids["monitor"], ids["monitor"])
+        await self.same(m, "monitor_history", "1218-6800", ids["combo"])
+        await self.same(m, "monitor_history", "US.SPXW261218C8050000", ids["monitor"])
+        for spelled in ["20261218 C8050", "261218 C8050", "20261218c8050", " 20261218 C8050 "]:
+            await self.same(m, "monitor_history", spelled, ids["monitor"])
+        assert m.asked == []
+
+    async def test_match_a_name_exactly_case_is_the_owner_s_except_in_a_contract_written_the_page_s_way(self, mcp):
+        m = mcp()
+        await self.names(m)
+        assert (await m.call("holding_history", {"id": "1016_ic"}))["isError"] is True
+        assert (await m.call("monitor_history", {"id": "1218-6800 "}))["isError"] is False
+        assert (await m.call("monitor_history", {"id": "us.spxw261218c8050000"}))["isError"] is True
+
+    async def test_trim_as_javascript_does_not_as_python_does(self, mcp):
+        # str.strip() takes U+001C–U+001F and U+0085, which `trim` does not; the first are refused as
+        # control characters anyway, and U+0085 too. U+FEFF is the other way: `trim` takes it.
+        m = mcp()
+        ids = await self.names(m)
+        await self.same(m, "holding_history", "\ufeff1016_IC\u3000", ids["position"])
+
+    async def test_list_each_candidate_where_a_name_matches_several_rules_to_call_again_with_one_id(self, mcp):
+        m = mcp()
+        ids = await self.names(m)
+        for given in ["20261218 P7100", "US.SPXW261218P7100000"]:
+            answer = await m.call("monitor_history", {"id": given})
+            assert (answer["isError"], answer["text"]) == (
+                True,
+                "\n".join(
+                    [
+                        f'"{given}" names 2 rules; call again with one of their ids:',
+                        f"{ids['put_delta']} — |Δ| ≥ 0.15",
+                        f"{ids['put_price']} — |value| ≥ 9.50",
+                    ]
+                ),
+            )
+
+    async def test_say_what_was_tried_when_nothing_matches_the_contract_included(self, mcp):
+        m = mcp()
+        await self.names(m)
+        answer = await m.call("monitor_history", {"id": "20261218 C9999"})
+        said = (
+            'no rule is "20261218 C9999": tried it as a rule\'s id, as its code or combo name, and as the contract '
+            "US.SPXW261218C9999000. watchlist lists every rule's id"
+        )
+        assert (answer["isError"], answer["text"]) == (True, said)
+
+    async def test_never_put_what_the_caller_typed_in_a_path_a_name_like_a_path_is_looked_up_and_not_found(self, mcp):
+        m = mcp()
+        await self.names(m)
+        for given in ["../quotes", "../../settings", "%2e%2e%2fquotes", "1016_IC/../../quotes", "?id=x"]:
+            assert (await m.call("holding_history", {"id": given}))["text"].startswith("no holding is "), given
+            assert (await m.call("monitor_history", {"id": given}))["text"].startswith("no rule is "), given
+        assert m.asked == []
+
+    async def test_read_only_the_list_and_the_resolved_id_s_history_both_gets_the_door_already_makes(self):
+        reads = []
+        rows = {
+            "/monitors": [
+                {
+                    "id": "mon-7",
+                    "code": "1218-6800",
+                    "field": "mid_price",
+                    "compare": "signed",
+                    "direction": "above",
+                    "threshold": 1,
+                    "legs": [{}, {}],
+                }
+            ],
+            "/positions": [{"id": "pos-7", "name": "../quotes"}],
+        }
+
+        async def read(path, authorization):
+            reads.append(path)
+            return 200, json.dumps(rows.get(path, {}))
+
+        box = _box(read)
+        assert "isError" not in await box.call("monitor_history", {"id": "1218-6800"}, None)
+        assert "isError" not in await box.call("holding_history", {"id": "../quotes"}, None)
+        assert reads == ["/monitors", "/monitors/mon-7/samples", "/positions", "/positions/pos-7/samples"]
+
+    async def test_refuse_to_build_a_path_from_a_stored_id_that_is_not_an_id(self):
+        reads = []
+
+        async def read(path, authorization):
+            reads.append(path)
+            return 200, json.dumps([{"id": "../quotes", "name": "odd"}])
+
+        assert await _box(read).call("holding_history", {"id": "odd"}, None) == {
+            "content": [{"type": "text", "text": 'the holding "odd" has an id no path can carry'}],
+            "isError": True,
+        }
+        assert reads == ["/positions"]
+
+    async def test_carry_a_list_that_cannot_be_read_as_a_tool_error_in_the_service_s_own_words(self):
+        async def read(path, authorization):
+            return 500, json.dumps({"detail": "database is locked"})
+
+        assert await _box(read).call("monitor_history", {"id": "mon-1"}, None) == {
+            "content": [{"type": "text", "text": "GET /monitors answered 500: database is locked"}],
+            "isError": True,
+        }
 
 
 class TestTheLiveReadsSharedCache:
@@ -429,6 +599,10 @@ class TestTheDoorsReach:
             "math",
             # the one type it is handed, `Read`, and nothing that runs
             "...ports",
+            # the library's pure domain for the words: a contract as the page writes it is read by
+            # `/unwatch`'s own parser, and a rule is said in its short form
+            "optionality.alarm",
+            "optionality.contract",
             "optionality.js",
             "optionality.timefmt",
             "pathlib",

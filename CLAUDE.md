@@ -340,7 +340,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   cannot write, cannot compute a figure, and its answer's `data` IS the GET's body. Eight tools
   (`tools.ts`), each one GET: `holdings` (`/positions/values`), `watchlist` (`/quotes`),
   `positions` (`/positions`, closed trades included), `holding_history`, `monitor_history`,
-  `monitor_closes`, `references`, `health`; an answer is `{source, read_at, data}` written with
+  `monitor_closes`, `references`, `health` — the two histories take an id OR a name, resolved
+  first through `/positions` or `/monitors` (`LOOKUPS`), and only the resolved id reaches a path
+  (ADR 0026, amended 2026-11-18); an answer is `{source, read_at, data}` written with
   sorted keys and JavaScript's numbers, so both backends write the same TEXT. The three live ones
   share one read per path for `LIVE_FOR_MS` (5s) across every caller, a read in flight joined, a
   refusal shared too — the page and the sweep never pass through it. The table — names,

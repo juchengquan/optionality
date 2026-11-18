@@ -273,6 +273,30 @@ const rpc = (method: string, params?: unknown) =>
 const tool = (name: string, args?: Record<string, unknown>) =>
   rpc("tools/call", { name, ...(args === undefined ? {} : { arguments: args }) });
 
+/** Rules to name (#447's follow-up): the short call watched for its Δ (`mon-1`) and its price
+ *  (`mon-3`), the short put for its Δ alone (`mon-4`), and the call spread as the combo `1218-6800`. */
+const RULES = world({
+  tables: {
+    monitors: [
+      monitor({ id: "mon-1" }),
+      monitor({ id: "mon-3", field: "mid_price", threshold: 9.5, compare: "signed", created_at: "2026-11-02 14:31:00.000000" }),
+      monitor({ id: "mon-4", option_type: "PUT", strike: 6400, threshold: 0.15, created_at: "2026-11-02 14:32:00.000000" }),
+      combo({ id: "mon-2", code: "1218-6800", created_at: "2026-11-02 14:33:00.000000" }),
+    ],
+    watch_samples: [
+      watchDay([P6400], {
+        observed_on: "2026-11-05", dte: 43, observed_at: "2026-11-05 21:14:00.000000", spx: 6812.5,
+        legs_mid: { [P6400]: 4.1 }, legs_iv: { [P6400]: 18.5 }, legs_delta: { [P6400]: -0.12 }, contract_size: 100,
+      }),
+      watchDay([C7300, C7350], {
+        observed_on: "2026-11-05", dte: 43, observed_at: "2026-11-05 21:14:00.000000", spx: 6812.5,
+        legs_mid: { [C7300]: 3, [C7350]: 2 }, contract_size: 100,
+      }),
+    ],
+  },
+  provider: { down: DOWN },
+});
+
 export const HTTP: readonly HttpInput[] = [
   // --- /health ----------------------------------------------------------------------------
   {
@@ -2500,15 +2524,50 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/mcp", tool("holding_history", { id: "pos-1" })),
   },
   {
+    // looked up as an id and as a name: neither, said in words, with the tool that lists them
     name: "POST /mcp says a holding that does not exist is not found",
     world: world({ tables: held }),
     request: request("POST", "/mcp", tool("holding_history", { id: "pos-9" })),
   },
   {
-    // refused before the API is asked anything: no path is built from it
+    // the history tools take a NAME as well as an id (decided 2026-11-18): one call, not a 404, a
+    // watchlist search and a retry. The answer's source names the id it resolved to.
+    name: "POST /mcp reads a holding's history by its name",
+    world: world({
+      tables: {
+        positions: [opened],
+        position_samples: [day("2026-11-06", 42, [14, 13.5, 19, 20])],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("POST", "/mcp", tool("holding_history", { id: " dec-condor " })),
+  },
+  {
+    // a closed trade keeps its name, and /positions lists it: found as an open one is
+    name: "POST /mcp reads a closed holding's history by its name",
+    world: world({
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({ id: "pos-2", name: "nov-condor", entry: 5.5, opened_at: "2026-11-06", closed_on: "2026-11-07", exit: 1.25 }),
+        ],
+        position_samples: [{ ...day("2026-11-06", 42, [14, 13.5, 19, 20]), position_id: "pos-2" }],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("POST", "/mcp", tool("holding_history", { id: "nov-condor" })),
+  },
+  {
+    // control characters and more than 64 characters are refused before the API is asked anything
     name: "POST /mcp refuses an id that is not an id, asking nothing",
     world: world({ tables: held, provider: { quotes: BOOK } }),
-    request: request("POST", "/mcp", tool("holding_history", { id: "../quotes" })),
+    request: request("POST", "/mcp", tool("holding_history", { id: "dec-condor\n" })),
+  },
+  {
+    // a name is looked up in the list, never put in a path: one like a path is simply not found
+    name: "POST /mcp looks a path-like name up rather than following it",
+    world: world({ tables: held, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("monitor_history", { id: "../quotes" })),
   },
   {
     name: "POST /mcp refuses an argument a tool does not take",
@@ -2531,6 +2590,34 @@ export const HTTP: readonly HttpInput[] = [
       provider: { down: DOWN },
     }),
     request: request("POST", "/mcp", tool("monitor_history", { id: "mon-2" })),
+  },
+  {
+    name: "POST /mcp reads a rule's history by its combo name",
+    world: RULES,
+    request: request("POST", "/mcp", tool("monitor_history", { id: "1218-6800" })),
+  },
+  {
+    // the one rule on the put: its code as stored, `US.SPXW…`
+    name: "POST /mcp reads a rule's history by its contract's code",
+    world: RULES,
+    request: request("POST", "/mcp", tool("monitor_history", { id: "US.SPXW261218P6400000" })),
+  },
+  {
+    // and the contract as the page and the bot write it, read by /unwatch's own parser
+    name: "POST /mcp reads a rule's history by its contract as the page writes it",
+    world: RULES,
+    request: request("POST", "/mcp", tool("monitor_history", { id: "20261218 P6400" })),
+  },
+  {
+    // the short call is watched for its Δ and for its price: each is listed, to call again by id
+    name: "POST /mcp lists the rules a contract names when it names several",
+    world: RULES,
+    request: request("POST", "/mcp", tool("monitor_history", { id: "20261218 C7300" })),
+  },
+  {
+    name: "POST /mcp says what it tried when nothing has the name",
+    world: RULES,
+    request: request("POST", "/mcp", tool("monitor_history", { id: "261218 C9999" })),
   },
   {
     name: "POST /mcp reads each rule's last close",

@@ -11,7 +11,8 @@
  *  **The table is shared ground**, `schema/mcp/server.json`, read by both backends (ADR 0021): the
  *  names, the descriptions an agent reads, the input schemas and which tools are live are written
  *  once, so the two cannot describe the same tool in two ways. What is CODE is here: the argument
- *  check, the path a call becomes, the cache and the text.
+ *  check, how a history tool's name becomes an id (`LOOKUPS`), the path a call becomes, the cache
+ *  and the text.
  *
  *  **The cache** is the owner's decision 7 on #447: the live reads — `/quotes`, `/positions/values`,
  *  `/references` — ask the Provider, whose snapshot limit (60 per 30 seconds) is shared with the
@@ -22,6 +23,8 @@
  */
 import { readFileSync } from "node:fs";
 
+import { ruleShort } from "optionality/domain/alarm";
+import { expandSpxShort } from "optionality/domain/contract";
 import { displayTime } from "optionality/domain/timefmt";
 
 import type { Read } from "../../ports.ts";
@@ -117,6 +120,71 @@ function detailOf(body: string): string {
   return body;
 }
 
+/** What a resolved id must be before a path is built from it: the service's own ids are all this. */
+const AN_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** A row of a list GET, as far as resolving a name needs it. */
+type Row = Record<string, unknown> & { id: string };
+
+/** How a history tool's `id` — an id OR a name (#447's follow-up, decided 2026-11-18) — becomes the
+ *  one id its path is built from: the list GET that holds every candidate, the rows `given` names,
+ *  in order of precedence, and the words for each.
+ *
+ *  Resolved through a GET the API already serves, never a query of its own, so the door still reads
+ *  through `read` alone; and the INPUT never reaches a path — only an id read back from that list,
+ *  held to `AN_ID` — so a name like `../quotes` is looked up and not found, never followed. */
+interface Lookup {
+  list: string;
+  /** what one is called in the words, "rule" or "holding" */
+  noun: string;
+  /** the rows `given` names: by exact id first, and only where none has it, by name */
+  named(rows: Row[], given: string): Row[];
+  /** one candidate, as an agent picks between several */
+  label(row: Row): string;
+  /** what was tried, for the words when nothing matched */
+  tried(given: string): string;
+  /** the tool that lists every candidate's id */
+  lister: string;
+}
+
+const byId = (rows: Row[], given: string) => rows.filter((r) => r.id === given);
+
+const LOOKUPS: Record<string, Lookup> = {
+  holding_history: {
+    list: "/positions",
+    noun: "holding",
+    // names are unique (`ix_positions_name`), and /positions lists the closed ones too
+    named: (rows, given) => {
+      const exact = byId(rows, given);
+      return exact.length > 0 ? exact : rows.filter((r) => r.name === given);
+    },
+    label: (r) => `${r.id} — ${String(r.name)}`,
+    tried: () => "as a holding's id and as its name",
+    lister: "positions",
+  },
+  monitor_history: {
+    list: "/monitors",
+    noun: "rule",
+    // a rule's code as stored — a combo's name, a contract's `US.SPXW…` — or a contract the way the
+    // page and the bot write it, read by the bot's own `/unwatch` parser
+    named: (rows, given) => {
+      const exact = byId(rows, given);
+      if (exact.length > 0) return exact;
+      const contract = expandSpxShort(given);
+      return rows.filter((r) => r.code === given || (contract !== null && r.code === contract));
+    },
+    label: (r) => `${r.id} — ${ruleShort({
+      field: String(r.field), combo: Array.isArray(r.legs) && r.legs.length > 0, compare: String(r.compare),
+      direction: String(r.direction), threshold: Number(r.threshold),
+    })}`,
+    tried: (given) => {
+      const contract = expandSpxShort(given);
+      return `as a rule's id, as its code or combo name${contract === null ? "" : `, and as the contract ${contract}`}`;
+    },
+    lister: "watchlist",
+  },
+};
+
 interface Reading {
   at: Date;
   answer: Promise<{ status: number; body: string }>;
@@ -144,6 +212,24 @@ export function toolbox(options: { read: Read; now(): Date; displayTz: string })
     return reading;
   };
 
+  /** The one id `given` names, or the tool error saying why there is not one. */
+  const resolve = async (lookup: Lookup, given: string, authorization: string | null): Promise<string | ToolResult> => {
+    const { status, body } = await read(lookup.list, authorization);
+    if (status !== 200) return failed(`GET ${lookup.list} answered ${status}: ${detailOf(body)}`);
+    const named = lookup.named(JSON.parse(body) as Row[], given);
+    if (named.length === 0) {
+      return failed(`no ${lookup.noun} is "${given}": tried it ${lookup.tried(given)}. ${lookup.lister} lists every ${lookup.noun}'s id`);
+    }
+    if (named.length > 1) {
+      return failed([`"${given}" names ${named.length} ${lookup.noun}s; call again with one of their ids:`,
+        ...named.map(lookup.label)].join("\n"));
+    }
+    const id = named[0]!.id;
+    // the service's ids are all this; anything else is not put in a path whatever it is
+    if (typeof id !== "string" || !AN_ID.test(id)) return failed(`the ${lookup.noun} "${given}" has an id no path can carry`);
+    return id;
+  };
+
   return {
     tools: DESCRIBED.tools,
     has: (name: string) => DESCRIBED.tools.some((t) => t.name === name),
@@ -152,7 +238,15 @@ export function toolbox(options: { read: Read; now(): Date; displayTz: string })
       const fault = argumentFault(tool, args);
       if (fault !== null) return failed(fault);
       const given = (args ?? {}) as Record<string, string>;
-      const path = tool.path.replace(/\{(\w+)\}/g, (_, key: string) => encodeURIComponent(given[key]!));
+      const resolved: Record<string, string> = {};
+      const lookup = LOOKUPS[tool.name];
+      if (lookup !== undefined) {
+        const found = await resolve(lookup, given.id!.trim(), authorization);
+        if (typeof found !== "string") return found;
+        resolved.id = found;
+      }
+      // only a RESOLVED id is ever put in a path, never what the caller typed
+      const path = tool.path.replace(/\{(\w+)\}/g, (_, key: string) => encodeURIComponent(resolved[key]!));
       const reading = tool.live ? live(path, authorization) : fresh(path, authorization);
       const { status, body } = await reading.answer;
       if (status !== 200) return failed(`GET ${path} answered ${status}: ${detailOf(body)}`);

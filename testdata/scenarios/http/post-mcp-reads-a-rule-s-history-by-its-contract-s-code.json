@@ -1,0 +1,196 @@
+{
+  "name": "POST /mcp reads a rule's history by its contract's code",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": "connect ECONNREFUSED 127.0.0.1:33333",
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "mon-2",
+          "code": "1218-6800",
+          "strike_date": "2026-12-18",
+          "option_type": "CMB",
+          "strike": 0,
+          "field": "mid_price",
+          "threshold": 4,
+          "direction": "above",
+          "compare": "abs",
+          "legs": [
+            {
+              "sign": -1,
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "sign": 1,
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:33:00.000000"
+        },
+        {
+          "id": "mon-3",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "mid_price",
+          "threshold": 9.5,
+          "direction": "above",
+          "compare": "signed",
+          "legs": null,
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:31:00.000000"
+        },
+        {
+          "id": "mon-4",
+          "code": "US.SPXW261218P6400000",
+          "strike_date": "2026-12-18",
+          "option_type": "PUT",
+          "strike": 6400,
+          "field": "option_delta",
+          "threshold": 0.15,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:32:00.000000"
+        }
+      ],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [
+        {
+          "contracts": "US.SPXW261218C7300000,US.SPXW261218C7350000",
+          "observed_on": "2026-11-05",
+          "dte": 43,
+          "legs_mid": {
+            "US.SPXW261218C7300000": 3,
+            "US.SPXW261218C7350000": 2
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-05 21:14:00.000000",
+          "spx": 6812.5,
+          "contract_size": 100
+        },
+        {
+          "contracts": "US.SPXW261218P6400000",
+          "observed_on": "2026-11-05",
+          "dte": 43,
+          "legs_mid": {
+            "US.SPXW261218P6400000": 4.1
+          },
+          "legs_iv": {
+            "US.SPXW261218P6400000": 18.5
+          },
+          "legs_vega": null,
+          "legs_delta": {
+            "US.SPXW261218P6400000": -0.12
+          },
+          "observed_at": "2026-11-05 21:14:00.000000",
+          "spx": 6812.5,
+          "contract_size": 100
+        }
+      ],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "monitor_history",
+        "arguments": {
+          "id": "US.SPXW261218P6400000"
+        }
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"data\":{\"contracts\":[\"US.SPXW261218P6400000\"],\"price_rule\":null,\"samples\":[{\"dte\":43,\"legs_delta\":{\"US.SPXW261218P6400000\":-0.12},\"legs_iv\":{\"US.SPXW261218P6400000\":18.5},\"legs_vega\":null,\"observed_at\":\"2026-11-06 05:14:00+08:00\",\"observed_on\":\"2026-11-05\",\"price\":4.1,\"spx\":6812.5,\"timing\":\"close\"}]},\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /monitors/mon-4/samples\"}"
+            }
+          ]
+        }
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

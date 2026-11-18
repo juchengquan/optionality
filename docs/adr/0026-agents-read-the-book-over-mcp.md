@@ -4,8 +4,8 @@ Date: 2026-11-18
 
 ## Status
 
-Accepted and built (#447). Decided by the owner on 2026-11-18. Both backends carry it, in lockstep
-(ADR 0021).
+Accepted and built (#447). Decided by the owner on 2026-11-18, and amended the same day: the
+histories take a name. Both backends carry it, in lockstep (ADR 0021).
 
 ## Context
 
@@ -84,7 +84,7 @@ backends (`1.0` as `1`), because `JSON.parse` cannot tell the two apart.
 is not JSON or not JSON-RPC is a 400 with the JSON-RPC error; an unknown method or tool is a JSON-RPC
 error; arguments that are not the tool's, an unknown id and a failed read are a TOOL error (`isError`)
 in words an agent can correct from — the service's own `detail` for a refused GET. An id must match
-`^[A-Za-z0-9_-]{1,64}$` before any path is built from it. A request with an `Origin` is refused 403:
+`^[A-Za-z0-9_-]{1,64}$` before any path is built from it (since the amendment below, the RESOLVED id). A request with an `Origin` is refused 403:
 only a browser sends one, and the transport asks a server to refuse it against DNS rebinding.
 
 **The text is canonical**: an answer is written with every object's keys sorted, no whitespace, and
@@ -106,6 +106,35 @@ Tailscale serve table or `~/recovery.sh` (#447's note suggested an `/opt/mcp` ma
 and one fewer mapping is one fewer thing `recovery.sh` must rebuild). Connect with
 `claude mcp add --transport http optionality https://<tailnet-host>/opt/api/mcp`
 (and `--header "Authorization: Bearer <API_TOKEN>"` once a token is set).
+
+## Amendment, 2026-11-18: the histories take a name
+
+The owner's decision ("option A"), from a live agent test: asked how `1218-6800` had moved, an agent
+called `monitor_history {"id": "1218-6800"}`, got a 404, and recovered only by searching `watchlist`
+for the id — three calls for one question. **`holding_history` and `monitor_history` now read their
+`id` as an id OR a name** (the argument keeps its name, for the clients already calling it):
+
+- A holding: its exact id, else its name (unique, `ix_positions_name`), open or closed — resolved in
+  `GET /positions`, which lists both.
+- A rule: its exact id, else its `code` as stored (a combo's name, `1218-6800`; a contract's
+  `US.SPXW261218P6800000`), or a contract as the page and the bot write it (`20261218 P6800`, the older
+  `261218 P6800`) read by `expandSpxShort`, the parser `/unwatch` uses — resolved in `GET /monitors`.
+- Exact after JavaScript's `trim`: case is the owner's (two names differing in case are two names), except
+  in a contract written the page's way, which the parser upper-cases as it always has.
+- One match is answered exactly as the GET by its id, and `source` names that id, so the agent learns it.
+  Several (a contract watched for its Δ and its price) is a tool error listing each as `id — rule`, in the
+  rule's short form; none is a tool error saying what was tried.
+
+The door still reads through `Read` alone: the list GET is one the API already serves, and the only new
+imports are the library's pure `domain/contract` and `domain/alarm`, for the parser and the words. **What
+the caller typed never reaches a path** — only an id read back from the list, held again to
+`^[A-Za-z0-9_-]{1,64}$` — so a name like `../quotes` is looked up and not found. The argument's own
+pattern widens from that id pattern to any 1–64 characters with no control character
+(`U+0000–U+001F`, `U+007F–U+009F`) and no surrogate, the length counted in UTF-16 units as JavaScript
+counts it (the Python matches against that view of the string, so a character beyond the BMP is refused
+in both). Neither tool is live, so neither is cached: each call reads the list afresh. Door scenarios hold
+every road in both backends: by id, by combo name, by contract code, by the page's spelling, by a
+holding's name and a closed holding's, an ambiguous contract, no match, a path-like name and a refused one.
 
 ## Consequences
 
