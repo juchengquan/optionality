@@ -135,7 +135,7 @@ const WatchSamplesOut = z.object({
  *  whatever field it watches. Null where no day had one, for a rule that cannot be read, and for a
  *  rule on contracts an open holding holds exactly: the sweep records those as the holding's from
  *  the day it was entered, so a watch day would only go stale (`lastCloses`). */
-const LastCloseOut = z.object({
+export const LastCloseOut = z.object({
   price: z.number(),
   observed_on: z.string(),
   observed_at: z.string().nullable(),

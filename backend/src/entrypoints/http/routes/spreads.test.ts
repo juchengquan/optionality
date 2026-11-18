@@ -587,3 +587,230 @@ describe("a held spread replacing the watch rules it clashes with", () => {
   });
 });
 
+
+/** `GET /spreads/quote` — any SPX structure priced live, in one bounded call (#452, ADR 0027). */
+describe("GET /spreads/quote", () => {
+  const D = EXPIRY.replaceAll("-", "");
+  const code = (type: "CALL" | "PUT", strike: number) => buildSpxCode(EXPIRY, type, strike);
+  const P6800 = code("PUT", 6800);
+  const P6750 = code("PUT", 6750);
+  const C7300 = code("CALL", 7300);
+  const C7350 = code("CALL", 7350);
+  /** Thursday 1 October 2026, 11:00 New York: in the regular session. */
+  const SESSION = new Date("2026-10-01T15:00:00.000Z");
+  const leg = (bid: number, ask: number, delta: number, over: Record<string, unknown> = {}) => ({
+    bid_price: bid, ask_price: ask, mid_price: (bid + ask) / 2, option_delta: delta, option_gamma: 0.001,
+    option_theta: -0.5, option_vega: 4, option_implied_volatility: 18, option_contract_size: 100, ...over,
+  });
+  const BOOK: Record<string, Record<string, unknown>> = {
+    [P6800]: leg(10.5, 11, -0.2),
+    [P6750]: leg(8.25, 8.75, -0.15),
+    [C7300]: leg(2.5, 3, 0.2),
+    [C7350]: leg(1.5, 2, 0.15),
+  };
+  const quotingBook = (book = BOOK, unknown: string[] = []) => counting((codes) => Promise.resolve({
+    records: codes.filter((c) => c in book).map((c) => ({ code: c, ...book[c] })),
+    unknown: codes.filter((c) => unknown.includes(c)),
+  }));
+  const at = (when: Date) => { h.now = when; };
+  const ask = (...spreads: string[]) =>
+    h.call(`/spreads/quote?${spreads.map((s) => `spread=${encodeURIComponent(s)}`).join("&")}`);
+  const PUT_SPREAD = `${D}:-P6800,+P6750`;
+  const CALL_SPREAD = `${D}:-C7300,+C7350x2`;
+
+  it("prices two structures in ONE Provider call carrying every distinct leg once", async () => {
+    const { asked, fetch } = quotingBook();
+    start(fetch);
+    at(SESSION);
+    const resp = await ask(PUT_SPREAD, CALL_SPREAD, `${D}:-P6800`);
+    const answer = await body(resp);
+    expect(resp.status, JSON.stringify(answer)).toBe(200);
+    expect(asked).toEqual([[C7300, C7350, P6750, P6800].sort()]);
+    expect(answer.phase).toBe("regular");
+    expect(answer.spreads.map((s: { legs: { code: string }[] }) => s.legs.map((l) => l.code)))
+      .toEqual([[P6800, P6750], [C7300, C7350], [P6800]]);
+  });
+
+  it("answers each structure's value, natural fill, signed greeks and its legs", async () => {
+    start(quotingBook().fetch);
+    at(SESSION);
+    const [puts, calls] = (await body(await ask(PUT_SPREAD, CALL_SPREAD))).spreads;
+    expect(puts.expiry).toBe(EXPIRY);
+    expect(puts.value).toBe(8.5 - 10.75);
+    expect(puts.natural).toEqual({ bid: 8.25 - 11, ask: 8.75 - 10.5 });
+    expect(puts.greeks.option_delta).toBeCloseTo(-0.15 + 0.2, 10);
+    expect(puts.legs[0]).toMatchObject({
+      side: "short", option_type: "PUT", strike: 6800, qty: 1, code: P6800,
+      bid_price: 10.5, ask_price: 11, mid_price: 10.75, error: null, last_known: null,
+    });
+    // a quantity multiplies its leg's figures
+    expect(calls.legs[1].qty).toBe(2);
+    expect(calls.value).toBe(2 * 1.75 - 2.75);
+    expect(calls.natural).toEqual({ bid: 2 * 1.5 - 3, ask: 2 * 2 - 2.5 });
+    // the short strikes, as a combo on /quotes places them
+    expect(calls.short_strikes.map((s: { code: string }) => s.code)).toEqual([C7300]);
+  });
+
+  it("draws the payoff from the entry given, else from the mid, else the shape alone", async () => {
+    start(quotingBook({ ...BOOK, [P6750]: leg(0, 0, -0.15) }).fetch);
+    at(SESSION);
+    const [given, mid, shape] = (await body(await ask(`${PUT_SPREAD}@1.25`, CALL_SPREAD, PUT_SPREAD))).spreads;
+    expect(given.payoff_basis).toBe("entry");
+    expect(given.entry).toBe(1.25);
+    expect(given.payoff.max_profit).toBe(1.25);
+    expect(mid.payoff_basis).toBe("mid");
+    // opened at the mid, a debit of 0.75: what it loses where neither call is in the money
+    expect(mid.payoff.at_strikes[0]).toEqual({ spx: 7300, pnl: -0.75 });
+    expect(shape.payoff_basis).toBe("shape");
+    expect(shape.payoff).toMatchObject({ breakevens: null, max_profit: null, max_loss: null });
+    expect(shape.payoff.at_strikes).toEqual([{ spx: 6750, pnl: -50 }, { spx: 6800, pnl: 0 }]);
+  });
+
+  it("dashes a leg quoted 0/0 and its structure's value and natural, and still sums its greeks", async () => {
+    start(quotingBook({ ...BOOK, [P6750]: leg(0, 0, -0.15) }).fetch);
+    const [puts] = (await body(await ask(PUT_SPREAD))).spreads;
+    expect(puts.legs[1]).toMatchObject({ mid_price: null, error: "no two-sided quote" });
+    expect(puts.value).toBeNull();
+    expect(puts.natural).toBeNull();
+    expect(puts.greeks.option_delta).toBeCloseTo(0.05, 10);
+  });
+
+  it("serves each leg's last regular-session close beside it, never summed", async () => {
+    start(quotingBook({ ...BOOK, [P6750]: leg(0, 0, -0.15) }).fetch);
+    // the short put watched alone: Wednesday's close at 16:14 New York, and a priced row at 16:30
+    h.db.prepare(`insert into watch_samples (contracts, observed_on, dte, legs_mid, observed_at)
+      values (?, '2026-09-30', 42, ?, '2026-09-30 20:14:00.000000')`).run(P6800, JSON.stringify({ [P6800]: 10.25 }));
+    h.db.prepare(`insert into watch_samples (contracts, observed_on, dte, legs_mid, observed_at)
+      values (?, '2026-09-29', 43, ?, '2026-09-29 20:14:00.000000')`).run(
+      [P6750, P6800].sort().join(","), JSON.stringify({ [P6750]: 8, [P6800]: 10 }));
+    const [puts] = (await body(await ask(PUT_SPREAD))).spreads;
+    expect(puts.legs[0].last_known).toMatchObject({ price: 10.25, observed_on: "2026-09-30", timing: "close" });
+    expect(puts.legs[1].last_known).toMatchObject({ price: 8, observed_on: "2026-09-29", timing: "close" });
+    expect(puts.value).toBeNull();
+    expect(puts.payoff_basis).toBe("shape");
+  });
+
+  it("fails only the structure holding a contract the Provider does not know", async () => {
+    start(quotingBook(BOOK, [C7350]).fetch);
+    at(SESSION);
+    const [puts, calls] = (await body(await ask(PUT_SPREAD, `${CALL_SPREAD}@-1`))).spreads;
+    expect(puts.error).toBeNull();
+    expect(puts.value).not.toBeNull();
+    expect(calls.error).toBe(`unknown contract: ${C7350}`);
+    expect(calls).toMatchObject({ value: null, natural: null, payoff: null, payoff_basis: null });
+    expect(calls.legs[1].error).toBe("unknown contract");
+  });
+
+  it("answers 502 in the error shape when the Provider is down", async () => {
+    start(() => Promise.reject(new Error("connect ECONNREFUSED")));
+    const resp = await ask(PUT_SPREAD);
+    expect(resp.status).toBe(502);
+    expect(await body(resp)).toEqual({ detail: "moomoo call failed: connect ECONNREFUSED" });
+  });
+
+  it.each([
+    ["no spread", [], "give at least one spread"],
+    ["a structure that is not the grammar", [`${D}-P6800`], "is not <expiry>:<legs>"],
+    ["a leg that is not the grammar", [`${D}:-Q6800`], "leg 1 \"-Q6800\" is not"],
+    ["an expiry that is no date", ["20261332:-P6800"], "invalid expiry"],
+    ["quantity 0", [`${D}:-P6800x0`], "a quantity is 1 to 10, not 0"],
+    ["quantity 11", [`${D}:-P6800x11`], "a quantity is 1 to 10, not 11"],
+    ["an expired expiry", ["20260930:-P6800"], "20260930 has expired"],
+    ["seven legs in one structure", [`${D}:-P6800,+P6750,-P6700,+P6650,-P6600,+P6550,-P6500`], "has 7 legs: at most 6"],
+    ["33 legs in all", [...Array(5).fill(`${D}:-P6800,+P6750,-P6700,+P6650,-P6600,+P6550`), `${D}:-P6800,+P6750,-P6700`],
+      "this request has 33 legs: at most 32 in one request"],
+  ])("refuses %s with 422 and the reason, asking the Provider nothing", async (_, spreads, words) => {
+    const { asked, fetch } = quotingBook();
+    start(fetch);
+    const resp = await ask(...spreads);
+    const answer = await body(resp);
+    expect(resp.status).toBe(422);
+    expect(answer.detail).toContain(words);
+    expect(asked).toEqual([]);
+  });
+
+  it("reads a raw + in the query, which arrives as a space, as long", async () => {
+    start(quotingBook().fetch);
+    const resp = await h.call(`/spreads/quote?spread=${D}:-P6800,+P6750`);
+    expect(resp.status).toBe(200);
+    expect((await body(resp)).spreads[0].legs[1].side).toBe("long");
+  });
+
+  it("answers the same request again within 5s from the same call, spending nothing", async () => {
+    const { asked, fetch } = quotingBook();
+    start(fetch);
+    at(SESSION);
+    const first = await body(await ask(PUT_SPREAD, CALL_SPREAD));
+    at(new Date(SESSION.getTime() + 4999));
+    // the same structures, the other way round and their legs reordered: the same request
+    const again = await body(await ask(`${D}:+C7350x2,-C7300`, PUT_SPREAD));
+    expect(asked).toHaveLength(1);
+    expect(again.fetched_at).toBe(first.fetched_at);
+    expect(again.spreads[1]).toEqual(first.spreads[0]);
+    at(new Date(SESSION.getTime() + 5000));
+    await ask(PUT_SPREAD, CALL_SPREAD);
+    expect(asked).toHaveLength(2);
+  });
+
+  it("joins a call still in flight rather than making a second", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const { asked, fetch } = quotingBook();
+    start(async (codes) => { const answer = fetch(codes); await gate; return answer; });
+    const both = Promise.all([ask(PUT_SPREAD), ask(PUT_SPREAD)]);
+    release();
+    expect((await both).map((r) => r.status)).toEqual([200, 200]);
+    expect(asked).toHaveLength(1);
+  });
+
+  it("refuses the 13th uncached call inside 30s with 429 and the wait, and a cached one is free", async () => {
+    const { asked, fetch } = quotingBook();
+    start(fetch);
+    at(SESSION);
+    for (let i = 0; i < 12; i++) {
+      at(new Date(SESSION.getTime() + i * 1000));
+      expect((await ask(`${D}:-P${6000 + i * 5}`)).status).toBe(200);
+    }
+    expect(asked).toHaveLength(12);
+    // a repeat of the last, inside its 5s, is answered without a call
+    expect((await ask(`${D}:-P6055`)).status).toBe(200);
+    const refused = await ask(`${D}:-P6800`);
+    expect(refused.status).toBe(429);
+    // the first call was at +0s and it is now +11s: the next is allowed 19 seconds from now
+    expect(await body(refused)).toEqual({
+      detail: "spread quotes are capped at 12 Provider calls in 30 seconds: the next is allowed in 19s",
+    });
+    expect(asked).toHaveLength(12);
+    at(new Date(SESSION.getTime() + 30_000));
+    expect((await ask(`${D}:-P6800`)).status).toBe(200);
+  });
+
+  it("caps at SPREAD_QUOTE_CALLS_PER_30S where .env says", async () => {
+    const { fetch } = quotingBook();
+    h = harness({ fetchQuotes: (codes) => fetch(codes), settings: { spreadQuoteCallsPer30s: 1 } });
+    expect((await ask(PUT_SPREAD)).status).toBe(200);
+    expect((await ask(CALL_SPREAD)).status).toBe(429);
+  });
+
+  it("shares one cap with the MCP door", async () => {
+    const { asked, fetch } = quotingBook();
+    h = harness({ fetchQuotes: (codes) => fetch(codes), settings: { spreadQuoteCallsPer30s: 1 } });
+    expect((await ask(PUT_SPREAD)).status).toBe(200);
+    const resp = await h.call("/mcp", {
+      ...json({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "price_spreads", arguments: {
+        structures: [{ expiry: D, legs: [{ side: "short", option_type: "CALL", strike: 7300 }] }],
+      } } }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const { result } = await body(resp);
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/answered 429: spread quotes are capped at 1 Provider calls/);
+    expect(asked).toHaveLength(1);
+  });
+
+  it("wants the API's token", async () => {
+    start(quotingBook().fetch);
+    expect((await h.call(`/spreads/quote?spread=${encodeURIComponent(PUT_SPREAD)}`, { anonymous: true })).status)
+      .toBe(401);
+  });
+});

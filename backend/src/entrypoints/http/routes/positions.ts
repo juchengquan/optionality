@@ -198,7 +198,7 @@ const VolOut = z.object({
  *  strike and the slope beyond the outer two, which is the whole of a curve that bends only at the
  *  strikes, its breakevens and its maximums. At expiry only (ADR 0023): no T+0 curve and no
  *  probability, because there is no pricing model to draw them with. */
-const PayoffOut = z.object({
+export const PayoffOut = z.object({
   at_strikes: z.array(z.object({ spx: z.number(), pnl: z.number() })),
   slope_below: z.number(),
   slope_above: z.number(),

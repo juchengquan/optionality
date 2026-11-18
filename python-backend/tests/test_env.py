@@ -125,6 +125,15 @@ class TestTheKnobsAServiceMustNotStartOn:
         with pytest.raises(ValueError, match="FLAPPING_REPEAT_SECONDS is set to nothing"):
             settings_from_env({"FLAPPING_REPEAT_SECONDS": ""})
 
+    def test_caps_the_spreads_an_agent_prices_at_12_provider_calls_in_30_seconds_never_0(self):
+        # 0 would be a 429 with no answer to "when may I call": a cap of nothing is a broken knob (#452)
+        assert settings_from_env({}).spread_quote_calls_per_30s == 12
+        assert settings_from_env({"SPREAD_QUOTE_CALLS_PER_30S": "4"}).spread_quote_calls_per_30s == 4
+        with pytest.raises(ValueError, match="SPREAD_QUOTE_CALLS_PER_30S must be at least 1"):
+            settings_from_env({"SPREAD_QUOTE_CALLS_PER_30S": "0"})
+        with pytest.raises(ValueError, match="SPREAD_QUOTE_CALLS_PER_30S is not an integer"):
+            settings_from_env({"SPREAD_QUOTE_CALLS_PER_30S": "2.5"})
+
     def test_checks_the_defaults_themselves_so_a_bad_default_cannot_ship(self):
         settings_from_env({})
 
@@ -141,7 +150,8 @@ class TestWhatOnlyThePythonCanGetWrong:
 
     def test_the_variables_are_the_typescript_s_by_name(self):
         # renaming one silently reverts a knob the owner has set, in whichever backend reads it
-        assert all(re.fullmatch(r"[A-Z][A-Z_]*", v) for v in FROM_ENV.values())
+        # (a digit inside one, as in SPREAD_QUOTE_CALLS_PER_30S, is the TypeScript's spelling too)
+        assert all(re.fullmatch(r"[A-Z][A-Z0-9_]*", v) for v in FROM_ENV.values())
         assert FROM_ENV["monitor_interval_seconds"] == "MONITOR_INTERVAL_SECONDS"
         assert FROM_ENV["db_path"] == "OPTIONALITY_DB_PATH"
         assert FROM_ENV["display_tz"] == "DISPLAY_TZ"

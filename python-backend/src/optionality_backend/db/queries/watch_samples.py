@@ -38,6 +38,27 @@ def recent_priced_watch_samples(db: sqlite3.Connection, contracts: str, limit: i
     )
 
 
+def priced_watch_samples_holding(db: sqlite3.Connection, code: str, limit: int) -> list[WatchSampleRow]:
+    """Every row of the latest `limit` priced days of ANY watched set holding `code`, newest first — a
+    day's rows by when they were observed, latest first, then by their set: what one contract's last
+    close is chosen from (`price_spreads.py`'s `last_known`, ADR 0027). A contract's own mid is stored in
+    every set that holds it (`legs_mid`), and in no other table: a holding's samples store its Cost to
+    close, never a leg's price. Matched as a whole code between the key's commas."""
+    holding = "instr(',' || contracts || ',', ',' || ? || ',') > 0 and legs_mid is not null"
+    return cast(
+        list[WatchSampleRow],
+        rows(
+            db,
+            f"""select * from watch_samples where {holding} and observed_on in (
+                  select distinct observed_on from watch_samples where {holding} order by observed_on desc limit ?)
+                order by observed_on desc, observed_at desc, contracts""",
+            code,
+            code,
+            limit,
+        ),
+    )
+
+
 def find_watch_sample(db: sqlite3.Connection, contracts: str, observed_on: str) -> WatchSampleRow | None:
     """The day already stored for this set of contracts, if any: what `takes_sample` decides against."""
     return cast(

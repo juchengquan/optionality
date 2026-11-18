@@ -134,6 +134,11 @@ async function endpoints() {
         }],
       },
     }),
+    // any SPX structures priced live in one bounded call (#452, ADR 0027): no page calls it — an
+    // agent does, through the MCP door — but its shape is held here like every other route's
+    spreadsQuote: await client.spreads.quote.$get({
+      query: { spread: ["20261218:-P6800,+P6750", "20261218:-C7300,+C7350x2@-1.25"] },
+    }),
   };
 }
 
@@ -273,6 +278,18 @@ export type HcChecks = [
     { id: string; threshold: number; direction: string; compare: string } | null>>,
   // what a watched row's value and payoff fall back on out of the session and through an outage (#402)
   Checked<Exactly<NonNullable<Ok<E["closes"]>[number]["last_close"]>["price"], number>>,
+  // a priced structure (#452): its figures null where a leg has no price, its payoff's three a shape
+  // cannot have nullable, and each leg's last close beside it
+  Checked<Exactly<Ok<Awaited<ReturnType<E["spreadsQuote"]["json"]>>>["phase"], "regular" | "curb" | "overnight" | "closed">>,
+  Checked<Exactly<Ok<Awaited<ReturnType<E["spreadsQuote"]["json"]>>>["spreads"][number]["value"], number | null>>,
+  Checked<Exactly<Ok<Awaited<ReturnType<E["spreadsQuote"]["json"]>>>["spreads"][number]["natural"],
+    { bid: number; ask: number } | null>>,
+  Checked<Exactly<NonNullable<Ok<Awaited<ReturnType<E["spreadsQuote"]["json"]>>>["spreads"][number]["payoff"]>["breakevens"],
+    number[] | null>>,
+  Checked<Exactly<Ok<Awaited<ReturnType<E["spreadsQuote"]["json"]>>>["spreads"][number]["payoff_basis"],
+    "entry" | "mid" | "shape" | null>>,
+  Checked<Exactly<NonNullable<Ok<Awaited<ReturnType<E["spreadsQuote"]["json"]>>>["spreads"][number]["legs"][number]["last_known"]>["price"],
+    number>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.
@@ -295,6 +312,7 @@ export type StatusChecks = [
   Checked<Exactly<E["referenceDeleted"]["status"], 204>>,
   Checked<Exactly<E["draftPayoff"]["status"], 200 | 422>>,
   Checked<Exactly<E["spreadsAdded"]["status"], 201 | 422>>,
+  Checked<Exactly<E["spreadsQuote"]["status"], 200 | 422>>,
 
   // {detail} is IN the union wherever a route VALIDATES its input, so the dashboard cannot read
   // rows without saying what it does when the request was refused. That is the bug class that used

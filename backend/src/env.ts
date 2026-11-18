@@ -68,6 +68,10 @@ export interface Settings {
   exitStopMultiple: number;
   /** exit schedule: be out of a Position at or inside this DTE whatever the P&L */
   exitManageByDte: number;
+  /** the most Provider calls `GET /spreads/quote` may make in any 30 seconds, whoever asks — HTTP
+   *  or MCP (ADR 0027). Its own budget inside moomoo's 60, so an agent pricing candidates can never
+   *  starve the sweep. At least 1: a cap of 0 would refuse every call with no time to wait for. */
+  spreadQuoteCallsPer30s: number;
   telegramBotToken: string;
   telegramChatId: string;
   /** URL prefix when served behind a path-stripping reverse proxy, e.g. "/opt/api" */
@@ -108,6 +112,7 @@ export const DEFAULTS: Settings = {
   exitTakeFraction: 0.5,
   exitStopMultiple: 2,
   exitManageByDte: 21,
+  spreadQuoteCallsPer30s: 12,
   telegramBotToken: "",
   telegramChatId: "",
   rootPath: "",
@@ -139,6 +144,7 @@ const FROM_ENV = {
   exitTakeFraction: "EXIT_TAKE_FRACTION",
   exitStopMultiple: "EXIT_STOP_MULTIPLE",
   exitManageByDte: "EXIT_MANAGE_BY_DTE",
+  spreadQuoteCallsPer30s: "SPREAD_QUOTE_CALLS_PER_30S",
   telegramBotToken: "TELEGRAM_BOT_TOKEN",
   telegramChatId: "TELEGRAM_CHAT_ID",
   rootPath: "ROOT_PATH",
@@ -162,6 +168,8 @@ const FRACTIONAL: ReadonlySet<keyof Settings> = new Set(["exitTakeFraction", "ex
  */
 const AT_LEAST_ONE: readonly (keyof Settings)[] = [
   "monitorIntervalSeconds", "degradedAfterFailures",
+  // a cap of 0 would answer every spread quote 429 with no time to wait for (ADR 0027)
+  "spreadQuoteCallsPer30s",
 ];
 
 /** Every count is non-negative; some must be positive. Fatal, as a mistyped setting already is in

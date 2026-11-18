@@ -65,6 +65,7 @@ from .sweep_interval import clear_sweep_interval, read_sweep_interval, write_swe
 from .watch_samples import (
     find_watch_sample,
     list_watch_samples,
+    priced_watch_samples_holding,
     recent_priced_watch_samples,
     record_watch_sample,
 )
@@ -104,6 +105,7 @@ __all__ = [
     "orphan_monitors",
     "positions_for_monitor",
     "positions_for_monitors",
+    "priced_watch_samples_holding",
     "read_sweep_interval",
     "recent_priced_watch_samples",
     "record_position_sample",

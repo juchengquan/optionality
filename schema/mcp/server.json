@@ -3,7 +3,7 @@
     "name": "optionality",
     "title": "optionality — an SPX options book, read-only",
     "version": "1",
-    "instructions": "Read-only access to one trader's SPX options book: what is held, the rules (Monitors) that watch it, their histories, the Reference securities on the page and the service's own health. Nothing here adds, edits, mutes, deletes, records or closes anything, and no tool prices a contract the service does not already watch. Every successful tool answers one JSON object: `source`, the API's own GET it served; `read_at`, when the service read it, in the service's display zone; and `data`, that GET's body exactly as the HTTP API serves it (keys sorted). The three LIVE tools (holdings, watchlist, references) ask the market-data Provider, which allows 60 calls per 30 seconds shared with the alarm sweep and the dashboard: their answers are shared by every caller for 5 seconds, so asking again sooner returns the same answer with the same `read_at` — there is no point polling faster. Prices are in index points per contract unless a field says money; P&L is money. A failed read is a tool error carrying the service's own words.",
+    "instructions": "Read-only access to one trader's SPX options book: what is held, the rules (Monitors) that watch it, their histories, the Reference securities on the page and the service's own health. Nothing here adds, edits, mutes, deletes, records or closes anything. Every successful tool answers one JSON object: `source`, the API's own GET it served; `read_at`, when the service read it, in the service's display zone; and `data`, that GET's body exactly as the HTTP API serves it (keys sorted). The LIVE tools ask the market-data Provider, which allows 60 calls per 30 seconds shared with the alarm sweep and the dashboard. Three (holdings, watchlist, references) read only what the service already watches: their answers are shared by every caller for 5 seconds, so asking again sooner returns the same answer with the same `read_at` — there is no point polling faster. The fourth, price_spreads, prices ANY SPX structure you name, in one bounded call: the same structures asked again within 5 seconds are answered from the same call, and the service makes at most a capped number of such calls in any 30 seconds whoever asks (12 unless the owner set otherwise) — past it the tool error says how many seconds to wait, so price several structures in ONE call rather than one per call. Prices are in index points per contract unless a field says money; P&L is money. A failed read is a tool error carrying the service's own words.",
     "protocol_versions": ["2025-11-25", "2025-06-18"]
   },
   "tools": [
@@ -76,6 +76,52 @@
       "live": true,
       "description": "The securities kept on the page to read the market by (References: never alarmed on, nothing derived from them), each with its live figure: GET /references, one bounded call per source in use. LIVE: shared by every caller for 5 seconds. Each: `id`, `code`, `label` (e.g. how SPX is read through SPY ×10), `source` (the vendor asked), `name`, `figure`, `field` (mid_price or last_price: which number `figure` is), `change` (the day's move as a FRACTION of the previous close), `error` (why there is no figure), `delayed`, `last_known` and `delayed_by_minutes` (the vendor's own claims about freshness; null where it made none), `fetched_at` (when the call answered, display zone).",
       "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "price_spreads",
+      "title": "Price any SPX spread or combo, live",
+      "path": "/spreads/quote",
+      "live": true,
+      "cached_by": "route",
+      "description": "Prices any SPX structures you name — spreads, condors, ratios, single options, watched or not — live, in ONE bounded Provider call: GET /spreads/quote, one `spread=<expiry>:<legs>[@<entry>]` per structure. At most 6 legs a structure and 32 in all; an expiry before today, a quantity outside 1–10 or a malformed structure is refused before anything is asked. LIVE, and capped: the same structures asked again within 5 seconds are answered from the same call (the same `fetched_at`), and the service makes at most a capped number of such calls in any 30 seconds, shared with every other caller — over it the tool error says how many seconds to wait. So name every structure you want priced in one call. `data`: `phase` regular|curb|overnight|closed (New York's market phase when priced), `fetched_at` (when the Provider answered, display zone) and `spreads`, one per structure in the order given: `expiry`, `dte`, `entry` (as given, else null), `legs` in the order given (each `side`, `option_type`, `strike`, `qty`, `code`, `bid_price`, `ask_price`, `mid_price` — null where the leg has no two-sided quote, as out of hours when moomoo quotes 0/0 — `option_implied_volatility` in percent, `option_delta`/`gamma`/`theta`/`vega`, `option_contract_size`, `fetched_at`, `error` — unknown contract|no quote returned|no two-sided quote — and `last_known`: the contract's latest stored REGULAR-SESSION close where the service has watched it, `price`, `observed_on`, `observed_at`, `timing`, else null; context only, never summed), `value` (points per contract: the signed mid sum, a long leg plus, a short minus, each times its qty — so a credit structure is NEGATIVE; null where any leg has no mid, never a partial sum), `natural` (`bid` and `ask`, the worst fill each way, signed as value: `ask` is what OPENING costs — longs bought at their ask, shorts sold at their bid — and `bid` what CLOSING gets; null where any leg has no two-sided quote), `greeks` (signed sums of option_delta, option_gamma, option_theta, option_vega; each null where any leg lacks it; IV is never summed), `spx` and `spx_reason` (SPX as this batch's own premiums imply it, as in holdings), `short_strikes` (each short leg against `spx`, as in holdings), `payoff` (at expiry, POINTS for one structure: `at_strikes` — the P&L with SPX settling at each strike — `slope_below`, `slope_above`, `breakevens`, `max_profit`, `max_loss`) and `payoff_basis`: `entry` (from the entry you gave, a credit positive), `mid` (as if opened at `value` now) or `shape` (no price to measure from: the legs' value at expiry alone, with breakevens, max_profit and max_loss null), `error` (`unknown contract: …` — that structure's figures and payoff are null; the others are still priced). A Provider that is down is a tool error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "structures": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "description": "the structures to price, each on one expiry; 32 legs at most in all",
+            "items": {
+              "type": "object",
+              "properties": {
+                "expiry": { "type": "string", "pattern": "^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$", "description": "the expiry, YYYYMMDD or YYYY-MM-DD: \"20261218\"" },
+                "legs": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 6,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "side": { "type": "string", "enum": ["short", "long"] },
+                      "option_type": { "type": "string", "enum": ["CALL", "PUT"] },
+                      "strike": { "type": "integer", "minimum": 1, "description": "the strike, in index points: 6800" },
+                      "qty": { "type": "integer", "minimum": 1, "maximum": 10, "description": "how many of this contract one structure holds; 1 when not given" }
+                    },
+                    "required": ["side", "option_type", "strike"],
+                    "additionalProperties": false
+                  }
+                },
+                "entry": { "type": "number", "description": "what the structure was or would be entered at, points per contract, signed like a holding's entry: a credit received POSITIVE, a debit paid negative. The payoff is measured from it; without it, from the mid now" }
+              },
+              "required": ["expiry", "legs"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["structures"],
+        "additionalProperties": false
+      }
     },
     {
       "name": "health",
