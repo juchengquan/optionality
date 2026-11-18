@@ -5,9 +5,14 @@ passing — that a refusal is decided before the Provider is asked, that the pro
 the links and scopes come out as the two older routes would have left them.
 """
 
+import asyncio
 import copy
 import json
+import re
+from datetime import UTC, datetime, timedelta
+from urllib.parse import quote
 
+import pytest
 from harness import days_from_now, json_body, poisonable
 from optionality.contract import build_spx_code
 from optionality.quote import Batch
@@ -767,3 +772,281 @@ class TestAHeldSpreadReplacingTheWatchRulesItClashesWith:
         )
         assert resp.status_code == 409
         assert count(h, "monitors") == 1
+
+
+class TestGetSpreadsQuote:
+    """`GET /spreads/quote` — any SPX structure priced live, in one bounded call (#452, ADR 0027)."""
+
+    D = EXPIRY.replace("-", "")
+    #: Thursday 1 October 2026, 11:00 New York: in the regular session
+    SESSION = datetime(2026, 10, 1, 15, 0, tzinfo=UTC)
+    PUT_SPREAD = f"{D}:-P6800,+P6750"
+    CALL_SPREAD = f"{D}:-C7300,+C7350x2"
+
+    @staticmethod
+    def leg(bid, ask, delta, **over):
+        return {
+            "bid_price": bid,
+            "ask_price": ask,
+            "mid_price": (bid + ask) / 2,
+            "option_delta": delta,
+            "option_gamma": 0.001,
+            "option_theta": -0.5,
+            "option_vega": 4,
+            "option_implied_volatility": 18,
+            "option_contract_size": 100,
+            **over,
+        }
+
+    def book(self):
+        return {
+            code("PUT", 6800): self.leg(10.5, 11, -0.2),
+            code("PUT", 6750): self.leg(8.25, 8.75, -0.15),
+            code("CALL", 7300): self.leg(2.5, 3, 0.2),
+            code("CALL", 7350): self.leg(1.5, 2, 0.15),
+        }
+
+    def quoting_book(self, book=None, unknown=()):
+        book = self.book() if book is None else book
+
+        async def inner(codes):
+            return Batch(
+                records=[{"code": c, **book[c]} for c in codes if c in book], unknown=[c for c in codes if c in unknown]
+            )
+
+        return counting(inner)
+
+    @staticmethod
+    async def ask(h, *spreads):
+        return await h.call("/spreads/quote?" + "&".join(f"spread={quote(s, safe='')}" for s in spreads))
+
+    async def test_prices_two_structures_in_one_provider_call_carrying_every_distinct_leg_once(self, start):
+        asked, fetch = self.quoting_book()
+        h = start(fetch_quotes=fetch)
+        h.now = self.SESSION
+        resp = await self.ask(h, self.PUT_SPREAD, self.CALL_SPREAD, f"{self.D}:-P6800")
+        answer = resp.json()
+        assert resp.status_code == 200, json.dumps(answer)
+        assert asked == [sorted([code("CALL", 7300), code("CALL", 7350), code("PUT", 6750), code("PUT", 6800)])]
+        assert answer["phase"] == "regular"
+        assert [[leg["code"] for leg in s["legs"]] for s in answer["spreads"]] == [
+            [code("PUT", 6800), code("PUT", 6750)],
+            [code("CALL", 7300), code("CALL", 7350)],
+            [code("PUT", 6800)],
+        ]
+
+    async def test_answers_each_structure_s_value_natural_fill_signed_greeks_and_its_legs(self, start):
+        h = start(fetch_quotes=self.quoting_book()[1])
+        h.now = self.SESSION
+        puts, calls = (await self.ask(h, self.PUT_SPREAD, self.CALL_SPREAD)).json()["spreads"]
+        assert puts["expiry"] == EXPIRY
+        assert puts["value"] == 8.5 - 10.75
+        assert puts["natural"] == {"bid": 8.25 - 11, "ask": 8.75 - 10.5}
+        assert puts["greeks"]["option_delta"] == pytest.approx(-0.15 + 0.2, abs=1e-10)
+        first = puts["legs"][0]
+        assert {k: first[k] for k in ("side", "option_type", "strike", "qty", "code", "bid_price", "ask_price")} == {
+            "side": "short",
+            "option_type": "PUT",
+            "strike": 6800,
+            "qty": 1,
+            "code": code("PUT", 6800),
+            "bid_price": 10.5,
+            "ask_price": 11,
+        }
+        assert (first["mid_price"], first["error"], first["last_known"]) == (10.75, None, None)
+        # a quantity multiplies its leg's figures
+        assert calls["legs"][1]["qty"] == 2
+        assert calls["value"] == 2 * 1.75 - 2.75
+        assert calls["natural"] == {"bid": 2 * 1.5 - 3, "ask": 2 * 2 - 2.5}
+        # the short strikes, as a combo on /quotes places them
+        assert [s["code"] for s in calls["short_strikes"]] == [code("CALL", 7300)]
+
+    async def test_draws_the_payoff_from_the_entry_given_else_from_the_mid_else_the_shape_alone(self, start):
+        h = start(fetch_quotes=self.quoting_book({**self.book(), code("PUT", 6750): self.leg(0, 0, -0.15)})[1])
+        h.now = self.SESSION
+        given, mid, shape = (await self.ask(h, f"{self.PUT_SPREAD}@1.25", self.CALL_SPREAD, self.PUT_SPREAD)).json()[
+            "spreads"
+        ]
+        assert (given["payoff_basis"], given["entry"], given["payoff"]["max_profit"]) == ("entry", 1.25, 1.25)
+        assert mid["payoff_basis"] == "mid"
+        # opened at the mid, a debit of 0.75: what it loses where neither call is in the money
+        assert mid["payoff"]["at_strikes"][0] == {"spx": 7300, "pnl": -0.75}
+        assert shape["payoff_basis"] == "shape"
+        assert [shape["payoff"][k] for k in ("breakevens", "max_profit", "max_loss")] == [None, None, None]
+        assert shape["payoff"]["at_strikes"] == [{"spx": 6750, "pnl": -50}, {"spx": 6800, "pnl": 0}]
+
+    async def test_dashes_a_leg_quoted_0_0_and_its_structure_s_value_and_natural_and_still_sums_its_greeks(self, start):
+        h = start(fetch_quotes=self.quoting_book({**self.book(), code("PUT", 6750): self.leg(0, 0, -0.15)})[1])
+        (puts,) = (await self.ask(h, self.PUT_SPREAD)).json()["spreads"]
+        assert (puts["legs"][1]["mid_price"], puts["legs"][1]["error"]) == (None, "no two-sided quote")
+        assert (puts["value"], puts["natural"]) == (None, None)
+        assert puts["greeks"]["option_delta"] == pytest.approx(0.05, abs=1e-10)
+
+    async def test_serves_each_leg_s_last_regular_session_close_beside_it_never_summed(self, start):
+        h = start(fetch_quotes=self.quoting_book({**self.book(), code("PUT", 6750): self.leg(0, 0, -0.15)})[1])
+        p6800, p6750 = code("PUT", 6800), code("PUT", 6750)
+        # the short put watched alone: Wednesday's close at 16:14 New York; and both, the day before
+        h.db.execute(
+            "insert into watch_samples (contracts, observed_on, dte, legs_mid, observed_at)"
+            " values (?, '2026-09-30', 42, ?, '2026-09-30 20:14:00.000000')",
+            (p6800, json.dumps({p6800: 10.25})),
+        )
+        h.db.execute(
+            "insert into watch_samples (contracts, observed_on, dte, legs_mid, observed_at)"
+            " values (?, '2026-09-29', 43, ?, '2026-09-29 20:14:00.000000')",
+            (",".join(sorted([p6750, p6800])), json.dumps({p6750: 8, p6800: 10})),
+        )
+        (puts,) = (await self.ask(h, self.PUT_SPREAD)).json()["spreads"]
+        k0, k1 = puts["legs"][0]["last_known"], puts["legs"][1]["last_known"]
+        assert (k0["price"], k0["observed_on"], k0["timing"]) == (10.25, "2026-09-30", "close")
+        assert (k1["price"], k1["observed_on"], k1["timing"]) == (8, "2026-09-29", "close")
+        assert puts["value"] is None
+        assert puts["payoff_basis"] == "shape"
+
+    async def test_fails_only_the_structure_holding_a_contract_the_provider_does_not_know(self, start):
+        h = start(fetch_quotes=self.quoting_book(unknown=[code("CALL", 7350)])[1])
+        h.now = self.SESSION
+        puts, calls = (await self.ask(h, self.PUT_SPREAD, f"{self.CALL_SPREAD}@-1")).json()["spreads"]
+        assert puts["error"] is None
+        assert puts["value"] is not None
+        assert calls["error"] == f"unknown contract: {code('CALL', 7350)}"
+        assert [calls[k] for k in ("value", "natural", "payoff", "payoff_basis")] == [None, None, None, None]
+        assert calls["legs"][1]["error"] == "unknown contract"
+
+    async def test_answers_502_in_the_error_shape_when_the_provider_is_down(self, start):
+        async def down(codes):
+            raise RuntimeError("connect ECONNREFUSED")
+
+        h = start(fetch_quotes=down)
+        resp = await self.ask(h, self.PUT_SPREAD)
+        assert resp.status_code == 502
+        assert resp.json() == {"detail": "moomoo call failed: connect ECONNREFUSED"}
+
+    @pytest.mark.parametrize(
+        ("spreads", "words"),
+        [
+            ([], "give at least one spread"),
+            ([f"{D}-P6800"], "is not <expiry>:<legs>"),
+            ([f"{D}:-Q6800"], 'leg 1 "-Q6800" is not'),
+            (["20261332:-P6800"], "invalid expiry"),
+            ([f"{D}:-P6800x0"], "a quantity is 1 to 10, not 0"),
+            ([f"{D}:-P6800x11"], "a quantity is 1 to 10, not 11"),
+            (["20260930:-P6800"], "20260930 has expired"),
+            ([f"{D}:-P6800,+P6750,-P6700,+P6650,-P6600,+P6550,-P6500"], "has 7 legs: at most 6"),
+            (
+                [*[f"{D}:-P6800,+P6750,-P6700,+P6650,-P6600,+P6550"] * 5, f"{D}:-P6800,+P6750,-P6700"],
+                "this request has 33 legs: at most 32 in one request",
+            ),
+        ],
+        ids=[
+            "no spread",
+            "a structure that is not the grammar",
+            "a leg that is not the grammar",
+            "an expiry that is no date",
+            "quantity 0",
+            "quantity 11",
+            "an expired expiry",
+            "seven legs in one structure",
+            "33 legs in all",
+        ],
+    )
+    async def test_refuses_with_422_and_the_reason_asking_the_provider_nothing(self, start, spreads, words):
+        asked, fetch = self.quoting_book()
+        h = start(fetch_quotes=fetch)
+        resp = await self.ask(h, *spreads)
+        assert resp.status_code == 422
+        assert words in resp.json()["detail"]
+        assert asked == []
+
+    async def test_reads_a_raw_plus_in_the_query_which_arrives_as_a_space_as_long(self, start):
+        h = start(fetch_quotes=self.quoting_book()[1])
+        resp = await h.call(f"/spreads/quote?spread={self.D}:-P6800,+P6750")
+        assert resp.status_code == 200
+        assert resp.json()["spreads"][0]["legs"][1]["side"] == "long"
+
+    async def test_answers_the_same_request_again_within_5s_from_the_same_call_spending_nothing(self, start):
+        asked, fetch = self.quoting_book()
+        h = start(fetch_quotes=fetch)
+        h.now = self.SESSION
+        first = (await self.ask(h, self.PUT_SPREAD, self.CALL_SPREAD)).json()
+        h.now = self.SESSION + timedelta(milliseconds=4999)
+        # the same structures, the other way round and their legs reordered: the same request
+        again = (await self.ask(h, f"{self.D}:+C7350x2,-C7300", self.PUT_SPREAD)).json()
+        assert len(asked) == 1
+        assert again["fetched_at"] == first["fetched_at"]
+        assert again["spreads"][1] == first["spreads"][0]
+        h.now = self.SESSION + timedelta(milliseconds=5000)
+        await self.ask(h, self.PUT_SPREAD, self.CALL_SPREAD)
+        assert len(asked) == 2
+
+    async def test_joins_a_call_still_in_flight_rather_than_making_a_second(self, start):
+        gate = asyncio.Event()
+        asked, fetch = self.quoting_book()
+
+        async def held(codes):
+            answer = await fetch(codes)
+            await gate.wait()
+            return answer
+
+        h = start(fetch_quotes=held)
+        both = asyncio.gather(self.ask(h, self.PUT_SPREAD), self.ask(h, self.PUT_SPREAD))
+        await asyncio.sleep(0)
+        gate.set()
+        assert [r.status_code for r in await both] == [200, 200]
+        assert len(asked) == 1
+
+    async def test_refuses_the_13th_uncached_call_inside_30s_with_429_and_the_wait_and_a_cached_one_is_free(
+        self, start
+    ):
+        asked, fetch = self.quoting_book()
+        h = start(fetch_quotes=fetch)
+        for i in range(12):
+            h.now = self.SESSION + timedelta(seconds=i)
+            assert (await self.ask(h, f"{self.D}:-P{6000 + i * 5}")).status_code == 200
+        assert len(asked) == 12
+        # a repeat of the last, inside its 5s, is answered without a call
+        assert (await self.ask(h, f"{self.D}:-P6055")).status_code == 200
+        refused = await self.ask(h, f"{self.D}:-P6800")
+        assert refused.status_code == 429
+        # the first call was at +0s and it is now +11s: the next is allowed 19 seconds from now
+        assert refused.json() == {
+            "detail": "spread quotes are capped at 12 Provider calls in 30 seconds: the next is allowed in 19s"
+        }
+        assert len(asked) == 12
+        h.now = self.SESSION + timedelta(seconds=30)
+        assert (await self.ask(h, f"{self.D}:-P6800")).status_code == 200
+
+    async def test_caps_at_spread_quote_calls_per_30s_where_env_says(self, start):
+        h = start(fetch_quotes=self.quoting_book()[1], settings={"spread_quote_calls_per_30s": 1})
+        assert (await self.ask(h, self.PUT_SPREAD)).status_code == 200
+        assert (await self.ask(h, self.CALL_SPREAD)).status_code == 429
+
+    async def test_shares_one_cap_with_the_mcp_door(self, start):
+        asked, fetch = self.quoting_book()
+        h = start(fetch_quotes=fetch, settings={"spread_quote_calls_per_30s": 1})
+        assert (await self.ask(h, self.PUT_SPREAD)).status_code == 200
+        message = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "price_spreads",
+                "arguments": {
+                    "structures": [
+                        {"expiry": self.D, "legs": [{"side": "short", "option_type": "CALL", "strike": 7300}]}
+                    ]
+                },
+            },
+        }
+        resp = await h.call(
+            "/mcp", method="POST", content=json.dumps(message), headers={"Content-Type": "application/json"}
+        )
+        result = resp.json()["result"]
+        assert result["isError"] is True
+        assert re.search(r"answered 429: spread quotes are capped at 1 Provider calls", result["content"][0]["text"])
+        assert len(asked) == 1
+
+    async def test_wants_the_api_s_token(self, start):
+        h = start(fetch_quotes=self.quoting_book()[1])
+        resp = await h.call(f"/spreads/quote?spread={quote(self.PUT_SPREAD, safe='')}", anonymous=True)
+        assert resp.status_code == 401

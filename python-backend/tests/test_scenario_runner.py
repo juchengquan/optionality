@@ -328,8 +328,43 @@ def test_an_earlier_sweep_may_not_change_a_row():
 
     build, _ = build_with(on_sweep=sweep)
     scenario = {"world": world(tables=held(POSITION), sweeps=[{"at": "2026-11-09T14:59:00.000Z", "down": None}])}
-    with pytest.raises(ScenarioError, match="an earlier sweep changed the tables"):
+    with pytest.raises(ScenarioError, match="an earlier sweep or request changed the tables"):
         run_sweep(scenario, build)
+
+
+def test_earlier_requests_run_after_the_sweeps_at_their_instants_and_their_calls_are_forgotten():
+    # a memory no table holds — a shared batch, a cap's count (ADR 0027) — given as the requests that
+    # left it, through the same backend, and none of what they asked counted as the event's
+    seen = []
+
+    def answer(w):
+        seen.append(w.clock.now.isoformat())
+        w.provider.fetch_quotes(["A"])
+        return Response(200, "application/json", "{}")
+
+    build, built = build_with(on_request=answer)
+    get = {"method": "GET", "path": "/spreads/quote?spread=x", "headers": {}, "body": None}
+    earlier = [{"at": "2026-11-09T14:59:50.000Z", "request": get}, {"at": "2026-11-09T14:59:55.000Z", "request": get}]
+    out = run_http({"world": world(), "earlier": earlier, "request": get}, build)
+    assert seen == ["2026-11-09T14:59:50+00:00", "2026-11-09T14:59:55+00:00", "2026-11-09T15:00:00+00:00"]
+    assert len(built) == 1  # one backend, so whatever the earlier ones left, the event finds
+    assert out["calls"] == {"moomoo": [["A"]]}
+
+
+def test_an_earlier_request_may_not_change_a_row():
+    def write(w):
+        w.db.execute("update positions set opened_at = '2026-10-12'")
+        return Response(200, "application/json", "{}")
+
+    build, _ = build_with(on_request=write)
+    get = {"method": "GET", "path": "/positions", "headers": {}, "body": None}
+    scenario = {
+        "world": world(tables=held(POSITION)),
+        "earlier": [{"at": "2026-11-09T14:59:00.000Z", "request": get}],
+        "request": get,
+    }
+    with pytest.raises(ScenarioError, match="an earlier sweep or request changed the tables"):
+        run_http(scenario, build)
 
 
 def test_the_bot_replies_through_the_fake_api():

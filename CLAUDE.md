@@ -191,7 +191,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 - **Door scenarios** (ADR 0021, phase 1c): `testdata/scenarios/{http,bot,sweep}/` — a stated world
   (rows, `.env` lines, what each vendor answers, the clock), ONE request, Telegram update or sweep
   tick, and exactly what the service did: the response or reply, the rows it changed, the messages
-  it sent, the codes it asked each vendor for. The shared ground a second backend is held to.
+  it sent, the codes it asked each vendor for. The shared ground a second backend is held to. An
+  HTTP scenario may state `earlier` requests, run before the event through the same service and
+  held to changing no row, for a memory no table holds — `GET /spreads/quote`'s cache and cap
+  (ADR 0027), as `sweeps` give the engine its run of failures.
   **`make scenarios`** regenerates them from `backend/testing/scenarios/inputs/` (and `make cases`
   runs it too, because `/health` carries the golden fingerprint); **`make check-scenarios`** fails
   on a stale, missing or orphaned file. Never edit them by hand. `test-api` replays every file
@@ -337,15 +340,19 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   HTTP server by `main.ts`, which hands `createApp(deps, { mcp })` the factory and gets back a
   `Read` — a GET of the app's OWN, the caller's Authorization passed on. That is the door's whole
   reach: no service, query or engine is imported (`server.test.ts` holds its imports), so a tool
-  cannot write, cannot compute a figure, and its answer's `data` IS the GET's body. Eight tools
+  cannot write, cannot compute a figure, and its answer's `data` IS the GET's body. Nine tools
   (`tools.ts`), each one GET: `holdings` (`/positions/values`), `watchlist` (`/quotes`),
   `positions` (`/positions`, closed trades included), `holding_history`, `monitor_history`,
-  `monitor_closes`, `references`, `health` — the two histories take an id OR a name, resolved
+  `monitor_closes`, `references`, `price_spreads` (`/spreads/quote`, ADR 0027: any SPX structure,
+  its structured arguments written as the route's query by `QUERIES`, checking only the shape — every
+  other refusal is the route's 422), `health` — the two histories take an id OR a name, resolved
   first through `/positions` or `/monitors` (`LOOKUPS`), and only the resolved id reaches a path
   (ADR 0026, amended 2026-11-18); an answer is `{source, read_at, data}` written with
-  sorted keys and JavaScript's numbers, so both backends write the same TEXT. The three live ones
+  sorted keys and JavaScript's numbers, so both backends write the same TEXT. Three live ones
   share one read per path for `LIVE_FOR_MS` (5s) across every caller, a read in flight joined, a
-  refusal shared too — the page and the sweep never pass through it. The table — names,
+  refusal shared too — the page and the sweep never pass through it. The fourth, `price_spreads`,
+  is `"cached_by": "route"`: its route already shares its batch and caps its calls, so the door
+  reads it afresh rather than holding a second window. The table — names,
   descriptions, input schemas, which are live — is shared ground, `schema/mcp/server.json`. Behind
   the token like every route; not in `/openapi.json` (one JSON-RPC endpoint), so `hc.types.ts`
   is untouched. **Connect**: the tailnet already maps `/opt/api` to the API with the prefix
@@ -401,7 +408,15 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   they start with, ALL OR NOTHING — every refusal decided before ONE probe of every leg, then one
   transaction; `create-monitor.ts`'s order, and its refusals' words where the two overlap. A held
   spread's own Monitors are linked to IT, never re-inferred against the book (a shared strike made
-  that ambiguous), and a UNIQUE clash inside the write is the checks' own 409, not a 500.
+  that ambiguous), and a UNIQUE clash inside the write is the checks' own 409, not a 500. Beside it,
+  `price-spreads.ts` behind `GET /spreads/quote` (#452, ADR 0027): any SPX structure an agent names,
+  `?spread=<expiry>:<legs>[@<entry>]` once per structure, priced from ONE batch of every distinct
+  leg — every refusal (422) decided first; the batch shared for `SHARED_FOR_MS` (5s) by any request
+  that normalises to the same structures, a call in flight joined, a failure shared too; at most
+  `SPREAD_QUOTE_CALLS_PER_30S` (12) Provider calls in any 30 seconds whoever asks, then 429 with the
+  wait. ONE `SpreadPricer` per app, so the HTTP and MCP doors share both. Each leg carries its last
+  stored regular-session close (`last_known`, from `watch_samples`, the one table storing a
+  contract's own mid), never summed.
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
   **One page, the redesign (ADR 0023)**, since the swap of 2026-11-13 (#301) deleted the old one:
   `index.html` loads `src/main.tsx`. ONE page at every hour, with no Live/Review switch (ADR
@@ -632,11 +647,15 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   to a spread, #334). Widened from "every call to the Provider" by ADR
   0019, whose Provider-only wording is deprecated: a Reference may name a vendor the rest of the
   service does not use, and left Provider-specific the rule would have permitted an UNBOUNDED
-  call to one — a loophole that change itself created. **The MCP door adds no call** (ADR 0026):
-  its live tools ARE `/quotes`, `/positions/values` and `/references`, read through the app itself
-  behind a 5-second cache shared by every agent, so however many agents loop, each of the three
-  is made at most once per 5s on their behalf; no tool prices a contract the service does not
-  already watch. The payoff at expiry (`GET /positions/{id}/payoff`,
+  call to one — a loophole that change itself created. **The MCP door adds ONE call, and it is
+  capped** (ADR 0027, superseding ADR 0026's "no tool prices a contract the service does not
+  already watch"): `GET /spreads/quote` — the `price_spreads` tool — prices any SPX structure an
+  agent names in one bounded batch (at most 32 legs, six to a structure), shared for 5s by the same
+  request normalised, and at most `SPREAD_QUOTE_CALLS_PER_30S` (default 12 of moomoo's 60) such calls
+  in any 30 seconds whoever asks, HTTP or MCP — over it a 429 saying when. The door's other live
+  tools ARE `/quotes`, `/positions/values` and `/references`, read through the app itself
+  behind a 5-second cache shared by every agent, so however many agents loop, each of those three
+  is made at most once per 5s on their behalf. The payoff at expiry (`GET /positions/{id}/payoff`,
   `POST /positions/payoff`, #291) is not on that list because it asks for NO market data: legs,
   an Entry and a count, and its door scenarios run with the Provider down. Nor are a holding's daily
   samples (`GET /positions/{id}/samples`, #295): stored history, read once when a holding's history
