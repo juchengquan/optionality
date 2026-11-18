@@ -192,8 +192,9 @@ ENTRYPOINTS = Seam(
     dir="optionality_backend/entrypoints",
     # the HTTP layer's package door, and the bot's MODULE door, `bot/bot.py`, as `check-seams` declares
     # `bot/bot.ts`: it lists `TelegramBot` and what `__main__` builds one with, and the command table
-    # and the formatter stay behind it
-    doors=("http/__init__.py", "bot/bot.py"),
+    # and the formatter stay behind it; and the MCP door's package door (ADR 0026), as `check-seams`
+    # declares `mcp/index.ts`
+    doors=("http/__init__.py", "bot/bot.py", "mcp/__init__.py"),
     # a route mounted from anywhere but `app.py`, or mounted twice, is the one thing in this layer that
     # would be hard to see
     never=re.compile(r"/(app\.py|routes/.*)$"),

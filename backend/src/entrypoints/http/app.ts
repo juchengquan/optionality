@@ -7,6 +7,7 @@
  */
 import { Hono } from "hono";
 
+import type { Read } from "../../ports.ts";
 import type { Deps } from "./deps.ts";
 import { mountDocs } from "./openapi.ts";
 import { healthRoutes } from "./routes/health.ts";
@@ -21,6 +22,17 @@ import { spreadRoutes } from "./routes/spreads.ts";
  *  whether it is talking to the API it was built against (ADR 0006). The docs are open because the
  *  page cannot hand a token to the fetch of its own spec, and the spec holds no data. */
 const OPEN_PATHS = new Set(["/health", "/openapi.json", "/docs"]);
+
+/** Where the MCP door is mounted (ADR 0026): `/opt/api/mcp` to an agent on the tailnet. */
+export const MCP_PATH = "/mcp";
+
+
+/** The other surfaces this server carries, built by `main.ts` from their own doors (ADR 0020):
+ *  each is handed a `Read` of this app and answers a request. Passed in rather than imported, so
+ *  that this door depends on no other surface and no other surface on it. */
+export interface Surfaces {
+  mcp?: (read: Read) => (request: Request) => Promise<Response>;
+}
 
 /** A refusal says so, once, with enough to find it.
  *
@@ -46,7 +58,7 @@ function sayRequest(method: string, path: string, status: number, detail: string
   if (status >= 400) console.error(line); else console.log(line);
 }
 
-export function createApp(deps: Deps) {
+export function createApp(deps: Deps, surfaces: Surfaces = {}) {
   const app = new Hono()
     .use("*", async (c, next) => {
       await next();
@@ -56,7 +68,8 @@ export function createApp(deps: Deps) {
       // ones twice, which a test caught after a mutation sweep showed the thrown path was, until
       // then, exercised by nothing.
       const refused = c.res.status >= 400;
-      if (!refused && c.req.method === "GET") return;
+      // an MCP call is a POST that READS (ADR 0026): an agent in a loop is the flood a GET is
+      if (!refused && (c.req.method === "GET" || c.req.path === MCP_PATH)) return;
       let detail = "";
       // only when something went wrong: a created Position's body is its whole shape, and the
       // reason to log a write at all is that it happened, not what it returned
@@ -96,6 +109,21 @@ export function createApp(deps: Deps) {
     .route("/references", referenceRoutes(deps))
     .route("/settings", settingsRoutes(deps))
     .route("/spreads", spreadRoutes(deps));
+  // behind the token like every route, and outside the chain so `AppType` stays the API's alone;
+  // undocumented, so `/openapi.json` (and so `hc.types.ts`' coverage) never lists it — it is one
+  // JSON-RPC endpoint, which an OpenAPI operation cannot describe
+  if (surfaces.mcp) {
+    const read: Read = async (path, authorization) => {
+      const answer = await app.request(path, {
+        method: "GET", headers: authorization === null ? {} : { Authorization: authorization },
+      });
+      return { status: answer.status, body: await answer.text() };
+    };
+    const serve = surfaces.mcp(read);
+    app.post(MCP_PATH, (c) => serve(c.req.raw));
+    // the transport's "no stream offered" is a 405, which only the handler words
+    app.get(MCP_PATH, (c) => serve(c.req.raw));
+  }
   // after every other route, because the spec is generated from the routes already registered;
   // and not part of the chain, so `AppType` stays the API's alone
   mountDocs(app, deps.settings.rootPath, OPEN_PATHS);

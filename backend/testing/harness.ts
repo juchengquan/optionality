@@ -20,6 +20,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
 import { createApp } from "../src/entrypoints/http/index.ts";
+import { mcpServer } from "../src/entrypoints/mcp/index.ts";
 import { createDatabase } from "../src/db/open.ts";
 import { type Settings, settingsFor } from "../src/env.ts";
 import type { Deps } from "../src/entrypoints/http/index.ts";
@@ -163,7 +164,11 @@ export function harness(options: HarnessOptions = {}): Harness {
     sources: { [provider.name]: provider.fetchQuotes, ...options.referenceSources },
   };
 
-  const app = createApp(deps);
+  // with the MCP door mounted as `main.ts` mounts it (ADR 0026), so the app a test drives is the
+  // whole of what the server serves
+  const app = createApp(deps, {
+    mcp: (read) => mcpServer({ read, now: deps.now, displayTz: settings.displayTz }),
+  });
   const h: Harness = {
     app, db, settings, sweeper,
     get now() { return state.now; },

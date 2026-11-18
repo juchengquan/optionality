@@ -41,7 +41,8 @@ from fastapi import FastAPI
 from optionality.quote import Batch, Quote
 
 from optionality_backend.db.open import create_database
-from optionality_backend.entrypoints.http import Deps, create_app
+from optionality_backend.entrypoints.http import Deps, Surfaces, create_app
+from optionality_backend.entrypoints.mcp import McpOptions, mcp_server
 from optionality_backend.env import Settings, settings_for
 from optionality_backend.ports import AlarmState, QuoteFetcher
 
@@ -228,7 +229,12 @@ def harness(
         # among them under its own
         sources={provider.name: provider.fetch_quotes, **(reference_sources or {})},
     )
-    return Harness(app=create_app(deps), db=db, settings=s, sweeper=sweeper, folder=folder, clock=clock)
+    # with the MCP door mounted as `__main__` mounts it (ADR 0026), so the app a test drives is the whole
+    # of what the server serves
+    app = create_app(
+        deps, Surfaces(mcp=lambda read: mcp_server(McpOptions(read=read, now=deps.now, display_tz=s.display_tz)))
+    )
+    return Harness(app=app, db=db, settings=s, sweeper=sweeper, folder=folder, clock=clock)
 
 
 #: the mid each leg of the position tests' condor is priced at, by the end of its code

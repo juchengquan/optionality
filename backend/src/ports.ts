@@ -58,3 +58,9 @@ export interface ProviderClient extends VendorClient {
    *  held the port open and timed out every login). */
   reachable(): Promise<boolean>;
 }
+
+/** A GET of the app's own (ADR 0026): the path, and the caller's Authorization header, passed on so
+ *  the one token governs both — answering the status and the body. `app.ts` builds it and hands it
+ *  to the MCP door, its whole reach. The method is not a parameter, which is what makes that door
+ *  read-only by construction. Here because two surfaces speak it and neither may import the other. */
+export type Read = (path: string, authorization: string | null) => Promise<{ status: number; body: string }>;

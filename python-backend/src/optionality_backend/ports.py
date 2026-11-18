@@ -133,3 +133,10 @@ async def verify_contracts(codes: list[str], fetch: QuoteFetcher) -> str | None:
         return unverifiable_verdict(str(err))
     # everything but the fetch and the catch is `optionality.quote.verify_verdict`, which is cased
     return verify_verdict(codes, batch)
+
+
+#: A GET of the app's own (ADR 0026): the path, and the caller's Authorization header, passed on so the
+#: one token governs both — answering the status and the body. `app.py` builds it and hands it to the MCP
+#: door, its whole reach. The method is not a parameter, which is what makes that door read-only by
+#: construction. Here because two surfaces speak it and neither may import the other.
+type Read = Callable[[str, str | None], Awaitable[tuple[int, str]]]

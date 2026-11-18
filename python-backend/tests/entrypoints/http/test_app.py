@@ -30,6 +30,8 @@ SURFACE = {
     "DELETE /references/:id",
     "GET /docs",
     "GET /health",
+    # the MCP door (ADR 0026): a POST per message, and the GET that says it offers no stream
+    "GET /mcp",
     "GET /monitors",
     "GET /monitors/:id/samples",
     "GET /monitors/closes",
@@ -45,6 +47,7 @@ SURFACE = {
     "PATCH /positions/:id",
     # the sweep's interval, the one knob kept in the database (#442, ADR 0025)
     "PATCH /settings",
+    "POST /mcp",
     "POST /monitors",
     "POST /monitors/:id/total-entry",
     "POST /positions",
@@ -207,7 +210,7 @@ class TestTheBearerToken:
         # GET, each with no body: auth runs before validation too.
         h = start()
         doors = {d for d in served(h.app) if d.split(" ")[1] not in OPEN}
-        assert len(doors) == 23, "the real number of doors"
+        assert len(doors) == 25, "the real number of doors"
         for door in sorted(doors):
             method, path = door.split(" ")
             resp = await h.call(path.replace(":id", "x"), method=method, anonymous=True)

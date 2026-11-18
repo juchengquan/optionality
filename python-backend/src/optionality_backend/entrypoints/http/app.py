@@ -31,13 +31,16 @@ runner can drive it on a world's database (ADR 0021).
 
 import logging
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
+import httpx2
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from ...ports import Read
 from .deps import Deps
 from .openapi import mount_docs
 from .routes.health import health_routes
@@ -56,6 +59,18 @@ log = logging.getLogger(__name__)
 OPEN_PATHS = frozenset({"/health", "/openapi.json", "/docs"})
 
 type Next = Callable[[Request], Awaitable[Response]]
+
+#: Where the MCP door is mounted (ADR 0026): `/opt/api/mcp` to an agent on the tailnet.
+MCP_PATH = "/mcp"
+
+
+@dataclass(frozen=True)
+class Surfaces:
+    """The other surfaces this server carries, built by `__main__` from their own doors (ADR 0020): each
+    is handed a `Read` of this app and answers a request. Passed in rather than imported, so that this
+    door depends on no other surface and no other surface on it."""
+
+    mcp: Callable[[Read], Callable[[Request], Awaitable[Response]]] | None = None
 
 
 def _say_request(method: str, path: str, status: int, detail: str) -> None:
@@ -104,7 +119,8 @@ class _SayRequests:
         await self.app(scope, receive, watch)
         method = scope["method"]
         refused = status >= 400
-        if not refused and method == "GET":
+        # an MCP call is a POST that READS (ADR 0026): an agent in a loop is the flood a GET is
+        if not refused and (method == "GET" or scope["path"] == MCP_PATH):
             return
         # only when something went wrong: a created Position's body is its whole shape, and the
         # reason to log a write at all is that it happened, not what it returned
@@ -112,7 +128,7 @@ class _SayRequests:
         _say_request(method, scope["path"], status, detail)
 
 
-def create_app(deps: Deps) -> FastAPI:
+def create_app(deps: Deps, surfaces: Surfaces | None = None) -> FastAPI:
     app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None, redirect_slashes=False)
 
     async def guard(request: Request, call_next: Next) -> Response:
@@ -159,5 +175,20 @@ def create_app(deps: Deps) -> FastAPI:
     app.include_router(reference_routes(deps), prefix="/references")
     app.include_router(settings_routes(deps), prefix="/settings")
     app.include_router(spread_routes(deps), prefix="/spreads")
+    # behind the token like every route; the served description never lists it (`/openapi.json` is
+    # the TypeScript's), because it is one JSON-RPC endpoint, which an OpenAPI operation cannot describe
+    if surfaces is not None and surfaces.mcp is not None:
+        transport = httpx2.ASGITransport(app=app)
+
+        async def read(path: str, authorization: str | None) -> tuple[int, str]:
+            # the app itself, in process and on this loop, as `app.request` is in the TypeScript
+            headers = {} if authorization is None else {"Authorization": authorization}
+            answer = await transport.handle_async_request(httpx2.Request("GET", f"http://app{path}", headers=headers))
+            return answer.status_code, (await answer.aread()).decode("utf-8")
+
+        serve = surfaces.mcp(read)
+        # a POST per message, and the GET the transport answers 405 to, which only the handler words
+        app.add_api_route(MCP_PATH, serve, methods=["POST"])
+        app.add_api_route(MCP_PATH, serve, methods=["GET"])
     mount_docs(app, deps.settings.root_path)
     return app

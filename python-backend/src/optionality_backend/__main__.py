@@ -85,7 +85,8 @@ from .db.migrate import migrate
 from .db.open import open_database
 from .engine import MonitorSweeper, Scheduler, SweeperDeps, SweepWatchdog, stale_after_seconds
 from .entrypoints.bot.bot import BotDeps, TelegramBot
-from .entrypoints.http import Deps, create_app, take_port
+from .entrypoints.http import Deps, Surfaces, create_app, take_port
+from .entrypoints.mcp import McpOptions, mcp_server
 from .env import load_env_file, settings_from_env
 from .sweep_interval import sweep_interval
 from .telegram import telegram_api, telegram_sender
@@ -240,7 +241,13 @@ async def _run() -> NoReturn:
 
     # 127.0.0.1 (take_port's default): reachable only via the tailscale serve proxy and localhost,
     # never the LAN. Requests stop being answered 503 from here.
-    held.serve(create_app(deps))
+    # `/mcp` beside the routes (ADR 0026): the MCP door, handed a GET of the app's own and nothing else
+    held.serve(
+        create_app(
+            deps,
+            Surfaces(mcp=lambda read: mcp_server(McpOptions(read=read, now=deps.now, display_tz=settings.display_tz))),
+        )
+    )
 
     bot = TelegramBot(
         BotDeps(

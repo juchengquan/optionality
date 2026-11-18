@@ -16,6 +16,7 @@
  */
 import { type Deps, createApp } from "../../src/entrypoints/http/index.ts";
 import { TelegramBot } from "../../src/entrypoints/bot/bot.ts";
+import { mcpServer } from "../../src/entrypoints/mcp/index.ts";
 import { MonitorSweeper } from "../../src/engine/index.ts";
 import type {
   BotExpect, BotScenario, Calls, HttpExpect, HttpScenario, SweepExpect, SweepScenario, Tables,
@@ -99,7 +100,11 @@ export async function runHttp(
         init.body = JSON.stringify(body);
         (init.headers as Record<string, string>)["Content-Type"] = "application/json";
       }
-      const resp = await createApp(deps).request(path, init);
+      // the MCP door mounted as `main.ts` mounts it (ADR 0026), so `/mcp` is a request like any other
+      const app = createApp(deps, {
+        mcp: (read) => mcpServer({ read, now: deps.now, displayTz: w.settings.displayTz }),
+      });
+      const resp = await app.request(path, init);
       const text = await resp.text();
       const json = (resp.headers.get("content-type") ?? "").includes("application/json");
       return {

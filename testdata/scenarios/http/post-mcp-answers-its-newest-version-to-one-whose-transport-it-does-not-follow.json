@@ -1,0 +1,73 @@
+{
+  "name": "POST /mcp answers its newest version to one whose transport it does not follow",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-03-26"
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2025-11-25",
+          "capabilities": {
+            "tools": {
+              "listChanged": false
+            }
+          },
+          "serverInfo": {
+            "name": "optionality",
+            "title": "optionality — an SPX options book, read-only",
+            "version": "1"
+          },
+          "instructions": "Read-only access to one trader's SPX options book: what is held, the rules (Monitors) that watch it, their histories, the Reference securities on the page and the service's own health. Nothing here adds, edits, mutes, deletes, records or closes anything, and no tool prices a contract the service does not already watch. Every successful tool answers one JSON object: `source`, the API's own GET it served; `read_at`, when the service read it, in the service's display zone; and `data`, that GET's body exactly as the HTTP API serves it (keys sorted). The three LIVE tools (holdings, watchlist, references) ask the market-data Provider, which allows 60 calls per 30 seconds shared with the alarm sweep and the dashboard: their answers are shared by every caller for 5 seconds, so asking again sooner returns the same answer with the same `read_at` — there is no point polling faster. Prices are in index points per contract unless a field says money; P&L is money. A failed read is a tool error carrying the service's own words."
+        }
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}
