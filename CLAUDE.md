@@ -958,7 +958,9 @@ procedure is the skills'.
 - **Worktree setup:** `bun install --frozen-lockfile`; `uv sync --all-packages --locked -q`.
 - **Protected paths:** `~/_repository/optionality`, the live tree: Caddy serves its `frontend/dist`
   and the API runs its code. Only `make deploy` moves it; never build, pull or fast-forward there.
-- **Generated files:** `testdata/golden/` and the golden stamps via `make cases`;
+- **Generated files:** `testdata/golden/`, `testdata/vendors/` (the field corpus and
+  `ibkr-gateway/expected/`) and the golden stamps (`typescript/src/golden.ts`,
+  `python/src/optionality/_ported.py`) via `make cases`;
   `testdata/scenarios/` and `schema/api/` via `make scenarios`; `frontend/dist` via `make build-ui`,
   and on a conflict `make resolve-ui`. Never by hand.
 - **Must change together:** the TypeScript backend (`backend/`) and the Python backend
@@ -968,14 +970,16 @@ procedure is the skills'.
   (`backend/src/db/queries/samples.ts`, `watch-samples.ts` and their ports); the schema
   (`schema/`, every migration); the deploy tooling (the `Makefile`'s deploy, use and launchd rules,
   `deploy/`, `tools/use-backend.mjs`, `tools/deploy.test.mjs`).
-- **Hard rules:**
+- **Hard rules** (pasted into every builder's and reviewer's brief; the orchestrating session itself
+  merges and deploys, but only on the owner's word):
   > No requests to 127.0.0.1:31415 (at most GET, and prefer none); the live database only through
   > `sqlite3 -readonly`. Never `pgrep -f`/`pkill` — wait on your own jobs by PID or file. Never
   > `make deploy`, `make use` or `launchctl`. Never merge or push to main. Never echo `.env`.
 - **Branch prefixes:** `feat`, `fix`, `refactor`, `docs`, `chore`.
 - **Review extras:** when the PR adds a migration, run it on an online backup of the live database
-  (`node backend/tools/backup/backup.ts <live db> <scratch copy>`, never `cp`) in BOTH backends,
-  and compare every row before and after.
+  (`node backend/tools/backup/backup.ts <live db> <scratch copy>`, never `cp`; the one exception to
+  reading the live database only through `sqlite3 -readonly`) in BOTH backends, and compare every
+  row before and after.
 - **Deploy:** from `~/_repository/optionality`, `make deploy`; then show:
   - `/health`: db, provider, last sweep ok, and `golden_cases` equal to `typescript/src/golden.ts`;
   - the API's start time (`ps -o lstart= -p $(lsof -tiTCP:31415 -sTCP:LISTEN)`) later than the
