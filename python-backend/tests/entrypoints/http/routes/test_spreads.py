@@ -928,6 +928,9 @@ class TestGetSpreadsQuote:
             ([], "give at least one spread"),
             ([f"{D}-P6800"], "is not <expiry>:<legs>"),
             ([f"{D}:-Q6800"], 'leg 1 "-Q6800" is not'),
+            # a strike of any length built a code past a double's range, or a 500 here (#453 review)
+            ([f"{D}:-P1000000"], 'leg 1 "-P1000000" is not'),
+            ([f"{D}:-P{'9' * 400}"], 'leg 1 "-P999'),
             (["20261332:-P6800"], "invalid expiry"),
             ([f"{D}:-P6800x0"], "a quantity is 1 to 10, not 0"),
             ([f"{D}:-P6800x11"], "a quantity is 1 to 10, not 11"),
@@ -942,6 +945,8 @@ class TestGetSpreadsQuote:
             "no spread",
             "a structure that is not the grammar",
             "a leg that is not the grammar",
+            "a strike of seven digits",
+            "a strike of 400 digits",
             "an expiry that is no date",
             "quantity 0",
             "quantity 11",

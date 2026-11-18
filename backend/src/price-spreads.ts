@@ -67,8 +67,12 @@ export interface QuoteFault {
 const refuse = (message: string, status: 422 | 429 = 422): QuoteFault => ({ status, message });
 
 const STRUCTURE = /^([^:@]*):([^@]*)(?:@(-?\d+(?:\.\d+)?))?$/;
-/** A raw `+` in a query string arrives as a space, so a space where a sign goes reads as `+`. */
-const LEG = /^([-+ ])([CP])([1-9]\d*)(?:x(\d+))?$/;
+/** A raw `+` in a query string arrives as a space, so a space where a sign goes reads as `+`. A
+ *  strike is at most six digits: SPX is near 7,000, so that is two orders of magnitude to spare, and
+ *  every such number is an exact double, so both languages build the same code. Unbounded, a strike
+ *  of 22 digits built `…P1e+21000` and one of 400 `…PInfinity000`, each spent from the cap and sent to
+ *  the Provider (#453 review). */
+const LEG = /^([-+ ])([CP])([1-9]\d{0,5})(?:x(\d+))?$/;
 const EXAMPLE = "e.g. ?spread=20261218:-P6800,%2BP6750";
 
 /** The structures `given` asks for, or why not — every refusal before any Provider call (ADR 0027):

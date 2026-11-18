@@ -107,8 +107,11 @@ def _refuse(message: str, status: Literal[422, 429] = 422) -> QuoteFault:
 
 
 _STRUCTURE = re.compile(r"([^:@]*):([^@]*)(?:@(-?\d+(?:\.\d+)?))?", re.ASCII)
-#: A raw `+` in a query string arrives as a space, so a space where a sign goes reads as `+`.
-_LEG = re.compile(r"([-+ ])([CP])([1-9]\d*)(?:x(\d+))?", re.ASCII)
+#: A raw `+` in a query string arrives as a space, so a space where a sign goes reads as `+`. A strike is at
+#: most six digits: SPX is near 7,000, so that is two orders of magnitude to spare, and every such number is an
+#: exact double, so both languages build the same code. Unbounded, 400 digits raised OverflowError here (a 500)
+#: and 22 built a code the TypeScript does not (#453 review).
+_LEG = re.compile(r"([-+ ])([CP])([1-9]\d{0,5})(?:x(\d+))?", re.ASCII)
 _EXAMPLE = "e.g. ?spread=20261218:-P6800,%2BP6750"
 
 

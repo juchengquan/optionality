@@ -40,7 +40,8 @@ it needs a decision of its own and a bound of its own. The owner's decisions on 
 `?spread=20261218:-P6800,%2BP6750&spread=20261218:-C7300,%2BC7350x2@-1.25`.
 
 - `<expiry>` is `YYYYMMDD` or `YYYY-MM-DD`. A leg is `-` (short) or `+` (long), `C` or `P`, a whole
-  strike above zero, and an optional `x<n>`, the quantity 1–10 (absent is 1, as `qty` everywhere). A raw
+  strike above zero of at most six digits (an exact double, so both languages build one code; a
+  longer one is the leg's 422), and an optional `x<n>`, the quantity 1–10 (absent is 1, as `qty` everywhere). A raw
   `+` in a query string arrives as a space, so a space where a sign goes reads as `+`.
 - `@<entry>` is the structure's Entry in points per contract, signed like a Position's: a credit
   received is positive.

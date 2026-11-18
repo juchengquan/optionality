@@ -712,6 +712,9 @@ describe("GET /spreads/quote", () => {
     ["no spread", [], "give at least one spread"],
     ["a structure that is not the grammar", [`${D}-P6800`], "is not <expiry>:<legs>"],
     ["a leg that is not the grammar", [`${D}:-Q6800`], "leg 1 \"-Q6800\" is not"],
+    // a strike of any length built `…PInfinity000` or `…P1e+21000` and went to the Provider (#453 review)
+    ["a strike of seven digits", [`${D}:-P1000000`], "leg 1 \"-P1000000\" is not"],
+    ["a strike of 400 digits", [`${D}:-P${"9".repeat(400)}`], "leg 1 \"-P999"],
     ["an expiry that is no date", ["20261332:-P6800"], "invalid expiry"],
     ["quantity 0", [`${D}:-P6800x0`], "a quantity is 1 to 10, not 0"],
     ["quantity 11", [`${D}:-P6800x11`], "a quantity is 1 to 10, not 11"],

@@ -2718,6 +2718,12 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/spreads/quote?spread=20261218%3A-C7300%2C%2BQ7350"),
   },
   {
+    // a strike past six digits is no SPX strike, and unbounded it built a code no Provider has
+    name: "GET /spreads/quote refuses a strike of more than six digits, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", "/spreads/quote?spread=20261218%3A-P1000000000000000000000"),
+  },
+  {
     name: "GET /spreads/quote refuses a quantity above ten, asking nothing",
     world: world({ provider: { quotes: BOOK } }),
     request: request("GET", "/spreads/quote?spread=20261218%3A-C7300x11"),
