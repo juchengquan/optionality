@@ -846,7 +846,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 
 ## Workflow & environment
 
-- Branch → PR → the owner merges (never merge or push to main directly). Restart the agent after landing.
+- Branch → PR → the owner merges it, or says "merge #N" and the session orchestrating the build
+  merges the commit it reported ready (see **Building issues**). No other agent merges, and nothing
+  is pushed to main directly. `make deploy` lands it.
 - `.env` is gitignored and holds live Telegram credentials — never commit it or echo its secrets into
   committed files. It is mode 600 (`chmod 600 .env`; set on the live machine on 2026-11-16): it
   holds the bot token, the websocket key and the moomoo account in clear. `data/optionality-ts.db` is live state (watchlist, holdings, their daily samples — the samples
@@ -943,3 +945,53 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
     `-wal` beside it, and SQLite replays that old log onto the restored data.
 - The Telegram bot token allows ONE `getUpdates` consumer: never run two service instances against it, and
   avoid external `getUpdates` curls while the service runs.
+
+## Building issues
+
+Issues are filed, built, merged and deployed through the `relay` skills (`file-issue`,
+`build-issue`; from juchengquan/claude-osprey). The values below are this repository's; the
+procedure is the skills'.
+
+- **Check:** `make check`, on exactly the committed tree.
+- **Extra tests:** `bun run --cwd frontend test` (the jsdom suite), 3 runs in a row: it has had load
+  flakes.
+- **Worktree setup:** `bun install --frozen-lockfile`; `uv sync --all-packages --locked -q`.
+- **Protected paths:** `~/_repository/optionality`, the live tree: Caddy serves its `frontend/dist`
+  and the API runs its code. Only `make deploy` moves it; never build, pull or fast-forward there.
+- **Generated files:** `testdata/golden/`, the vendor field corpus (`testdata/vendors/*-fields.json`
+  and `testdata/vendors/ibkr-gateway/expected/`; the recordings beside them are inputs) and the
+  golden stamps (`typescript/src/golden.ts`, `python/src/optionality/_ported.py`) via `make cases`;
+  `testdata/scenarios/` and `schema/api/` via `make scenarios`; `frontend/dist` via
+  `make build-ui`, and on a conflict `make resolve-ui`. Never by hand.
+- **Must change together:** the TypeScript backend (`backend/`) and the Python backend
+  (`python-backend/`); the library (`typescript/`) and its Python port (`python/`), held together
+  by the golden cases; and the door scenarios both backends replay.
+- **Heavy areas:** the sweep (`backend/src/engine/sweeper.ts` and its port); the samples
+  (`backend/src/db/queries/samples.ts`, `watch-samples.ts` and their ports); the schema
+  (`schema/`, every migration); the deploy tooling (the `Makefile`'s deploy, use and launchd rules,
+  `deploy/`, `tools/use-backend.mjs`, `tools/deploy.test.mjs`).
+- **Hard rules** (they bind every builder and reviewer; the orchestrating session itself merges and
+  deploys, but only on the owner's word):
+  > No requests to 127.0.0.1:31415 (at most GET, and prefer none); the live database only through
+  > `sqlite3 -readonly`. Never `pgrep -f`/`pkill` — wait on your own jobs by PID or file. Never
+  > `make deploy`, `make use` or `launchctl`. Never merge or push to main. Never echo `.env`.
+- **Review extras:** when the PR adds a migration, run it on an online backup of the live database
+  (`node backend/tools/backup/backup.ts <live db> <scratch copy>`, never `cp`; the one exception to
+  reading the live database only through `sqlite3 -readonly`) in BOTH backends, and compare every
+  row before and after.
+- **Deploy:** from `~/_repository/optionality`, `make deploy`; then show:
+  - `/health`: db, provider, last sweep ok, and `golden_cases` equal to `typescript/src/golden.ts`;
+  - the API's start time (`ps -o lstart= -p $(lsof -tiTCP:31415 -sTCP:LISTEN)`) later than the
+    deploy, and a fresh `data/optionality-ts.db.bak-<stamp>`;
+  - for a migration: `pragma table_info` of what changed, every row survived, and
+    `pragma integrity_check`;
+  - the bundle on the real tailnet URL and its cache headers (`no-store` on the page, `immutable`
+    on assets);
+  - the page itself, read-only (Playwright, every non-GET request aborted), at desk width and on
+    the iPhone 13 profile: console errors, failed requests, horizontal overflow, and the
+    screenshots read.
+
+  A change to live data is the owner's call each time: the named backup is
+  `data/optionality-ts.db.bak-pre-<what>-<stamp>`, kept for good.
+- **Sign-off:** commits end with the attribution lines the session gives; PR bodies end with the
+  "🤖 Generated with [Claude Code](https://claude.com/claude-code)" line.
