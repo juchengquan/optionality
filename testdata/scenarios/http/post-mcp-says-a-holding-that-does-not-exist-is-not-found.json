@@ -156,7 +156,7 @@
           "content": [
             {
               "type": "text",
-              "text": "GET /positions/pos-9/samples answered 404: position not found"
+              "text": "no holding is \"pos-9\": tried it as a holding's id and as its name. positions lists every holding's id"
             }
           ],
           "isError": true

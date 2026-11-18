@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { type FakeProvider, type Harness, body, harness, json, pricedFetcher } from "../../../testing/harness.ts";
-import { LIVE_FOR_MS } from "./tools.ts";
+import { LIVE_FOR_MS, toolbox } from "./tools.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
@@ -258,21 +258,26 @@ describe("the tools", () => {
     expect(answer.text).not.toMatch(/": /);
   });
 
-  it("refuse an id that is not one of the service's, in words an agent can correct", async () => {
+  it("refuse an id or a name that is not one of the service's, in words an agent can correct", async () => {
     start();
-    const missing = await call("holding_history", { id: "nope" });
-    expect(missing).toMatchObject({
-      isError: true, text: "GET /positions/nope/samples answered 404: position not found",
+    expect(await call("holding_history", { id: "nope" })).toMatchObject({
+      isError: true,
+      text: 'no holding is "nope": tried it as a holding\'s id and as its name. positions lists every holding\'s id',
     });
-    const monitor = await call("monitor_history", { id: "nope" });
-    expect(monitor).toMatchObject({ isError: true, text: "GET /monitors/nope/samples answered 404: monitor not found" });
+    expect(await call("monitor_history", { id: "nope" })).toMatchObject({
+      isError: true,
+      text: 'no rule is "nope": tried it as a rule\'s id, as its code or combo name. watchlist lists every rule\'s id',
+    });
   });
 
   it("refuse arguments that are not the tool's before asking the API anything", async () => {
     start();
-    expect(await call("holding_history", { id: "../settings" })).toMatchObject({
-      isError: true, text: 'argument "id" must be a string matching ^[A-Za-z0-9_-]{1,64}$',
-    });
+    const pattern = "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]{1,64}$";
+    for (const id of ["dec\u0000condor", "dec\ncondor", "dec\u009fcondor", "x".repeat(65), "", "dec \u{1F985}"]) {
+      expect(await call("holding_history", { id }), JSON.stringify(id)).toMatchObject({
+        isError: true, text: `argument "id" must be a string matching ${pattern}`,
+      });
+    }
     expect(await call("holding_history", { id: 7 })).toMatchObject({ isError: true });
     expect(await call("holding_history")).toMatchObject({ isError: true, text: 'missing argument "id"' });
     expect(await call("holding_history", { id: "a", at: "b" })).toMatchObject({
@@ -299,6 +304,144 @@ describe("the tools", () => {
     const answer = await call("watchlist");
     expect(answer.isError).toBe(true);
     expect(answer.text).toMatch(/^GET \/quotes answered 502: .*ECONNREFUSED/);
+  });
+});
+
+describe("the history tools take a name as well as an id", () => {
+  // An agent asked "how has 1218-6800 moved?" called monitor_history with the name, got a 404, and
+  // recovered only by searching the watchlist for the id (2026-11-18): one call, not three.
+  const PUT_RULE = { strike_date: EXPIRY, option_type: "PUT", strike: 7100, field: "option_delta", threshold: 0.15, direction: "above" };
+  const COMBO = {
+    name: "1218-6800", strike_date: EXPIRY, field: "mid_price", threshold: 2.5, direction: "above",
+    legs: [{ sign: -1, option_type: "PUT", strike: 7100 }, { sign: 1, option_type: "PUT", strike: 7075 }],
+  };
+
+  /** `book`, plus a second rule on the short put (its price beside its Δ), a combo, and a closed holding. */
+  const names = async () => {
+    const ids = await book();
+    const putDelta = await created(await h.call("/monitors", json(PUT_RULE)));
+    const putPrice = await created(await h.call("/monitors", json({ ...PUT_RULE, field: "mid_price", threshold: 9.5 })));
+    const comboRule = await created(await h.call("/monitors", json(COMBO)));
+    const closed = await created(await h.call("/positions", json({ ...CONDOR, name: "oct-condor" })));
+    const shut = await h.call(`/positions/${closed}/close`, json({ exit: 1.25, closed_on: "2026-10-01" }));
+    expect(shut.status, await shut.clone().text()).toBe(200);
+    asked = [];
+    return { ...ids, putDelta, putPrice, comboRule, closed };
+  };
+
+  /** The answer `given` reads, held to the GET by `id`'s own: the same data, `source` naming the id. */
+  const same = async (name: "holding_history" | "monitor_history", given: string, id: string) => {
+    const path = name === "holding_history" ? `/positions/${id}/samples` : `/monitors/${id}/samples`;
+    const answer = await call(name, { id: given });
+    expect(answer.isError, `${given}: ${answer.text}`).toBe(false);
+    expect(answer.source, given).toBe(`GET ${path}`);
+    expect(answer.data, given).toEqual(await body(await h.call(path)));
+  };
+
+  it("read a holding by its id or its name, open or closed", async () => {
+    start();
+    const ids = await names();
+    await same("holding_history", ids.position, ids.position);
+    await same("holding_history", "1016_IC", ids.position);
+    await same("holding_history", "  1016_IC ", ids.position);
+    await same("holding_history", "oct-condor", ids.closed);
+    expect(asked).toEqual([]);
+  });
+
+  it("read a rule by its id, its code as stored, or its contract as the page and the bot write it", async () => {
+    start();
+    const ids = await names();
+    await same("monitor_history", ids.monitor, ids.monitor);
+    await same("monitor_history", "1218-6800", ids.comboRule);
+    await same("monitor_history", "US.SPXW261218C8050000", ids.monitor);
+    for (const spelled of ["20261218 C8050", "261218 C8050", "20261218c8050", " 20261218 C8050 "]) {
+      await same("monitor_history", spelled, ids.monitor);
+    }
+    expect(asked).toEqual([]);
+  });
+
+  it("match a name exactly: case is the owner's, except in a contract written the page's way", async () => {
+    start();
+    await names();
+    expect((await call("holding_history", { id: "1016_ic" })).isError).toBe(true);
+    expect((await call("monitor_history", { id: "1218-6800 " })).isError).toBe(false);
+    expect((await call("monitor_history", { id: "us.spxw261218c8050000" })).isError).toBe(true);
+  });
+
+  it("trim as JavaScript does, which the Python spells out", async () => {
+    // Python's strip() takes U+001C–U+001F and U+0085, which trim does not (all refused as control
+    // characters anyway); trim takes U+FEFF and U+3000, as the Python must too
+    start();
+    const ids = await names();
+    await same("holding_history", "\uFEFF1016_IC\u3000", ids.position);
+  });
+
+  it("list each candidate where a name matches several rules, to call again with one id", async () => {
+    start();
+    const ids = await names();
+    for (const given of ["20261218 P7100", "US.SPXW261218P7100000"]) {
+      expect(await call("monitor_history", { id: given })).toEqual({
+        isError: true,
+        text: [`"${given}" names 2 rules; call again with one of their ids:`,
+          `${ids.putDelta} — |Δ| ≥ 0.15`, `${ids.putPrice} — |value| ≥ 9.50`].join("\n"),
+      });
+    }
+  });
+
+  it("say what was tried when nothing matches, the contract included", async () => {
+    start();
+    await names();
+    expect(await call("monitor_history", { id: "20261218 C9999" })).toEqual({
+      isError: true,
+      text: 'no rule is "20261218 C9999": tried it as a rule\'s id, as its code or combo name, and as the contract US.SPXW261218C9999000. watchlist lists every rule\'s id',
+    });
+  });
+
+  it("never put what the caller typed in a path: a name like a path is looked up, and not found", async () => {
+    start();
+    await names();
+    for (const given of ["../quotes", "../../settings", "%2e%2e%2fquotes", "1016_IC/../../quotes", "?id=x"]) {
+      expect((await call("holding_history", { id: given })).text, given).toMatch(/^no holding is /);
+      expect((await call("monitor_history", { id: given })).text, given).toMatch(/^no rule is /);
+    }
+    expect(asked).toEqual([]);
+  });
+
+  it("read only the list and the resolved id's history, both GETs the door already makes", async () => {
+    const reads: string[] = [];
+    const rows: Record<string, unknown[]> = {
+      "/monitors": [{ id: "mon-7", code: "1218-6800", field: "mid_price", compare: "signed", direction: "above", threshold: 1, legs: [{}, {}] }],
+      "/positions": [{ id: "pos-7", name: "../quotes" }],
+    };
+    const box = toolbox({
+      now: () => new Date("2026-11-18T00:00:00Z"), displayTz: "UTC",
+      read: async (path) => { reads.push(path); return { status: 200, body: JSON.stringify(rows[path] ?? {}) }; },
+    });
+    expect((await box.call("monitor_history", { id: "1218-6800" }, null)).isError).toBeUndefined();
+    expect((await box.call("holding_history", { id: "../quotes" }, null)).isError).toBeUndefined();
+    expect(reads).toEqual(["/monitors", "/monitors/mon-7/samples", "/positions", "/positions/pos-7/samples"]);
+  });
+
+  it("refuse to build a path from a stored id that is not an id", async () => {
+    const reads: string[] = [];
+    const box = toolbox({
+      now: () => new Date("2026-11-18T00:00:00Z"), displayTz: "UTC",
+      read: async (path) => { reads.push(path); return { status: 200, body: JSON.stringify([{ id: "../quotes", name: "odd" }]) }; },
+    });
+    expect(await box.call("holding_history", { id: "odd" }, null)).toEqual({
+      isError: true, content: [{ type: "text", text: 'the holding "odd" has an id no path can carry' }],
+    });
+    expect(reads).toEqual(["/positions"]);
+  });
+
+  it("carry a list that cannot be read as a tool error in the service's own words", async () => {
+    const box = toolbox({
+      now: () => new Date("2026-11-18T00:00:00Z"), displayTz: "UTC",
+      read: async () => ({ status: 500, body: JSON.stringify({ detail: "database is locked" }) }),
+    });
+    expect(await box.call("monitor_history", { id: "mon-1" }, null)).toEqual({
+      isError: true, content: [{ type: "text", text: "GET /monitors answered 500: database is locked" }],
+    });
   });
 });
 
@@ -373,7 +516,12 @@ describe("the door's reach", () => {
     const reached = sources.flatMap((f) => [...readFileSync(join(dir, f), "utf8")
       .matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)].map((m) => m[1]!));
     const outside = reached.filter((spec) => !spec.startsWith("./"));
-    // `ports.ts` for the one type it is handed, `Read`, and nothing that runs
-    expect([...new Set(outside)].sort()).toEqual(["../../ports.ts", "node:fs", "optionality/domain/timefmt"]);
+    // `ports.ts` for the one type it is handed, `Read`, and nothing that runs; and the library's
+    // pure domain for the words — a contract as the page writes it is read by `/unwatch`'s own
+    // parser, and a rule is said in its short form — which reach nothing of the service either
+    expect([...new Set(outside)].sort()).toEqual([
+      "../../ports.ts", "node:fs", "optionality/domain/alarm", "optionality/domain/contract",
+      "optionality/domain/timefmt",
+    ]);
   });
 });

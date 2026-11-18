@@ -1,0 +1,166 @@
+{
+  "name": "POST /mcp reads a closed holding's history by its name",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": "connect ECONNREFUSED 127.0.0.1:33333",
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": null,
+          "exit": null,
+          "qty_corrected_at": null
+        },
+        {
+          "id": "pos-2",
+          "name": "nov-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 5.5,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-11-06",
+          "manage_notified_at": null,
+          "closed_on": "2026-11-07",
+          "exit": 1.25,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [
+        {
+          "position_id": "pos-2",
+          "observed_on": "2026-11-06",
+          "dte": 42,
+          "cost_to_close": 3.25,
+          "legs_iv": {
+            "US.SPXW261218C7300000": 14,
+            "US.SPXW261218C7350000": 13.5,
+            "US.SPXW261218P6400000": 19,
+            "US.SPXW261218P6350000": 20
+          },
+          "legs_vega": {
+            "US.SPXW261218C7300000": 4.25,
+            "US.SPXW261218C7350000": 4.25,
+            "US.SPXW261218P6400000": 4.25,
+            "US.SPXW261218P6350000": 4.25
+          },
+          "legs_delta": null,
+          "observed_at": null,
+          "spx": null,
+          "contract_size": null
+        }
+      ],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "holding_history",
+        "arguments": {
+          "id": "nov-condor"
+        }
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"data\":{\"before_entry\":[],\"entry_close\":null,\"levels\":{\"dte_at_open\":42,\"manage_by_dte\":21,\"stop\":11,\"target\":2.75,\"target_dte\":11},\"plan\":[{\"dte\":42,\"on_pace\":5.5},{\"dte\":41,\"on_pace\":5.434129360326446},{\"dte\":40,\"on_pace\":5.367450401216932},{\"dte\":39,\"on_pace\":5.299932614126873},{\"dte\":38,\"on_pace\":5.23154352166238},{\"dte\":37,\"on_pace\":5.162248494968982},{\"dte\":36,\"on_pace\":5.092010548749033},{\"dte\":35,\"on_pace\":5.020790110464023},{\"dte\":34,\"on_pace\":4.948544759633405},{\"dte\":33,\"on_pace\":4.875228932353551},{\"dte\":32,\"on_pace\":4.8007935851918315},{\"dte\":31,\"on_pace\":4.725185811413235},{\"dte\":30,\"on_pace\":4.648348401006841},{\"dte\":29,\"on_pace\":4.570219334113491},{\"dte\":28,\"on_pace\":4.4907311951024935},{\"dte\":27,\"on_pace\":4.409810491555002},{\"dte\":26,\"on_pace\":4.327376858581937},{\"dte\":25,\"on_pace\":4.243342123957528},{\"dte\":24,\"on_pace\":4.157609203101499},{\"dte\":23,\"on_pace\":4.070070784455252},{\"dte\":22,\"on_pace\":3.980607754506602},{\"dte\":21,\"on_pace\":3.8890872965260117},{\"dte\":20,\"on_pace\":3.7953605763829485},{\"dte\":19,\"on_pace\":3.699259900240021},{\"dte\":18,\"on_pace\":3.600595188893874},{\"dte\":17,\"on_pace\":3.499149556541935},{\"dte\":16,\"on_pace\":3.394673699166022},{\"dte\":15,\"on_pace\":3.2868786756695823},{\"dte\":14,\"on_pace\":3.1754264805429413},{\"dte\":13,\"on_pace\":3.059917521453028},{\"dte\":12,\"on_pace\":2.9398736610366685},{\"dte\":11,\"on_pace\":2.8147147364553744},{\"dte\":10,\"on_pace\":2.683725200608466},{\"dte\":9,\"on_pace\":2.5460052743745165},{\"dte\":8,\"on_pace\":2.4003967925959158},{\"dte\":7,\"on_pace\":2.2453655975512468},{\"dte\":6,\"on_pace\":2.0788046015507495},{\"dte\":5,\"on_pace\":1.8976802881914743},{\"dte\":4,\"on_pace\":1.697336849583011},{\"dte\":3,\"on_pace\":1.4699368305183342},{\"dte\":2,\"on_pace\":1.2001983962979579},{\"dte\":1,\"on_pace\":0.8486684247915055},{\"dte\":0,\"on_pace\":0}],\"qty_corrected_at\":null,\"samples\":[{\"before_correction\":false,\"cost_to_close\":null,\"dte\":42,\"legs_delta\":null,\"legs_iv\":{\"US.SPXW261218C7300000\":14,\"US.SPXW261218C7350000\":13.5,\"US.SPXW261218P6350000\":20,\"US.SPXW261218P6400000\":19},\"legs_vega\":{\"US.SPXW261218C7300000\":4.25,\"US.SPXW261218C7350000\":4.25,\"US.SPXW261218P6350000\":4.25,\"US.SPXW261218P6400000\":4.25},\"observed_at\":null,\"observed_on\":\"2026-11-06\",\"on_pace\":5.5,\"spx\":null,\"timing\":\"unrecorded\"}]},\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /positions/pos-2/samples\"}"
+            }
+          ]
+        }
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}
