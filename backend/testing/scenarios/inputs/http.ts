@@ -5,7 +5,7 @@
  *  the code takes — the order a refusal is decided in, a call that must NOT be made, a write that
  *  reaches a second table.
  */
-import type { HttpRequest, World } from "../format.ts";
+import type { EarlierRequest, HttpRequest, World } from "../format.ts";
 import {
   BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, PREMIUM_BOOK, at, chosenInterval, combo, except,
   link, monitor,
@@ -16,6 +16,8 @@ import {
 export interface HttpInput {
   name: string;
   world: World;
+  /** requests made before the event, for a memory no table holds (ADR 0027) */
+  earlier?: EarlierRequest[];
   request: HttpRequest;
 }
 
@@ -296,6 +298,12 @@ const RULES = world({
   },
   provider: { down: DOWN },
 });
+
+/** The condor's call spread and its put spread as `spread=` writes them, URI-encoded (#452). */
+const QUOTE_CALLS = "20261218%3A-C7300%2C+C7350";
+const QUOTE_PUTS = "20261218%3A-P6400%2C%2BP6350";
+/** Six legs, the most one structure may have. */
+const SIX_QUOTED = "20261218%3A-P6400%2C%2BP6350%2C-P6300%2C%2BP6250%2C-P6200%2C%2BP6150";
 
 export const HTTP: readonly HttpInput[] = [
   // --- /health ----------------------------------------------------------------------------
@@ -2644,6 +2652,150 @@ export const HTTP: readonly HttpInput[] = [
     name: "POST /mcp reads the service's health",
     world: world({ tables: { sweep_interval: [chosenInterval(5)] }, sweeps: [{ at: at(-10), down: null }] }),
     request: request("POST", "/mcp", tool("health")),
+  },
+  // --- GET /spreads/quote: any SPX structure, priced in one bounded call (#452, ADR 0027) ------
+  {
+    // three structures, one Provider call carrying every distinct leg once; the call spread written
+    // with a raw `+`, which a query string delivers as a space, and the put spread with %2B
+    name: "GET /spreads/quote prices every structure in one call carrying each leg once",
+    world: world({ provider: { quotes: PREMIUM_BOOK } }),
+    request: request("GET", `/spreads/quote?spread=${QUOTE_CALLS}&spread=${QUOTE_PUTS}%401.5&spread=20261218%3A-C7300`),
+  },
+  {
+    // a ratio: its long leg counted twice in the value, the natural fill and every greek
+    name: "GET /spreads/quote values a 1x2 its long leg counted twice",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", "/spreads/quote?spread=2026-12-18%3A-C7300%2C%2BC7350x2"),
+  },
+  {
+    // Saturday: moomoo quotes 0/0, so no leg has a mid and nothing is summed but the greeks; each
+    // leg's last regular-session close is said beside it, never summed, and the payoff is the shape
+    name: "GET /spreads/quote out of hours dashes every price, sums the greeks and says each leg's last close",
+    world: world({
+      clock: SATURDAY,
+      provider: { quotes: OUT_OF_HOURS },
+      tables: {
+        watch_samples: [
+          watchDay([C7300, C7350], {
+            observed_on: "2026-11-13", dte: 35, observed_at: "2026-11-13 21:14:00.000000",
+            legs_mid: { [C7300]: 3.1, [C7350]: 2.05 },
+          }),
+          // a later row read after the close is no close, and an older one is older
+          watchDay([C7300], {
+            observed_on: "2026-11-12", dte: 36, observed_at: "2026-11-12 21:14:00.000000",
+            legs_mid: { [C7300]: 2.9 },
+          }),
+        ],
+      },
+    }),
+    request: request("GET", `/spreads/quote?spread=${QUOTE_CALLS}&spread=${QUOTE_PUTS}%401.5`),
+  },
+  {
+    // GTH: SPX options trade and moomoo quotes them live, so a quoted structure is priced as in the
+    // session, and SPX is said to be the last close's level beside its price
+    name: "GET /spreads/quote overnight prices what is quoted live",
+    world: world({ clock: GTH, provider: { quotes: PREMIUM_BOOK } }),
+    request: request("GET", `/spreads/quote?spread=${QUOTE_CALLS}`),
+  },
+  {
+    name: "GET /spreads/quote fails only the structure holding a contract the Provider does not know",
+    world: world({ provider: { quotes: BOOK, unknown: [C7500] } }),
+    request: request("GET", `/spreads/quote?spread=${QUOTE_PUTS}&spread=20261218%3A-C7350%2C%2BC7500%40-0.5`),
+  },
+  {
+    name: "GET /spreads/quote answers 502 naming the Provider when it is down",
+    world: world({ provider: { down: DOWN } }),
+    request: request("GET", `/spreads/quote?spread=${QUOTE_CALLS}`),
+  },
+  {
+    name: "GET /spreads/quote refuses a request naming no spread",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", "/spreads/quote"),
+  },
+  {
+    name: "GET /spreads/quote refuses a structure that is not the grammar, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", "/spreads/quote?spread=20261218%3A-C7300%2C%2BQ7350"),
+  },
+  {
+    name: "GET /spreads/quote refuses a quantity above ten, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", "/spreads/quote?spread=20261218%3A-C7300x11"),
+  },
+  {
+    name: "GET /spreads/quote refuses an expiry already past, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", "/spreads/quote?spread=20261106%3A-P6400"),
+  },
+  {
+    name: "GET /spreads/quote refuses seven legs in one structure, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", "/spreads/quote?spread=20261218%3A-P6400%2C%2BP6350%2C-P6300%2C%2BP6250%2C-P6200%2C%2BP6150%2C-P6100"),
+  },
+  {
+    name: "GET /spreads/quote refuses 33 legs in all, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", `/spreads/quote?${[...Array(5).fill(SIX_QUOTED), "20261218%3A-P6400%2C%2BP6350%2C-P6300"]
+      .map((sp) => `spread=${sp}`).join("&")}`),
+  },
+  {
+    // the same structures asked 3s ago, the other way round: answered from that call, asking nothing
+    name: "GET /spreads/quote answers the same structures again within 5s from the same call",
+    world: world({ provider: { quotes: PREMIUM_BOOK } }),
+    earlier: [{ at: at(-3), request: request("GET", `/spreads/quote?spread=${QUOTE_CALLS}&spread=${QUOTE_PUTS}`) }],
+    request: request("GET", `/spreads/quote?spread=${QUOTE_PUTS}&spread=20261218%3A%2BC7350%2C-C7300`),
+  },
+  {
+    // the cap at 2 calls in 30 seconds, both spent 10s and 20s ago on other structures: the next is
+    // allowed when the older is 30s old
+    name: "GET /spreads/quote refuses a call over the cap saying when the next is allowed",
+    world: world({ settings: { SPREAD_QUOTE_CALLS_PER_30S: "2" }, provider: { quotes: BOOK } }),
+    earlier: [
+      { at: at(-20), request: request("GET", `/spreads/quote?spread=${QUOTE_PUTS}`) },
+      { at: at(-10), request: request("GET", "/spreads/quote?spread=20261218%3A-C7300") },
+    ],
+    request: request("GET", `/spreads/quote?spread=${QUOTE_CALLS}`),
+  },
+  {
+    name: "GET /spreads/quote wants the API's token",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", `/spreads/quote?spread=${QUOTE_CALLS}`, null, { anonymous: true }),
+  },
+  {
+    // the MCP door writes the structures as the route's query and GETs it (ADR 0027)
+    name: "POST /mcp prices any structure through GET /spreads/quote",
+    world: world({ provider: { quotes: PREMIUM_BOOK } }),
+    request: request("POST", "/mcp", tool("price_spreads", {
+      structures: [
+        { expiry: "20261218", legs: [{ side: "short", option_type: "CALL", strike: 7300 }, { side: "long", option_type: "CALL", strike: 7350 }] },
+        {
+          expiry: "2026-12-18", entry: 1.5,
+          legs: [{ side: "short", option_type: "PUT", strike: 6400 }, { side: "long", option_type: "PUT", strike: 6350, qty: 2 }],
+        },
+      ],
+    })),
+  },
+  {
+    name: "POST /mcp carries the route's refusal of a structure as a tool error",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("price_spreads", {
+      structures: [{ expiry: "20261106", legs: [{ side: "short", option_type: "PUT", strike: 6400 }] }],
+    })),
+  },
+  {
+    name: "POST /mcp refuses a structure it cannot write as a query, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("price_spreads", {
+      structures: [{ expiry: "20261218", legs: [{ side: "sold", option_type: "PUT", strike: 6400 }] }],
+    })),
+  },
+  {
+    name: "POST /mcp says how long to wait when spread quotes are capped",
+    world: world({ settings: { SPREAD_QUOTE_CALLS_PER_30S: "1" }, provider: { quotes: BOOK } }),
+    earlier: [{ at: at(-12), request: request("GET", `/spreads/quote?spread=${QUOTE_PUTS}`) }],
+    request: request("POST", "/mcp", tool("price_spreads", {
+      structures: [{ expiry: "20261218", legs: [{ side: "short", option_type: "CALL", strike: 7300 }] }],
+    })),
   },
   // --- /openapi.json and /docs --------------------------------------------------------------
   // The service's description of itself, held word for word (decided 2026-11-10): the Python

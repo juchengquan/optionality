@@ -83,6 +83,12 @@ Build the service on the world with only the vendors, Telegram, the clock and th
 `Content-Type: application/json`, or no body when it is null. `expect.response` is the `status`
 and the `body`: parsed JSON, `null` when empty, the raw text when not JSON.
 
+An HTTP scenario may also state `earlier`: requests made BEFORE the event, each `{at, request}`,
+sent in order through the same service with the clock at `at`, after the earlier sweeps. They give
+the service a memory that lives in no table — `GET /spreads/quote`'s shared batches and its cap on
+calls (ADR 0027) — so, like the sweeps, **they may not change a row**, and their answers and calls are
+not part of the expectation. A scenario without the key has none.
+
 ### `bot/`
 
 `update` is a Telegram update, in Telegram's shape. Hand it to the bot's update handler (not the

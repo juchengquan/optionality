@@ -76,7 +76,12 @@ export async function build(): Promise<Record<Door, Record<string, string>>> {
   // would be run as one world and written as another, and the file would fail its own replay.
   const asWritten = <T>(scenario: T): T => JSON.parse(JSON.stringify(scenario)) as T;
   for (const input of HTTP) {
-    const s = asWritten({ name: input.name, world: written(input.world), request: input.request });
+    // `earlier` only where there are some (the README: "a scenario without the key has none")
+    const s = asWritten({
+      name: input.name, world: written(input.world),
+      ...(input.earlier ? { earlier: input.earlier.map((e) => ({ at: e.at, request: e.request })) } : {}),
+      request: input.request,
+    });
     put("http", input.name, { ...s, expect: await runHttp(s) });
   }
   for (const input of BOT) {

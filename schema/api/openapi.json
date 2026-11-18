@@ -4683,6 +4683,535 @@
           "spreads"
         ]
       }
+    },
+    "/spreads/quote": {
+      "get": {
+        "operationId": "getSpreadsQuote",
+        "summary": "Price any SPX structures live, in one bounded Provider call, capped service-wide",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "phase": {
+                      "type": "string",
+                      "enum": [
+                        "regular",
+                        "curb",
+                        "overnight",
+                        "closed"
+                      ]
+                    },
+                    "fetched_at": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "spreads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "expiry": {
+                            "type": "string"
+                          },
+                          "dte": {
+                            "type": "number"
+                          },
+                          "entry": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "legs": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "side": {
+                                  "type": "string",
+                                  "enum": [
+                                    "short",
+                                    "long"
+                                  ]
+                                },
+                                "option_type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "CALL",
+                                    "PUT"
+                                  ]
+                                },
+                                "strike": {
+                                  "type": "number"
+                                },
+                                "qty": {
+                                  "type": "number"
+                                },
+                                "code": {
+                                  "type": "string"
+                                },
+                                "bid_price": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "ask_price": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "mid_price": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "option_implied_volatility": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "option_delta": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "option_gamma": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "option_theta": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "option_vega": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "option_contract_size": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "fetched_at": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "error": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "last_known": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "price": {
+                                          "type": "number"
+                                        },
+                                        "observed_on": {
+                                          "type": "string"
+                                        },
+                                        "observed_at": {
+                                          "type": [
+                                            "string",
+                                            "null"
+                                          ]
+                                        },
+                                        "timing": {
+                                          "type": "string",
+                                          "enum": [
+                                            "close",
+                                            "before-open",
+                                            "after-close",
+                                            "weekend",
+                                            "unrecorded"
+                                          ]
+                                        }
+                                      },
+                                      "required": [
+                                        "price",
+                                        "observed_on",
+                                        "observed_at",
+                                        "timing"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "side",
+                                "option_type",
+                                "strike",
+                                "qty",
+                                "code",
+                                "bid_price",
+                                "ask_price",
+                                "mid_price",
+                                "option_implied_volatility",
+                                "option_delta",
+                                "option_gamma",
+                                "option_theta",
+                                "option_vega",
+                                "option_contract_size",
+                                "fetched_at",
+                                "error",
+                                "last_known"
+                              ]
+                            }
+                          },
+                          "value": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "natural": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "bid": {
+                                    "type": "number"
+                                  },
+                                  "ask": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "bid",
+                                  "ask"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "greeks": {
+                            "type": "object",
+                            "properties": {
+                              "option_delta": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "option_gamma": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "option_theta": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "option_vega": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "option_delta",
+                              "option_gamma",
+                              "option_theta",
+                              "option_vega"
+                            ]
+                          },
+                          "spx": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "spx_reason": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "short_strikes": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "option_type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "CALL",
+                                    "PUT"
+                                  ]
+                                },
+                                "strike": {
+                                  "type": "number"
+                                },
+                                "delta": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "points": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "sigma": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "one_sigma": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "code",
+                                "option_type",
+                                "strike",
+                                "delta",
+                                "points",
+                                "sigma",
+                                "one_sigma"
+                              ]
+                            }
+                          },
+                          "payoff": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "at_strikes": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "spx": {
+                                          "type": "number"
+                                        },
+                                        "pnl": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "spx",
+                                        "pnl"
+                                      ]
+                                    }
+                                  },
+                                  "slope_below": {
+                                    "type": "number"
+                                  },
+                                  "slope_above": {
+                                    "type": "number"
+                                  },
+                                  "breakevens": {
+                                    "anyOf": [
+                                      {
+                                        "type": "array",
+                                        "items": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  },
+                                  "max_profit": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  },
+                                  "max_loss": {
+                                    "type": [
+                                      "number",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "at_strikes",
+                                  "slope_below",
+                                  "slope_above",
+                                  "breakevens",
+                                  "max_profit",
+                                  "max_loss"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "payoff_basis": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "entry",
+                                  "mid",
+                                  "shape"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "error": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "expiry",
+                          "dte",
+                          "entry",
+                          "legs",
+                          "value",
+                          "natural",
+                          "greeks",
+                          "spx",
+                          "spx_reason",
+                          "short_strikes",
+                          "payoff",
+                          "payoff_basis",
+                          "error"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "phase",
+                    "fetched_at",
+                    "spreads"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "the request is well-formed but refused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$schema": "https://json-schema.org/draft/2020-12/schema",
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "too many calls of this kind: the detail says when the next is allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "the OpenD call failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "detail": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "detail"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "spread",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "description": "a structure as <expiry>:<legs>[@<entry>], once per structure: the expiry YYYYMMDD or YYYY-MM-DD; each leg - (short) or + (long, %2B in a URL), C or P, the strike, and an optional x<qty> 1-10; the entry in points per contract, a credit positive. 20261218:-P6800,%2BP6750@1.25"
+          }
+        ],
+        "tags": [
+          "spreads"
+        ]
+      }
     }
   }
 }
