@@ -82,6 +82,16 @@ export function marketPhase(now: Date): MarketPhase {
   return "closed";
 }
 
+/** The gap before the open (2026-11-18): 09:25:00 to before 09:30:00 New York on a weekday, between
+ *  GTH's end and the regular session's start, when nothing trades and moomoo quotes no option. The
+ *  one hour a watched row's last price may be newer than its close: the overnight's, minutes old
+ *  (`lastPriceIn`). */
+export function preOpen(now: Date): boolean {
+  const { weekday, second } = newYork(now);
+  if (weekday === "Sat" || weekday === "Sun") return false;
+  return second >= GTH_UNTIL && second < OPEN;
+}
+
 /** The instant New York's wall clock reads `second` on the calendar `day` (a UTC midnight). Found
  *  by correcting a guess by the offset it lands on, twice: once is enough except across a change of
  *  clocks, and the edges here (09:30, 16:15) are never inside the hour a change skips or repeats. */

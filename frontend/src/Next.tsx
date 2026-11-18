@@ -40,7 +40,7 @@ import { holdOnDesk, NOTHING_SELECTED, type DeskSelection } from "./desk/keys";
 import { MonitorActionsContext, type MonitorActions } from "./MonitorEdit";
 import { PhoneBook } from "./phone/PhoneBook";
 import { PhoneJournal } from "./phone/PhoneJournal";
-import { marketPhase, servedWhen, sessionEdge, useSessionClock } from "./session";
+import { marketPhase, preOpen, servedWhen, sessionEdge, useSessionClock } from "./session";
 import { valueCell, withCloses, withLastKnown } from "./lastknown";
 import { NeedsLine, reveal } from "./NeedsLine";
 import { needsYou } from "./needs";
@@ -94,6 +94,7 @@ export function Next() {
   // GTH alike, since SPX options trade in all three and the holdings are valued live where quoted;
   // only while nothing trades is the book valued once. `session` is that: whether the page polls
   const phase = marketPhase(now);
+  const gap = preOpen(now);
   const session = phase !== "closed";
   // and WHICH session it is in or after: a tab asleep from Monday 20:00 to Tuesday 20:00 New York
   // reads `false` at both ends, and must still value the book again when it wakes
@@ -272,13 +273,14 @@ export function Next() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const requests = useRef(0);
   // a price rule with no two-sided quote has no figure; its last known one, read while SPX options
-  // traded, is said beside the dash (#380, lastknown.ts), and the newer of it and the row's last
-  // close (#402) is its value wherever there is no live one — at any hour (`valueCell`), and while
-  // /quotes is failing, whose rows are then the last ones read
+  // traded, is said beside the dash (#380, lastknown.ts), and the row's last close (#402) — or, in
+  // the gap before the open, the newer of the two (`preOpen`) — is its value wherever there is no
+  // live one: at any hour (`valueCell`), and while /quotes is failing, whose rows are then the last
+  // ones read
   const quotes = useMemo(
     () => withLastKnown(withCloses(book.quotes, book.closes), book.monitors,
-      valueCell(phase, book.quotesFailed)),
-    [book.quotes, book.closes, book.monitors, phase, book.quotesFailed],
+      valueCell(phase, book.quotesFailed), gap),
+    [book.quotes, book.closes, book.monitors, phase, book.quotesFailed, gap],
   );
   const placed = useMemo(() => placeBook(quotes, holdings, book.monitors), [quotes, holdings, book.monitors]);
   const found = useMemo(() => findables(placed), [placed]);

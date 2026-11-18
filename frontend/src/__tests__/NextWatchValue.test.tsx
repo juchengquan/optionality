@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
 import { lastPriceWords, valueCell, withLastKnown } from "../lastknown";
+import { preOpen } from "../session";
 import { PhoneBook } from "../phone/PhoneBook";
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { plainView, toMarkdown } from "../snapshot/plain";
@@ -232,6 +233,15 @@ describe("which the value cell says, by the hour (2026-11-17)", () => {
     for (const phase of ["curb", "overnight", "closed"] as const) expect(valueCell(phase, false)).toBe("live-or-close");
     for (const phase of ["regular", "curb", "overnight", "closed"] as const) expect(valueCell(phase, true)).toBe("close");
   });
+
+  it("knows the gap before the open: 09:25 to before 09:30 New York, on a weekday only", () => {
+    // Tuesday 20261117, New York in EST (UTC−5)
+    expect(preOpen(new Date("2026-11-17T14:24:59Z"))).toBe(false); // 09:24:59, GTH
+    expect(preOpen(new Date("2026-11-17T14:25:00Z"))).toBe(true);
+    expect(preOpen(new Date("2026-11-17T14:29:59Z"))).toBe(true);
+    expect(preOpen(new Date("2026-11-17T14:30:00Z"))).toBe(false); // the open
+    expect(preOpen(new Date("2026-11-15T14:27:00Z"))).toBe(false); // a Sunday
+  });
 });
 
 describe("the last close the service stored (#402)", () => {
@@ -252,14 +262,18 @@ describe("the last close the service stored (#402)", () => {
     expect(lastPriceWords(d!.last_price!)).toBe("−3.85 (Fri 16:14 ET)");
   });
 
-  it("gives way to a newer reading from the Curb or overnight (2026-11-17)", () => {
+  it("gives way to a newer reading only in the gap before the open (2026-11-18)", () => {
     // read at 16:50 New York on Friday, in the Curb, after the close the service stored
     const m = monitor("w-p", { last_value: -3.6, last_checked_at: "2026-11-14 05:50:00+08:00" });
-    const [p] = withLastKnown([priceRule], [m], "live-or-close");
+    // in the 09:25–09:30 gap the overnight's last price is the newer: it is said
+    const [p] = withLastKnown([priceRule], [m], "live-or-close", true);
     expect(lastPriceWords(p!.last_price!)).toBe("−3.60 (Fri 16:50 ET)");
-    // and a reading older than the close is not newer: the close stands
+    // at every other hour — an evening, a weekend — the close is what a trade is reviewed against
+    const [q] = withLastKnown([priceRule], [m], "live-or-close");
+    expect(lastPriceWords(q!.last_price!)).toBe("−3.85 (Fri 16:14 ET)");
+    // and in the gap a reading older than the close is not newer: the close stands
     const older = monitor("w-p", { last_value: -3.6, last_checked_at: "2026-11-13 22:24:00+08:00" });
-    expect(lastPriceWords(withLastKnown([priceRule], [older], "live-or-close")[0]!.last_price!)).toBe("−3.85 (Fri 16:14 ET)");
+    expect(lastPriceWords(withLastKnown([priceRule], [older], "live-or-close", true)[0]!.last_price!)).toBe("−3.85 (Fri 16:14 ET)");
   });
 
   it("changes nothing in the session", () => {
