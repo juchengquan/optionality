@@ -958,11 +958,11 @@ procedure is the skills'.
 - **Worktree setup:** `bun install --frozen-lockfile`; `uv sync --all-packages --locked -q`.
 - **Protected paths:** `~/_repository/optionality`, the live tree: Caddy serves its `frontend/dist`
   and the API runs its code. Only `make deploy` moves it; never build, pull or fast-forward there.
-- **Generated files:** `testdata/golden/`, `testdata/vendors/` (the field corpus and
-  `ibkr-gateway/expected/`) and the golden stamps (`typescript/src/golden.ts`,
-  `python/src/optionality/_ported.py`) via `make cases`;
-  `testdata/scenarios/` and `schema/api/` via `make scenarios`; `frontend/dist` via `make build-ui`,
-  and on a conflict `make resolve-ui`. Never by hand.
+- **Generated files:** `testdata/golden/`, the vendor field corpus (`testdata/vendors/*-fields.json`
+  and `testdata/vendors/ibkr-gateway/expected/`; the recordings beside them are inputs) and the
+  golden stamps (`typescript/src/golden.ts`, `python/src/optionality/_ported.py`) via `make cases`;
+  `testdata/scenarios/` and `schema/api/` via `make scenarios`; `frontend/dist` via
+  `make build-ui`, and on a conflict `make resolve-ui`. Never by hand.
 - **Must change together:** the TypeScript backend (`backend/`) and the Python backend
   (`python-backend/`); the library (`typescript/`) and its Python port (`python/`), held together
   by the golden cases; and the door scenarios both backends replay.
@@ -970,8 +970,8 @@ procedure is the skills'.
   (`backend/src/db/queries/samples.ts`, `watch-samples.ts` and their ports); the schema
   (`schema/`, every migration); the deploy tooling (the `Makefile`'s deploy, use and launchd rules,
   `deploy/`, `tools/use-backend.mjs`, `tools/deploy.test.mjs`).
-- **Hard rules** (pasted into every builder's and reviewer's brief; the orchestrating session itself
-  merges and deploys, but only on the owner's word):
+- **Hard rules** (they bind every builder and reviewer; the orchestrating session itself merges and
+  deploys, but only on the owner's word):
   > No requests to 127.0.0.1:31415 (at most GET, and prefer none); the live database only through
   > `sqlite3 -readonly`. Never `pgrep -f`/`pkill` — wait on your own jobs by PID or file. Never
   > `make deploy`, `make use` or `launchctl`. Never merge or push to main. Never echo `.env`.
