@@ -7,6 +7,9 @@ Date: 2026-11-18
 Accepted and built (#447). Decided by the owner on 2026-11-18, and amended the same day: the
 histories take a name. Both backends carry it, in lockstep (ADR 0021).
 
+Decision 5, "no tool prices an arbitrary contract", is **superseded by ADR 0027** (2026-11-19): the
+`price_spreads` tool prices any SPX structure through a bounded, capped call of its own.
+
 ## Context
 
 Agents — Claude Code and any other MCP client — should be able to read optionality's data, not only

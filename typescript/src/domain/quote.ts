@@ -61,6 +61,47 @@ export function midPrice(bid: unknown, ask: unknown): number | null {
   return (bid + ask) / 2;
 }
 
+/** One leg of a structure as a fill reads it: its contract, which way it is held (+1 long, -1
+ *  short, ADR 0013) and how many of it, absent being 1 (#351). */
+export interface FillLeg {
+  code: string;
+  sign: number;
+  qty?: number;
+}
+
+/** A structure's natural price: the worst it fills at, each way (#452, ADR 0027). */
+export interface NaturalPrice {
+  /** what CLOSING it gets: each long sold at its bid, each short bought back at its ask */
+  bid: number;
+  /** what OPENING it costs: each long bought at its ask, each short sold at its bid */
+  ask: number;
+}
+
+/** The natural bid and ask of a structure, or null where any leg has no two-sided quote (#452).
+ *
+ *  Signed as a combo's value is — a long leg's figure added, a short's subtracted, each as many
+ *  times as its quantity — so a credit spread's are negative, and `bid ≤ value ≤ ask` whenever every
+ *  leg has a mid: the mid is where a patient order might fill, these are where crossing the spread
+ *  does. A leg is two-sided by `midPrice`'s one rule, so a 0/0 out of hours is no price here either,
+ *  and one such leg leaves the whole structure without one — no partial fills, as no partial sums.
+ *  None for no legs: there is nothing to fill.
+ */
+export function naturalPrice(legs: FillLeg[], byCode: ByCode): NaturalPrice | null {
+  if (legs.length === 0) return null;
+  let bid = 0;
+  let ask = 0;
+  for (const leg of legs) {
+    const record = byCode[leg.code];
+    const [b, a] = [record?.bid_price, record?.ask_price];
+    if (midPrice(b, a) === null) return null;
+    const qty = leg.qty ?? 1;
+    // the side a long is sold at is its bid; a short is bought back at its ask — and the reverse to open
+    bid += leg.sign > 0 ? qty * (b as number) : -qty * (a as number);
+    ask += leg.sign > 0 ? qty * (a as number) : -qty * (b as number);
+  }
+  return { bid, ask };
+}
+
 /** Index a batch's records by code, with display-tz timestamps stamped on.
  *
  *  Copies rather than mutates: the records are SHARED — the sweeper caches its last batch and

@@ -115,6 +115,52 @@ def mid_price(bid: object, ask: object) -> float | None:
     return (b + a) / 2
 
 
+class FillLeg(BaseModel):
+    """One leg of a structure as a fill reads it: its contract, which way it is held (+1 long, -1 short,
+    ADR 0013) and how many of it, None being 1 (#351)."""
+
+    model_config = ConfigDict(frozen=True)
+    code: str
+    sign: float
+    qty: int | None = None
+
+
+class NaturalPrice(BaseModel):
+    """A structure's natural price: the worst it fills at, each way (#452, ADR 0027)."""
+
+    model_config = ConfigDict(frozen=True)
+    #: what CLOSING it gets: each long sold at its bid, each short bought back at its ask
+    bid: float
+    #: what OPENING it costs: each long bought at its ask, each short sold at its bid
+    ask: float
+
+
+def natural_price(legs: list[FillLeg], by_code: ByCode) -> NaturalPrice | None:
+    """The natural bid and ask of a structure, or None where any leg has no two-sided quote (#452).
+
+    Signed as a combo's value is — a long leg's figure added, a short's subtracted, each as many times
+    as its quantity — so `bid <= value <= ask` whenever every leg has a mid. A leg is two-sided by
+    `mid_price`'s one rule, and one leg without a side leaves the structure without a price: no partial
+    fills. None for no legs. Mirrors `quote.ts`' `naturalPrice`, summed in the same order.
+    """
+    if not legs:
+        return None
+    bid = 0.0
+    ask = 0.0
+    for leg in legs:
+        record = by_code.get(leg.code) or {}
+        b, a = record.get("bid_price"), record.get("ask_price")
+        if mid_price(b, a) is None:
+            return None
+        # two-sided by `mid_price`, so both are finite numbers here
+        fb, fa = float(b), float(a)  # type: ignore[arg-type]
+        qty = 1 if leg.qty is None else leg.qty
+        # the side a long is sold at is its bid; a short is bought back at its ask — the reverse to open
+        bid += qty * fb if leg.sign > 0 else -qty * fa
+        ask += qty * fa if leg.sign > 0 else -qty * fb
+    return NaturalPrice(bid=bid, ask=ask)
+
+
 def _finite(value: object) -> float | None:
     """A figure from the wire, or None for anything that is not a finite number.
 
