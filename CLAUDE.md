@@ -846,9 +846,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
 
 ## Workflow & environment
 
-- Branch → PR → merged only on the owner's word: the owner says "merge #N", and only the session
-  orchestrating the build merges, the commit it reported ready (see **Building issues**). Builders
-  and reviewers never merge, and nothing is pushed to main directly. `make deploy` lands it.
+- Branch → PR → the owner merges it, or says "merge #N" and the session orchestrating the build
+  merges the commit it reported ready (see **Building issues**). No other agent merges, and nothing
+  is pushed to main directly. `make deploy` lands it.
 - `.env` is gitignored and holds live Telegram credentials — never commit it or echo its secrets into
   committed files. It is mode 600 (`chmod 600 .env`; set on the live machine on 2026-11-16): it
   holds the bot token, the websocket key and the moomoo account in clear. `data/optionality-ts.db` is live state (watchlist, holdings, their daily samples — the samples
