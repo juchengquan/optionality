@@ -1,6 +1,7 @@
 # CLAUDE.md
 
-SPX options monitoring service: a JSON API, an alarm engine, a Telegram bot and a React dashboard.
+SPX options monitoring service: a JSON API, an alarm engine, a Telegram bot, a React dashboard and
+a read-only MCP server for agents (ADR 0026).
 **Two launchd agents** serve it, and a third watches what it depends on, on the owner's
 always-on machine, behind one tailnet hostname (ADR 0006):
 the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving `frontend/dist`, `/opt`).
@@ -195,7 +196,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   runs it too, because `/health` carries the golden fingerprint); **`make check-scenarios`** fails
   on a stale, missing or orphaned file. Never edit them by hand. `test-api` replays every file
   (`replay.test.ts`) and holds each door's coverage (`coverage.test.ts`): every status of every
-  endpoint in `/openapi.json`, every command in the bot's published "/" menu, and every outcome in
+  endpoint in `/openapi.json`, every tool the MCP door lists (its scenarios are HTTP ones,
+  `POST /mcp`, exempt from the description they are not in), every command in the bot's published
+  "/" menu, and every outcome in
   `outcomes.ts` — whose own list is held to the decisions the engine imports and the
   `disabled_reason`s it writes. Ids and the clock are INJECTED (`Deps.newId`, `BotDeps.newId`), not
   scrubbed. `testdata/scenarios/README.md` is the format, for a runner in another language.
@@ -307,7 +310,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   ADR 0020's word for the service's own logic beside its entrypoints, which predates the
   `typescript/` library and means `backend/src/` minus delivery),
   **`entrypoints/`** (every way the outside world reaches the service, each behind its own door:
-  `entrypoints/http/` and `entrypoints/bot/`. `make check-seams` holds the direction — the library
+  `entrypoints/http/`, `entrypoints/bot/` and `entrypoints/mcp/`. `make check-seams` holds the direction — the library
   depends on neither, and `importableBy` names `main.ts` and the test harness as the only callers,
   so no service can reach a surface and no request can reach another surface's routes. A test also
   refuses a NEW surface that arrives with no door declared, which is the one thing a per-surface
@@ -325,7 +328,29 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   the seams `check-seams` holds, and `http/index.ts` says so:
   unlike `vendors/` and `engine/` it closes no measured failure. `ports.ts` is NOT in it —
   `bot/bot.ts`, `engine/health.ts` and `vendors/index.ts` all import it, so it is the service's
-  interface vocabulary rather than the HTTP layer's), **`engine/`** (the alarm engine behind ONE DOOR, `engine/index.ts`: `sweeper.ts` (the sweep),
+  interface vocabulary rather than the HTTP layer's.
+  **`entrypoints/mcp/`** (ADR 0026, #447) is the MCP server agents read the book through, behind
+  `mcp/index.ts`: MCP's Streamable HTTP, STATELESS, one JSON-RPC message per POST, written by hand
+  in both languages (`server.ts`: `initialize`, `ping`, `tools/list`, `tools/call`; no session, no
+  stream — `GET /mcp` is 405; an `Origin` is refused 403) rather than with either official SDK,
+  because the door scenarios compare the two backends' words exactly. Mounted at `/mcp` on the
+  HTTP server by `main.ts`, which hands `createApp(deps, { mcp })` the factory and gets back a
+  `Read` — a GET of the app's OWN, the caller's Authorization passed on. That is the door's whole
+  reach: no service, query or engine is imported (`server.test.ts` holds its imports), so a tool
+  cannot write, cannot compute a figure, and its answer's `data` IS the GET's body. Eight tools
+  (`tools.ts`), each one GET: `holdings` (`/positions/values`), `watchlist` (`/quotes`),
+  `positions` (`/positions`, closed trades included), `holding_history`, `monitor_history`,
+  `monitor_closes`, `references`, `health`; an answer is `{source, read_at, data}` written with
+  sorted keys and JavaScript's numbers, so both backends write the same TEXT. The three live ones
+  share one read per path for `LIVE_FOR_MS` (5s) across every caller, a read in flight joined, a
+  refusal shared too — the page and the sweep never pass through it. The table — names,
+  descriptions, input schemas, which are live — is shared ground, `schema/mcp/server.json`. Behind
+  the token like every route; not in `/openapi.json` (one JSON-RPC endpoint), so `hc.types.ts`
+  is untouched. **Connect**: the tailnet already maps `/opt/api` to the API with the prefix
+  stripped, so it is `https://<tailnet-host>/opt/api/mcp` with NO change
+  to the Tailscale serve table or `~/recovery.sh`:
+  `claude mcp add --transport http optionality https://<tailnet-host>/opt/api/mcp`
+  (add `--header "Authorization: Bearer <API_TOKEN>"` once a token is set)), **`engine/`** (the alarm engine behind ONE DOOR, `engine/index.ts`: `sweeper.ts` (the sweep),
   `health.ts` (its account of itself — the WHOLE of `ports.ts`'s `SweeperPort`) and `scheduler.ts`
   (the sweep loop and its watchdog — NOT dead code: it is what drives the alarms). `main.ts` is the
   only thing outside that needs any of them, and `make check-seams` holds it there, so a route or a
@@ -417,7 +442,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   file (ADR 0021). Shared ground, declared beside `testdata/` in `check-boundaries`, and moved out
   of `backend/src/db/` for exactly that reason: from there the Python could have read it only by
   reaching into another package's source. Beside them, `api/`: the HTTP door's description of
-  itself, which the TypeScript generates and the Python serves (see **Door scenarios**).
+  itself, which the TypeScript generates and the Python serves (see **Door scenarios**); and
+  `mcp/server.json`, the MCP door's tool table, hand-written and read by both backends (ADR 0026).
 - `tools/guards.test.mjs` — every tree-walking guard skips the same directories. `SKIP_DIRS` is
   copied in every guard its `GUARDS` names, each with its own `walk`, which is why `.claude` was
   missing from all five at once on 2026-11-10: `.claude/worktrees/<agent>` is a checkout of this
@@ -604,7 +630,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   to a spread, #334). Widened from "every call to the Provider" by ADR
   0019, whose Provider-only wording is deprecated: a Reference may name a vendor the rest of the
   service does not use, and left Provider-specific the rule would have permitted an UNBOUNDED
-  call to one — a loophole that change itself created. The payoff at expiry (`GET /positions/{id}/payoff`,
+  call to one — a loophole that change itself created. **The MCP door adds no call** (ADR 0026):
+  its live tools ARE `/quotes`, `/positions/values` and `/references`, read through the app itself
+  behind a 5-second cache shared by every agent, so however many agents loop, each of the three
+  is made at most once per 5s on their behalf; no tool prices a contract the service does not
+  already watch. The payoff at expiry (`GET /positions/{id}/payoff`,
   `POST /positions/payoff`, #291) is not on that list because it asks for NO market data: legs,
   an Entry and a count, and its door scenarios run with the Provider down. Nor are a holding's daily
   samples (`GET /positions/{id}/samples`, #295): stored history, read once when a holding's history

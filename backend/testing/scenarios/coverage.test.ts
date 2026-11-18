@@ -37,6 +37,11 @@ function endpointOf(path: string, templates: string[]): string | undefined {
  *  test below holds each to one, so naming a route here is no way round the guard. */
 const DESCRIPTION = ["GET /openapi.json", "GET /docs"];
 
+/** The MCP door's one endpoint (ADR 0026): JSON-RPC, which the description cannot list. Its
+ *  scenarios are held to the tools the door LISTS instead — its own account of itself, as the bot's
+ *  "/" menu is the bot's — by the MCP coverage below. */
+const MCP = "/mcp";
+
 /** The command a message names, the way the bot reads it: `/Watch@thebot` is `watch`. */
 function commandOf(text: string): string | undefined {
   const first = text.trim().split(/\s+/)[0] ?? "";
@@ -77,6 +82,7 @@ describe("the HTTP door's coverage", () => {
     const templates = [...new Set(answers.map((a) => a.path))];
     const astray = all<HttpScenario>("http")
       .filter(({ scenario: { request: r } }) => !DESCRIPTION.includes(`${r.method} ${r.path}`))
+      .filter(({ scenario: { request: r } }) => r.path !== MCP)
       .filter(({ scenario }) => {
         const path = endpointOf(scenario.request.path, templates);
         return path === undefined
@@ -105,6 +111,29 @@ describe("the HTTP door's coverage", () => {
     expect(endpointOf("/positions/pos-1", templates)).toBe("/positions/{id}");
     expect(endpointOf("/positions/pos-1/vol", templates)).toBe("/positions/{id}/vol");
     expect(endpointOf("/positions/pos-1/other", templates)).toBeUndefined();
+  });
+});
+
+describe("the MCP door's coverage", () => {
+  const mcp = () => all<HttpScenario>("http").map((s) => s.scenario).filter((s) => s.request.path === MCP);
+  const asked = (s: HttpScenario) => s.request.body as { method?: string; params?: { name?: string } } | null;
+
+  it("has a scenario reading every tool the door lists, and one for each method it answers", async () => {
+    const answer = await runHttp({
+      world: world(), request: request("POST", MCP, { jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    const listed = ((answer.response.body as { result: { tools: { name: string }[] } }).result.tools)
+      .map((t) => t.name);
+    expect(listed.length, "the MCP door lists no tools").toBeGreaterThanOrEqual(8);
+    const read = new Set(mcp().filter((s) => asked(s)?.method === "tools/call"
+      && !(s.expect.response.body as { result?: { isError?: boolean } }).result?.isError)
+      .map((s) => asked(s)?.params?.name));
+    expect(listed.filter((name) => !read.has(name)), "write a scenario reading each in inputs/http.ts")
+      .toEqual([]);
+    const methods = new Set(mcp().map((s) => asked(s)?.method));
+    for (const method of ["initialize", "ping", "tools/list", "tools/call"]) {
+      expect(methods.has(method), `no scenario sends ${method}`).toBe(true);
+    }
   });
 });
 

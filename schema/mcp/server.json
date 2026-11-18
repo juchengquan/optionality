@@ -1,0 +1,89 @@
+{
+  "server": {
+    "name": "optionality",
+    "title": "optionality — an SPX options book, read-only",
+    "version": "1",
+    "instructions": "Read-only access to one trader's SPX options book: what is held, the rules (Monitors) that watch it, their histories, the Reference securities on the page and the service's own health. Nothing here adds, edits, mutes, deletes, records or closes anything, and no tool prices a contract the service does not already watch. Every successful tool answers one JSON object: `source`, the API's own GET it served; `read_at`, when the service read it, in the service's display zone; and `data`, that GET's body exactly as the HTTP API serves it (keys sorted). The three LIVE tools (holdings, watchlist, references) ask the market-data Provider, which allows 60 calls per 30 seconds shared with the alarm sweep and the dashboard: their answers are shared by every caller for 5 seconds, so asking again sooner returns the same answer with the same `read_at` — there is no point polling faster. Prices are in index points per contract unless a field says money; P&L is money. A failed read is a tool error carrying the service's own words.",
+    "protocol_versions": ["2025-11-25", "2025-06-18"]
+  },
+  "tools": [
+    {
+      "name": "holdings",
+      "title": "The book: every open holding, valued",
+      "path": "/positions/values",
+      "live": true,
+      "description": "Every OPEN holding (a Position: options actually held) valued — what it would cost to close, its P&L and where it stands against its exit schedule. GET /positions/values. Live in New York's regular session (09:30–16:15 ET), and in the Curb and overnight session where every leg is quoted; otherwise from the holding's latest stored close. LIVE: shared by every caller for 5 seconds. Each holding: `id`, `name`, `strategy`, `strike_date` (the expiry), `contracts` (how many of the whole structure), `legs` (each `side` long|short, `option_type` CALL|PUT, `strike`, optional `qty`, absent meaning 1), `entry` (points per contract taken in to open it), `opened_at` (the day it was put on), `cost_to_close` (points per contract to close it now; positive for a credit structure), `pnl` (MONEY: (entry − cost_to_close) × contracts × contract_size), `captured` (the fraction of a credit's entry kept so far, 1 is all of it; null for a debit), `contract_size`, `greeks` (the holding's signed exposure, summed over its legs: option_delta, option_gamma, option_theta, option_vega), `legs_delta` (each leg's own delta by contract code), `spx` (SPX's level as implied by this batch's own option premiums — never a Reference's figure) and `spx_reason` (why it is null, or why it is not current), `short_strikes` (each short leg against `spx`: `points` and `sigma` still to go before SPX reaches the strike, positive while it has not, negative by how far past, `one_sigma` in points, the leg's `delta`), `dte` (days to expiry, today's), `schedule` (null without a recorded open day: `dte_at_open`, `on_pace` — the cost to close if only time had passed, `pace_gap` — cost_to_close − on_pace, positive is BEHIND pace, `target` and `stop` — the Levels as costs to close, `reached` target|stop|null, `target_dte`, `manage_by_dte` and `manage_by_due` — the day it is to be dealt with whatever its P&L), `valued_from` live|close, `valued_on` and `valued_timing` (which stored row a close valuation is from, and whether it really was the day's close), `valued_reason` (why the figures are not live), `fetched_at` (when the figures were read). A holding whose stored row cannot be read is listed with `unreadable` saying why and no figures.",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "watchlist",
+      "title": "Every rule, with its figure and distance now",
+      "path": "/quotes",
+      "live": true,
+      "description": "Every rule (a Monitor: a threshold on one figure of one contract, or of a signed combo of contracts) with its live figure, how far it is from firing and whether it is breached now. GET /quotes. LIVE: shared by every caller for 5 seconds. Each row: `id`, `code` (the contract's code, or the combo's name), `strike_date`, `option_type` CALL|PUT|CMB (a combo), `legs` (a combo's: `sign` +1 long / −1 short, `option_type`, `strike`, optional `qty`), `field` (the figure watched: mid_price, option_delta, option_gamma, option_theta, option_vega, option_implied_volatility), `threshold`, `direction` above|below, `compare` abs|signed (abs compares the figure's magnitude), `watched` (the figure now, raw and signed), `distance` (how far `watched` still has to move to breach, in its own units: at or below zero exactly when `triggered`, negative by how far past), `triggered` (breached by these same figures — the dashboard's bell; the Telegram alarm state is the sweep's own and may lead or lag), `fill` (0–100, how far the figure has travelled toward its threshold; null where there is no honest baseline), `quote` (a single contract's live quote: bid_price, ask_price, mid_price, last_price, option_delta/gamma/theta/vega, option_implied_volatility in percent, option_contract_size, update_time — the last trade, not freshness — and fetched_at), `combo_value` and `combo_greeks` (a combo's signed sums; null where any leg is missing), `error` (why a row has no figures), `dte`, `scope` and `positions` (the holdings the rule is linked to), `held` (whether any contract it watches is a leg of an open holding), `in_combos` (combos whose legs include this contract), `cost_to_close`, `entry`, `pnl` (MONEY) and `schedule` (as in holdings, for a rule linked to one holding), `spx` and `spx_reason` (as in holdings), `short_strikes` (a combo's short legs against `spx`).",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "positions",
+      "title": "Every position recorded, open and closed",
+      "path": "/positions",
+      "live": false,
+      "description": "Every Position recorded — open AND closed — as stored, asking no Provider. GET /positions. A CLOSED trade is one whose `closed_on` is set: the New York market day it was closed, with `exit` (the cost to close actually got, points per contract, signed like cost_to_close: a credit bought back is positive, a long sold is negative) and `realized_points` (entry − exit across the contracts, in POINTS — not money: a closed trade has no quote to give a contract size). Each: `id`, `name`, `strategy`, `strike_date`, `contracts`, `entry`, `legs` (`side` long|short, `option_type`, `strike`, optional `qty`), `created_at` (when it was recorded here), `opened_at` (the day it was put on), `closed_on`, `exit`, `realized_points`, and `unreadable` (why a stored row cannot be read, else null). Its id reads its history with holding_history.",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "holding_history",
+      "title": "A holding's daily history",
+      "path": "/positions/{id}/samples",
+      "live": false,
+      "description": "One holding's recorded daily history, open or closed, from stored rows: GET /positions/{id}/samples, asking no Provider. `samples`, oldest first, one per New York calendar day: `observed_on` (the market day), `observed_at` (when it was read, display zone), `timing` close|before-open|after-close|unrecorded (only `close` is the day's close), `dte`, `cost_to_close` (points per contract; null where no regular-session price was read that day), `on_pace` (the cost to close if only time had passed; null without a schedule), `legs_iv`, `legs_vega`, `legs_delta` (each leg's reading by contract code; IV in percent), `spx` (as implied by that sweep's premiums), `before_correction` (summed before a leg's quantity was corrected). `levels` (`dte_at_open`, `target`, `stop`, `target_dte`, `manage_by_dte`; null without a recorded open day), `plan` (on_pace at every DTE from the open to 0), `before_entry` (days its contracts were watched before it was entered, valued the same way), `entry_close` (the entry day's watched close where its own row has no price), `qty_corrected_at`. The id is a holding's `id` from holdings or positions; an unknown one is a tool error.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$", "description": "the holding's id, as holdings or positions gives it" }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "monitor_history",
+      "title": "A rule's daily history",
+      "path": "/monitors/{id}/samples",
+      "live": false,
+      "description": "One rule's daily history: the stored days of the contracts it watches, valued as the rule values them, from stored rows: GET /monitors/{id}/samples, asking no Provider. `contracts` (the codes the history is kept for, sorted — every rule on exactly these shares it), `price_rule` (the price rule its value is drawn against: `id`, `threshold`, `direction`, `compare`; null where there is none), `samples`, oldest first: `observed_on`, `observed_at`, `timing` close|before-open|after-close|unrecorded, `dte`, `price` (the rule's price that day under its own signs and quantities, points; null where a contract had no two-sided regular-session quote), `legs_iv`, `legs_vega`, `legs_delta`, `spx`. The id is a row's `id` from watchlist; an unknown one is a tool error, and so is a rule whose stored row cannot be read.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$", "description": "the rule's id, as watchlist gives it" }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "monitor_closes",
+      "title": "Each rule's last close",
+      "path": "/monitors/closes",
+      "live": false,
+      "description": "Each rule's PRICE at its latest close, from stored history, asking no Provider: GET /monitors/closes — what the dashboard shows for a rule out of the session or while live quotes fail. Each: `id` (the rule's), `last_close` (null where no day had a price, for a rule that cannot be read, and for a rule on exactly an open holding's contracts — read those from holding_history): `price` (points, under the rule's own signs), `observed_on`, `observed_at`, `timing` close|before-open|after-close|weekend|unrecorded (only `close` is a regular session's close).",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "references",
+      "title": "The Reference securities on the page",
+      "path": "/references",
+      "live": true,
+      "description": "The securities kept on the page to read the market by (References: never alarmed on, nothing derived from them), each with its live figure: GET /references, one bounded call per source in use. LIVE: shared by every caller for 5 seconds. Each: `id`, `code`, `label` (e.g. how SPX is read through SPY ×10), `source` (the vendor asked), `name`, `figure`, `field` (mid_price or last_price: which number `figure` is), `change` (the day's move as a FRACTION of the previous close), `error` (why there is no figure), `delayed`, `last_known` and `delayed_by_minutes` (the vendor's own claims about freshness; null where it made none), `fetched_at` (when the call answered, display zone).",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "health",
+      "title": "The service's health",
+      "path": "/health",
+      "live": false,
+      "description": "The service's own account of itself: GET /health, asking the Provider nothing once a sweep has. `db` (the database answers), `provider` (`name` of the market-data Provider, `ok` — whether its last call answered), `golden_cases` (the fingerprint of the domain logic this build runs), `monitor` (the alarm sweep: `last_sweep_at`, `last_sweep_ok`, `consecutive_failures`, `alarms` — a `label` and whether it is `bad` — and `fetched_at`, its last batch), `settings` (`manage_by_dte`, `expired_retention_days`, `display_tz` — the zone every time here is in — and the sweep interval in force: `sweep_seconds`, `sweep_source` settings|env, `sweep_default_seconds`, `sweep_presets`, `sweep_refused`).",
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    }
+  ]
+}

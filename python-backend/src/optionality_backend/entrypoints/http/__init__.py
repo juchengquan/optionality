@@ -15,8 +15,8 @@ dashboard takes its types from the TypeScript, and the Python's routes are held 
 the HTTP door scenarios instead (`hc.types.ts` is TypeScript-only in `tools/check-module-map.mjs`).
 """
 
-from .app import create_app
+from .app import Surfaces, create_app
 from .deps import Deps
 from .listen import HeldPort, take_port
 
-__all__ = ["Deps", "HeldPort", "create_app", "take_port"]
+__all__ = ["Deps", "HeldPort", "Surfaces", "create_app", "take_port"]

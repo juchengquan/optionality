@@ -139,6 +139,8 @@ describe("the bearer token", () => {
       "DELETE /references/:id",
       "GET /docs",
       "GET /health",
+      // the MCP door (ADR 0026): a POST per message, and the GET that says it offers no stream
+      "GET /mcp",
       "GET /monitors",
       "GET /monitors/:id/samples",
       "GET /monitors/closes",
@@ -154,6 +156,7 @@ describe("the bearer token", () => {
       "PATCH /positions/:id",
       // the sweep's interval, the one knob kept in the database (#442, ADR 0025)
       "PATCH /settings",
+      "POST /mcp",
       "POST /monitors",
       "POST /monitors/:id/total-entry",
       "POST /positions",
@@ -188,7 +191,7 @@ describe("the bearer token", () => {
         return [`${r.method} ${path}`, { method: r.method, path }] as const;
       })).entries()];
     // the real number of doors, which the route list above enumerates one by one
-    expect(doors.length).toBe(23);
+    expect(doors.length).toBe(25);
     for (const [door, { method, path }] of doors) {
       expect((await h.call(path, { anonymous: true, method })).status, door).toBe(401);
     }

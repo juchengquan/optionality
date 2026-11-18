@@ -48,7 +48,8 @@ from optionality.quotes import QuoteFetcher as LibraryFetcher
 
 from optionality_backend.engine import MonitorSweeper, SweeperDeps
 from optionality_backend.entrypoints.bot.bot import BotDeps, TelegramApi, TelegramBot
-from optionality_backend.entrypoints.http import Deps, create_app
+from optionality_backend.entrypoints.http import Deps, Surfaces, create_app
+from optionality_backend.entrypoints.mcp import McpOptions, mcp_server
 from optionality_backend.env import settings_from_env
 from optionality_backend.ports import QuoteFetcher
 
@@ -151,9 +152,12 @@ class _Backend:
             provider=provider,
             sources=fetchers,
         )
-        self._client = httpx2.AsyncClient(
-            transport=httpx2.ASGITransport(app=create_app(deps)), base_url="http://scenario"
+        # the MCP door mounted as `__main__` mounts it (ADR 0026), so `/mcp` is a request like any other
+        app = create_app(
+            deps,
+            Surfaces(mcp=lambda read: mcp_server(McpOptions(read=read, now=deps.now, display_tz=settings.display_tz))),
         )
+        self._client = httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://scenario")
         # as `runBot` builds it: the Provider, the sweeper's own health, the world's clock and ids
         self._bot = TelegramBot(
             BotDeps(

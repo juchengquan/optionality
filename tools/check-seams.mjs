@@ -158,7 +158,9 @@ export const SEAMS = [
   },
   {
     dir: "backend/src/entrypoints",
-    doors: ["http/index.ts", "bot/bot.ts"],
+    // the MCP door (ADR 0026) is the third surface: `main.ts` hands `createApp` its handler, so it
+    // is mounted on the HTTP server without either surface importing the other
+    doors: ["http/index.ts", "bot/bot.ts", "mcp/index.ts"],
     /** Who may use a door AT ALL (ADR 0020).
      *
      *  The rule here is not WHICH file is importable but which direction the dependency may run:

@@ -1,0 +1,102 @@
+{
+  "name": "POST /mcp reads the References",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPY": {
+          "name": "SPDR S&P 500 ETF",
+          "mid_price": 689.45,
+          "last_price": 689.4,
+          "prev_close_price": 685.2
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [
+        {
+          "id": "ref-1",
+          "code": "US.SPY",
+          "label": "SPX via SPY",
+          "source": "moomoo",
+          "created_at": "2026-11-02 14:30:00.000000"
+        },
+        {
+          "id": "ref-2",
+          "code": "^VIX",
+          "label": null,
+          "source": "yahoo",
+          "created_at": "2026-11-02 14:31:00.000000"
+        },
+        {
+          "id": "ref-3",
+          "code": "VIX",
+          "label": null,
+          "source": "ibkr",
+          "created_at": "2026-11-02 14:32:00.000000"
+        }
+      ],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "references"
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"data\":[{\"change\":0.0062025685931114995,\"code\":\"US.SPY\",\"delayed\":null,\"delayed_by_minutes\":null,\"error\":null,\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"field\":\"mid_price\",\"figure\":689.45,\"id\":\"ref-1\",\"label\":\"SPX via SPY\",\"last_known\":null,\"name\":\"SPDR S&P 500 ETF\",\"source\":\"moomoo\"},{\"change\":null,\"code\":\"^VIX\",\"delayed\":null,\"delayed_by_minutes\":null,\"error\":\"no yahoo client in this build\",\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"field\":null,\"figure\":null,\"id\":\"ref-2\",\"label\":null,\"last_known\":null,\"name\":null,\"source\":\"yahoo\"},{\"change\":null,\"code\":\"VIX\",\"delayed\":null,\"delayed_by_minutes\":null,\"error\":\"no ibkr client in this build\",\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"field\":null,\"figure\":null,\"id\":\"ref-3\",\"label\":null,\"last_known\":null,\"name\":null,\"source\":\"ibkr\"}],\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /references\"}"
+            }
+          ]
+        }
+      }
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPY"
+        ]
+      ]
+    }
+  }
+}

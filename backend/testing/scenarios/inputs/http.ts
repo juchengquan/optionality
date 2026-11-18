@@ -266,6 +266,13 @@ const references = {
   ],
 };
 
+/** One JSON-RPC request to the MCP door, as a client sends it (ADR 0026). */
+const rpc = (method: string, params?: unknown) =>
+  ({ jsonrpc: "2.0", id: 1, method, ...(params === undefined ? {} : { params }) });
+/** One `tools/call`. */
+const tool = (name: string, args?: Record<string, unknown>) =>
+  rpc("tools/call", { name, ...(args === undefined ? {} : { arguments: args }) });
+
 export const HTTP: readonly HttpInput[] = [
   // --- /health ----------------------------------------------------------------------------
   {
@@ -2369,6 +2376,187 @@ export const HTTP: readonly HttpInput[] = [
     name: "DELETE /references/{id} on a Reference that does not exist",
     world: world({ tables: references }),
     request: request("DELETE", "/references/ref-9"),
+  },
+  // --- /mcp ----------------------------------------------------------------------------------
+  // The MCP door (ADR 0026, #447): one JSON-RPC message per POST, each tool a GET of the API's
+  // own. Its answers are compared as TEXT, word for word, so these hold the Python to the same
+  // bytes — keys sorted, numbers as JavaScript writes them. Not in `/openapi.json`, which cannot
+  // describe JSON-RPC; `coverage.test.ts` holds these to the tools the door LISTS instead.
+  {
+    name: "POST /mcp initializes at the version the client asks for",
+    world: world(),
+    request: request("POST", "/mcp", rpc("initialize", {
+      protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "claude-code", version: "2" },
+    })),
+  },
+  {
+    name: "POST /mcp answers its newest version to one it does not speak",
+    world: world(),
+    request: request("POST", "/mcp", rpc("initialize", { protocolVersion: "2099-01-01" })),
+  },
+  {
+    name: "POST /mcp lists every tool, each a read",
+    world: world(),
+    request: request("POST", "/mcp", rpc("tools/list")),
+  },
+  {
+    name: "POST /mcp accepts a notification with no answer",
+    world: world(),
+    request: request("POST", "/mcp", { jsonrpc: "2.0", method: "notifications/initialized" }),
+  },
+  {
+    // 2025-03-26 allowed batches and 2024-11-05 is the old HTTP+SSE transport: neither is spoken
+    name: "POST /mcp answers its newest version to one whose transport it does not follow",
+    world: world(),
+    request: request("POST", "/mcp", rpc("initialize", { protocolVersion: "2025-03-26" })),
+  },
+  {
+    // the transport's rule after initialization: an unsupported version is a 400, with no id
+    name: "POST /mcp refuses a request carrying an MCP-Protocol-Version it does not speak",
+    world: world(),
+    request: {
+      ...request("POST", "/mcp", rpc("ping")),
+      headers: { Authorization: "Bearer tok", "MCP-Protocol-Version": "2024-11-05" },
+    },
+  },
+  {
+    name: "POST /mcp answers a request carrying a version it speaks",
+    world: world(),
+    request: {
+      ...request("POST", "/mcp", rpc("ping")),
+      headers: { Authorization: "Bearer tok", "MCP-Protocol-Version": "2025-06-18" },
+    },
+  },
+  {
+    name: "POST /mcp answers a ping",
+    world: world(),
+    request: request("POST", "/mcp", rpc("ping")),
+  },
+  {
+    name: "POST /mcp says a method it does not have is not found",
+    world: world(),
+    request: request("POST", "/mcp", rpc("resources/list")),
+  },
+  {
+    name: "POST /mcp refuses a message that is not JSON-RPC",
+    world: world(),
+    request: request("POST", "/mcp", { id: 1, method: "ping" }),
+  },
+  {
+    name: "POST /mcp wants the API's token",
+    world: world(),
+    request: request("POST", "/mcp", rpc("tools/list"), { anonymous: true }),
+  },
+  {
+    name: "GET /mcp offers no stream",
+    world: world(),
+    request: request("GET", "/mcp"),
+  },
+  {
+    name: "POST /mcp says a tool it does not have is unknown",
+    world: world(),
+    request: request("POST", "/mcp", rpc("tools/call", { name: "close_position", arguments: { id: "pos-1" } })),
+  },
+  {
+    // the live book, in session: one Provider call, its answer the route's own
+    name: "POST /mcp reads the holdings as GET /positions/values serves them",
+    world: world({ tables: held, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("holdings")),
+  },
+  {
+    name: "POST /mcp reads the watchlist as GET /quotes serves it",
+    world: world({ tables: held, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("watchlist")),
+  },
+  {
+    // a Provider that is down is a tool error in the service's own words, not a protocol error
+    name: "POST /mcp says the watchlist cannot be read while the Provider is down",
+    world: world({ tables: held, provider: { down: DOWN } }),
+    request: request("POST", "/mcp", tool("watchlist")),
+  },
+  {
+    // closed trades are the recorded positions with a close day: asking no Provider
+    name: "POST /mcp reads every position recorded, the closed ones with what they made",
+    world: world({
+      tables: {
+        positions: [
+          position({ id: "pos-1" }),
+          position({ id: "pos-2", name: "nov-condor", entry: 5.5, closed_on: "2026-11-06", exit: 1.25 }),
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("POST", "/mcp", tool("positions")),
+  },
+  {
+    name: "POST /mcp reads a holding's history",
+    world: world({
+      tables: {
+        positions: [opened],
+        position_samples: [day("2026-11-06", 42, [14, 13.5, 19, 20]), day("2026-11-07", 41, [14.5, 14, 19.5, 20.5])],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("POST", "/mcp", tool("holding_history", { id: "pos-1" })),
+  },
+  {
+    name: "POST /mcp says a holding that does not exist is not found",
+    world: world({ tables: held }),
+    request: request("POST", "/mcp", tool("holding_history", { id: "pos-9" })),
+  },
+  {
+    // refused before the API is asked anything: no path is built from it
+    name: "POST /mcp refuses an id that is not an id, asking nothing",
+    world: world({ tables: held, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("holding_history", { id: "../quotes" })),
+  },
+  {
+    name: "POST /mcp refuses an argument a tool does not take",
+    world: world({ tables: held, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("watchlist", { fresh: true })),
+  },
+  {
+    name: "POST /mcp reads a rule's history",
+    world: world({
+      tables: {
+        monitors: [combo({ id: "mon-2" })],
+        watch_samples: [
+          watchDay([C7300, C7350], {
+            observed_on: "2026-11-05", dte: 43, observed_at: "2026-11-05 21:14:00.000000", spx: 6812.5,
+            legs_mid: { [C7300]: 3, [C7350]: 2 }, legs_iv: { [C7300]: 14.5, [C7350]: 14.25 },
+            legs_delta: { [C7300]: 0.22, [C7350]: 0.16 }, contract_size: 100,
+          }),
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("POST", "/mcp", tool("monitor_history", { id: "mon-2" })),
+  },
+  {
+    name: "POST /mcp reads each rule's last close",
+    world: world({
+      tables: {
+        monitors: [combo({ id: "mon-2" })],
+        watch_samples: [
+          watchDay([C7300, C7350], {
+            observed_on: "2026-11-06", dte: 42, observed_at: "2026-11-06 21:14:00.000000",
+            legs_mid: { [C7300]: 3.1, [C7350]: 2.05 },
+          }),
+        ],
+      },
+      provider: { down: DOWN },
+    }),
+    request: request("POST", "/mcp", tool("monitor_closes")),
+  },
+  {
+    name: "POST /mcp reads the References",
+    world: world({ tables: references, provider: { quotes: { "US.SPY": SPY } } }),
+    request: request("POST", "/mcp", tool("references")),
+  },
+  {
+    name: "POST /mcp reads the service's health",
+    world: world({ tables: { sweep_interval: [chosenInterval(5)] }, sweeps: [{ at: at(-10), down: null }] }),
+    request: request("POST", "/mcp", tool("health")),
   },
   // --- /openapi.json and /docs --------------------------------------------------------------
   // The service's description of itself, held word for word (decided 2026-11-10): the Python

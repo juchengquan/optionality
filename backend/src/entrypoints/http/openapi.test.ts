@@ -75,7 +75,9 @@ describe("/openapi.json and /docs", () => {
     start();
     const s = await spec(h);
     const served = h.app.routes
-      .filter((r) => r.method !== "ALL" && !["/openapi.json", "/docs"].includes(r.path))
+      // `/mcp` is the MCP door's one JSON-RPC endpoint (ADR 0026), which no OpenAPI operation can
+      // describe: its tools describe themselves in `tools/list`, from `schema/mcp/server.json`
+      .filter((r) => r.method !== "ALL" && !["/openapi.json", "/docs", "/mcp"].includes(r.path))
       .map((r) => `${r.method} ${r.path.replace(/:(\w+)/g, "{$1}")}`);
     const missing: string[] = [];
     for (const route of new Set(served)) {

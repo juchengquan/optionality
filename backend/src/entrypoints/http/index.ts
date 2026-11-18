@@ -25,6 +25,6 @@
  *  all — `tsc` reads it and that is the point of it (see `hc.types.test.ts`, which holds it to
  *  every endpoint).
  */
-export { createApp, type AppType } from "./app.ts";
+export { createApp, type AppType, type Surfaces } from "./app.ts";
 export type { Deps } from "./deps.ts";
 export { type HeldPort, takePort } from "./listen.ts";
