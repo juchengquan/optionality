@@ -975,7 +975,6 @@ procedure is the skills'.
   > No requests to 127.0.0.1:31415 (at most GET, and prefer none); the live database only through
   > `sqlite3 -readonly`. Never `pgrep -f`/`pkill` — wait on your own jobs by PID or file. Never
   > `make deploy`, `make use` or `launchctl`. Never merge or push to main. Never echo `.env`.
-- **Branch prefixes:** `feat`, `fix`, `refactor`, `docs`, `chore`.
 - **Review extras:** when the PR adds a migration, run it on an online backup of the live database
   (`node backend/tools/backup/backup.ts <live db> <scratch copy>`, never `cp`; the one exception to
   reading the live database only through `sqlite3 -readonly`) in BOTH backends, and compare every
