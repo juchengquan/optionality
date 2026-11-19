@@ -20,7 +20,6 @@ from urllib.parse import quote
 import pytest
 from harness import json_body, priced_fetcher
 from optionality.monitor import WATCHABLE_FIELDS
-from optionality.opend import RECORD_FIELDS
 
 from optionality_backend.entrypoints.mcp.tools import (
     DESCRIBED,
@@ -829,8 +828,11 @@ class TestFiguresAreRoundedByKeyPerTool:
             assert table[field] in (2, 4, 6, None), field
 
     def test_round_a_quote_s_figure_as_a_rule_watching_that_field_is_rounded_and_every_figure_of_moomoo_s_record(self):
-        # the watchlist's `quote` is moomoo's whole record (review of #455, the owner's decision 1)
-        numbers = [f for f in RECORD_FIELDS if f in WATCHABLE_FIELDS]
+        # the watchlist's `quote` is moomoo's whole record (review of #455, the owner's decision 1). Its
+        # fields read from the vendor corpus, which records `RECORD_FIELDS`: `optionality.opend` is a
+        # client, behind the vendors' door (test_seams.py)
+        corpus = json.loads((_REPO / "testdata" / "vendors" / "opend-fields.json").read_text("utf-8"))
+        numbers = [f for f in corpus["constants"]["RECORD_FIELDS"] if f in WATCHABLE_FIELDS]
         assert len(numbers) > 25
         by_field = DESCRIBED["rounding"]["by_field"]
         watchlist = _table("watchlist")["keys"]
