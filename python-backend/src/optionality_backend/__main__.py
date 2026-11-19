@@ -88,6 +88,7 @@ from .entrypoints.bot.bot import BotDeps, TelegramBot
 from .entrypoints.http import Deps, Surfaces, create_app, take_port
 from .entrypoints.mcp import McpOptions, mcp_server
 from .env import load_env_file, settings_from_env
+from .notify import delivery
 from .sweep_interval import sweep_interval
 from .telegram import telegram_api, telegram_sender
 from .vendors import open_vendors
@@ -241,11 +242,24 @@ async def _run() -> NoReturn:
 
     # 127.0.0.1 (take_port's default): reachable only via the tailscale serve proxy and localhost,
     # never the LAN. Requests stop being answered 503 from here.
-    # `/mcp` beside the routes (ADR 0026): the MCP door, handed a GET of the app's own and nothing else
+    # `/mcp` beside the routes (ADR 0026): the MCP door, handed a GET of the app's own, a write it holds to
+    # two routes and makes none of unless MCP_WRITES is on (ADR 0028), and the owner's Telegram
     held.serve(
         create_app(
             deps,
-            Surfaces(mcp=lambda read: mcp_server(McpOptions(read=read, now=deps.now, display_tz=settings.display_tz))),
+            Surfaces(
+                mcp=lambda read, write: mcp_server(
+                    McpOptions(
+                        read=read,
+                        write=write,
+                        notify=delivery(settings, send),
+                        now=deps.now,
+                        display_tz=settings.display_tz,
+                        writes=settings.mcp_writes,
+                        writes_per_10_min=settings.mcp_writes_per_10_min,
+                    )
+                )
+            ),
         )
     )
 

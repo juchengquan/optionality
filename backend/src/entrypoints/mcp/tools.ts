@@ -46,8 +46,12 @@ export interface Tool {
   name: string;
   title: string;
   description: string;
-  /** the API path it GETs, with `{id}` where its one argument goes */
+  /** a WRITE tool's method (ADR 0028); absent, the tool is a GET */
+  method?: "POST" | "PATCH";
+  /** the API path it GETs (or writes), with `{id}` where its one argument goes */
   path: string;
+  /** what a client may tell its user before calling it (ADR 0028), listed as they are */
+  annotations: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean; openWorldHint: boolean };
   /** whether it asks the Provider, and so is shared for `LIVE_FOR_MS` — unless `cached_by` says
    *  its route shares it already */
   live: boolean;
@@ -75,7 +79,11 @@ export interface Rounding {
 }
 
 export interface Described {
-  server: { name: string; title: string; version: string; instructions: string; protocol_versions: string[] };
+  server: {
+    name: string; title: string; version: string; instructions: string; protocol_versions: string[];
+    /** what the instructions add, by whether an agent's writes are on (ADR 0028); `{cap}` is the cap */
+    writes_on: string; writes_off: string;
+  };
   /** the places of a rule's figure, by the field it watches (#454): every watchable field, null where
    *  it is a count, a strike or a size and never rounded */
   rounding: { by_field: Record<string, number | null> };
@@ -154,7 +162,7 @@ export function byKey(data: unknown, rounding: Rounding, figure: (value: number,
 export const rounded = (data: unknown, rounding: Rounding): unknown =>
   byKey(data, rounding, (value, places) => places === null ? value : roundTo(value, places));
 
-const failed = (text: string): ToolResult => ({ content: [{ type: "text", text }], isError: true });
+export const failed = (text: string): ToolResult => ({ content: [{ type: "text", text }], isError: true });
 
 /** Why these arguments are not this tool's, in words an agent can correct itself from, or null. */
 export function argumentFault(tool: Tool, args: unknown): string | null {
@@ -189,11 +197,11 @@ type Checked<T> = T | { fault: string };
 const isFault = <T>(value: Checked<T>): value is { fault: string } =>
   value !== null && typeof value === "object" && "fault" in value;
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
+export const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 
 /** Why an object is not one with exactly these keys, these `required`, or null. */
-function keysFault(value: Record<string, unknown>, at: string, noun: string, keys: string[], required: string[]): string | null {
+export function keysFault(value: Record<string, unknown>, at: string, noun: string, keys: string[], required: string[]): string | null {
   for (const key of required) if (!(key in value)) return `${at} is missing "${key}"`;
   const extra = Object.keys(value).filter((k) => !keys.includes(k)).sort();
   if (extra.length > 0) {
@@ -203,10 +211,10 @@ function keysFault(value: Record<string, unknown>, at: string, noun: string, key
 }
 
 /** A number as JavaScript writes it, which the route's grammar reads (`js_string` in the Python). */
-const written = (n: number) => String(n);
+export const written = (n: number) => String(n);
 
 /** The pattern an expiry must match before it is written into a query: `server.json`'s, read there. */
-const EXPIRY_PATTERN = "^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$";
+export const EXPIRY_PATTERN = "^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$";
 
 /** One structure as the route's `spread` reads it, `<expiry>:<legs>[@<entry>]`, or why it cannot be
  *  written. Only the shape and the types: what the route would refuse — a quantity of 11, seven legs,
@@ -259,7 +267,7 @@ const QUERIES: Record<string, (given: Record<string, unknown>) => Checked<string
 };
 
 /** The `detail` of a refusal, as the dashboard reads it, or the body itself where it has none. */
-function detailOf(body: string): string {
+export function detailOf(body: string): string {
   try {
     const parsed: unknown = JSON.parse(body);
     if (parsed !== null && typeof parsed === "object" && typeof (parsed as { detail?: unknown }).detail === "string") {
@@ -275,7 +283,7 @@ function detailOf(body: string): string {
 const AN_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** A row of a list GET, as far as resolving a name needs it. */
-type Row = Record<string, unknown> & { id: string };
+export type Row = Record<string, unknown> & { id: string };
 
 /** How a history tool's `id` — an id OR a name (#447's follow-up, decided 2026-11-18) — becomes the
  *  one id its path is built from: the list GET that holds every candidate, the rows `given` names,
@@ -300,7 +308,7 @@ interface Lookup {
 
 const byId = (rows: Row[], given: string) => rows.filter((r) => r.id === given);
 
-const LOOKUPS: Record<string, Lookup> = {
+export const LOOKUPS: Record<string, Lookup> = {
   holding_history: {
     list: "/positions",
     noun: "holding",
@@ -336,6 +344,31 @@ const LOOKUPS: Record<string, Lookup> = {
   },
 };
 
+/** The one row `given` names, read through `read` from `lookup.list` — its id held to `AN_ID`, so it
+ *  can be put in a path — or the tool error saying why there is not one. A history tool takes its id;
+ *  `edit_rule` (ADR 0028) takes the row too, for the rule before the write and why it is off. */
+export async function resolveRow(
+  read: Read, lookup: Lookup, given: string, authorization: string | null,
+): Promise<Row | ToolResult> {
+  const { status, body } = await read(lookup.list, authorization);
+  if (status !== 200) return failed(`GET ${lookup.list} answered ${status}: ${detailOf(body)}`);
+  const named = lookup.named(JSON.parse(body) as Row[], given);
+  if (named.length === 0) {
+    return failed(`no ${lookup.noun} is "${given}": tried it ${lookup.tried(given)}. ${lookup.lister} lists every ${lookup.noun}'s id`);
+  }
+  if (named.length > 1) {
+    return failed([`"${given}" names ${named.length} ${lookup.noun}s; call again with one of their ids:`,
+      ...named.map(lookup.label)].join("\n"));
+  }
+  const row = named[0]!;
+  // the service's ids are all this; anything else is not put in a path whatever it is
+  if (typeof row.id !== "string" || !AN_ID.test(row.id)) return failed(`the ${lookup.noun} "${given}" has an id no path can carry`);
+  return row;
+}
+
+/** Whether `resolveRow` answered a row rather than a refusal. */
+export const isRow = (found: Row | ToolResult): found is Row => !("content" in found);
+
 interface Reading {
   at: Date;
   answer: Promise<{ status: number; body: string }>;
@@ -363,27 +396,9 @@ export function toolbox(options: { read: Read; now(): Date; displayTz: string })
     return reading;
   };
 
-  /** The one id `given` names, or the tool error saying why there is not one. */
-  const resolve = async (lookup: Lookup, given: string, authorization: string | null): Promise<string | ToolResult> => {
-    const { status, body } = await read(lookup.list, authorization);
-    if (status !== 200) return failed(`GET ${lookup.list} answered ${status}: ${detailOf(body)}`);
-    const named = lookup.named(JSON.parse(body) as Row[], given);
-    if (named.length === 0) {
-      return failed(`no ${lookup.noun} is "${given}": tried it ${lookup.tried(given)}. ${lookup.lister} lists every ${lookup.noun}'s id`);
-    }
-    if (named.length > 1) {
-      return failed([`"${given}" names ${named.length} ${lookup.noun}s; call again with one of their ids:`,
-        ...named.map(lookup.label)].join("\n"));
-    }
-    const id = named[0]!.id;
-    // the service's ids are all this; anything else is not put in a path whatever it is
-    if (typeof id !== "string" || !AN_ID.test(id)) return failed(`the ${lookup.noun} "${given}" has an id no path can carry`);
-    return id;
-  };
-
   return {
-    tools: DESCRIBED.tools,
-    has: (name: string) => DESCRIBED.tools.some((t) => t.name === name),
+    /** the READ tools: a write tool is `writes.ts`' */
+    has: (name: string) => DESCRIBED.tools.some((t) => t.name === name && t.method === undefined),
     async call(name: string, args: unknown, authorization: string | null): Promise<ToolResult> {
       const tool = DESCRIBED.tools.find((t) => t.name === name)!;
       const fault = argumentFault(tool, args);
@@ -392,9 +407,9 @@ export function toolbox(options: { read: Read; now(): Date; displayTz: string })
       const resolved: Record<string, string> = {};
       const lookup = LOOKUPS[tool.name];
       if (lookup !== undefined) {
-        const found = await resolve(lookup, given.id!.trim(), authorization);
-        if (typeof found !== "string") return found;
-        resolved.id = found;
+        const found = await resolveRow(read, lookup, given.id!.trim(), authorization);
+        if (!isRow(found)) return found;
+        resolved.id = found.id;
       }
       // only a RESOLVED id is ever put in a path, never what the caller typed
       let path = tool.path.replace(/\{(\w+)\}/g, (_, key: string) => encodeURIComponent(resolved[key]!));

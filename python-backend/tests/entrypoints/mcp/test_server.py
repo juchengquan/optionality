@@ -12,6 +12,7 @@ import ast
 import asyncio
 import json
 import logging
+import re
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, ClassVar
@@ -20,6 +21,7 @@ from urllib.parse import quote
 import pytest
 from harness import json_body, priced_fetcher
 from optionality.monitor import WATCHABLE_FIELDS
+from optionality.quote import Batch
 
 from optionality_backend.entrypoints.mcp.tools import (
     DESCRIBED,
@@ -30,6 +32,7 @@ from optionality_backend.entrypoints.mcp.tools import (
     round_to,
     rounded,
 )
+from optionality_backend.entrypoints.mcp.writes import WRITES, allowed_write
 
 EXPIRY = "2026-12-18"
 CONDOR = {
@@ -157,7 +160,8 @@ class TestTheProtocol:
         assert r["capabilities"] == {"tools": {"listChanged": False}}
         assert r["serverInfo"]["name"] == "optionality"
         assert r["serverInfo"]["version"] == "1"
-        assert "read-only" in r["instructions"].lower()
+        # writes are off unless the owner switched them on (ADR 0028), and the instructions say so
+        assert "WRITES ARE OFF" in r["instructions"]
 
     async def test_answers_its_newest_version_to_one_it_does_not_speak_and_the_client_decides(self, mcp):
         m = mcp()
@@ -292,7 +296,8 @@ class TestTheTools:
         # that ARE reads, so no tool can be a GET of something that is not there
         m = mcp()
         spec = (await m.h.call("/openapi.json")).json()
-        for tool in DESCRIBED["tools"]:
+        # a write tool names its method (ADR 0028), and is held by the writes' own test
+        for tool in (t for t in DESCRIBED["tools"] if "method" not in t):
             assert spec["paths"].get(tool["path"], {}).get("get"), (
                 f"{tool['name']}: GET {tool['path']} is not documented"
             )
@@ -697,15 +702,542 @@ class TestTheLiveReadsSharedCache:
         assert (await m.call("positions"))["data"][0]["name"] == "renamed"
 
 
+READS = [
+    "holdings",
+    "watchlist",
+    "positions",
+    "holding_history",
+    "monitor_history",
+    "monitor_closes",
+    "references",
+    "price_spreads",
+    "health",
+]
+D = EXPIRY.replace("-", "")
+PUT_SPREAD = {
+    "expiry": D,
+    "name": "1218-7100",
+    "threshold": 3,
+    "legs": [
+        {"side": "short", "option_type": "PUT", "strike": 7100},
+        {"side": "long", "option_type": "PUT", "strike": 7075},
+    ],
+}
+TELEGRAM = {"telegram_bot_token": "t", "telegram_chat_id": "42"}
+WRITES_LOG = "optionality_backend.entrypoints.mcp.writes"
+WRITES_OFF = (
+    "writes are off on this service: add_rule and edit_rule need MCP_WRITES=1 in its .env, which only its owner sets"
+)
+READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
+
+
+class Writing(Book):
+    """`Book` with an agent's writes on (unless said) and Telegram configured (unless said)."""
+
+    def __init__(self, start, settings=None, fetch=None, send=None) -> None:
+        self.asked = []
+        self.down = False
+        self.next_id = 0
+
+        async def counted(codes):
+            self.asked.append(codes)
+            return await (fetch or priced_fetcher)(codes)
+
+        options = {} if send is None else {"send": send}
+        self.h = start(settings={"mcp_writes": True, **TELEGRAM, **(settings or {})}, fetch_quotes=counted, **options)
+
+    async def rules(self):
+        return (await self.h.call("/monitors")).json()
+
+
+@pytest.fixture
+def writing(start):
+    return lambda settings=None, fetch=None, send=None: Writing(start, settings, fetch, send)
+
+
+class TestAnAgentsWritesTheSwitch:
+    """#456, ADR 0028: add_rule and edit_rule, behind MCP_WRITES."""
+
+    async def test_is_off_by_default_the_writes_are_not_listed_every_tool_listed_is_a_read_and_the_instructions_say_so(
+        self, mcp
+    ):
+        m = mcp()
+        tools = (await m.result(await m.rpc("tools/list")))["tools"]
+        assert [t["name"] for t in tools] == READS
+        assert all(t["annotations"]["readOnlyHint"] is True for t in tools)
+        instructions = (await m.result(await m.rpc("initialize", {"protocolVersion": "2025-11-25"})))["instructions"]
+        assert "WRITES ARE OFF on this service" in instructions
+        assert "WRITES ARE ON" not in instructions
+
+    async def test_off_refuses_a_write_before_asking_anything_writing_nothing_and_counting_nothing(self, mcp):
+        m = mcp()
+        await m.book()
+        before = (await m.h.call("/monitors")).json()
+        for name, args in [("add_rule", PUT_SPREAD), ("edit_rule", {"id": "anything", "threshold": 1})]:
+            assert await m.call(name, args) == {"isError": True, "text": WRITES_OFF}
+        assert await m.call("add_rule", {"nonsense": True}) == {"isError": True, "text": WRITES_OFF}
+        assert m.asked == []
+        assert (await m.h.call("/monitors")).json() == before
+        assert m.h.sent == []
+
+    async def test_on_lists_the_two_writes_after_the_reads_each_annotated_and_the_instructions_say_so(self, writing):
+        w = writing({"mcp_writes_per_10_min": 7})
+        tools = (await w.result(await w.rpc("tools/list")))["tools"]
+        assert [t["name"] for t in tools] == [*READS, "add_rule", "edit_rule"]
+        annotations = {t["name"]: t["annotations"] for t in tools}
+        for name in READS:
+            assert annotations[name] == READ_ONLY, name
+        assert annotations["add_rule"] == {
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": False,
+        }
+        assert annotations["edit_rule"] == {
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        }
+        instructions = (await w.result(await w.rpc("initialize", {"protocolVersion": "2025-11-25"})))["instructions"]
+        assert "WRITES ARE ON, for alarm rules only" in instructions
+        assert "at most 7 writes may reach the service in any ten minutes" in instructions
+        assert "{cap}" not in instructions
+
+
+class TestTheDoorsReachForAWrite:
+    async def test_lists_exactly_two_writes_post_monitors_and_patch_monitors_id_each_documented(self, mcp):
+        m = mcp()
+        assert [f"{w['method']} {w['path']}" for w in WRITES] == ["POST /monitors", "PATCH /monitors/{id}"]
+        spec = (await m.h.call("/openapi.json")).json()
+        for w in WRITES:
+            assert spec["paths"].get(w["path"], {}).get(w["method"].lower()), f"{w['method']} {w['path']}"
+
+    async def test_lets_through_only_the_pairs_server_json_lists_refusing_every_other_before_the_app_is_asked(self):
+        made: list[str] = []
+
+        async def inner(method, path, body, authorization):
+            made.append(f"{method} {path}")
+            return 200, "{}"
+
+        write = allowed_write(inner)
+        await write("POST", "/monitors", {}, None)
+        await write("PATCH", "/monitors/mon-1", {}, None)
+        await write("PATCH", "/monitors/00000000000000000000000000000001", {}, None)
+        for method, path in [
+            ("GET", "/monitors"),
+            ("DELETE", "/monitors/mon-1"),
+            ("PUT", "/monitors/mon-1"),
+            ("POST", "/monitors/mon-1"),
+            ("PATCH", "/monitors"),
+            ("POST", "/positions"),
+            ("PATCH", "/positions/pos-1"),
+            ("POST", "/spreads"),
+            ("PATCH", "/settings"),
+            ("POST", "/monitors/mon-1/total-entry"),
+            ("PATCH", "/monitors/../positions/pos-1"),
+            ("PATCH", "/monitors/mon 1"),
+            ("PATCH", "/monitors/mon-1?x=1"),
+            ("post", "/monitors"),
+            ("POST", "/monitors/"),
+            ("DELETE", "/positions/pos-1"),
+            ("POST", "/positions/pos-1/close"),
+            ("PATCH", "/monitors/" + "x" * 65),
+            ("PATCH", "/monitors/mon-1\n"),
+        ]:
+            with pytest.raises(PermissionError) as refused:
+                await write(method, path, {}, None)
+            assert str(refused.value) == (
+                f"the MCP door may not {method} {path}: it writes only POST /monitors and PATCH /monitors/{{id}}"
+            )
+        assert made == ["POST /monitors", "PATCH /monitors/mon-1", "PATCH /monitors/00000000000000000000000000000001"]
+
+
+class TestAddRule:
+    async def test_adds_a_put_spread_s_rule_through_post_monitors_answers_the_rule_and_tells_the_owner_once(
+        self, writing
+    ):
+        w = writing()
+        answer = await w.call("add_rule", PUT_SPREAD)
+        assert answer["isError"] is False, answer["text"]
+        assert answer["source"] == "POST /monitors"
+        assert answer["read_at"] == "2026-10-02 13:26:06+08:00"
+        [made] = await w.rules()
+        assert answer["data"] == made
+        assert made["code"] == "1218-7100"
+        assert made["field"] == "mid_price"
+        assert made["legs"] == [
+            {"sign": -1, "option_type": "PUT", "strike": 7100},
+            {"sign": 1, "option_type": "PUT", "strike": 7075},
+        ]
+        assert len(w.asked) == 1
+        assert sorted(w.asked[0]) == ["US.SPXW261218P7075000", "US.SPXW261218P7100000"]
+        assert w.h.sent == ["🤖 agent added 1218-7100 |value| ≥ 3.00"]
+
+    async def test_adds_a_rule_on_one_contract_its_side_meaning_nothing_with_the_route_s_defaults(self, writing):
+        w = writing()
+        legs = [{"side": "short", "option_type": "CALL", "strike": 8050, "qty": 1}]
+        answer = await w.call("add_rule", {"expiry": EXPIRY, "legs": legs, "threshold": 0.2})
+        assert answer["isError"] is False, answer["text"]
+        assert answer["data"]["code"] == "US.SPXW261218C8050000"
+        assert answer["data"]["field"] == "option_delta"
+        assert answer["data"]["legs"] is None
+        assert w.h.sent == ["🤖 agent added 20261218 C8050 |Δ| ≥ 0.20"]
+
+    async def test_adds_a_rule_the_route_links_to_a_holding_and_names_the_holding_in_the_notice(self, writing):
+        # review of #457
+        w = writing()
+        await w.created(await w.h.call("/positions", **json_body(CONDOR)))
+        legs = [{"side": "short", "option_type": "PUT", "strike": 7100}]
+        answer = await w.call("add_rule", {"expiry": D, "legs": legs, "threshold": 0.2})
+        assert answer["isError"] is False, answer["text"]
+        assert [p["name"] for p in answer["data"]["positions"]] == ["1016_IC"]
+        assert w.h.sent == ["🤖 agent added 20261218 P7100 |Δ| ≥ 0.20 on 1016_IC"]
+
+    async def test_passes_field_direction_and_compare_only_where_given(self, writing):
+        w = writing()
+        answer = await w.call("add_rule", {**PUT_SPREAD, "compare": "signed", "direction": "below", "threshold": -4.5})
+        assert answer["data"]["compare"] == "signed"
+        assert answer["data"]["direction"] == "below"
+        assert w.h.sent == ["🤖 agent added 1218-7100 close ≥ 4.50"]
+
+    async def test_refuses_a_quantity_a_combo_with_no_name_a_name_on_one_contract_and_a_wrong_shape_counting_nothing(
+        self, writing
+    ):
+        w = writing({"mcp_writes_per_10_min": 1})
+        one = {"expiry": D, "legs": [{"side": "long", "option_type": "CALL", "strike": 8050}], "threshold": 0.2}
+        unnamed = {k: v for k, v in PUT_SPREAD.items() if k != "name"}
+        for args, words in [
+            (
+                {**PUT_SPREAD, "legs": [PUT_SPREAD["legs"][0], {**PUT_SPREAD["legs"][1], "qty": 2}]},
+                (
+                    "legs[1].qty is 2: a rule here watches one of each contract — "
+                    "a rule on a structure with quantities is made on the page"
+                ),
+            ),
+            (
+                unnamed,
+                'a rule on 2 legs is a combo, and a combo needs a "name": it becomes the rule\'s code ("1218-6750")',
+            ),
+            ({**one, "name": "mine"}, 'a rule on one contract takes no "name": its code is the contract\'s'),
+            ({**one, "legs": []}, '"legs" must hold one leg or more'),
+            ({**one, "legs": "P7100"}, '"legs" must be a list of legs'),
+            ({**one, "expiry": "Dec 18"}, 'argument "expiry" must be a string matching ^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$'),
+            (
+                {**one, "legs": [{"side": "sold", "option_type": "CALL", "strike": 8050}]},
+                'legs[0].side must be "short" or "long"',
+            ),
+            (
+                {**one, "legs": [{"side": "long", "option_type": "CALL", "strike": "8050"}]},
+                "legs[0].strike must be a number",
+            ),
+            (
+                {**one, "legs": [{"side": "long", "option_type": "CALL", "strike": 8050, "entry": 1}]},
+                'legs[0] has an unexpected "entry": a leg takes only "side", "option_type", "strike", "qty"',
+            ),
+            ({**one, "threshold": "0.2"}, '"threshold" must be a number'),
+            ({**one, "threshold": True}, '"threshold" must be a number'),
+            ({**one, "direction": 1}, '"direction" must be a string'),
+            ({k: v for k, v in one.items() if k != "threshold"}, 'missing argument "threshold"'),
+            (
+                {**one, "enabled": False},
+                (
+                    'unexpected argument "enabled": add_rule takes only "expiry", "legs", "field", "threshold", '
+                    '"direction", "compare", "name"'
+                ),
+            ),
+        ]:
+            assert await w.call("add_rule", args) == {"isError": True, "text": words}, args
+        assert w.asked == []
+        assert await w.rules() == []
+        assert (await w.call("add_rule", PUT_SPREAD))["isError"] is False
+
+    async def test_carries_the_route_s_refusal_in_its_own_words_and_counts_it(self, writing):
+        async def unknown(codes):
+            return Batch(records=[], unknown=list(codes))
+
+        w = writing({"mcp_writes_per_10_min": 1}, unknown)
+        refused = await w.call("add_rule", PUT_SPREAD)
+        assert refused["isError"] is True
+        assert refused["text"].startswith("POST /monitors answered 422: ")
+        assert len(w.asked) == 1
+        assert w.h.sent == []
+        assert await w.call("add_rule", PUT_SPREAD) == {
+            "isError": True,
+            "text": "agent writes are capped at 1 in ten minutes: the next is allowed in 600s",
+        }
+        assert len(w.asked) == 1
+
+
+class TestTheCap:
+    async def test_refuses_the_eleventh_write_within_ten_minutes_with_the_wait_and_allows_the_next_after(self, writing):
+        w = writing()
+        assert (await w.call("add_rule", PUT_SPREAD))["isError"] is False
+        for i in range(1, 10):
+            w.h.now = w.h.now + timedelta(seconds=1)
+            edited = await w.call("edit_rule", {"id": "1218-7100", "threshold": 3 + i})
+            assert edited["isError"] is False, edited["text"]
+        assert await w.call("edit_rule", {"id": "1218-7100", "threshold": 20}) == {
+            "isError": True,
+            "text": "agent writes are capped at 10 in ten minutes: the next is allowed in 591s",
+        }
+        assert (await w.rules())[0]["threshold"] == 12
+        w.h.now = w.h.now + timedelta(seconds=591)
+        assert (await w.call("edit_rule", {"id": "1218-7100", "threshold": 20}))["isError"] is False
+
+    async def test_counts_only_the_mcp_s_writes_the_page_s_are_not_counted(self, writing):
+        w = writing({"mcp_writes_per_10_min": 1})
+        for _ in range(3):
+            await w.h.call("/monitors", **json_body(RULE))
+        assert (await w.call("add_rule", PUT_SPREAD))["isError"] is False
+
+
+COMBO = {
+    "name": "1218-6800",
+    "strike_date": EXPIRY,
+    "field": "mid_price",
+    "threshold": 4.51,
+    "legs": [{"sign": -1, "option_type": "PUT", "strike": 7100}, {"sign": 1, "option_type": "PUT", "strike": 7075}],
+}
+
+
+async def _set_up(writing, settings=None):
+    w = writing(settings)
+    combo = await w.created(await w.h.call("/monitors", **json_body(COMBO)))
+    delta = await w.created(await w.h.call("/monitors", **json_body({**RULE, "option_type": "PUT", "strike": 7100})))
+    w.asked.clear()
+    return w, combo, delta
+
+
+class TestEditRule:
+    async def test_finds_a_rule_by_its_combo_name_changes_its_threshold_and_tells_the_owner(self, writing):
+        w, combo, _ = await _set_up(writing)
+        answer = await w.call("edit_rule", {"id": "1218-6800", "threshold": 4.8})
+        assert answer["isError"] is False, answer["text"]
+        assert answer["source"] == f"PATCH /monitors/{combo}"
+        assert answer["data"] == next(r for r in await w.rules() if r["id"] == combo)
+        assert answer["data"]["threshold"] == 4.8
+        assert w.h.sent == ["🤖 agent: 1218-6800 |value| ≥ 4.51 → ≥ 4.80"]
+        assert w.asked == []
+
+    async def test_mutes_a_rule_as_the_owner_muting_it_by_hand_would_and_unmutes_it(self, writing):
+        w, _, delta = await _set_up(writing)
+        muted = await w.call("edit_rule", {"id": "20261218 P7100", "enabled": False})
+        assert (muted["data"]["id"], muted["data"]["enabled"], muted["data"]["disabled_reason"]) == (
+            delta,
+            False,
+            "manual",
+        )
+        unmuted = await w.call("edit_rule", {"id": delta, "enabled": True})
+        assert (unmuted["data"]["enabled"], unmuted["data"]["disabled_reason"]) == (True, None)
+        assert w.h.sent == [
+            "🤖 agent muted 20261218 P7100 |Δ| ≥ 0.20",
+            "🤖 agent unmuted 20261218 P7100 |Δ| ≥ 0.20",
+        ]
+
+    async def test_refuses_to_unmute_a_rule_the_service_switched_off_writing_nothing_and_counting_nothing(
+        self, writing
+    ):
+        w, _, delta = await _set_up(writing, {"mcp_writes_per_10_min": 1})
+        for reason in ["unknown-contract", "no-figure", "unreadable", "expired", "holding-closed"]:
+            w.h.db.execute("update monitors set enabled = 0, disabled_reason = ? where id = ?", (reason, delta))
+            w.h.db.commit()
+            assert await w.call("edit_rule", {"id": delta, "enabled": True, "threshold": 0.3}) == {
+                "isError": True,
+                "text": f'the rule "{delta}" is off as "{reason}", not muted by hand: '
+                'edit_rule unmutes only a rule muted by hand (disabled_reason "manual")',
+            }, reason
+        rule = next(r for r in await w.rules() if r["id"] == delta)
+        assert (rule["enabled"], rule["threshold"]) == (False, 0.2)
+        assert w.h.sent == []
+        assert (await w.call("edit_rule", {"id": delta, "threshold": 0.3}))["isError"] is False
+
+    async def test_refuses_to_mute_a_rule_the_service_switched_off_which_would_make_it_unmutable_here(self, writing):
+        # review of #457: muting first rewrote its reason to "manual", and the unmute guard then let it on
+        w, _, delta = await _set_up(writing, {"mcp_writes_per_10_min": 1})
+        for reason in ["unknown-contract", "no-figure", "unreadable", "expired", "holding-closed"]:
+            w.h.db.execute("update monitors set enabled = 0, disabled_reason = ? where id = ?", (reason, delta))
+            w.h.db.commit()
+            assert await w.call("edit_rule", {"id": delta, "enabled": False}) == {
+                "isError": True,
+                "text": f'the rule "{delta}" is already off as "{reason}", not muted by hand: edit_rule does not '
+                'mute it again, which would make it a rule muted by hand (disabled_reason "manual")',
+            }, reason
+            assert (await w.call("edit_rule", {"id": delta, "enabled": True}))["isError"] is True
+            rule = next(r for r in await w.rules() if r["id"] == delta)
+            assert (rule["enabled"], rule["disabled_reason"]) == (False, reason)
+        assert w.h.sent == []
+        # an edit that leaves enabled alone keeps the service's reason, and the cap of one was never spent
+        moved = await w.call("edit_rule", {"id": delta, "threshold": 0.3})
+        assert moved["isError"] is False, moved["text"]
+        assert (moved["data"]["enabled"], moved["data"]["disabled_reason"], moved["data"]["threshold"]) == (
+            False,
+            "holding-closed",
+            0.3,
+        )
+
+    async def test_changes_only_a_watch_rule_a_holding_s_rule_is_refused_before_any_write_counting_nothing(
+        self, writing
+    ):
+        # the owner, #456
+        w = writing({"mcp_writes_per_10_min": 1})
+        await w.created(await w.h.call("/positions", **json_body(CONDOR)))
+        held = await w.created(await w.h.call("/monitors", **json_body(RULE)))
+        rule = next(r for r in await w.rules() if r["id"] == held)
+        assert [p["name"] for p in rule["positions"]] == ["1016_IC"]
+        for change in ({"threshold": 0.3}, {"enabled": False}, {"direction": "below"}):
+            assert await w.call("edit_rule", {"id": held, **change}) == {
+                "isError": True,
+                "text": f'the rule "{held}" watches the holding 1016_IC: a holding\'s rules are changed on the page, '
+                "and edit_rule changes only a watch rule",
+            }, change
+        rule = next(r for r in await w.rules() if r["id"] == held)
+        assert (rule["threshold"], rule["enabled"]) == (0.2, True)
+        assert w.h.sent == []
+        watch = await w.created(await w.h.call("/monitors", **json_body({**RULE, "strike": 9000})))
+        assert (await w.call("edit_rule", {"id": watch, "threshold": 0.3}))["isError"] is False
+
+    async def test_refuses_a_rule_whose_scope_is_set_though_no_link_is_listed_as_a_holding_s(self, writing):
+        w, _, delta = await _set_up(writing)
+        w.h.db.execute("update monitors set scope = 'leg' where id = ?", (delta,))
+        w.h.db.commit()
+        assert await w.call("edit_rule", {"id": delta, "threshold": 0.3}) == {
+            "isError": True,
+            "text": f'the rule "{delta}" watches a holding: a holding\'s rules are changed on the page, '
+            "and edit_rule changes only a watch rule",
+        }
+        assert w.h.sent == []
+
+    async def test_lets_a_rule_muted_by_hand_be_muted_again_which_changes_nothing(self, writing):
+        w, _, delta = await _set_up(writing)
+        await w.call("edit_rule", {"id": delta, "enabled": False})
+        again = await w.call("edit_rule", {"id": delta, "enabled": False})
+        assert again["isError"] is False, again["text"]
+        assert (again["data"]["enabled"], again["data"]["disabled_reason"]) == (False, "manual")
+
+    async def test_lets_a_rule_already_on_be_sent_enabled_true_which_changes_nothing(self, writing):
+        w, _, _ = await _set_up(writing)
+        assert (await w.call("edit_rule", {"id": "1218-6800", "enabled": True}))["isError"] is False
+        assert w.h.sent == ["🤖 agent: 1218-6800 |value| ≥ 4.51, unchanged"]
+
+    async def test_refuses_field_and_an_edit_of_nothing_before_writing_anything(self, writing):
+        w, _, _ = await _set_up(writing, {"mcp_writes_per_10_min": 1})
+        assert await w.call("edit_rule", {"id": "1218-6800", "field": "option_delta"}) == {
+            "isError": True,
+            "text": 'unexpected argument "field": edit_rule takes only "id", "threshold", "direction", "compare", '
+            '"name", "enabled"',
+        }
+        assert await w.call("edit_rule", {"id": "1218-6800"}) == {
+            "isError": True,
+            "text": "edit_rule needs at least one change: threshold, direction, compare, name or enabled",
+        }
+        assert await w.call("edit_rule", {"id": "1218-6800", "enabled": "no"}) == {
+            "isError": True,
+            "text": '"enabled" must be true or false',
+        }
+        assert await w.call("edit_rule", {"id": "1218-6800", "enabled": 1}) == {
+            "isError": True,
+            "text": '"enabled" must be true or false',
+        }
+        assert w.h.sent == []
+        assert (await w.call("edit_rule", {"id": "1218-6800", "threshold": 5}))["isError"] is False
+
+    async def test_names_the_rules_a_name_fits_and_what_it_tried_when_none_as_monitor_history_does(self, writing):
+        w, _, _ = await _set_up(writing)
+        await w.created(
+            await w.h.call(
+                "/monitors",
+                **json_body({**RULE, "option_type": "PUT", "strike": 7100, "field": "mid_price", "threshold": 3}),
+            )
+        )
+        several = await w.call("edit_rule", {"id": "20261218 P7100", "threshold": 1})
+        assert several["isError"] is True
+        assert several["text"] == (await w.call("monitor_history", {"id": "20261218 P7100"}))["text"]
+        none = await w.call("edit_rule", {"id": "nope", "threshold": 1})
+        assert none["text"] == (await w.call("monitor_history", {"id": "nope"}))["text"]
+        assert w.h.sent == []
+
+    async def test_carries_the_route_s_refusal_in_its_own_words_and_counts_it(self, writing):
+        w, _, delta = await _set_up(writing, {"mcp_writes_per_10_min": 1})
+        assert await w.call("edit_rule", {"id": delta, "name": "renamed"}) == {
+            "isError": True,
+            "text": f"PATCH /monitors/{delta} answered 422: only combo monitors can be renamed; "
+            "a single-leg code is derived from its contract",
+        }
+        assert (await w.call("edit_rule", {"id": delta, "threshold": 0.3}))["text"].startswith(
+            "agent writes are capped at 1"
+        )
+
+
+class TestTheNoticeAndTheLog:
+    async def test_logs_one_line_for_every_write_attempted_the_door_s_refusals_included_and_none_for_a_read(
+        self, writing, caplog
+    ):
+        w = writing()
+        unnamed = {k: v for k, v in PUT_SPREAD.items() if k != "name"}
+        with caplog.at_level(logging.INFO, logger=WRITES_LOG):
+            await w.call("add_rule", PUT_SPREAD)
+            await w.call("add_rule", unnamed)
+            await w.call("watchlist")
+            await w.call("edit_rule", {"id": "1218-7100", "threshold": 4})
+        lines = [r.getMessage() for r in caplog.records if r.name == WRITES_LOG]
+        assert len(lines) == 3
+        assert re.fullmatch(
+            r'mcp add_rule \{.*"name":"1218-7100".*\}: POST /monitors answered 201: rule [0-9a-f]{32}, notice sent',
+            lines[0],
+        )
+        assert re.match(r"mcp add_rule \{.*\}: refused by the door: a rule on 2 legs is a combo", lines[1])
+        assert re.fullmatch(
+            r'mcp edit_rule \{"id":"1218-7100","threshold":4\}: PATCH /monitors/[0-9a-f]{32} answered 200: '
+            r"rule [0-9a-f]{32}, notice sent",
+            lines[2],
+        )
+
+    async def test_logs_a_write_refused_while_writes_are_off(self, mcp, caplog):
+        m = mcp()
+        with caplog.at_level(logging.INFO, logger=WRITES_LOG):
+            await m.call("edit_rule", {"id": "x", "threshold": 1})
+        assert [r.getMessage() for r in caplog.records if r.name == WRITES_LOG] == [
+            f'mcp edit_rule {{"id":"x","threshold":1}}: refused by the door: {WRITES_OFF}'
+        ]
+
+    async def test_lets_a_write_stand_with_telegram_not_configured_and_logs_that_no_notice_was_sent(
+        self, writing, caplog
+    ):
+        w = writing({"telegram_bot_token": "", "telegram_chat_id": ""})
+        with caplog.at_level(logging.INFO):
+            assert (await w.call("add_rule", PUT_SPREAD))["isError"] is False
+        assert len(await w.rules()) == 1
+        assert w.h.sent == []
+        said = [r.getMessage() for r in caplog.records]
+        assert "telegram not configured; alarm suppressed: 🤖 agent added 1218-7100 |value| ≥ 3.00" in said
+        assert next(m for m in said if m.startswith("mcp add_rule")).endswith(", no notice: Telegram is not configured")
+
+    async def test_lets_a_write_stand_when_telegram_refuses_the_notice_and_logs_that_it_was_not_sent(
+        self, writing, caplog
+    ):
+        def down(text):
+            raise RuntimeError("telegram is down")
+
+        w = writing(send=down)
+        with caplog.at_level(logging.INFO):
+            assert (await w.call("add_rule", PUT_SPREAD))["isError"] is False
+        assert len(await w.rules()) == 1
+        said = [r.getMessage() for r in caplog.records]
+        assert "telegram send failed" in said
+        assert next(m for m in said if m.startswith("mcp add_rule")).endswith(", its notice not sent")
+
+
 DOOR = Path(__file__).resolve().parents[3] / "src" / "optionality_backend" / "entrypoints" / "mcp"
 
 
 class TestTheDoorsReach:
     def test_imports_nothing_of_the_service_no_route_no_query_no_engine_no_write(self):
-        # It is handed a GET of the API's own and that is all it may use (ADR 0026). Read from the
-        # source, so a write path added later fails here rather than in a review.
+        # It is handed a GET of the API's own, a write it holds to two routes and a notifier, and that is
+        # all it may use (ADR 0026, 0028). Read from the source, so a write path added later fails here
+        # rather than in a review.
         sources = sorted(p.name for p in DOOR.glob("*.py"))
-        assert sources == ["__init__.py", "server.py", "tools.py"]
+        assert sources == ["__init__.py", "server.py", "tools.py", "writes.py"]
         reached = set()
         for name in sources:
             for node in ast.walk(ast.parse((DOOR / name).read_text())):
@@ -722,8 +1254,9 @@ class TestTheDoorsReach:
             "dataclasses",
             "datetime",
             "json",
+            "logging",
             "math",
-            # the one type it is handed, `Read`, and nothing that runs
+            # the types it is handed, `Read`, `Write` and `Notify`, and nothing that runs
             "...ports",
             # the library's pure domain for the words: a contract as the page writes it is read by
             # `/unwatch`'s own parser, and a rule is said in its short form

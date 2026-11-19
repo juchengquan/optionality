@@ -1,0 +1,94 @@
+{
+  "name": "POST /mcp refuses to unmute a quarantined rule, writing nothing",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MCP_WRITES": "1",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 0,
+          "disabled_reason": "no-figure",
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "edit_rule",
+        "arguments": {
+          "id": "mon-1",
+          "enabled": true
+        }
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "the rule \"mon-1\" is off as \"no-figure\", not muted by hand: edit_rule unmutes only a rule muted by hand (disabled_reason \"manual\")"
+            }
+          ],
+          "isError": true
+        }
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

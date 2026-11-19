@@ -29,9 +29,11 @@ runner can drive it on a world's database (ADR 0021).
   itself in its own words. The TypeScript's description is served instead (`openapi.py`).
 """
 
+import json
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 import httpx2
 from fastapi import FastAPI, HTTPException, Request
@@ -40,7 +42,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from ...ports import Read
+from ...ports import Read, Write
 from .deps import Deps
 from .openapi import mount_docs
 from .routes.health import health_routes
@@ -67,10 +69,10 @@ MCP_PATH = "/mcp"
 @dataclass(frozen=True)
 class Surfaces:
     """The other surfaces this server carries, built by `__main__` from their own doors (ADR 0020): each
-    is handed a `Read` of this app and answers a request. Passed in rather than imported, so that this
-    door depends on no other surface and no other surface on it."""
+    is handed a `Read` and a `Write` of this app and answers a request. Passed in rather than imported, so
+    that this door depends on no other surface and no other surface on it."""
 
-    mcp: Callable[[Read], Callable[[Request], Awaitable[Response]]] | None = None
+    mcp: Callable[[Read, Write], Callable[[Request], Awaitable[Response]]] | None = None
 
 
 def _say_request(method: str, path: str, status: int, detail: str) -> None:
@@ -186,7 +188,19 @@ def create_app(deps: Deps, surfaces: Surfaces | None = None) -> FastAPI:
             answer = await transport.handle_async_request(httpx2.Request("GET", f"http://app{path}", headers=headers))
             return answer.status_code, (await answer.aread()).decode("utf-8")
 
-        serve = surfaces.mcp(read)
+        # the same, for a write (ADR 0028): what the door may write is the door's own allow-list,
+        # `allowed_write`, applied before this is ever reached
+        async def write(method: str, path: str, payload: Any, authorization: str | None) -> tuple[int, str]:
+            headers = {"Content-Type": "application/json"}
+            if authorization is not None:
+                headers["Authorization"] = authorization
+            content = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            answer = await transport.handle_async_request(
+                httpx2.Request(method, f"http://app{path}", headers=headers, content=content)
+            )
+            return answer.status_code, (await answer.aread()).decode("utf-8")
+
+        serve = surfaces.mcp(read, write)
         # a POST per message, and the GET the transport answers 405 to, which only the handler words
         app.add_api_route(MCP_PATH, serve, methods=["POST"])
         app.add_api_route(MCP_PATH, serve, methods=["GET"])

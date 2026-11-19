@@ -134,6 +134,23 @@ describe("the knobs a service must not start on", () => {
       .toThrow(/SPREAD_QUOTE_CALLS_PER_30S is not an integer/);
   });
 
+  it("leaves an agent's writes off unless MCP_WRITES says on, and refuses a switch it cannot read (#456)", () => {
+    expect(settingsFromEnv({}).mcpWrites).toBe(false);
+    for (const on of ["1", "true", " TRUE "]) expect(settingsFromEnv({ MCP_WRITES: on }).mcpWrites, on).toBe(true);
+    for (const off of ["0", "false", "", "  "]) expect(settingsFromEnv({ MCP_WRITES: off }).mcpWrites, off).toBe(false);
+    for (const typo of ["yes", "on", "2", "ture"]) {
+      expect(() => settingsFromEnv({ MCP_WRITES: typo }), typo)
+        .toThrow(`MCP_WRITES is not a switch: ${typo} (1 or true for on, 0, false or nothing for off)`);
+    }
+  });
+
+  it("caps an agent's writes at 10 in ten minutes, never 0 (#456)", () => {
+    expect(settingsFromEnv({}).mcpWritesPer10Min).toBe(10);
+    expect(settingsFromEnv({ MCP_WRITES_PER_10_MIN: "3" }).mcpWritesPer10Min).toBe(3);
+    expect(() => settingsFromEnv({ MCP_WRITES_PER_10_MIN: "0" })).toThrow(/MCP_WRITES_PER_10_MIN must be at least 1/);
+    expect(() => settingsFromEnv({ MCP_WRITES_PER_10_MIN: "2.5" })).toThrow(/MCP_WRITES_PER_10_MIN is not an integer/);
+  });
+
   it("checks the defaults themselves, so a bad default cannot ship", () => {
     expect(() => settingsFromEnv({})).not.toThrow();
   });

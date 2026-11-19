@@ -64,3 +64,16 @@ export interface ProviderClient extends VendorClient {
  *  to the MCP door, its whole reach. The method is not a parameter, which is what makes that door
  *  read-only by construction. Here because two surfaces speak it and neither may import the other. */
 export type Read = (path: string, authorization: string | null) => Promise<{ status: number; body: string }>;
+
+/** A write of the app's own (ADR 0028): the method, the path, the JSON body, and the caller's
+ *  Authorization header passed on as `Read` passes it — answering the status and the body. `app.ts`
+ *  builds it as it builds `Read`, and hands both to the MCP door, whose `allowedWrite` (`writes.ts`)
+ *  lets through only the method and path pairs `schema/mcp/server.json` lists for a write tool. */
+export type Write = (
+  method: string, path: string, body: unknown, authorization: string | null,
+) => Promise<{ status: number; body: string }>;
+
+/** Telling the owner, as a surface is handed it: `notify.ts`'s `delivery`, which says whether the
+ *  message was sent, not sent because Telegram is not configured, or refused — and never throws.
+ *  Here because the MCP door may import nothing that runs. */
+export type Notify = (text: string) => Promise<"sent" | "unconfigured" | "failed">;

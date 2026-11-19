@@ -1,0 +1,440 @@
+{
+  "name": "POST /mcp lists the two writes after the reads while writes are on",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MCP_WRITES": "1",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/list"
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "tools": [
+            {
+              "name": "holdings",
+              "title": "The book: every open holding, valued",
+              "description": "Every OPEN holding (a Position: options actually held) valued — what it would cost to close, its P&L and where it stands against its exit schedule. GET /positions/values. Live in New York's regular session (09:30–16:15 ET), and in the Curb and overnight session where every leg is quoted; otherwise from the holding's latest stored close. LIVE: shared by every caller for 5 seconds. Each holding: `id`, `name`, `strategy`, `strike_date` (the expiry), `contracts` (how many of the whole structure), `legs` (each `side` long|short, `option_type` CALL|PUT, `strike`, optional `qty`, absent meaning 1), `entry` (points per contract taken in to open it), `opened_at` (the day it was put on), `cost_to_close` (points per contract to close it now; positive for a credit structure), `pnl` (MONEY: (entry − cost_to_close) × contracts × contract_size), `captured` (the fraction of a credit's entry kept so far, 1 is all of it; null for a debit), `contract_size`, `greeks` (the holding's signed exposure, summed over its legs: option_delta, option_gamma, option_theta, option_vega), `legs_delta` (each leg's own delta by contract code), `spx` (SPX's level as implied by this batch's own option premiums — never a Reference's figure) and `spx_reason` (why it is null, or why it is not current), `short_strikes` (each short leg against `spx`: `points` and `sigma` still to go before SPX reaches the strike, positive while it has not, negative by how far past, `one_sigma` in points, the leg's `delta`), `dte` (days to expiry, today's), `schedule` (null without a recorded open day: `dte_at_open`, `on_pace` — the cost to close if only time had passed, `pace_gap` — cost_to_close − on_pace, positive is BEHIND pace, `target` and `stop` — the Levels as costs to close, `reached` target|stop|null, `target_dte`, `manage_by_dte` and `manage_by_due` — the day it is to be dealt with whatever its P&L), `valued_from` live|close, `valued_on` and `valued_timing` (which stored row a close valuation is from, and whether it really was the day's close), `valued_reason` (why the figures are not live), `fetched_at` (when the figures were read). A holding whose stored row cannot be read is listed with `unreadable` saying why and no figures.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "watchlist",
+              "title": "Every rule, with its figure and distance now",
+              "description": "Every rule (a Monitor: a threshold on one figure of one contract, or of a signed combo of contracts) with its live figure, how far it is from firing and whether it is breached now. GET /quotes. LIVE: shared by every caller for 5 seconds. Each row: `id`, `code` (the contract's code, or the combo's name), `strike_date`, `option_type` CALL|PUT|CMB (a combo), `legs` (a combo's: `sign` +1 long / −1 short, `option_type`, `strike`, optional `qty`), `field` (the figure watched: mid_price, option_delta, option_gamma, option_theta, option_vega, option_implied_volatility), `threshold`, `direction` above|below, `compare` abs|signed (abs compares the figure's magnitude), `watched` (the figure now, signed — not its magnitude), `distance` (how far `watched` still has to move to breach, in its own units: at or below zero exactly when `triggered`, negative by how far past), `triggered` (breached by these same figures — the dashboard's bell; the Telegram alarm state is the sweep's own and may lead or lag), `fill` (0–100, how far the figure has travelled toward its threshold; null where there is no honest baseline), `quote` (a single contract's live quote: bid_price, ask_price, mid_price, last_price, option_delta/gamma/theta/vega, option_implied_volatility in percent, option_contract_size, update_time — the last trade, not freshness — and fetched_at), `combo_value` and `combo_greeks` (a combo's signed sums; null where any leg is missing), `error` (why a row has no figures), `dte`, `scope` and `positions` (the holdings the rule is linked to), `held` (whether any contract it watches is a leg of an open holding), `in_combos` (combos whose legs include this contract), `cost_to_close`, `entry`, `pnl` (MONEY) and `schedule` (as in holdings, for a rule linked to one holding), `spx` and `spx_reason` (as in holdings), `short_strikes` (a combo's short legs against `spx`).",
+              "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "positions",
+              "title": "Every position recorded, open and closed",
+              "description": "Every Position recorded — open AND closed — as stored, asking no Provider. GET /positions. A CLOSED trade is one whose `closed_on` is set: the New York market day it was closed, with `exit` (the cost to close actually got, points per contract, signed like cost_to_close: a credit bought back is positive, a long sold is negative) and `realized_points` (entry − exit across the contracts, in POINTS — not money: a closed trade has no quote to give a contract size). Each: `id`, `name`, `strategy`, `strike_date`, `contracts`, `entry`, `legs` (`side` long|short, `option_type`, `strike`, optional `qty`), `created_at` (when it was recorded here), `opened_at` (the day it was put on), `closed_on`, `exit`, `realized_points`, and `unreadable` (why a stored row cannot be read, else null). Its id reads its history with holding_history.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "holding_history",
+              "title": "A holding's daily history",
+              "description": "One holding's recorded daily history, open or closed, from stored rows: GET /positions/{id}/samples, asking no Provider. `samples`, oldest first, one per New York calendar day: `observed_on` (the market day), `observed_at` (when it was read, display zone), `timing` close|before-open|after-close|unrecorded (only `close` is the day's close), `dte`, `cost_to_close` (points per contract; null where no regular-session price was read that day), `on_pace` (the cost to close if only time had passed; null without a schedule), `legs_iv`, `legs_vega`, `legs_delta` (each leg's reading by contract code; IV in percent), `spx` (as implied by that sweep's premiums), `before_correction` (summed before a leg's quantity was corrected). `levels` (`dte_at_open`, `target`, `stop`, `target_dte`, `manage_by_dte`; null without a recorded open day), `plan` (on_pace at every DTE from the open to 0), `before_entry` (days its contracts were watched before it was entered, valued the same way), `entry_close` (the entry day's watched close where its own row has no price), `qty_corrected_at`. `id` is the holding's id OR its name (names are unique), open or closed, as holdings or positions gives them — \"dec-condor\" reads the same history as its id, and the answer's `source` names the id it resolved to. Nothing matching is a tool error saying what was tried.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]{1,64}$",
+                    "description": "the holding's id OR its name, open or closed, as holdings or positions gives them: \"pos-1\" or \"dec-condor\""
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "monitor_history",
+              "title": "A rule's daily history",
+              "description": "One rule's daily history: the stored days of the contracts it watches, valued as the rule values them, from stored rows: GET /monitors/{id}/samples, asking no Provider. `contracts` (the codes the history is kept for, sorted — every rule on exactly these shares it), `price_rule` (the price rule its value is drawn against: `id`, `threshold`, `direction`, `compare`; null where there is none), `samples`, oldest first: `observed_on`, `observed_at`, `timing` close|before-open|after-close|unrecorded, `dte`, `price` (the rule's price that day under its own signs and quantities, points; null where a contract had no two-sided regular-session quote), `legs_iv`, `legs_vega`, `legs_delta`, `spx`. `id` is the rule's id, OR its `code` as watchlist gives it (a combo's name, e.g. \"1218-6800\"; a contract's, e.g. \"US.SPXW261218P6800000\"), OR a contract as the page and the bot write it (\"20261218 P6800\", or the older \"261218 P6800\"); exact after trimming, and case matters except in a contract written the page's way. The answer's `source` names the id it resolved to. Where several rules match — a contract watched for its Δ and for its price — the tool error lists each as `id — rule`, to call again with one id; nothing matching is a tool error saying what was tried, and so is a rule whose stored row cannot be read.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]{1,64}$",
+                    "description": "the rule's id, its code or combo name, or its contract as the page writes it: \"mon-2\", \"1218-6800\", \"US.SPXW261218P6800000\" or \"20261218 P6800\""
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "monitor_closes",
+              "title": "Each rule's last close",
+              "description": "Each rule's PRICE at its latest close, from stored history, asking no Provider: GET /monitors/closes — what the dashboard shows for a rule out of the session or while live quotes fail. Each: `id` (the rule's), `last_close` (null where no day had a price, for a rule that cannot be read, and for a rule on exactly an open holding's contracts — read those from holding_history): `price` (points, under the rule's own signs), `observed_on`, `observed_at`, `timing` close|before-open|after-close|weekend|unrecorded (only `close` is a regular session's close).",
+              "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "references",
+              "title": "The Reference securities on the page",
+              "description": "The securities kept on the page to read the market by (References: never alarmed on, nothing derived from them), each with its live figure: GET /references, one bounded call per source in use. LIVE: shared by every caller for 5 seconds. Each: `id`, `code`, `label` (e.g. how SPX is read through SPY ×10), `source` (the vendor asked), `name`, `figure`, `field` (mid_price or last_price: which number `figure` is), `change` (the day's move as a FRACTION of the previous close), `error` (why there is no figure), `delayed`, `last_known` and `delayed_by_minutes` (the vendor's own claims about freshness; null where it made none), `fetched_at` (when the call answered, display zone).",
+              "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "price_spreads",
+              "title": "Price any SPX spread or combo, live",
+              "description": "Prices any SPX structures you name — spreads, condors, ratios, single options, watched or not — live, in ONE bounded Provider call: GET /spreads/quote, one `spread=<expiry>:<legs>[@<entry>]` per structure. At most 6 legs a structure and 32 in all; an expiry before today, a quantity outside 1–10, a contract named twice or both short and long in one structure, or a malformed structure is refused before anything is asked. LIVE, and capped: the same contracts asked again within 5 seconds — at any entry, grouped any way — are answered from the same call (the same `fetched_at`) and spend nothing, and the service makes at most a capped number of such calls in any 30 seconds, shared with every other caller — over it the tool error says how many seconds to wait. So name every structure you want priced in one call. `data`: `phase` regular|curb|overnight|closed (New York's market phase when priced), `fetched_at` (when the Provider answered, display zone) and `spreads`, one per structure in the order given: `expiry`, `dte`, `entry` (as given, else null), `legs` in the order given (each `side`, `option_type`, `strike`, `qty`, `code`, `bid_price`, `ask_price`, `mid_price` — null where the leg has no two-sided quote, as out of hours when moomoo quotes 0/0 — `option_implied_volatility` in percent, `option_delta`/`gamma`/`theta`/`vega`, `option_contract_size`, `fetched_at`, `error` — unknown contract|no quote returned|no two-sided quote — and `last_known`: the contract's latest stored REGULAR-SESSION close where the service has watched it, `price`, `observed_on`, `observed_at`, `timing`, else null; context only, never summed), `value` (points per contract: the signed mid sum, a long leg plus, a short minus, each times its qty — so a credit structure is NEGATIVE; null where any leg has no mid, never a partial sum), `natural` (`bid` and `ask`, the worst fill each way, signed as value: `ask` is what OPENING costs — longs bought at their ask, shorts sold at their bid — and `bid` what CLOSING gets; null where any leg has no two-sided quote), `greeks` (signed sums of option_delta, option_gamma, option_theta, option_vega; each null where any leg lacks it; IV is never summed), `spx` and `spx_reason` (SPX as this batch's own premiums imply it, as in holdings), `short_strikes` (each short leg against `spx`, as in holdings), `payoff` (at expiry, POINTS for one structure: `at_strikes` — the P&L with SPX settling at each strike — `slope_below`, `slope_above`, `breakevens`, `max_profit`, `max_loss`) and `payoff_basis`: `entry` (from the entry you gave, a credit positive), `mid` (as if opened at `value` now) or `shape` (no price to measure from: the legs' value at expiry alone, with breakevens, max_profit and max_loss null), `error` (`unknown contract: …` — that structure's figures and payoff are null; the others are still priced). A Provider that is down is a tool error. Figures are rounded as every tool's are: prices, `value`, `natural`, P&L, `spx` and the payoff to 2 decimals, Δ Θ ν and IV to 4, Γ to 6 — so a spread's small gamma still reads — and `sigma` to 4.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "structures": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 32,
+                    "description": "the structures to price, each on one expiry; 32 legs at most in all",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "expiry": {
+                          "type": "string",
+                          "pattern": "^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$",
+                          "description": "the expiry, YYYYMMDD or YYYY-MM-DD: \"20261218\""
+                        },
+                        "legs": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 6,
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "side": {
+                                "type": "string",
+                                "enum": [
+                                  "short",
+                                  "long"
+                                ]
+                              },
+                              "option_type": {
+                                "type": "string",
+                                "enum": [
+                                  "CALL",
+                                  "PUT"
+                                ]
+                              },
+                              "strike": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "description": "the strike, in index points: 6800"
+                              },
+                              "qty": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 10,
+                                "description": "how many of this contract one structure holds; 1 when not given"
+                              }
+                            },
+                            "required": [
+                              "side",
+                              "option_type",
+                              "strike"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "entry": {
+                          "type": "number",
+                          "description": "what the structure was or would be entered at, points per contract, signed like a holding's entry: a credit received POSITIVE, a debit paid negative. The payoff is measured from it; without it, from the mid now"
+                        }
+                      },
+                      "required": [
+                        "expiry",
+                        "legs"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "structures"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "health",
+              "title": "The service's health",
+              "description": "The service's own account of itself: GET /health, asking the Provider nothing once a sweep has. `db` (the database answers), `provider` (`name` of the market-data Provider, `ok` — whether its last call answered), `golden_cases` (the fingerprint of the domain logic this build runs), `monitor` (the alarm sweep: `last_sweep_at`, `last_sweep_ok`, `consecutive_failures`, `alarms` — a `label` and whether it is `bad` — and `fetched_at`, its last batch), `settings` (`manage_by_dte`, `expired_retention_days`, `display_tz` — the zone every time here is in — and the sweep interval in force: `sweep_seconds`, `sweep_source` settings|env, `sweep_default_seconds`, `sweep_presets`, `sweep_refused`).",
+              "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": true,
+                "destructiveHint": false,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "add_rule",
+              "title": "Add an alarm rule",
+              "description": "Adds a WATCH rule — an alarm on one figure of one SPX contract, or of a combo of contracts on one expiry — through POST /monitors, exactly as the dashboard's add form does: the service first asks the market-data Provider whether every contract exists (one bounded call), and refuses one it does not know. Give a structure as price_spreads takes one: `expiry`, and `legs`, each `side` (short or long), `option_type` and `strike`. ONE leg is a rule on that contract alone (its side then means nothing); TWO OR MORE are a combo, valued as the signed sum of the legs' figures, a short leg negative — so a credit spread's value is MINUS its cost to close — and a combo needs a `name`, which becomes its code (\"1218-6750\"). A quantity is not taken here: every leg is one contract, and a rule on a structure with quantities (a ratio, a butterfly) is made on the page. `threshold` is required; `field` is the figure watched — mid_price (the price), option_delta, option_gamma, option_theta, option_vega, option_implied_volatility (not on a combo) or another a quote carries — and defaults to option_delta for one contract and mid_price for a combo; `direction` is above (the default) or below; `compare` is abs (the default: the figure's size against a positive threshold) or signed (the figure as it is, a threshold of either sign but never 0). The rule starts ON. ONLY WHILE WRITES ARE ON (the server's instructions say): every rule added is sent to the owner's phone, and writes are capped per ten minutes. Answers `{source, read_at, data}`: `source` is `POST /monitors`, `data` the rule as created (as watchlist and monitor_history name it, with its `id`), its threshold rounded as its field is. A refusal — a contract that does not exist, a rule already there for that code and field, a threshold the compare forbids — is a tool error in the service's own words.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "expiry": {
+                    "type": "string",
+                    "pattern": "^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$",
+                    "description": "the expiry, YYYYMMDD or YYYY-MM-DD: \"20261218\""
+                  },
+                  "legs": {
+                    "type": "array",
+                    "minItems": 1,
+                    "description": "one leg for a rule on one contract; two or more for a combo, which then needs a name",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "side": {
+                          "type": "string",
+                          "enum": [
+                            "short",
+                            "long"
+                          ]
+                        },
+                        "option_type": {
+                          "type": "string",
+                          "enum": [
+                            "CALL",
+                            "PUT"
+                          ]
+                        },
+                        "strike": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "the strike, in index points: 6800"
+                        },
+                        "qty": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1,
+                          "description": "1, or leave it out: a rule on a structure with quantities is made on the page"
+                        }
+                      },
+                      "required": [
+                        "side",
+                        "option_type",
+                        "strike"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "field": {
+                    "type": "string",
+                    "description": "the figure watched: mid_price, option_delta, option_gamma, option_theta, option_vega or option_implied_volatility; option_delta for one contract and mid_price for a combo when not given"
+                  },
+                  "threshold": {
+                    "type": "number",
+                    "description": "where the rule fires, in the field's own units: 3.0 for a price, 0.2 for a delta"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "above",
+                      "below"
+                    ],
+                    "description": "fire at or above the threshold, or at or below it; above when not given"
+                  },
+                  "compare": {
+                    "type": "string",
+                    "enum": [
+                      "abs",
+                      "signed"
+                    ],
+                    "description": "abs compares the figure's size with a positive threshold; signed, the figure as it is; abs when not given"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "a combo's name, which becomes its code: \"1218-6750\". Required for two legs or more, refused for one"
+                  }
+                },
+                "required": [
+                  "expiry",
+                  "legs",
+                  "threshold"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": false,
+                "destructiveHint": false,
+                "idempotentHint": false,
+                "openWorldHint": false
+              }
+            },
+            {
+              "name": "edit_rule",
+              "title": "Edit, mute or unmute an alarm rule",
+              "description": "Changes one rule through PATCH /monitors/{id}, as the dashboard's edit does: its `threshold`, `direction` (above or below), `compare` (abs or signed) or a combo's `name`, or switches it off (`enabled: false`, which mutes it as the owner muting it by hand would) or back on (`enabled: true`). At least one of those; the figure a rule watches (its field) is not changed here. Only a WATCH rule is changed here: a rule that watches a holding (its `positions` non-empty in watchlist) is refused, as a holding's rules are changed on the page. The rule is named by `id`: its id, its code or combo name, or its contract as the page writes it, found as monitor_history finds it — where a name fits several rules (a contract watched for its Δ and its price) the tool error lists each, to call again with its id. Only a rule muted BY HAND can be unmuted here: one the service switched off — quarantined (unknown-contract, no-figure, unreadable), expired, or holding-closed — is refused with its reason, as the owner must look at it first. ONLY WHILE WRITES ARE ON (the server's instructions say): every edit is sent to the owner's phone, and writes are capped per ten minutes. Answers `{source, read_at, data}`: `source` is `PATCH /monitors/<id>`, `data` the rule as it now stands, its threshold rounded as its field is. A refusal — a threshold the compare forbids, a name another rule has — is a tool error in the service's own words.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]{1,64}$",
+                    "description": "the rule's id, its code or combo name, or its contract as the page writes it: \"mon-2\", \"1218-6800\", \"US.SPXW261218P6800000\" or \"20261218 P6800\""
+                  },
+                  "threshold": {
+                    "type": "number",
+                    "description": "the new threshold, in the field's own units"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "above",
+                      "below"
+                    ]
+                  },
+                  "compare": {
+                    "type": "string",
+                    "enum": [
+                      "abs",
+                      "signed"
+                    ]
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "a combo's new name, which becomes its code; a rule on one contract is named by its contract and cannot be renamed"
+                  },
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "false mutes the rule; true unmutes one muted by hand"
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              },
+              "annotations": {
+                "readOnlyHint": false,
+                "destructiveHint": true,
+                "idempotentHint": true,
+                "openWorldHint": false
+              }
+            }
+          ]
+        }
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

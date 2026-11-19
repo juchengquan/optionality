@@ -22,18 +22,28 @@ export type Notifier = (text: string) => Promise<boolean>;
 /** The raw transport: what `bot/` provides and what a test fakes. */
 export type NotifySender = (text: string) => Promise<void> | void;
 
-export function notifier(settings: Settings, send: NotifySender): Notifier {
-  return async (text: string): Promise<boolean> => {
+/** Whether a message went: sent, not sent because Telegram is not configured, or refused. */
+export type Delivery = "sent" | "unconfigured" | "failed";
+
+/** Telling the owner, saying which of the three happened — what the MCP door's writes log (#456, ADR
+ *  0028), where "delivered" would call a notice nobody could send a sent one. Logs as `notifier` does. */
+export function delivery(settings: Settings, send: NotifySender): (text: string) => Promise<Delivery> {
+  return async (text: string): Promise<Delivery> => {
     if (!settings.telegramBotToken || !settings.telegramChatId) {
       console.info(`telegram not configured; alarm suppressed: ${text}`);
-      return true;
+      return "unconfigured";
     }
     try {
       await send(text);
-      return true;
+      return "sent";
     } catch (err) {
       console.error("telegram send failed:", err);
-      return false;
+      return "failed";
     }
   };
+}
+
+export function notifier(settings: Settings, send: NotifySender): Notifier {
+  const deliver = delivery(settings, send);
+  return async (text: string): Promise<boolean> => (await deliver(text)) !== "failed";
 }

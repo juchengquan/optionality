@@ -29,7 +29,7 @@ blanks the token on purpose so a local sweep cannot message the owner's phone.
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Protocol
+from typing import Literal, Protocol
 
 log = logging.getLogger(__name__)
 
@@ -47,18 +47,34 @@ class TelegramSettings(Protocol):
     telegram_chat_id: str
 
 
-def notifier(settings: TelegramSettings, send: NotifySender) -> Notifier:
-    async def notify(text: str) -> bool:
+#: Whether a message went: sent, not sent because Telegram is not configured, or refused.
+type Delivery = Literal["sent", "unconfigured", "failed"]
+
+
+def delivery(settings: TelegramSettings, send: NotifySender) -> Callable[[str], Awaitable[Delivery]]:
+    """Telling the owner, saying which of the three happened — what the MCP door's writes log (#456, ADR
+    0028), where "delivered" would call a notice nobody could send a sent one. Logs as `notifier` does."""
+
+    async def deliver(text: str) -> Delivery:
         if not settings.telegram_bot_token or not settings.telegram_chat_id:
             log.info("telegram not configured; alarm suppressed: %s", text)
-            return True
+            return "unconfigured"
         try:
             sent = send(text)
             if inspect.isawaitable(sent):
                 await sent
-            return True
+            return "sent"
         except Exception:
             log.exception("telegram send failed")
-            return False
+            return "failed"
+
+    return deliver
+
+
+def notifier(settings: TelegramSettings, send: NotifySender) -> Notifier:
+    deliver = delivery(settings, send)
+
+    async def notify(text: str) -> bool:
+        return await deliver(text) != "failed"
 
     return notify

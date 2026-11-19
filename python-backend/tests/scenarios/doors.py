@@ -110,7 +110,9 @@ def run_http(scenario: dict[str, Any], build: Builder | None = None) -> dict[str
         answer = _send(o.service, scenario["request"])
         is_json = "application/json" in answer.content_type
         parsed = None if answer.text == "" else json.loads(answer.text) if is_json else answer.text
-        return {"response": {"status": answer.status, "body": parsed}, **_after(o)}
+        # the Telegram messages it sent, only where it sent any: an agent's write over MCP (ADR 0028)
+        sent = {"messages": list(o.world.sent)} if o.world.sent else {}
+        return {"response": {"status": answer.status, "body": parsed}, **sent, **_after(o)}
 
 
 def run_bot(scenario: dict[str, Any], build: Builder | None = None) -> dict[str, Any]:

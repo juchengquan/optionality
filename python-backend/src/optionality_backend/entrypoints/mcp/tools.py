@@ -79,8 +79,12 @@ class Tool(TypedDict):
     name: str
     title: str
     description: str
-    #: the API path it GETs, with `{id}` where its one argument goes
+    #: a WRITE tool's method (ADR 0028); absent, the tool is a GET
+    method: NotRequired[str]
+    #: the API path it GETs (or writes), with `{id}` where its one argument goes
     path: str
+    #: what a client may tell its user before calling it (ADR 0028), listed as they are
+    annotations: dict[str, bool]
     #: whether it asks the Provider, and so is shared for `LIVE_FOR_MS` — unless `cached_by` says its route
     #: shares it already
     live: bool
@@ -423,6 +427,38 @@ def _detail_of(body: str) -> str:
     return body
 
 
+async def resolve_row(read: Read, lookup: _Lookup, given: str, authorization: str | None) -> "Row | ToolResult":
+    """The one row `given` names, read through `read` from `lookup.list` — its id held to `_AN_ID`, so it can
+    be put in a path — or the tool error saying why there is not one. A history tool takes its id;
+    `edit_rule` (ADR 0028) takes the row too, for the rule before the write and why it is off."""
+    status, body = await read(lookup.list, authorization)
+    if status != 200:
+        return _failed(f"GET {lookup.list} answered {status}: {_detail_of(body)}")
+    named = lookup.named(json.loads(body), given)
+    if not named:
+        return _failed(
+            f'no {lookup.noun} is "{given}": tried it {lookup.tried(given)}. '
+            f"{lookup.lister} lists every {lookup.noun}'s id"
+        )
+    if len(named) > 1:
+        return _failed(
+            "\n".join(
+                [f'"{given}" names {len(named)} {lookup.noun}s; call again with one of their ids:']
+                + [lookup.label(r) for r in named]
+            )
+        )
+    row = named[0]
+    # the service's ids are all this; anything else is not put in a path whatever it is
+    if not isinstance(row.get("id"), str) or _AN_ID.fullmatch(row["id"]) is None:
+        return _failed(f'the {lookup.noun} "{given}" has an id no path can carry')
+    return row
+
+
+def is_row(found: "Row | ToolResult") -> bool:
+    """Whether `resolve_row` answered a row rather than a refusal."""
+    return "content" not in found
+
+
 @dataclass(frozen=True)
 class _Reading:
     at: datetime
@@ -441,7 +477,8 @@ class Toolbox:
         self.tools = DESCRIBED["tools"]
 
     def has(self, name: str) -> bool:
-        return any(t["name"] == name for t in self.tools)
+        """Whether `name` is a READ tool: a write tool is `writes.py`'s."""
+        return any(t["name"] == name and "method" not in t for t in self.tools)
 
     def _fresh(self, path: str, authorization: str | None) -> _Reading:
         # begun at once, as a JavaScript promise is, so a caller that joins it joins one read
@@ -465,30 +502,6 @@ class Toolbox:
         reading.answer.add_done_callback(forget)
         return reading
 
-    async def _resolve(self, lookup: _Lookup, given: str, authorization: str | None) -> "str | ToolResult":
-        """The one id `given` names, or the tool error saying why there is not one."""
-        status, body = await self._read(lookup.list, authorization)
-        if status != 200:
-            return _failed(f"GET {lookup.list} answered {status}: {_detail_of(body)}")
-        named = lookup.named(json.loads(body), given)
-        if not named:
-            return _failed(
-                f'no {lookup.noun} is "{given}": tried it {lookup.tried(given)}. '
-                f"{lookup.lister} lists every {lookup.noun}'s id"
-            )
-        if len(named) > 1:
-            return _failed(
-                "\n".join(
-                    [f'"{given}" names {len(named)} {lookup.noun}s; call again with one of their ids:']
-                    + [lookup.label(r) for r in named]
-                )
-            )
-        found = named[0]["id"]
-        # the service's ids are all this; anything else is not put in a path whatever it is
-        if not isinstance(found, str) or _AN_ID.fullmatch(found) is None:
-            return _failed(f'the {lookup.noun} "{given}" has an id no path can carry')
-        return found
-
     async def call(self, name: str, args: Any, authorization: str | None) -> ToolResult:
         tool = next(t for t in self.tools if t["name"] == name)
         fault = argument_fault(tool, args)
@@ -498,10 +511,10 @@ class Toolbox:
         resolved: dict[str, str] = {}
         lookup = _LOOKUPS.get(tool["name"])
         if lookup is not None:
-            found = await self._resolve(lookup, given["id"].strip(_JS_WHITESPACE), authorization)
-            if not isinstance(found, str):
-                return found
-            resolved["id"] = found
+            found = await resolve_row(self._read, lookup, given["id"].strip(_JS_WHITESPACE), authorization)
+            if not is_row(found):
+                return found  # type: ignore[return-value]
+            resolved["id"] = found["id"]
         # only a RESOLVED id is ever put in a path, never what the caller typed
         path = re.sub(r"\{(\w+)\}", lambda m: quote(resolved[m.group(1)], safe=""), tool["path"])
         query = _QUERIES.get(tool["name"])

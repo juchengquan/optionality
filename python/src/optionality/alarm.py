@@ -16,6 +16,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
+from optionality.contract import contract_name
 from optionality.js import to_fixed
 from optionality.monitor import Monitor, is_breached, threshold_distance
 
@@ -229,3 +230,45 @@ def alarm_transition(
     else:
         words = f"✅ {name}: {_said(rule, 'back below' if above else 'back above')} — {_reading(rule, monitor, value)}"
     return AlarmDecision(triggered=breached, notice=words)
+
+
+class AgentRule(RuleShape):
+    """A rule as the notice of an agent's write reads it (#456, ADR 0028): its short form's five facts,
+    the code it is named by, and whether it is on."""
+
+    code: str
+    enabled: bool
+    #: the names of the holdings the rule watches, as the route links it; empty for none
+    holdings: list[str] = []
+
+
+def agent_notice(before: AgentRule | None, after: AgentRule) -> str:
+    """The one line the owner's phone gets for a write an agent made over MCP (#456, ADR 0028): `before`
+    None for a rule added, else the rule as it was and as the write left it. In the alarms' short form
+    (#388), the rule named as every alarm names it (`contract_name`), prefixed `🤖 agent` — see
+    `agentNotice` in alarm.ts for every form it takes, a rule added on holdings naming them sorted."""
+
+    def name_of(rule: AgentRule) -> str:
+        return contract_name(rule.code, rule.code)
+
+    if before is None:
+        # sorted as JavaScript's `sort` orders strings: by UTF-16 code unit, which UTF-16BE's bytes follow
+        held = sorted(after.holdings, key=lambda name: name.encode("utf-16-be", "surrogatepass"))
+        return f"🤖 agent added {name_of(after)} {rule_short(after)}{f' on {", ".join(held)}' if held else ''}"
+    if before.enabled and not after.enabled:
+        verb: str | None = "muted"
+    elif not before.enabled and after.enabled:
+        verb = "unmuted"
+    else:
+        verb = None
+    name = name_of(after) if before.code == after.code else f"{name_of(before)} → {name_of(after)}"
+    was = rule_short(before)
+    now = rule_short(after)
+    # the relation alone where the subject is the same, else the whole rule
+    then = (
+        f"{'≥' if _says_above(after) else '≤'} {_threshold_text(after)}" if _subject(before) == _subject(after) else now
+    )
+    rule = now if was == now else f"{was} → {then}"
+    changed = verb is not None or before.code != after.code or was != now
+    head = "🤖 agent:" if verb is None else f"🤖 agent {verb}"
+    return f"{head} {name} {rule}{'' if changed else ', unchanged'}"

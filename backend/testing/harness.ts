@@ -23,6 +23,7 @@ import { createApp } from "../src/entrypoints/http/index.ts";
 import { mcpServer } from "../src/entrypoints/mcp/index.ts";
 import { createDatabase } from "../src/db/open.ts";
 import { type Settings, settingsFor } from "../src/env.ts";
+import { type NotifySender, delivery } from "../src/notify.ts";
 import type { Deps } from "../src/entrypoints/http/index.ts";
 import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "optionality/quotes";
 
@@ -63,6 +64,9 @@ export interface Harness {
   db: DatabaseSync;
   settings: Settings;
   sweeper: FakeSweeper;
+  /** Every Telegram message the MCP door's writes delivered (ADR 0028), in order: none while
+   *  Telegram is not configured, which it is not unless a test sets its two settings. */
+  sent: string[];
   /** What the clock returns. Set it to state the time rather than wait for it. */
   now: Date;
   close(): void;
@@ -130,6 +134,8 @@ export interface HarnessOptions {
    *  creation probe goes to the NAMED one rather than to whatever the Provider happens to be.
    *  The Provider is added under its own name either way, as the registry does. */
   referenceSources?: Deps["sources"];
+  /** Telegram's send, for the MCP door's notices (ADR 0028); by default it records into `sent`. */
+  send?: NotifySender;
 }
 
 export function harness(options: HarnessOptions = {}): Harness {
@@ -166,11 +172,16 @@ export function harness(options: HarnessOptions = {}): Harness {
 
   // with the MCP door mounted as `main.ts` mounts it (ADR 0026), so the app a test drives is the
   // whole of what the server serves
+  const sent: string[] = [];
+  const send: NotifySender = options.send ?? ((text) => { sent.push(text); });
   const app = createApp(deps, {
-    mcp: (read) => mcpServer({ read, now: deps.now, displayTz: settings.displayTz }),
+    mcp: (read, write) => mcpServer({
+      read, write, notify: delivery(settings, send), now: deps.now, displayTz: settings.displayTz,
+      writes: settings.mcpWrites, writesPer10Min: settings.mcpWritesPer10Min,
+    }),
   });
   const h: Harness = {
-    app, db, settings, sweeper,
+    app, db, settings, sweeper, sent,
     get now() { return state.now; },
     set now(value: Date) { state.now = value; },
     close() {

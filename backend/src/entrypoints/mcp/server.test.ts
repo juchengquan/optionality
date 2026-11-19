@@ -10,7 +10,9 @@ import { WATCHABLE_FIELDS } from "optionality/domain/monitor";
 import { opendFields } from "optionality/vendors/fields";
 
 import { type FakeProvider, type Harness, body, harness, json, pricedFetcher } from "../../../testing/harness.ts";
+import type { Settings } from "../../env.ts";
 import { DESCRIBED, LIVE_FOR_MS, type Rounding, byKey, canonical, roundTo, rounded, toolbox } from "./tools.ts";
+import { WRITES, allowedWrite } from "./writes.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
@@ -98,7 +100,8 @@ describe("the protocol", () => {
     expect(r.protocolVersion).toBe("2025-06-18");
     expect(r.capabilities).toEqual({ tools: { listChanged: false } });
     expect(r.serverInfo).toMatchObject({ name: "optionality", version: "1" });
-    expect(r.instructions).toMatch(/read-only/i);
+    // writes are off unless the owner switched them on (ADR 0028), and the instructions say so
+    expect(r.instructions).toMatch(/WRITES ARE OFF/);
   });
 
   it("answers its newest version to one it does not speak, and the client decides", async () => {
@@ -231,11 +234,12 @@ describe("the tools", () => {
 
   it("each serve a GET the API documents, and nothing else", async () => {
     // the read handed to the door is a GET by construction (`app.ts`); this holds the table to
-    // paths that ARE reads, so no tool can be a GET of something that is not there
+    // paths that ARE reads, so no tool can be a GET of something that is not there. A write tool
+    // names its method (ADR 0028), and is held by the writes' own test below
     start();
     const spec = await body(await h.call("/openapi.json"));
     const { DESCRIBED } = await import("./tools.ts");
-    for (const tool of DESCRIBED.tools) {
+    for (const tool of DESCRIBED.tools.filter((t) => t.method === undefined)) {
       expect(spec.paths[tool.path]?.get, `${tool.name}: GET ${tool.path} is not documented`).toBeTruthy();
     }
   });
@@ -682,17 +686,441 @@ describe("figures are rounded by key, per tool (#454)", () => {
   });
 });
 
+describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, ADR 0028)", () => {
+  const D = EXPIRY.replaceAll("-", "");
+  const PUT_SPREAD = {
+    expiry: D, name: "1218-7100", threshold: 3,
+    legs: [{ side: "short", option_type: "PUT", strike: 7100 }, { side: "long", option_type: "PUT", strike: 7075 }],
+  };
+  const TELEGRAM = { telegramBotToken: "t", telegramChatId: "42" };
+  const READS = [
+    "holdings", "watchlist", "positions", "holding_history", "monitor_history", "monitor_closes",
+    "references", "price_spreads", "health",
+  ];
+
+  /** The harness with writes on (unless said), Telegram configured (unless said), and the Provider
+   *  counted as `start` counts it. */
+  const writing = (settings: Partial<Settings> = {}, fetchQuotes: FakeProvider = pricedFetcher as FakeProvider) => {
+    asked = [];
+    h = harness({
+      settings: { mcpWrites: true, ...TELEGRAM, ...settings },
+      fetchQuotes: (codes) => { asked.push(codes); return fetchQuotes(codes); },
+    });
+    return h;
+  };
+  const rules = async () => (await body(await h.call("/monitors"))) as Record<string, unknown>[];
+  /** The log lines a block wrote, info and warnings and errors alike. */
+  const logged = async (fn: () => Promise<unknown>) => {
+    const said: string[] = [];
+    const saved = { log: console.log, info: console.info, warn: console.warn, error: console.error };
+    const take = (...a: unknown[]) => { said.push(a.map(String).join(" ")); };
+    Object.assign(console, { log: take, info: take, warn: take, error: take });
+    try {
+      await fn();
+    } finally {
+      Object.assign(console, saved);
+    }
+    return said;
+  };
+  const WRITES_OFF = "writes are off on this service: add_rule and edit_rule need MCP_WRITES=1 in its .env, which only its owner sets";
+
+  describe("the switch", () => {
+    it("is off by default: the writes are not listed, every tool listed is a read, and the instructions say so", async () => {
+      start();
+      const { tools } = await result(await rpc("tools/list"));
+      expect(tools.map((t: { name: string }) => t.name)).toEqual(READS);
+      for (const tool of tools) expect(tool.annotations.readOnlyHint, tool.name).toBe(true);
+      const { instructions } = await result(await rpc("initialize", { protocolVersion: "2025-11-25" }));
+      expect(instructions).toContain("WRITES ARE OFF on this service");
+      expect(instructions).not.toContain("WRITES ARE ON");
+    });
+
+    it("off, refuses a write before asking anything, writing nothing and counting nothing", async () => {
+      start();
+      await book();
+      const before = await rules();
+      for (const [name, args] of [["add_rule", PUT_SPREAD], ["edit_rule", { id: "anything", threshold: 1 }]] as const) {
+        expect(await call(name, args)).toMatchObject({ isError: true, text: WRITES_OFF });
+      }
+      // even arguments that are not the tool's: the switch is the first thing said
+      expect(await call("add_rule", { nonsense: true })).toMatchObject({ isError: true, text: WRITES_OFF });
+      expect(asked).toEqual([]);
+      expect(await rules()).toEqual(before);
+      expect(h.sent).toEqual([]);
+    });
+
+    it("on, lists the two writes after the reads, each annotated as the write it is, and the instructions say so", async () => {
+      writing({ mcpWritesPer10Min: 7 });
+      const { tools } = await result(await rpc("tools/list"));
+      expect(tools.map((t: { name: string }) => t.name)).toEqual([...READS, "add_rule", "edit_rule"]);
+      const annotations = Object.fromEntries(tools.map((t: { name: string; annotations: unknown }) => [t.name, t.annotations]));
+      for (const name of READS) {
+        expect(annotations[name], name).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+      }
+      expect(annotations.add_rule).toEqual({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false });
+      expect(annotations.edit_rule).toEqual({ readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false });
+      const { instructions } = await result(await rpc("initialize", { protocolVersion: "2025-11-25" }));
+      expect(instructions).toContain("WRITES ARE ON, for alarm rules only");
+      expect(instructions).toContain("at most 7 writes may reach the service in any ten minutes");
+      expect(instructions).not.toContain("{cap}");
+    });
+  });
+
+  describe("the door's reach for a write", () => {
+    it("lists exactly two writes in server.json, POST /monitors and PATCH /monitors/{id}, each a route the API documents", async () => {
+      start();
+      expect(WRITES.map((w) => `${w.method} ${w.path}`)).toEqual(["POST /monitors", "PATCH /monitors/{id}"]);
+      const spec = await body(await h.call("/openapi.json"));
+      for (const { method, path } of WRITES) {
+        expect(spec.paths[path]?.[method.toLowerCase()], `${method} ${path} is not documented`).toBeTruthy();
+      }
+    });
+
+    it("lets through only the pairs server.json lists, refusing every other before the app is asked", async () => {
+      const made: string[] = [];
+      const write = allowedWrite(async (method, path) => { made.push(`${method} ${path}`); return { status: 200, body: "{}" }; });
+      await write("POST", "/monitors", {}, null);
+      await write("PATCH", "/monitors/mon-1", {}, null);
+      await write("PATCH", "/monitors/00000000000000000000000000000001", {}, null);
+      for (const [method, path] of [
+        ["GET", "/monitors"], ["DELETE", "/monitors/mon-1"], ["PUT", "/monitors/mon-1"], ["POST", "/monitors/mon-1"],
+        ["PATCH", "/monitors"], ["POST", "/positions"], ["PATCH", "/positions/pos-1"], ["POST", "/spreads"],
+        ["PATCH", "/settings"], ["POST", "/monitors/mon-1/total-entry"], ["PATCH", "/monitors/../positions/pos-1"],
+        ["PATCH", "/monitors/mon 1"], ["PATCH", "/monitors/mon-1?x=1"], ["post", "/monitors"], ["POST", "/monitors/"],
+        ["DELETE", "/positions/pos-1"], ["POST", "/positions/pos-1/close"], ["PATCH", `/monitors/${"x".repeat(65)}`],
+        ["PATCH", "/monitors/mon-1\n"],
+      ]) {
+        await expect(write(method!, path!, {}, null), `${method} ${path}`).rejects
+          .toThrow(`the MCP door may not ${method} ${path}: it writes only POST /monitors and PATCH /monitors/{id}`);
+      }
+      expect(made).toEqual(["POST /monitors", "PATCH /monitors/mon-1", "PATCH /monitors/00000000000000000000000000000001"]);
+    });
+  });
+
+  describe("add_rule", () => {
+    it("adds a put spread's rule through POST /monitors, answers the rule as created, and tells the owner once", async () => {
+      writing();
+      const answer = await call("add_rule", PUT_SPREAD);
+      expect(answer.isError, answer.text).toBe(false);
+      expect(answer.source).toBe("POST /monitors");
+      expect(answer.read_at).toBe("2026-10-02 13:26:06+08:00");
+      const [made] = await rules();
+      expect(answer.data).toEqual(made);
+      expect(made).toMatchObject({
+        code: "1218-7100", field: "mid_price", threshold: 3, direction: "above", compare: "abs", enabled: true,
+        legs: [{ sign: -1, option_type: "PUT", strike: 7100 }, { sign: 1, option_type: "PUT", strike: 7075 }],
+      });
+      // the route's own probe, of both legs, in one call
+      expect(asked).toHaveLength(1);
+      expect([...asked[0]!].sort()).toEqual(["US.SPXW261218P7075000", "US.SPXW261218P7100000"]);
+      expect(h.sent).toEqual(["🤖 agent added 1218-7100 |value| ≥ 3.00"]);
+    });
+
+    it("adds a rule on one contract, its side meaning nothing, with the route's defaults", async () => {
+      writing();
+      const answer = await call("add_rule", { expiry: EXPIRY, legs: [{ side: "short", option_type: "CALL", strike: 8050, qty: 1 }], threshold: 0.2 });
+      expect(answer.isError, answer.text).toBe(false);
+      expect(answer.data).toMatchObject({ code: "US.SPXW261218C8050000", field: "option_delta", direction: "above", compare: "abs", legs: null });
+      expect(h.sent).toEqual(["🤖 agent added 20261218 C8050 |Δ| ≥ 0.20"]);
+    });
+
+    it("adds a rule the route links to a holding, and names the holding in the notice (review of #457)", async () => {
+      writing();
+      await created(await h.call("/positions", json(CONDOR)));
+      const answer = await call("add_rule", { expiry: D, legs: [{ side: "short", option_type: "PUT", strike: 7100 }], threshold: 0.2 });
+      expect(answer.isError, answer.text).toBe(false);
+      expect(answer.data.positions).toEqual([{ id: expect.any(String), name: "1016_IC" }]);
+      expect(h.sent).toEqual(["🤖 agent added 20261218 P7100 |Δ| ≥ 0.20 on 1016_IC"]);
+    });
+
+    it("passes field, direction and compare only where given", async () => {
+      writing();
+      const answer = await call("add_rule", { ...PUT_SPREAD, compare: "signed", direction: "below", threshold: -4.5 });
+      expect(answer.data).toMatchObject({ field: "mid_price", compare: "signed", direction: "below", threshold: -4.5 });
+      expect(h.sent).toEqual(["🤖 agent added 1218-7100 close ≥ 4.50"]);
+    });
+
+    it("refuses a quantity, a combo with no name, a name on one contract and a wrong shape, asking nothing and counting nothing", async () => {
+      writing({ mcpWritesPer10Min: 1 });
+      const one = { expiry: D, legs: [{ side: "long", option_type: "CALL", strike: 8050 }], threshold: 0.2 };
+      for (const [args, words] of [
+        [{ ...PUT_SPREAD, legs: [PUT_SPREAD.legs[0], { ...PUT_SPREAD.legs[1], qty: 2 }] },
+          "legs[1].qty is 2: a rule here watches one of each contract — a rule on a structure with quantities is made on the page"],
+        [{ ...PUT_SPREAD, name: undefined },
+          'a rule on 2 legs is a combo, and a combo needs a "name": it becomes the rule\'s code ("1218-6750")'],
+        [{ ...one, name: "mine" }, 'a rule on one contract takes no "name": its code is the contract\'s'],
+        [{ ...one, legs: [] }, '"legs" must hold one leg or more'],
+        [{ ...one, legs: "P7100" }, '"legs" must be a list of legs'],
+        [{ ...one, expiry: "Dec 18" }, 'argument "expiry" must be a string matching ^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$'],
+        [{ ...one, legs: [{ side: "sold", option_type: "CALL", strike: 8050 }] }, 'legs[0].side must be "short" or "long"'],
+        [{ ...one, legs: [{ side: "long", option_type: "CALL", strike: "8050" }] }, "legs[0].strike must be a number"],
+        [{ ...one, legs: [{ side: "long", option_type: "CALL", strike: 8050, entry: 1 }] },
+          'legs[0] has an unexpected "entry": a leg takes only "side", "option_type", "strike", "qty"'],
+        [{ ...one, threshold: "0.2" }, '"threshold" must be a number'],
+        [{ ...one, direction: 1 }, '"direction" must be a string'],
+        [{ ...one, threshold: undefined }, 'missing argument "threshold"'],
+        [{ ...one, enabled: false }, 'unexpected argument "enabled": add_rule takes only "expiry", "legs", "field", "threshold", "direction", "compare", "name"'],
+      ] as const) {
+        const clean = JSON.parse(JSON.stringify(args));
+        expect(await call("add_rule", clean), JSON.stringify(clean)).toMatchObject({ isError: true, text: words });
+      }
+      expect(asked).toEqual([]);
+      expect(await rules()).toEqual([]);
+      // none of them counted: the cap of one still has its one
+      expect((await call("add_rule", PUT_SPREAD)).isError).toBe(false);
+    });
+
+    it("carries the route's refusal in its own words, and counts it: a refused probe still asked the Provider", async () => {
+      writing({ mcpWritesPer10Min: 1 }, (codes) => Promise.resolve({ records: [], unknown: codes }));
+      const refused = await call("add_rule", PUT_SPREAD);
+      expect(refused.isError).toBe(true);
+      expect(refused.text).toMatch(/^POST \/monitors answered 422: /);
+      expect(asked).toHaveLength(1);
+      expect(h.sent).toEqual([]);
+      const capped = await call("add_rule", PUT_SPREAD);
+      expect(capped).toMatchObject({
+        isError: true, text: "agent writes are capped at 1 in ten minutes: the next is allowed in 600s",
+      });
+      expect(asked).toHaveLength(1);
+    });
+  });
+
+  describe("the cap", () => {
+    it("refuses the eleventh write within ten minutes with the wait, and allows the next once the first is ten minutes old", async () => {
+      writing();
+      expect((await call("add_rule", PUT_SPREAD)).isError).toBe(false);
+      for (let i = 1; i < 10; i++) {
+        h.now = new Date(h.now.getTime() + 1000);
+        const edited = await call("edit_rule", { id: "1218-7100", threshold: 3 + i });
+        expect(edited.isError, edited.text).toBe(false);
+      }
+      const capped = await call("edit_rule", { id: "1218-7100", threshold: 20 });
+      // the first was made 9s ago: 591s until it leaves the window
+      expect(capped).toMatchObject({ isError: true, text: "agent writes are capped at 10 in ten minutes: the next is allowed in 591s" });
+      expect((await rules())[0]!.threshold).toBe(12);
+      h.now = new Date(h.now.getTime() + 591_000);
+      expect((await call("edit_rule", { id: "1218-7100", threshold: 20 })).isError).toBe(false);
+    });
+
+    it("counts only the MCP's writes: the page's are not counted", async () => {
+      writing({ mcpWritesPer10Min: 1 });
+      for (let i = 0; i < 3; i++) await h.call("/monitors", json(RULE)).then((r) => r.text());
+      expect((await call("add_rule", PUT_SPREAD)).isError).toBe(false);
+    });
+  });
+
+  describe("edit_rule", () => {
+    const COMBO = {
+      name: "1218-6800", strike_date: EXPIRY, field: "mid_price", threshold: 4.51,
+      legs: [{ sign: -1, option_type: "PUT", strike: 7100 }, { sign: 1, option_type: "PUT", strike: 7075 }],
+    };
+    const setUp = async (settings: Partial<Settings> = {}) => {
+      writing(settings);
+      const combo = await created(await h.call("/monitors", json(COMBO)));
+      const delta = await created(await h.call("/monitors", json({ ...RULE, option_type: "PUT", strike: 7100 })));
+      asked = [];
+      return { combo, delta };
+    };
+
+    it("finds a rule by its combo name, changes its threshold through PATCH, and tells the owner before and after", async () => {
+      const { combo } = await setUp();
+      const answer = await call("edit_rule", { id: "1218-6800", threshold: 4.8 });
+      expect(answer.isError, answer.text).toBe(false);
+      expect(answer.source).toBe(`PATCH /monitors/${combo}`);
+      expect(answer.data).toEqual((await rules()).find((r) => r.id === combo));
+      expect(answer.data.threshold).toBe(4.8);
+      expect(h.sent).toEqual(["🤖 agent: 1218-6800 |value| ≥ 4.51 → ≥ 4.80"]);
+      expect(asked).toEqual([]);
+    });
+
+    it("mutes a rule as the owner muting it by hand would, and unmutes it", async () => {
+      const { delta } = await setUp();
+      const muted = await call("edit_rule", { id: "20261218 P7100", enabled: false });
+      expect(muted.data).toMatchObject({ id: delta, enabled: false, disabled_reason: "manual" });
+      const unmuted = await call("edit_rule", { id: delta, enabled: true });
+      expect(unmuted.data).toMatchObject({ id: delta, enabled: true, disabled_reason: null });
+      expect(h.sent).toEqual(["🤖 agent muted 20261218 P7100 |Δ| ≥ 0.20", "🤖 agent unmuted 20261218 P7100 |Δ| ≥ 0.20"]);
+    });
+
+    it("refuses to unmute a rule the service switched off, with its reason, writing nothing and counting nothing", async () => {
+      const { delta } = await setUp({ mcpWritesPer10Min: 1 });
+      for (const reason of ["unknown-contract", "no-figure", "unreadable", "expired", "holding-closed"]) {
+        h.db.prepare("update monitors set enabled = 0, disabled_reason = ? where id = ?").run(reason, delta);
+        expect(await call("edit_rule", { id: delta, enabled: true, threshold: 0.3 }), reason).toMatchObject({
+          isError: true,
+          text: `the rule "${delta}" is off as "${reason}", not muted by hand: edit_rule unmutes only a rule muted by hand (disabled_reason "manual")`,
+        });
+      }
+      expect((await rules()).find((r) => r.id === delta)).toMatchObject({ enabled: false, threshold: 0.2 });
+      expect(h.sent).toEqual([]);
+      // a quarantined rule may still be edited while it stays off, and nothing above was counted
+      expect((await call("edit_rule", { id: delta, threshold: 0.3 })).isError).toBe(false);
+    });
+
+    it("refuses to mute a rule the service switched off, which would make it one muted by hand and so unmutable here", async () => {
+      // review of #457: muting first rewrote its reason to "manual", and the unmute guard then let it on
+      const { delta } = await setUp({ mcpWritesPer10Min: 1 });
+      for (const reason of ["unknown-contract", "no-figure", "unreadable", "expired", "holding-closed"]) {
+        h.db.prepare("update monitors set enabled = 0, disabled_reason = ? where id = ?").run(reason, delta);
+        expect(await call("edit_rule", { id: delta, enabled: false }), reason).toMatchObject({
+          isError: true,
+          text: `the rule "${delta}" is already off as "${reason}", not muted by hand: edit_rule does not mute it again, `
+            + 'which would make it a rule muted by hand (disabled_reason "manual")',
+        });
+        expect(await call("edit_rule", { id: delta, enabled: true }), reason).toMatchObject({ isError: true });
+        expect((await rules()).find((r) => r.id === delta), reason).toMatchObject({ enabled: false, disabled_reason: reason });
+      }
+      expect(h.sent).toEqual([]);
+      // an edit that leaves enabled alone keeps the service's reason, and the cap of one was never spent
+      const moved = await call("edit_rule", { id: delta, threshold: 0.3 });
+      expect(moved.isError, moved.text).toBe(false);
+      expect(moved.data).toMatchObject({ enabled: false, disabled_reason: "holding-closed", threshold: 0.3 });
+    });
+
+    it("changes only a watch rule: a holding's rule is refused before any write, counting nothing (the owner, #456)", async () => {
+      writing({ mcpWritesPer10Min: 1 });
+      await created(await h.call("/positions", json(CONDOR)));
+      const held = await created(await h.call("/monitors", json(RULE)));
+      const [rule] = (await rules()).filter((r) => r.id === held);
+      expect(rule!.positions).toEqual([{ id: expect.any(String), name: "1016_IC" }]);
+      for (const change of [{ threshold: 0.3 }, { enabled: false }, { direction: "below" }]) {
+        expect(await call("edit_rule", { id: held, ...change }), JSON.stringify(change)).toMatchObject({
+          isError: true,
+          text: `the rule "${held}" watches the holding 1016_IC: a holding's rules are changed on the page, `
+            + "and edit_rule changes only a watch rule",
+        });
+      }
+      expect((await rules()).find((r) => r.id === held)).toMatchObject({ threshold: 0.2, enabled: true });
+      expect(h.sent).toEqual([]);
+      // none of it counted: the cap of one still has its one, for a watch rule
+      const watch = await created(await h.call("/monitors", json({ ...RULE, strike: 9000 })));
+      expect((await call("edit_rule", { id: watch, threshold: 0.3 })).isError).toBe(false);
+    });
+
+    it("refuses a rule whose scope is set though no link is listed, as a holding's", async () => {
+      const { delta } = await setUp();
+      h.db.prepare("update monitors set scope = 'leg' where id = ?").run(delta);
+      expect(await call("edit_rule", { id: delta, threshold: 0.3 })).toMatchObject({
+        isError: true,
+        text: `the rule "${delta}" watches a holding: a holding's rules are changed on the page, and edit_rule changes only a watch rule`,
+      });
+      expect(h.sent).toEqual([]);
+    });
+
+    it("lets a rule muted by hand be muted again, which changes nothing", async () => {
+      const { delta } = await setUp();
+      await call("edit_rule", { id: delta, enabled: false });
+      const again = await call("edit_rule", { id: delta, enabled: false });
+      expect(again.isError, again.text).toBe(false);
+      expect(again.data).toMatchObject({ enabled: false, disabled_reason: "manual" });
+    });
+
+    it("lets a rule already on be sent enabled true, which changes nothing", async () => {
+      await setUp();
+      const answer = await call("edit_rule", { id: "1218-6800", enabled: true });
+      expect(answer.isError, answer.text).toBe(false);
+      expect(h.sent).toEqual(["🤖 agent: 1218-6800 |value| ≥ 4.51, unchanged"]);
+    });
+
+    it("refuses field, and an edit of nothing, before writing anything", async () => {
+      await setUp({ mcpWritesPer10Min: 1 });
+      expect(await call("edit_rule", { id: "1218-6800", field: "option_delta" })).toMatchObject({
+        isError: true,
+        text: 'unexpected argument "field": edit_rule takes only "id", "threshold", "direction", "compare", "name", "enabled"',
+      });
+      expect(await call("edit_rule", { id: "1218-6800" })).toMatchObject({
+        isError: true, text: "edit_rule needs at least one change: threshold, direction, compare, name or enabled",
+      });
+      expect(await call("edit_rule", { id: "1218-6800", enabled: "no" })).toMatchObject({
+        isError: true, text: '"enabled" must be true or false',
+      });
+      expect(h.sent).toEqual([]);
+      expect((await call("edit_rule", { id: "1218-6800", threshold: 5 })).isError).toBe(false);
+    });
+
+    it("names the rules a name fits and what it tried when none, as monitor_history does, writing nothing", async () => {
+      await setUp();
+      await created(await h.call("/monitors", json({ ...RULE, option_type: "PUT", strike: 7100, field: "mid_price", threshold: 3 })));
+      const several = await call("edit_rule", { id: "20261218 P7100", threshold: 1 });
+      expect(several.isError).toBe(true);
+      expect(several.text).toBe((await call("monitor_history", { id: "20261218 P7100" })).text);
+      const none = await call("edit_rule", { id: "nope", threshold: 1 });
+      expect(none.text).toBe((await call("monitor_history", { id: "nope" })).text);
+      expect(h.sent).toEqual([]);
+    });
+
+    it("carries the route's refusal in its own words, and counts it", async () => {
+      const { delta } = await setUp({ mcpWritesPer10Min: 1 });
+      const refused = await call("edit_rule", { id: delta, name: "renamed" });
+      expect(refused).toMatchObject({
+        isError: true,
+        text: `PATCH /monitors/${delta} answered 422: only combo monitors can be renamed; a single-leg code is derived from its contract`,
+      });
+      expect((await call("edit_rule", { id: delta, threshold: 0.3 })).text).toMatch(/^agent writes are capped at 1/);
+    });
+  });
+
+  describe("the notice and the log", () => {
+    it("logs one line for every write attempted, the door's refusals included, and none for a read", async () => {
+      writing();
+      const said = await logged(async () => {
+        await call("add_rule", PUT_SPREAD);
+        await call("add_rule", { ...PUT_SPREAD, name: undefined });
+        await call("watchlist");
+        await call("edit_rule", { id: "1218-7100", threshold: 4 });
+      });
+      const mcp = said.filter((line) => line.startsWith("mcp "));
+      expect(mcp).toHaveLength(3);
+      expect(mcp[0]).toMatch(/^mcp add_rule \{.*"name":"1218-7100".*\}: POST \/monitors answered 201: rule [0-9a-f]{32}, notice sent$/);
+      expect(mcp[1]).toMatch(/^mcp add_rule \{.*\}: refused by the door: a rule on 2 legs is a combo/);
+      expect(mcp[2]).toMatch(/^mcp edit_rule \{"id":"1218-7100","threshold":4\}: PATCH \/monitors\/[0-9a-f]{32} answered 200: rule [0-9a-f]{32}, notice sent$/);
+    });
+
+    it("logs a write refused while writes are off", async () => {
+      start();
+      const said = await logged(() => call("edit_rule", { id: "x", threshold: 1 }));
+      expect(said).toEqual([`mcp edit_rule {"id":"x","threshold":1}: refused by the door: ${WRITES_OFF}`]);
+    });
+
+    it("lets a write stand with Telegram not configured, and logs that no notice was sent", async () => {
+      writing({ telegramBotToken: "", telegramChatId: "" });
+      const said = await logged(async () => {
+        expect((await call("add_rule", PUT_SPREAD)).isError).toBe(false);
+      });
+      expect(await rules()).toHaveLength(1);
+      expect(h.sent).toEqual([]);
+      expect(said).toContain("telegram not configured; alarm suppressed: 🤖 agent added 1218-7100 |value| ≥ 3.00");
+      expect(said.find((line) => line.startsWith("mcp add_rule"))).toMatch(/, no notice: Telegram is not configured$/);
+    });
+
+    it("lets a write stand when Telegram refuses the notice, and logs that it was not sent", async () => {
+      asked = [];
+      h = harness({
+        settings: { mcpWrites: true, ...TELEGRAM },
+        send: () => { throw new Error("telegram is down"); },
+      });
+      const said = await logged(async () => {
+        expect((await call("add_rule", PUT_SPREAD)).isError).toBe(false);
+      });
+      expect(await rules()).toHaveLength(1);
+      expect(said.some((line) => line.startsWith("telegram send failed:"))).toBe(true);
+      expect(said.find((line) => line.startsWith("mcp add_rule"))).toMatch(/, its notice not sent$/);
+    });
+  });
+});
+
 describe("the door's reach", () => {
   it("imports nothing of the service: no route, no query, no engine, no write", () => {
-    // It is handed a GET of the API's own and that is all it may use (ADR 0026). Read from the
-    // source, so a write path added later fails here rather than in a review.
+    // It is handed a GET of the API's own, a write it holds to two routes and a notifier, and that
+    // is all it may use (ADR 0026, 0028). Read from the source, so a write path added later fails
+    // here rather than in a review.
     const dir = new URL(".", import.meta.url).pathname;
     const sources = readdirSync(dir).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts"));
-    expect(sources.sort()).toEqual(["index.ts", "server.ts", "tools.ts"]);
+    expect(sources.sort()).toEqual(["index.ts", "server.ts", "tools.ts", "writes.ts"]);
     const reached = sources.flatMap((f) => [...readFileSync(join(dir, f), "utf8")
       .matchAll(/(?:from|import)\s*\(?\s*"([^"]+)"/g)].map((m) => m[1]!));
     const outside = reached.filter((spec) => !spec.startsWith("./"));
-    // `ports.ts` for the one type it is handed, `Read`, and nothing that runs; and the library's
+    // `ports.ts` for the types it is handed, `Read`, `Write` and `Notify`, and nothing that runs; and the library's
     // pure domain for the words — a contract as the page writes it is read by `/unwatch`'s own
     // parser, and a rule is said in its short form — which reach nothing of the service either
     expect([...new Set(outside)].sort()).toEqual([

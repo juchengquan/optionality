@@ -10,6 +10,11 @@ histories take a name. Both backends carry it, in lockstep (ADR 0021).
 Decision 5, "no tool prices an arbitrary contract", is **superseded by ADR 0027** (2026-11-19): the
 `price_spreads` tool prices any SPX structure through a bounded, capped call of its own.
 
+**Amended by ADR 0028** (2026-11-19, #456): every tool is one GET the API serves, or one of the WRITES
+`server.json` lists — `add_rule` and `edit_rule`, off unless `MCP_WRITES` is on — and the door is handed a
+`Write` beside its `Read`, held to `POST /monitors` and `PATCH /monitors/{id}`. Decision 4, "read-only",
+holds while that switch is off, the default.
+
 **Amended 2026-11-19** (#454, below): a tool's `data` is its GET's body with its figures rounded by
 key; "that GET's body" and "The text is canonical" are read with that amendment.
 

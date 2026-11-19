@@ -16,6 +16,7 @@
  *  all. Collapsing them is how a throttled alarm re-announces itself on every sweep after — the
  *  flag never got written, so the next sweep sees the breach as fresh again.
  */
+import { contractName } from "./contract.ts";
 import { isBreached, thresholdDistance, type Monitor } from "./monitor.ts";
 
 /** What the database says about this rule right now — re-read after the fetch, in the sweep. */
@@ -213,4 +214,44 @@ export function distanceShort(rule: RuleShape, distance: number): string {
   if (distance > 0) return `${up ? "↑" : "↓"}${sizeText(distance, places)}`;
   if (distance === 0) return `${up ? "▲" : "▼"} at`;
   return `${up ? "▲" : "▼"} past ${sizeText(-distance, places)}`;
+}
+
+/** A rule as the notice of an agent's write reads it (#456, ADR 0028): its short form's five facts,
+ *  the code it is named by, and whether it is on. */
+export interface AgentRule extends RuleShape {
+  code: string;
+  enabled: boolean;
+  /** the names of the holdings the rule watches, as the route links it; absent or empty for none */
+  holdings?: string[];
+}
+
+/** The one line the owner's phone gets for a write an agent made over MCP (#456, ADR 0028): `before`
+ *  null for a rule added, else the rule as it was and as the write left it. In the alarms' short form
+ *  (#388), the rule named as every alarm names it (`contractName`), prefixed `🤖 agent`:
+ *
+ *    🤖 agent added 1218-6750 |value| ≥ 3.00
+ *    🤖 agent muted 20261218 P6800 |Δ| ≥ 0.20        (and `unmuted`)
+ *    🤖 agent: 1218-6800 |value| ≥ 4.51 → ≥ 4.80     (the subject said once where it is the same)
+ *    🤖 agent: 1218-6800 → dec-puts |value| ≥ 4.51   (a rename)
+ *    🤖 agent: 1218-6800 |value| ≥ 4.51, unchanged   (an edit that changed nothing said here)
+ *
+ *  An edit making several changes says each: `🤖 agent muted 1218-6800 |value| ≥ 4.51 → ≥ 4.80`.
+ *  A rule added that the route linked to holdings names them, sorted by name (in UTF-16 code units, as
+ *  `sort` orders strings): `🤖 agent added 20261218 P7100 |Δ| ≥ 0.20 on 1016_IC` (review of #457). An
+ *  edit names none: `edit_rule` changes only a rule that watches no holding. */
+export function agentNotice(before: AgentRule | null, after: AgentRule): string {
+  const nameOf = (rule: AgentRule) => contractName(rule.code, rule.code);
+  if (before === null) {
+    const held = [...(after.holdings ?? [])].sort();
+    return `🤖 agent added ${nameOf(after)} ${ruleShort(after)}${held.length > 0 ? ` on ${held.join(", ")}` : ""}`;
+  }
+  const verb = before.enabled && !after.enabled ? "muted" : !before.enabled && after.enabled ? "unmuted" : null;
+  const name = before.code === after.code ? nameOf(after) : `${nameOf(before)} → ${nameOf(after)}`;
+  const was = ruleShort(before);
+  const now = ruleShort(after);
+  // the relation alone where the subject is the same, else the whole rule
+  const then = subjectOf(before) === subjectOf(after) ? `${saysAbove(after) ? "≥" : "≤"} ${thresholdText(after)}` : now;
+  const rule = was === now ? now : `${was} → ${then}`;
+  const changed = verb !== null || before.code !== after.code || was !== now;
+  return `${verb === null ? "🤖 agent:" : `🤖 agent ${verb}`} ${name} ${rule}${changed ? "" : ", unchanged"}`;
 }
