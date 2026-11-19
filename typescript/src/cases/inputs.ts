@@ -10,7 +10,7 @@
  *  disagree, and the TypeScript itself rounds three ways (`Math.round` in exit and expiry, Python's
  *  half-to-even in thresholdFill, `toFixed` in round4).
  */
-import type { AgentRule, AlarmPolicy, AlarmState, RuleShape } from "../domain/alarm.ts";
+import type { AgentHolding, AgentRule, AlarmPolicy, AlarmState, RuleShape } from "../domain/alarm.ts";
 import { buildSpxCode } from "../domain/contract.ts";
 import type { ExitPolicy } from "../domain/exit.ts";
 import type { Monitor } from "../domain/monitor.ts";
@@ -149,6 +149,14 @@ const agentRule = (over: Partial<AgentRule> = {}): AgentRule => ({
   code: "1218-6800", field: "mid_price", combo: true, compare: "abs", direction: "above", threshold: 4.51,
   enabled: true, ...over,
 });
+/** a put spread an agent records (#458): its long leg given first, as an agent may give it */
+const agentHolding = (over: Partial<AgentHolding> = {}): AgentHolding => ({
+  name: "dec-condor", strike_date: "2026-12-18",
+  legs: [{ side: "long", option_type: "PUT", strike: 6750 }, { side: "short", option_type: "PUT", strike: 6800 }],
+  entry: 1.25, contracts: 2, opened_at: "2026-11-19", exit: null, closed_on: null, ...over,
+});
+/** the same holding, closed */
+const agentClosed = agentHolding({ exit: 0.4, closed_on: "2026-11-18" });
 /** the expiring rule the expiry notices name */
 const expiring = shape({ threshold: 0.3 });
 
@@ -1127,6 +1135,30 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "agentNotice", name: "a rule added on several holdings names each, sorted",
       args: [null, agentRule({ holdings: ["nov-puts", "dec-condor", "Dec-B"] })] },
     { fn: "agentNotice", name: "a rule added on no holding names none", args: [null, agentRule({ holdings: [] })] },
+
+    // an agent's write to the book (#458, ADR 0029): a holding recorded, the rules it took over, and a
+    // close corrected — only what changed said
+    { fn: "agentHoldingNotice", name: "a put spread recorded, its short leg first", args: [null, agentHolding()] },
+    { fn: "agentHoldingNotice", name: "a ratio recorded at a debit typed finer, one contract",
+      args: [null, agentHolding({
+        legs: [{ side: "short", option_type: "CALL", strike: 7300, qty: 2 }, { side: "long", option_type: "CALL", strike: 7350 }],
+        contracts: 1, entry: -0.125,
+      })] },
+    { fn: "agentHoldingNotice", name: "a holding with no entry and no open day says neither",
+      args: [null, agentHolding({ entry: null, opened_at: null })] },
+    { fn: "agentHoldingNotice", name: "a holding recorded names the rule it took over",
+      args: [null, agentHolding(), [agentRule()]] },
+    { fn: "agentHoldingNotice", name: "and several, sorted",
+      args: [null, agentHolding(), [
+        agentRule({ code: "US.SPXW261218P6800000", field: "option_delta", combo: false, threshold: 0.2 }),
+        agentRule(), agentRule({ code: "1218-6750", threshold: 3 }),
+      ]] },
+    { fn: "agentHoldingNotice", name: "a close's exit and day corrected",
+      args: [agentClosed, { ...agentClosed, exit: 0.35, closed_on: "2026-11-19" }] },
+    { fn: "agentHoldingNotice", name: "a close's exit corrected to a long's sale", args: [agentClosed, { ...agentClosed, exit: -1.5 }] },
+    { fn: "agentHoldingNotice", name: "a close's day corrected alone", args: [agentClosed, { ...agentClosed, closed_on: "2026-11-17" }] },
+    { fn: "agentHoldingNotice", name: "a blank exit filled in", args: [{ ...agentClosed, exit: null }, agentClosed] },
+    { fn: "agentHoldingNotice", name: "a correction that changed nothing", args: [agentClosed, agentClosed] },
     { fn: "alarmTransition", name: "a breach past a finely typed threshold says by how much",
       args: [{ ...single, field: "mid_price", threshold: 4.505 }, 4.506, "1120_7100", state(false, null), alarms, NOW] },
     { fn: "alarmTransition", name: "a gamma back below a five-place threshold",
