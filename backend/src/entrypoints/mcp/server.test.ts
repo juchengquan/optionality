@@ -1443,7 +1443,7 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
             method: "POST",
             body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "record_holding", arguments: PUT_HOLDING } }),
           }));
-          answer = await resp.json();
+          answer = (await resp.json()) as typeof answer;
         });
         return { answer: answer!, sent, line: said.find((l) => l.startsWith("mcp record_holding"))! };
       };
