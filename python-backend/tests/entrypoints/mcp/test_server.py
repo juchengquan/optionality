@@ -201,7 +201,9 @@ class TestTheProtocol:
         # header rule is the transport's for requests AFTER initialization, so it never refuses this
         m = mcp()
         for header in ("2026-07-28", "2025-03-26", "2025-06-18"):
-            answered = await m.rpc("initialize", {"protocolVersion": "2026-07-28"}, headers={"MCP-Protocol-Version": header})
+            answered = await m.rpc(
+                "initialize", {"protocolVersion": "2026-07-28"}, headers={"MCP-Protocol-Version": header}
+            )
             assert answered.status_code == 200
             assert (await m.result(answered))["protocolVersion"] == "2025-11-25"
         # the exemption is initialize's alone: the same header on any other request is still refused
