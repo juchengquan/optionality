@@ -3,8 +3,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  alarmPolicy, alarmTransition, distanceShort, figureShort, ruleShape, ruleShort,
-  type AlarmPolicy, type AlarmState, type RuleShape,
+  agentNotice, alarmPolicy, alarmTransition, distanceShort, figureShort, ruleShape, ruleShort,
+  type AgentRule, type AlarmPolicy, type AlarmState, type RuleShape,
 } from "./alarm.ts";
 import type { Monitor } from "./monitor.ts";
 
@@ -270,5 +270,53 @@ describe("the short form", () => {
     expect(ruleShape(rule())).toEqual(r({ threshold: 0.3 }));
     expect(ruleShape(rule({ legs: [] })).combo).toBe(false);
     expect(ruleShape(rule({ legs: [{ sign: 1, option_type: "PUT", strike: 1 }] })).combo).toBe(true);
+  });
+});
+
+describe("what the owner is told about an agent's write (#456, ADR 0028)", () => {
+  const SPREAD = "1218-6800";
+  const PUT = "US.SPXW261218P6800000";
+  const agentRule = (over: Partial<AgentRule> = {}): AgentRule => ({
+    code: SPREAD, field: "mid_price", combo: true, compare: "abs", direction: "above", threshold: 4.51,
+    enabled: true, ...over,
+  });
+
+  it("says a rule added, named as every alarm names it, in its short form", () => {
+    expect(agentNotice(null, agentRule({ code: "1218-6750", threshold: 3 })))
+      .toBe("🤖 agent added 1218-6750 |value| ≥ 3.00");
+    expect(agentNotice(null, agentRule({ code: PUT, field: "option_delta", combo: false, threshold: 0.2 })))
+      .toBe("🤖 agent added 20261218 P6800 |Δ| ≥ 0.20");
+  });
+
+  it("says a rule muted and unmuted", () => {
+    const put = agentRule({ code: PUT, field: "option_delta", combo: false, threshold: 0.2 });
+    expect(agentNotice(put, { ...put, enabled: false })).toBe("🤖 agent muted 20261218 P6800 |Δ| ≥ 0.20");
+    expect(agentNotice({ ...put, enabled: false }, put)).toBe("🤖 agent unmuted 20261218 P6800 |Δ| ≥ 0.20");
+  });
+
+  it("says a threshold moved as the rule before and after, its subject said once", () => {
+    expect(agentNotice(agentRule(), agentRule({ threshold: 4.8 })))
+      .toBe("🤖 agent: 1218-6800 |value| ≥ 4.51 → ≥ 4.80");
+    expect(agentNotice(agentRule(), agentRule({ direction: "below" })))
+      .toBe("🤖 agent: 1218-6800 |value| ≥ 4.51 → ≤ 4.51");
+  });
+
+  it("repeats the subject where the edit changed it", () => {
+    expect(agentNotice(agentRule(), agentRule({ compare: "signed" })))
+      .toBe("🤖 agent: 1218-6800 |value| ≥ 4.51 → value ≥ 4.51");
+    // a held credit's stop is said as its cost to close
+    expect(agentNotice(agentRule(), agentRule({ compare: "signed", direction: "below", threshold: -9.44 })))
+      .toBe("🤖 agent: 1218-6800 |value| ≥ 4.51 → close ≥ 9.44");
+  });
+
+  it("says a rename, and every change one edit made", () => {
+    expect(agentNotice(agentRule(), agentRule({ code: "dec-puts" })))
+      .toBe("🤖 agent: 1218-6800 → dec-puts |value| ≥ 4.51");
+    expect(agentNotice(agentRule(), agentRule({ threshold: 4.8, enabled: false })))
+      .toBe("🤖 agent muted 1218-6800 |value| ≥ 4.51 → ≥ 4.80");
+  });
+
+  it("says an edit that changed nothing said here", () => {
+    expect(agentNotice(agentRule(), agentRule())).toBe("🤖 agent: 1218-6800 |value| ≥ 4.51, unchanged");
   });
 });

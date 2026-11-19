@@ -66,7 +66,7 @@
           "content": [
             {
               "type": "text",
-              "text": "{\"data\":{\"db\":true,\"golden_cases\":\"52d2d5616742\",\"monitor\":{\"alarms\":{\"bad\":false,\"label\":\"active\"},\"consecutive_failures\":0,\"fetched_at\":null,\"last_sweep_at\":\"2026-11-09 22:59:50+08:00\",\"last_sweep_ok\":true},\"provider\":{\"name\":\"moomoo\",\"ok\":true},\"settings\":{\"display_tz\":\"Asia/Singapore\",\"expired_retention_days\":7,\"manage_by_dte\":21,\"sweep_default_seconds\":15,\"sweep_presets\":[5,10,15,30,60],\"sweep_refused\":null,\"sweep_seconds\":5,\"sweep_source\":\"settings\"}},\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /health\"}"
+              "text": "{\"data\":{\"db\":true,\"golden_cases\":\"ce92b4dfafa2\",\"monitor\":{\"alarms\":{\"bad\":false,\"label\":\"active\"},\"consecutive_failures\":0,\"fetched_at\":null,\"last_sweep_at\":\"2026-11-09 22:59:50+08:00\",\"last_sweep_ok\":true},\"provider\":{\"name\":\"moomoo\",\"ok\":true},\"settings\":{\"display_tz\":\"Asia/Singapore\",\"expired_retention_days\":7,\"manage_by_dte\":21,\"sweep_default_seconds\":15,\"sweep_presets\":[5,10,15,30,60],\"sweep_refused\":null,\"sweep_seconds\":5,\"sweep_source\":\"settings\"}},\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /health\"}"
             }
           ]
         }

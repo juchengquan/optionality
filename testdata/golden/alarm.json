@@ -1463,6 +1463,265 @@
       "expect": "▲ past <0.001"
     },
     {
+      "fn": "agentNotice",
+      "name": "a spread's rule added",
+      "args": [
+        null,
+        {
+          "code": "1218-6750",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 3,
+          "enabled": true
+        }
+      ],
+      "expect": "🤖 agent added 1218-6750 |value| ≥ 3.00"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a contract's rule added, named as the page writes it",
+      "args": [
+        null,
+        {
+          "code": "US.SPXW261218P6800000",
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2,
+          "enabled": true
+        }
+      ],
+      "expect": "🤖 agent added 20261218 P6800 |Δ| ≥ 0.20"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a rule muted",
+      "args": [
+        {
+          "code": "US.SPXW261218P6800000",
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2,
+          "enabled": true
+        },
+        {
+          "code": "US.SPXW261218P6800000",
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2,
+          "enabled": false
+        }
+      ],
+      "expect": "🤖 agent muted 20261218 P6800 |Δ| ≥ 0.20"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a rule unmuted",
+      "args": [
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": false
+        },
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        }
+      ],
+      "expect": "🤖 agent unmuted 1218-6800 |value| ≥ 4.51"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a threshold moved, the subject said once",
+      "args": [
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        },
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.8,
+          "enabled": true
+        }
+      ],
+      "expect": "🤖 agent: 1218-6800 |value| ≥ 4.51 → ≥ 4.80"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a direction turned",
+      "args": [
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        },
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "below",
+          "threshold": 4.51,
+          "enabled": true
+        }
+      ],
+      "expect": "🤖 agent: 1218-6800 |value| ≥ 4.51 → ≤ 4.51"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a compare changed says the new subject",
+      "args": [
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        },
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "signed",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        }
+      ],
+      "expect": "🤖 agent: 1218-6800 |value| ≥ 4.51 → value ≥ 4.51"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a held credit's stop said as its cost to close",
+      "args": [
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        },
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "signed",
+          "direction": "below",
+          "threshold": -9.44,
+          "enabled": true
+        }
+      ],
+      "expect": "🤖 agent: 1218-6800 |value| ≥ 4.51 → close ≥ 9.44"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a spread renamed",
+      "args": [
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        },
+        {
+          "code": "dec-puts",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        }
+      ],
+      "expect": "🤖 agent: 1218-6800 → dec-puts |value| ≥ 4.51"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "muted and moved in one edit",
+      "args": [
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        },
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.8,
+          "enabled": false
+        }
+      ],
+      "expect": "🤖 agent muted 1218-6800 |value| ≥ 4.51 → ≥ 4.80"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "an edit that changed nothing",
+      "args": [
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        },
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true
+        }
+      ],
+      "expect": "🤖 agent: 1218-6800 |value| ≥ 4.51, unchanged"
+    },
+    {
       "fn": "alarmTransition",
       "name": "a breach past a finely typed threshold says by how much",
       "args": [

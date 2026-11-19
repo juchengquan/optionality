@@ -10,7 +10,7 @@
  *  disagree, and the TypeScript itself rounds three ways (`Math.round` in exit and expiry, Python's
  *  half-to-even in thresholdFill, `toFixed` in round4).
  */
-import type { AlarmPolicy, AlarmState, RuleShape } from "../domain/alarm.ts";
+import type { AgentRule, AlarmPolicy, AlarmState, RuleShape } from "../domain/alarm.ts";
 import { buildSpxCode } from "../domain/contract.ts";
 import type { ExitPolicy } from "../domain/exit.ts";
 import type { Monitor } from "../domain/monitor.ts";
@@ -144,6 +144,11 @@ const shape = (over: Partial<RuleShape> = {}): RuleShape =>
   ({ field: "option_delta", combo: false, compare: "abs", direction: "above", threshold: 0.2, ...over });
 /** a held credit's stop, as the add form posts it: the spread's signed mid at or below minus its cost */
 const costStop = shape({ field: "mid_price", combo: true, compare: "signed", direction: "below", threshold: -9.44 });
+/** a spread's price rule, as an agent's write leaves it (#456) */
+const agentRule = (over: Partial<AgentRule> = {}): AgentRule => ({
+  code: "1218-6800", field: "mid_price", combo: true, compare: "abs", direction: "above", threshold: 4.51,
+  enabled: true, ...over,
+});
 /** the expiring rule the expiry notices name */
 const expiring = shape({ threshold: 0.3 });
 
@@ -1096,6 +1101,26 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "distanceShort", name: "a distance that rounds to zero is under the last place, not zero",
       args: [shape({ threshold: 0.3 }), 0.0000001] },
     { fn: "distanceShort", name: "and past it likewise", args: [shape({ threshold: 0.3 }), -0.0004] },
+
+    // an agent's write, said to the owner's phone (#456, ADR 0028): a rule added, muted, unmuted,
+    // moved, renamed, several of those at once, and nothing at all
+    { fn: "agentNotice", name: "a spread's rule added", args: [null, agentRule({ code: "1218-6750", threshold: 3 })] },
+    { fn: "agentNotice", name: "a contract's rule added, named as the page writes it",
+      args: [null, agentRule({ code: "US.SPXW261218P6800000", field: "option_delta", combo: false, threshold: 0.2 })] },
+    { fn: "agentNotice", name: "a rule muted",
+      args: [agentRule({ code: "US.SPXW261218P6800000", field: "option_delta", combo: false, threshold: 0.2 }),
+        agentRule({ code: "US.SPXW261218P6800000", field: "option_delta", combo: false, threshold: 0.2, enabled: false })] },
+    { fn: "agentNotice", name: "a rule unmuted",
+      args: [agentRule({ enabled: false }), agentRule()] },
+    { fn: "agentNotice", name: "a threshold moved, the subject said once", args: [agentRule(), agentRule({ threshold: 4.8 })] },
+    { fn: "agentNotice", name: "a direction turned", args: [agentRule(), agentRule({ direction: "below" })] },
+    { fn: "agentNotice", name: "a compare changed says the new subject", args: [agentRule(), agentRule({ compare: "signed" })] },
+    { fn: "agentNotice", name: "a held credit's stop said as its cost to close",
+      args: [agentRule(), agentRule({ compare: "signed", direction: "below", threshold: -9.44 })] },
+    { fn: "agentNotice", name: "a spread renamed", args: [agentRule(), agentRule({ code: "dec-puts" })] },
+    { fn: "agentNotice", name: "muted and moved in one edit",
+      args: [agentRule(), agentRule({ threshold: 4.8, enabled: false })] },
+    { fn: "agentNotice", name: "an edit that changed nothing", args: [agentRule(), agentRule()] },
     { fn: "alarmTransition", name: "a breach past a finely typed threshold says by how much",
       args: [{ ...single, field: "mid_price", threshold: 4.505 }, 4.506, "1120_7100", state(false, null), alarms, NOW] },
     { fn: "alarmTransition", name: "a gamma back below a five-place threshold",
