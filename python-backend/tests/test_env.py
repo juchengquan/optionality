@@ -148,6 +148,19 @@ class TestTheKnobsAServiceMustNotStartOn:
                 f"MCP_WRITES is not a switch: {typo} (1 or true for on, 0, false or nothing for off)"
             )
 
+    def test_leaves_an_agent_s_writes_to_the_book_off_unless_mcp_writes_positions_says_on(self):
+        # #458, read as MCP_WRITES is
+        assert settings_from_env({}).mcp_writes_positions is False
+        for on in ("1", "true", " TRUE "):
+            assert settings_from_env({"MCP_WRITES_POSITIONS": on}).mcp_writes_positions is True, on
+        for off in ("0", "false", "", "  "):
+            assert settings_from_env({"MCP_WRITES_POSITIONS": off}).mcp_writes_positions is False, off
+        with pytest.raises(ValueError) as refused:
+            settings_from_env({"MCP_WRITES_POSITIONS": "yes"})
+        assert str(refused.value) == (
+            "MCP_WRITES_POSITIONS is not a switch: yes (1 or true for on, 0, false or nothing for off)"
+        )
+
     def test_caps_an_agent_s_writes_at_10_in_ten_minutes_never_0(self):
         # #456
         assert settings_from_env({}).mcp_writes_per_10_min == 10
