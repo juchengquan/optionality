@@ -1,0 +1,79 @@
+{
+  "name": "POST /mcp initializes a client whose header names a version it does not speak",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok",
+      "MCP-Protocol-Version": "2026-07-28"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2026-07-28",
+        "capabilities": {},
+        "clientInfo": {
+          "name": "claude-code",
+          "version": "3"
+        }
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "protocolVersion": "2025-11-25",
+          "capabilities": {
+            "tools": {
+              "listChanged": false
+            }
+          },
+          "serverInfo": {
+            "name": "optionality",
+            "title": "optionality — an SPX options book",
+            "version": "1"
+          },
+          "instructions": "Access to one trader's SPX options book: what is held, the rules (Monitors) that watch it, their histories, the Reference securities on the page and the service's own health. Every successful tool answers one JSON object: `source`, the API's own GET it served (for a write, the write it made); `read_at`, when the service read it, in the service's display zone; and `data`, that GET's body as the HTTP API serves it, its keys sorted and its figures ROUNDED, half away from zero: prices, P&L and SPX levels (and the distances and payoffs in points) to 2 decimals; option_delta, option_theta, option_vega and option_implied_volatility to 4; option_gamma to 6, where a spread's gamma lives; `sigma`, `captured`, a Reference's `change` and a rule's `fill` to 4; a quote's other figures likewise (open/high/low/prev-close/average prices and turnover to 2; option_rho, option_premium, amplitude, turnover_rate and bid_ask_ratio to 4); and a rule's `watched`, `threshold` and `distance` as its `field` is rounded (a price to 2, option_gamma to 6, another Greek, IV or ratio to 4, a count never). Ids, counts, volumes, days, strikes, sizes, quantities and times are never rounded. The HTTP API and the dashboard keep the unrounded figures. The LIVE tools ask the market-data Provider, which allows 60 calls per 30 seconds shared with the alarm sweep and the dashboard. Three (holdings, watchlist, references) read only what the service already watches: their answers are shared by every caller for 5 seconds, so asking again sooner returns the same answer with the same `read_at` — there is no point polling faster. The fourth, price_spreads, prices ANY SPX structure you name, in one bounded call: the same contracts asked again within 5 seconds — at any entry, grouped any way — are answered from the same call, and the service makes at most a capped number of such calls in any 30 seconds whoever asks (12 unless the owner set otherwise) — past it the tool error says how many seconds to wait, so price several structures in ONE call rather than one per call. Prices are in index points per contract unless a field says money; P&L is money. A failed read is a tool error carrying the service's own words. WRITES ARE OFF on this service: every tool reads, and nothing here adds, edits, mutes, deletes, records or closes anything."
+        }
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

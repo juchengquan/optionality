@@ -135,6 +135,21 @@ describe("the protocol", () => {
     }
   });
 
+  it("negotiates initialize from its body, whatever version its header names (#460)", async () => {
+    // a newer client sends the version it asks for in the header of initialize as well; the
+    // header rule is the transport's for requests AFTER initialization, so it never refuses this
+    start();
+    for (const header of ["2026-07-28", "2025-03-26", "2025-06-18"]) {
+      const answered = await rpc("initialize", { protocolVersion: "2026-07-28" }, { headers: { "MCP-Protocol-Version": header } });
+      expect(answered.status).toBe(200);
+      expect((await result(answered)).protocolVersion).toBe("2025-11-25");
+    }
+    // the exemption is initialize's alone: the same header on any other request is still refused
+    for (const method of ["ping", "tools/list"]) {
+      expect((await rpc(method, undefined, { headers: { "MCP-Protocol-Version": "2026-07-28" } })).status).toBe(400);
+    }
+  });
+
   it("echoes an integral id as an integer, whatever way it was written", async () => {
     start();
     const resp = await h.call("/mcp", {
