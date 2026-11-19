@@ -13,16 +13,20 @@ import asyncio
 import json
 import logging
 import re
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, ClassVar
 from urllib.parse import quote
 
+import httpx2
 import pytest
 from harness import json_body, priced_fetcher
 from optionality.monitor import WATCHABLE_FIELDS
 from optionality.quote import Batch
+from starlette.applications import Starlette
+from starlette.routing import Route
 
+from optionality_backend.entrypoints.mcp.server import McpOptions, mcp_server
 from optionality_backend.entrypoints.mcp.tools import (
     DESCRIBED,
     LIVE_FOR_MS,
@@ -32,7 +36,7 @@ from optionality_backend.entrypoints.mcp.tools import (
     round_to,
     rounded,
 )
-from optionality_backend.entrypoints.mcp.writes import WRITES, allowed_write
+from optionality_backend.entrypoints.mcp.writes import OPENED_WITHIN_DAYS, WRITES, allowed_write
 
 EXPIRY = "2026-12-18"
 CONDOR = {
@@ -800,15 +804,22 @@ class TestAnAgentsWritesTheSwitch:
             "openWorldHint": False,
         }
         instructions = (await w.result(await w.rpc("initialize", {"protocolVersion": "2025-11-25"})))["instructions"]
-        assert "WRITES ARE ON, for alarm rules only" in instructions
-        assert "at most 7 writes may reach the service in any ten minutes" in instructions
+        assert "WRITES ARE ON, for alarm rules" in instructions
+        assert "Writes to the BOOK are off" in instructions
+        assert "at most 7 writes of any kind may reach the service in any ten minutes" in instructions
         assert "{cap}" not in instructions
 
 
 class TestTheDoorsReachForAWrite:
-    async def test_lists_exactly_two_writes_post_monitors_and_patch_monitors_id_each_documented(self, mcp):
+    async def test_lists_exactly_four_writes_two_of_rules_and_two_of_the_book_each_documented(self, mcp):
+        # ADR 0029
         m = mcp()
-        assert [f"{w['method']} {w['path']}" for w in WRITES] == ["POST /monitors", "PATCH /monitors/{id}"]
+        assert [f"{w['tier']} {w['method']} {w['path']}" for w in WRITES] == [
+            "rules POST /monitors",
+            "rules PATCH /monitors/{id}",
+            "positions POST /positions",
+            "positions PATCH /positions/{id}",
+        ]
         spec = (await m.h.call("/openapi.json")).json()
         for w in WRITES:
             assert spec["paths"].get(w["path"], {}).get(w["method"].lower()), f"{w['method']} {w['path']}"
@@ -824,14 +835,23 @@ class TestTheDoorsReachForAWrite:
         await write("POST", "/monitors", {}, None)
         await write("PATCH", "/monitors/mon-1", {}, None)
         await write("PATCH", "/monitors/00000000000000000000000000000001", {}, None)
+        await write("POST", "/positions", {}, None)
+        await write("PATCH", "/positions/pos-1", {}, None)
         for method, path in [
             ("GET", "/monitors"),
             ("DELETE", "/monitors/mon-1"),
             ("PUT", "/monitors/mon-1"),
             ("POST", "/monitors/mon-1"),
             ("PATCH", "/monitors"),
-            ("POST", "/positions"),
-            ("PATCH", "/positions/pos-1"),
+            ("PATCH", "/positions"),
+            ("POST", "/positions/pos-1"),
+            ("PUT", "/positions/pos-1"),
+            ("POST", "/positions/payoff"),
+            ("PATCH", "/positions/pos-1/close"),
+            ("POST", "/positions/"),
+            ("PATCH", "/positions/../monitors/mon-1"),
+            ("PATCH", "/positions/pos-1?exit=1"),
+            ("patch", "/positions/pos-1"),
             ("POST", "/spreads"),
             ("PATCH", "/settings"),
             ("POST", "/monitors/mon-1/total-entry"),
@@ -848,9 +868,16 @@ class TestTheDoorsReachForAWrite:
             with pytest.raises(PermissionError) as refused:
                 await write(method, path, {}, None)
             assert str(refused.value) == (
-                f"the MCP door may not {method} {path}: it writes only POST /monitors and PATCH /monitors/{{id}}"
+                f"the MCP door may not {method} {path}: it writes only POST /monitors, PATCH /monitors/{{id}}, "
+                "POST /positions and PATCH /positions/{id}"
             )
-        assert made == ["POST /monitors", "PATCH /monitors/mon-1", "PATCH /monitors/00000000000000000000000000000001"]
+        assert made == [
+            "POST /monitors",
+            "PATCH /monitors/mon-1",
+            "PATCH /monitors/00000000000000000000000000000001",
+            "POST /positions",
+            "PATCH /positions/pos-1",
+        ]
 
 
 class TestAddRule:
@@ -1228,12 +1255,432 @@ class TestTheNoticeAndTheLog:
         assert next(m for m in said if m.startswith("mcp add_rule")).endswith(", its notice not sent")
 
 
+# --- the second tier: writes to the book (#458, ADR 0029) ----------------------------------------------
+BOOK_OFF = (
+    "writes to the book are off on this service: record_holding and correct_close need "
+    "MCP_WRITES_POSITIONS=1, beside MCP_WRITES=1, in its .env, which only its owner sets"
+)
+SERVER_LOG = "optionality_backend.entrypoints.mcp.server"
+#: today's New York market day on the harness's clock, 2026-10-02
+TODAY = "20261002"
+PUT_HOLDING = {
+    "name": "oct-puts",
+    "expiry": D,
+    "entry": 1.25,
+    "contracts": 2,
+    "opened_at": TODAY,
+    "legs": [
+        {"side": "long", "option_type": "PUT", "strike": 7075},
+        {"side": "short", "option_type": "PUT", "strike": 7100},
+    ],
+}
+WRITE = {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False}
+CORRECT = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False}
+
+
+def _without(args: dict[str, Any], key: str) -> dict[str, Any]:
+    return {k: v for k, v in args.items() if k != key}
+
+
+async def _holdings(w) -> list[dict[str, Any]]:
+    return (await w.h.call("/positions")).json()
+
+
+async def _closed_condor(w) -> str:
+    """A holding recorded through the page and closed there, as the owner would have."""
+    id_ = await w.created(await w.h.call("/positions", **json_body({**CONDOR, "opened_at": "2026-09-28"})))
+    closed = await w.h.call(f"/positions/{id_}/close", **json_body({"exit": 0.4, "closed_on": "2026-10-01"}))
+    assert closed.status_code == 200, closed.text
+    w.asked.clear()
+    return id_
+
+
+@pytest.fixture
+def booking(writing):
+    return lambda settings=None, fetch=None: writing({"mcp_writes_positions": True, **(settings or {})}, fetch)
+
+
+class TestTheBooksSwitch:
+    """#458, ADR 0029: record_holding and correct_close, behind MCP_WRITES_POSITIONS beside MCP_WRITES."""
+
+    async def test_with_rule_writes_on_and_this_one_unset_lists_the_rule_tools_only_and_refuses_either(self, writing):
+        w = writing({"mcp_writes_per_10_min": 1})
+        await _closed_condor(w)
+        tools = (await w.result(await w.rpc("tools/list")))["tools"]
+        assert [t["name"] for t in tools] == [*READS, "add_rule", "edit_rule"]
+        before = await _holdings(w)
+        for name, args in [("record_holding", PUT_HOLDING), ("correct_close", {"id": "1016_IC", "exit": 0.35})]:
+            assert await w.call(name, args) == {"isError": True, "text": BOOK_OFF}, name
+        assert await w.call("correct_close", {"nonsense": True}) == {"isError": True, "text": BOOK_OFF}
+        assert w.asked == []
+        assert await _holdings(w) == before
+        assert w.h.sent == []
+        # nothing counted: the cap of one still has its one
+        assert (await w.call("add_rule", PUT_SPREAD))["isError"] is False
+
+    async def test_on_while_mcp_writes_is_off_is_off_and_the_log_says_why_once(self, start, caplog):
+        with caplog.at_level(logging.INFO, logger=SERVER_LOG):
+            m = Writing(start, {"mcp_writes": False, "mcp_writes_positions": True})
+            tools = (await m.result(await m.rpc("tools/list")))["tools"]
+            assert [t["name"] for t in tools] == READS
+            instructions = (await m.result(await m.rpc("initialize", {"protocolVersion": "2025-11-25"})))[
+                "instructions"
+            ]
+            assert "WRITES ARE OFF on this service" in instructions
+            assert "BOOK" not in instructions
+            assert await m.call("record_holding", PUT_HOLDING) == {"isError": True, "text": BOOK_OFF}
+        assert [r.getMessage() for r in caplog.records if r.name == SERVER_LOG] == [
+            (
+                "MCP_WRITES_POSITIONS is on but MCP_WRITES is off: "
+                "an agent's writes to the book stay off until MCP_WRITES is on too"
+            )
+        ]
+        assert (await m.h.call("/positions")).json() == []
+        assert m.h.sent == []
+
+    async def test_with_both_on_lists_all_four_writes_annotated_and_the_instructions_say_the_book_s_are_on(
+        self, booking, caplog
+    ):
+        with caplog.at_level(logging.INFO, logger=SERVER_LOG):
+            w = booking()
+        assert [r for r in caplog.records if r.name == SERVER_LOG] == []
+        tools = (await w.result(await w.rpc("tools/list")))["tools"]
+        assert [t["name"] for t in tools] == [*READS, "add_rule", "edit_rule", "record_holding", "correct_close"]
+        annotations = {t["name"]: t["annotations"] for t in tools}
+        assert annotations["record_holding"] == WRITE
+        assert annotations["correct_close"] == CORRECT
+        instructions = (await w.result(await w.rpc("initialize", {"protocolVersion": "2025-11-25"})))["instructions"]
+        assert "WRITES ARE ON, for alarm rules" in instructions
+        assert "Writes to the BOOK are ON, for two things only" in instructions
+
+    def test_states_the_5_days_of_record_holding_s_window_in_its_description_as_the_door_holds_it(self):
+        assert OPENED_WITHIN_DAYS == 5
+        tool = next(t for t in DESCRIBED["tools"] if t["name"] == "record_holding")
+        assert f"at most {OPENED_WITHIN_DAYS} calendar days before it" in tool["description"]
+        assert (
+            f"at most {OPENED_WITHIN_DAYS} calendar days before it"
+            in (tool["inputSchema"]["properties"]["opened_at"]["description"])
+        )
+
+
+class TestRecordHolding:
+    async def test_records_a_put_spread_as_given_answers_it_as_recorded_and_tells_the_owner_once(self, booking):
+        w = booking()
+        answer = await w.call("record_holding", {**PUT_HOLDING, "strategy": "put spread"})
+        assert answer["isError"] is False, answer["text"]
+        assert answer["source"] == "POST /positions"
+        [made] = await _holdings(w)
+        assert answer["data"] == made
+        assert {k: made[k] for k in ("name", "strike_date", "entry", "contracts", "opened_at", "strategy")} == {
+            "name": "oct-puts",
+            "strike_date": EXPIRY,
+            "entry": 1.25,
+            "contracts": 2,
+            "opened_at": "2026-10-02",
+            "strategy": "put spread",
+        }
+        assert made["legs"] == PUT_HOLDING["legs"]
+        assert made["closed_on"] is None and made["exit"] is None
+        assert len(w.asked) == 1
+        assert sorted(w.asked[0]) == ["US.SPXW261218P7075000", "US.SPXW261218P7100000"]
+        assert w.h.sent == ["🤖 agent recorded oct-puts 20261218 −P7100 +P7075 ×2 @ 1.25, opened 20261002"]
+
+    async def test_passes_a_leg_s_quantity_and_leaves_strategy_to_the_route_where_it_is_not_given(self, booking):
+        w = booking()
+        legs = [{**PUT_HOLDING["legs"][0], "qty": 2}, PUT_HOLDING["legs"][1]]
+        answer = await w.call("record_holding", {**PUT_HOLDING, "legs": legs, "entry": -0.5, "contracts": 1})
+        assert answer["isError"] is False, answer["text"]
+        assert answer["data"]["strategy"] is None
+        assert answer["data"]["legs"][0] == {"side": "long", "option_type": "PUT", "strike": 7075, "qty": 2}
+        assert w.h.sent == ["🤖 agent recorded oct-puts 20261218 −P7100 +2P7075 ×1 @ −0.50, opened 20261002"]
+
+    async def test_names_the_watch_rule_the_new_holding_took_over_which_edit_rule_then_refuses(self, booking):
+        w = booking()
+        combo = {
+            "name": "1218-7100",
+            "strike_date": EXPIRY,
+            "field": "mid_price",
+            "threshold": 4.51,
+            "legs": [
+                {"sign": -1, "option_type": "PUT", "strike": 7100},
+                {"sign": 1, "option_type": "PUT", "strike": 7075},
+            ],
+        }
+        rule = await w.created(await w.h.call("/monitors", **json_body(combo)))
+        # a rule on another contract stays a watch rule, and is not named
+        await w.created(await w.h.call("/monitors", **json_body({**RULE, "strike": 9000})))
+        w.asked.clear()
+        answer = await w.call("record_holding", PUT_HOLDING)
+        assert answer["isError"] is False, answer["text"]
+        taken = next(r for r in await w.rules() if r["id"] == rule)
+        assert taken["positions"] == [{"id": answer["data"]["id"], "name": "oct-puts"}]
+        assert w.h.sent == [
+            (
+                "🤖 agent recorded oct-puts 20261218 −P7100 +P7075 ×2 @ 1.25, opened 20261002, "
+                "taking over 1218-7100 |value| ≥ 4.51"
+            )
+        ]
+        assert (await w.call("edit_rule", {"id": rule, "threshold": 5}))["isError"] is True
+
+    async def test_refuses_a_missing_or_empty_entry_contracts_or_opened_at_and_a_wrong_shape_counting_nothing(
+        self, booking
+    ):
+        w = booking({"mcp_writes_per_10_min": 1})
+        legs = PUT_HOLDING["legs"]
+        for args, words in [
+            (_without(PUT_HOLDING, "entry"), 'missing argument "entry"'),
+            (_without(PUT_HOLDING, "contracts"), 'missing argument "contracts"'),
+            (_without(PUT_HOLDING, "opened_at"), 'missing argument "opened_at"'),
+            ({**PUT_HOLDING, "entry": None}, '"entry" must be a number'),
+            ({**PUT_HOLDING, "entry": True}, '"entry" must be a number'),
+            ({**PUT_HOLDING, "contracts": None}, '"contracts" must be a number'),
+            (
+                {**PUT_HOLDING, "opened_at": None},
+                'argument "opened_at" must be a string matching ^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$',
+            ),
+            ({**PUT_HOLDING, "name": 7}, '"name" must be a string'),
+            ({**PUT_HOLDING, "strategy": 7}, '"strategy" must be a string'),
+            ({**PUT_HOLDING, "legs": []}, '"legs" must hold one leg or more'),
+            (
+                {**PUT_HOLDING, "legs": [{**legs[1], "side": "sold"}]},
+                'legs[0].side must be "short" or "long"',
+            ),
+            ({**PUT_HOLDING, "legs": [{**legs[1], "qty": "2"}]}, "legs[0].qty must be a number"),
+            ({**PUT_HOLDING, "opened_at": "20261340"}, "opened_at 20261340 is not a day: use YYYY-MM-DD or YYYYMMDD"),
+            (
+                {**PUT_HOLDING, "exit": 1},
+                (
+                    'unexpected argument "exit": record_holding takes only "name", "expiry", "legs", "entry", '
+                    '"contracts", "opened_at", "strategy"'
+                ),
+            ),
+        ]:
+            assert await w.call("record_holding", args) == {"isError": True, "text": words}, args
+        assert w.asked == []
+        assert await _holdings(w) == []
+        assert (await w.call("record_holding", PUT_HOLDING))["isError"] is False
+
+    async def test_takes_an_opened_at_back_5_days_and_refuses_tomorrow_and_6_days_back_uncounted(self, booking):
+        w = booking({"mcp_writes_per_10_min": 1})
+        assert await w.call("record_holding", {**PUT_HOLDING, "opened_at": "2026-10-03"}) == {
+            "isError": True,
+            "text": "opened_at 2026-10-03 is after today's New York market day, 2026-10-02: "
+            "a holding is recorded here once it is opened",
+        }
+        assert await w.call("record_holding", {**PUT_HOLDING, "opened_at": "20260926"}) == {
+            "isError": True,
+            "text": "opened_at 2026-09-26 is more than 5 days before today's New York market day, 2026-10-02: "
+            "a holding opened earlier is recorded on the page",
+        }
+        assert w.asked == []
+        answer = await w.call("record_holding", {**PUT_HOLDING, "opened_at": "20260927"})
+        assert answer["isError"] is False, answer["text"]
+        assert answer["data"]["opened_at"] == "2026-09-27"
+
+    async def test_reads_the_market_day_from_the_injected_clock_in_new_york_not_utc_s(self, booking):
+        w = booking()
+        w.h.now = datetime(2026, 10, 3, 2, 0, tzinfo=UTC)
+        assert await w.call("record_holding", {**PUT_HOLDING, "opened_at": "20261003"}) == {
+            "isError": True,
+            "text": "opened_at 2026-10-03 is after today's New York market day, 2026-10-02: "
+            "a holding is recorded here once it is opened",
+        }
+        assert (await w.call("record_holding", {**PUT_HOLDING, "opened_at": "20261002"}))["isError"] is False
+        # and five days back from New York's day, not from UTC's
+        assert (await w.call("record_holding", {**PUT_HOLDING, "name": "b", "opened_at": "20260927"}))[
+            "isError"
+        ] is False
+
+    async def test_carries_the_route_s_409_on_a_name_already_recorded_in_its_words_and_counts_it(self, booking):
+        w = booking({"mcp_writes_per_10_min": 2})
+        assert (await w.call("record_holding", PUT_HOLDING))["isError"] is False
+        assert await w.call("record_holding", PUT_HOLDING) == {
+            "isError": True,
+            "text": "POST /positions answered 409: position 'oct-puts' already exists",
+        }
+        assert await w.call("record_holding", {**PUT_HOLDING, "name": "other"}) == {
+            "isError": True,
+            "text": "agent writes are capped at 2 in ten minutes: the next is allowed in 600s",
+        }
+        assert len(w.h.sent) == 1
+
+
+class TestCorrectClose:
+    async def test_corrects_a_closed_holding_s_exit_by_its_name_and_tells_the_owner_only_what_changed(self, booking):
+        w = booking()
+        id_ = await _closed_condor(w)
+        answer = await w.call("correct_close", {"id": "1016_IC", "exit": 0.35})
+        assert answer["isError"] is False, answer["text"]
+        assert answer["source"] == f"PATCH /positions/{id_}"
+        assert {k: answer["data"][k] for k in ("id", "exit", "closed_on", "entry")} == {
+            "id": id_,
+            "exit": 0.35,
+            "closed_on": "2026-10-01",
+            "entry": 3,
+        }
+        [held] = await _holdings(w)
+        assert (held["exit"], held["closed_on"]) == (0.35, "2026-10-01")
+        assert w.h.sent == ["🤖 agent corrected the close of 1016_IC: exit 0.40 → 0.35"]
+        assert w.asked == []
+
+    async def test_corrects_both_by_id_saying_both(self, booking):
+        w = booking()
+        id_ = await _closed_condor(w)
+        answer = await w.call("correct_close", {"id": id_, "exit": 0.35, "closed_on": "20261002"})
+        assert answer["isError"] is False, answer["text"]
+        assert w.h.sent == ["🤖 agent corrected the close of 1016_IC: exit 0.40 → 0.35, closed 20261001 → 20261002"]
+
+    async def test_on_an_open_holding_is_the_route_s_refusal_which_closes_nothing_and_counts(self, booking):
+        w = booking({"mcp_writes_per_10_min": 1})
+        await w.created(await w.h.call("/positions", **json_body(CONDOR)))
+        refused = await w.call("correct_close", {"id": "1016_IC", "exit": 0.35})
+        assert refused["isError"] is True
+        assert re.fullmatch(
+            r"PATCH /positions/[0-9a-f]{32} answered 422: position '1016_IC' is not closed: close it first",
+            refused["text"],
+        )
+        [held] = await _holdings(w)
+        assert (held["closed_on"], held["exit"]) == (None, None)
+        assert w.h.sent == []
+        assert (await w.call("add_rule", PUT_SPREAD))["text"].startswith("agent writes are capped at 1")
+
+    async def test_refuses_any_other_field_no_change_an_unknown_holding_and_a_wrong_type_counting_nothing(
+        self, booking
+    ):
+        w = booking({"mcp_writes_per_10_min": 1})
+        id_ = await _closed_condor(w)
+        takes = 'correct_close takes only "id", "exit", "closed_on"'
+        for args, words in [
+            ({"id": id_, "entry": 2}, f'unexpected argument "entry": {takes}'),
+            ({"id": id_, "exit": 0.35, "contracts": 2}, f'unexpected argument "contracts": {takes}'),
+            ({"id": id_, "legs": []}, f'unexpected argument "legs": {takes}'),
+            ({"id": id_}, "correct_close needs at least one change: exit or closed_on"),
+            ({"id": id_, "exit": None}, "correct_close needs at least one change: exit or closed_on"),
+            ({"id": id_, "exit": 0.4}, "the close of 1016_IC already says exit 0.4: correct_close needs a change"),
+            (
+                {"id": id_, "exit": 0.4, "closed_on": "2026-10-01"},
+                "the close of 1016_IC already says exit 0.4 and closed_on 2026-10-01: correct_close needs a change",
+            ),
+            ({"id": id_, "exit": "0.35"}, '"exit" must be a number'),
+            ({"id": id_, "exit": True}, '"exit" must be a number'),
+            ({"id": id_, "closed_on": "2026-13-01"}, "closed_on 2026-13-01 is not a day: use YYYY-MM-DD or YYYYMMDD"),
+            (
+                {"id": "nobody", "exit": 0.35},
+                "no holding is \"nobody\": tried it as a holding's id and as its name. positions lists every holding's id",
+            ),
+        ]:
+            assert await w.call("correct_close", args) == {"isError": True, "text": words}, args
+        [held] = await _holdings(w)
+        assert (held["exit"], held["closed_on"], held["entry"], held["contracts"]) == (0.4, "2026-10-01", 3, 1)
+        assert w.h.sent == []
+        assert (await w.call("correct_close", {"id": id_, "closed_on": "2026-10-01", "exit": 0.3}))["isError"] is False
+
+    async def test_writes_the_route_a_body_of_exit_and_closed_on_alone_to_the_resolved_id_s_path(self):
+        writes: list[dict[str, Any]] = []
+        row = {
+            "id": "pos-1",
+            "name": "1016_IC",
+            "strike_date": EXPIRY,
+            "entry": 3,
+            "contracts": 1,
+            "opened_at": "2026-09-28",
+            "legs": CONDOR["legs"],
+            "exit": 0.4,
+            "closed_on": "2026-10-01",
+        }
+
+        async def read(path, authorization):
+            return 200, json.dumps([row])
+
+        async def write(method, path, body, authorization):
+            writes.append({"method": method, "path": path, "body": body})
+            return 200, json.dumps({**row, **body})
+
+        async def notify(text):
+            return "sent"
+
+        serve = mcp_server(
+            McpOptions(
+                read=read,
+                write=write,
+                notify=notify,
+                now=lambda: datetime(2026, 10, 2, 5, 26, 6, tzinfo=UTC),
+                display_tz="UTC",
+                writes=True,
+                writes_positions=True,
+                writes_per_10_min=10,
+            )
+        )
+        app = Starlette(routes=[Route("/mcp", serve, methods=["POST"])])
+        async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://x") as client:
+            for args in (
+                {"id": "1016_IC", "exit": 0.35},
+                {"id": "1016_IC", "closed_on": "20261002"},
+                {"id": "1016_IC", "exit": 0.35, "closed_on": "2026-10-02"},
+            ):
+                message = {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "tools/call",
+                    "params": {"name": "correct_close", "arguments": args},
+                }
+                await client.post("/mcp", content=json.dumps(message))
+        assert writes == [
+            {"method": "PATCH", "path": "/positions/pos-1", "body": {"exit": 0.35}},
+            {"method": "PATCH", "path": "/positions/pos-1", "body": {"closed_on": "20261002"}},
+            {"method": "PATCH", "path": "/positions/pos-1", "body": {"exit": 0.35, "closed_on": "2026-10-02"}},
+        ]
+
+
+class TestTheCapShared:
+    async def test_counts_rule_and_book_writes_together_6_add_rule_and_4_record_holding_then_the_11th_is_refused(
+        self, booking
+    ):
+        w = booking()
+        for i in range(6):
+            added = await w.call("add_rule", {**PUT_SPREAD, "name": f"r-{i}"})
+            assert added["isError"] is False, added["text"]
+            w.h.now = w.h.now + timedelta(seconds=1)
+        for i in range(4):
+            recorded = await w.call("record_holding", {**PUT_HOLDING, "name": f"h-{i}"})
+            assert recorded["isError"] is False, recorded["text"]
+            w.h.now = w.h.now + timedelta(seconds=1)
+        capped = {"isError": True, "text": "agent writes are capped at 10 in ten minutes: the next is allowed in 590s"}
+        assert await w.call("record_holding", {**PUT_HOLDING, "name": "h-4"}) == capped
+        assert await w.call("add_rule", {**PUT_SPREAD, "name": "r-6"}) == capped
+        assert len(await _holdings(w)) == 4
+
+
+class TestTheBooksLog:
+    async def test_logs_one_line_for_every_write_to_the_book_attempted_refusals_included(self, booking, caplog):
+        w = booking()
+        with caplog.at_level(logging.INFO, logger=WRITES_LOG):
+            await w.call("record_holding", PUT_HOLDING)
+            await w.call("record_holding", {**PUT_HOLDING, "opened_at": "20261003"})
+            await w.call("correct_close", {"id": "oct-puts", "exit": 0.1})
+        lines = [r.getMessage() for r in caplog.records if r.name == WRITES_LOG]
+        assert len(lines) == 3
+        assert re.fullmatch(
+            r'mcp record_holding \{.*"name":"oct-puts".*\}: POST /positions answered 201: holding [0-9a-f]{32}, '
+            r"notice sent",
+            lines[0],
+        )
+        assert re.match(
+            r"mcp record_holding \{.*\}: refused by the door: opened_at 2026-10-03 is after today's", lines[1]
+        )
+        assert re.match(
+            r'mcp correct_close \{"exit":0.1,"id":"oct-puts"\}: PATCH /positions/[0-9a-f]{32} answered 422: '
+            r"position 'oct-puts' is not closed",
+            lines[2],
+        )
+
+
 DOOR = Path(__file__).resolve().parents[3] / "src" / "optionality_backend" / "entrypoints" / "mcp"
 
 
 class TestTheDoorsReach:
     def test_imports_nothing_of_the_service_no_route_no_query_no_engine_no_write(self):
-        # It is handed a GET of the API's own, a write it holds to two routes and a notifier, and that is
+        # It is handed a GET of the API's own, a write it holds to four routes and a notifier, and that is
         # all it may use (ADR 0026, 0028). Read from the source, so a write path added later fails here
         # rather than in a review.
         sources = sorted(p.name for p in DOOR.glob("*.py"))
@@ -1262,6 +1709,8 @@ class TestTheDoorsReach:
             # `/unwatch`'s own parser, and a rule is said in its short form
             "optionality.alarm",
             "optionality.contract",
+            # New York's market day bounds a holding's open day (ADR 0029)
+            "optionality.expiry",
             "optionality.js",
             "optionality.timefmt",
             "pathlib",

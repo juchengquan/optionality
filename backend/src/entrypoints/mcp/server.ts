@@ -26,7 +26,7 @@ import { writer } from "./writes.ts";
 export interface McpOptions {
   /** a GET of the API's own (`app.ts`); the only way this door reads anything */
   read: Read;
-  /** a write of the API's own (`app.ts`), which the door holds to the two `server.json` lists
+  /** a write of the API's own (`app.ts`), which the door holds to the four `server.json` lists
    *  (`allowedWrite`, ADR 0028) — and makes none of while `writes` is off */
   write: Write;
   /** telling the owner of each write an agent made (ADR 0028): the service's `delivery` */

@@ -165,6 +165,7 @@ class _Backend:
                         now=deps.now,
                         display_tz=settings.display_tz,
                         writes=settings.mcp_writes,
+                        writes_positions=settings.mcp_writes_positions,
                         writes_per_10_min=settings.mcp_writes_per_10_min,
                     )
                 )

@@ -1,10 +1,12 @@
-/** The MCP door's writes (ADR 0028, #456): `add_rule` and `edit_rule`, behind `MCP_WRITES`, capped by
- *  `MCP_WRITES_PER_10_MIN`, each one said to the owner's phone and in the log.
+/** The MCP door's writes (ADR 0028, #456; ADR 0029, #458): `add_rule` and `edit_rule`, behind
+ *  `MCP_WRITES`, and `record_holding` and `correct_close`, behind `MCP_WRITES_POSITIONS` beside it — all
+ *  four capped together by `MCP_WRITES_PER_10_MIN`, each one said to the owner's phone and in the log.
  *
- *  **What this module can write is two routes, and nothing else.** It is handed a `Write` of the app's
+ *  **What this module can write is four routes, and nothing else.** It is handed a `Write` of the app's
  *  own (`app.ts`) and wraps it at once in `allowedWrite`, which lets through only the method and path
- *  pairs `schema/mcp/server.json` lists for a write tool — `POST /monitors` and `PATCH /monitors/{id}`,
- *  the id one of the service's own — and refuses any other before the app is asked. No service, query
+ *  pairs `schema/mcp/server.json` lists for a write tool — `POST /monitors`, `PATCH /monitors/{id}`,
+ *  `POST /positions` and `PATCH /positions/{id}`, an id one of the service's own — and refuses any other
+ *  (a close, a delete) before the app is asked. No service, query
  *  or engine is imported here, as none is in `tools.ts` (`server.test.ts` holds both): a rule is
  *  written by the very routes the dashboard writes it through, their probe, their checks and their
  *  words, and this door adds only what an agent must not be able to do that the page may.
@@ -13,7 +15,9 @@
  *  every write while the switch is off; arguments that are not the tool's shape; a `qty` other than 1
  *  (a rule on a structure with quantities is made on the page); a combo with no name, or a name on
  *  one contract; an edit of nothing; and unmuting a rule the service switched off — only a rule muted
- *  by hand (`manual`) may be unmuted here. Everything else is the route's to refuse, and is said in its
+ *  by hand (`manual`) may be unmuted here. Of the book's: a holding with no entry, contracts or open day,
+ *  or one opened after today's New York market day or more than `OPENED_WITHIN_DAYS` before it; and a
+ *  correction of anything but a close's exit and day, or of nothing. Everything else is the route's to refuse, and is said in its
  *  words, and counted: a refused probe still asked the Provider.
  *
  *  **The notice** is the domain's `agentNotice`, from the rule before (the `GET /monitors` row the
