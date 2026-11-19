@@ -237,6 +237,29 @@ class TestTheProtocol:
             },
         }
 
+    async def test_reads_a_body_that_starts_with_a_utf8_bom_as_the_json_after_it(self, mcp):
+        # #462: as the Fetch API's text() reads it in the TypeScript
+        m = mcp()
+
+        async def post(text, headers=None):
+            return await m.h.call(
+                "/mcp",
+                method="POST",
+                content=b"\xef\xbb\xbf" + text.encode(),
+                headers={"Content-Type": "application/json", **(headers or {})},
+            )
+
+        init = json.dumps(
+            {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2026-07-28"}}
+        )
+        for headers in ({}, {"MCP-Protocol-Version": "2026-07-28"}):
+            answered = await post(init, headers)
+            assert answered.status_code == 200
+            assert answered.json()["result"]["protocolVersion"] == "2025-11-25"
+        not_json = await post("{nope")
+        assert not_json.status_code == 400
+        assert not_json.json()["error"]["code"] == -32700
+
     async def test_echoes_an_integral_id_as_an_integer_whatever_way_it_was_written(self, mcp):
         m = mcp()
         resp = await m.h.call(

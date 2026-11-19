@@ -62,6 +62,27 @@ describe("choosing the sweep's interval", () => {
   });
 });
 
+describe("a body that starts with a UTF-8 BOM (#462)", () => {
+  // the Fetch API strips one leading BOM before parsing; the Python reads the bytes the same way
+  const raw = (bytes: Uint8Array) => h.call("/settings", {
+    method: "PATCH", body: bytes, headers: { "Content-Type": "application/json" },
+  });
+  const BOM = [0xef, 0xbb, 0xbf];
+  const withBom = (text: string) => new Uint8Array([...BOM, ...new TextEncoder().encode(text)]);
+
+  it("is read as the JSON after the mark", async () => {
+    start(ENV_15);
+    const resp = await raw(withBom(JSON.stringify({ sweep_seconds: 5 })));
+    expect(resp.status).toBe(200);
+    expect((await body(resp)).sweep_seconds).toBe(5);
+  });
+
+  it("is still malformed when what follows the mark is not JSON", async () => {
+    start(ENV_15);
+    expect((await raw(withBom("{nope"))).status).toBe(400);
+  });
+});
+
 describe("/health's sweep interval", () => {
   it("is .env's, said to be, with the default and the presets beside it", async () => {
     start(ENV_15);
