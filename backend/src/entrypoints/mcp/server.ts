@@ -146,7 +146,9 @@ export function mcpServer(options: McpOptions): (request: Request) => Promise<Re
       return json(405, failure(null, REFUSED, "Method not allowed: /mcp takes one JSON-RPC message per POST, and offers no stream"),
         { Allow: "POST" });
     }
-    const text = await request.text();
+    // decoded by TextDecoder, not request.text(): the Encoding spec ignores ONE leading BOM, as the
+    // Python's utf-8-sig does, where Node's Request.text() strips two (v25.9.0; #462)
+    const text = new TextDecoder().decode(await request.arrayBuffer());
     let message: unknown;
     let parsed = true;
     try {

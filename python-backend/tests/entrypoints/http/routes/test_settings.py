@@ -117,7 +117,8 @@ class TestWhatOnlyThePythonCanGetWrong:
 
 
 class TestABodyThatStartsWithAUtf8Bom:
-    """#462: one leading BOM is ignored, as the Fetch API's text() ignores it in the TypeScript."""
+    """#462: exactly ONE leading BOM is ignored (utf-8-sig), as the TypeScript's own TextDecoder ignores
+    one; Node's Request.json() would strip two, so the TypeScript no longer uses it (2026-11-20)."""
 
     @staticmethod
     async def raw(h, data: bytes):
@@ -132,3 +133,10 @@ class TestABodyThatStartsWithAUtf8Bom:
     async def test_is_still_malformed_when_what_follows_the_mark_is_not_json(self, begin):
         h = begin()
         assert (await self.raw(h, b"\xef\xbb\xbf{nope")).status_code == 400
+
+    async def test_strips_one_mark_only_a_second_or_third_is_malformed_json(self, begin):
+        h = begin()
+        for marks in (2, 3):
+            resp = await self.raw(h, b"\xef\xbb\xbf" * marks + json.dumps({"sweep_seconds": 5}).encode())
+            assert resp.status_code == 400
+            assert resp.text == "Malformed JSON in request body"

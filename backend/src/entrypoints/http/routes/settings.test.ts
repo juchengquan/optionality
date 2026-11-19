@@ -63,7 +63,9 @@ describe("choosing the sweep's interval", () => {
 });
 
 describe("a body that starts with a UTF-8 BOM (#462)", () => {
-  // the Fetch API strips one leading BOM before parsing; the Python reads the bytes the same way
+  // exactly ONE leading BOM is ignored, by the service's own decoding (TextDecoder, as the Encoding
+  // spec has it) — not by Node's Request.json(), which on v25.9.0 strips two. The Python's
+  // utf-8-sig strips one, so the two backends agree whatever Node runs (the owner, 2026-11-20).
   const raw = (bytes: Uint8Array) => h.call("/settings", {
     method: "PATCH", body: bytes, headers: { "Content-Type": "application/json" },
   });
@@ -80,6 +82,16 @@ describe("a body that starts with a UTF-8 BOM (#462)", () => {
   it("is still malformed when what follows the mark is not JSON", async () => {
     start(ENV_15);
     expect((await raw(withBom("{nope"))).status).toBe(400);
+  });
+
+  it("strips one mark only: a second or third is malformed JSON", async () => {
+    start(ENV_15);
+    const valid = JSON.stringify({ sweep_seconds: 5 });
+    for (const marks of [2, 3]) {
+      const resp = await raw(new Uint8Array([...Array(marks).fill(BOM).flat(), ...new TextEncoder().encode(valid)]));
+      expect(resp.status).toBe(400);
+      expect(await resp.text()).toBe("Malformed JSON in request body");
+    }
   });
 });
 

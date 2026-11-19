@@ -187,6 +187,13 @@ describe("the protocol", () => {
     const notJson = await post("{nope");
     expect(notJson.status).toBe(400);
     expect((await body(notJson)).error.code).toBe(-32700);
+    // one mark only, by the service's own TextDecoder (Node's Request.text() would strip two)
+    const twice = await h.call("/mcp", {
+      method: "POST", body: new Uint8Array([...BOM, ...BOM, ...new TextEncoder().encode(init)]),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(twice.status).toBe(400);
+    expect((await body(twice)).error.code).toBe(-32700);
   });
 
   it("echoes an integral id as an integer, whatever way it was written", async () => {

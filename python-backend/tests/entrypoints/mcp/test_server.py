@@ -259,6 +259,10 @@ class TestTheProtocol:
         not_json = await post("{nope")
         assert not_json.status_code == 400
         assert not_json.json()["error"]["code"] == -32700
+        # one mark only, as the TypeScript's own TextDecoder strips one
+        twice = await post("\ufeff" + init)
+        assert twice.status_code == 400
+        assert twice.json()["error"]["code"] == -32700
 
     async def test_echoes_an_integral_id_as_an_integer_whatever_way_it_was_written(self, mcp):
         m = mcp()
