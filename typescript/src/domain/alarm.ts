@@ -221,6 +221,8 @@ export function distanceShort(rule: RuleShape, distance: number): string {
 export interface AgentRule extends RuleShape {
   code: string;
   enabled: boolean;
+  /** the names of the holdings the rule watches, as the route links it; absent or empty for none */
+  holdings?: string[];
 }
 
 /** The one line the owner's phone gets for a write an agent made over MCP (#456, ADR 0028): `before`
@@ -233,10 +235,16 @@ export interface AgentRule extends RuleShape {
  *    🤖 agent: 1218-6800 → dec-puts |value| ≥ 4.51   (a rename)
  *    🤖 agent: 1218-6800 |value| ≥ 4.51, unchanged   (an edit that changed nothing said here)
  *
- *  An edit making several changes says each: `🤖 agent muted 1218-6800 |value| ≥ 4.51 → ≥ 4.80`. */
+ *  An edit making several changes says each: `🤖 agent muted 1218-6800 |value| ≥ 4.51 → ≥ 4.80`.
+ *  A rule added that the route linked to holdings names them, sorted by name (in UTF-16 code units, as
+ *  `sort` orders strings): `🤖 agent added 20261218 P7100 |Δ| ≥ 0.20 on 1016_IC` (review of #457). An
+ *  edit names none: `edit_rule` changes only a rule that watches no holding. */
 export function agentNotice(before: AgentRule | null, after: AgentRule): string {
   const nameOf = (rule: AgentRule) => contractName(rule.code, rule.code);
-  if (before === null) return `🤖 agent added ${nameOf(after)} ${ruleShort(after)}`;
+  if (before === null) {
+    const held = [...(after.holdings ?? [])].sort();
+    return `🤖 agent added ${nameOf(after)} ${ruleShort(after)}${held.length > 0 ? ` on ${held.join(", ")}` : ""}`;
+  }
   const verb = before.enabled && !after.enabled ? "muted" : !before.enabled && after.enabled ? "unmuted" : null;
   const name = before.code === after.code ? nameOf(after) : `${nameOf(before)} → ${nameOf(after)}`;
   const was = ruleShort(before);

@@ -206,6 +206,10 @@ def _agent_rule(row: dict[str, Any]) -> AgentRule:
         direction=str(row.get("direction")),
         threshold=float(row.get("threshold")),  # type: ignore[arg-type]
         enabled=row.get("enabled") is True,
+        # the holdings the route linked it to, by name: what a rule added on one is said with (review of #457)
+        holdings=[_reason(p.get("name")) for p in positions]
+        if isinstance(positions := row.get("positions"), list)
+        else [],
     )
 
 

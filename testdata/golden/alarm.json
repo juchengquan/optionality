@@ -1722,6 +1722,66 @@
       "expect": "🤖 agent: 1218-6800 |value| ≥ 4.51, unchanged"
     },
     {
+      "fn": "agentNotice",
+      "name": "a rule added on a holding names it",
+      "args": [
+        null,
+        {
+          "code": "US.SPXW261218P7100000",
+          "field": "option_delta",
+          "combo": false,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 0.2,
+          "enabled": true,
+          "holdings": [
+            "1016_IC"
+          ]
+        }
+      ],
+      "expect": "🤖 agent added 20261218 P7100 |Δ| ≥ 0.20 on 1016_IC"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a rule added on several holdings names each, sorted",
+      "args": [
+        null,
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true,
+          "holdings": [
+            "nov-puts",
+            "dec-condor",
+            "Dec-B"
+          ]
+        }
+      ],
+      "expect": "🤖 agent added 1218-6800 |value| ≥ 4.51 on Dec-B, dec-condor, nov-puts"
+    },
+    {
+      "fn": "agentNotice",
+      "name": "a rule added on no holding names none",
+      "args": [
+        null,
+        {
+          "code": "1218-6800",
+          "field": "mid_price",
+          "combo": true,
+          "compare": "abs",
+          "direction": "above",
+          "threshold": 4.51,
+          "enabled": true,
+          "holdings": []
+        }
+      ],
+      "expect": "🤖 agent added 1218-6800 |value| ≥ 4.51"
+    },
+    {
       "fn": "alarmTransition",
       "name": "a breach past a finely typed threshold says by how much",
       "args": [

@@ -884,6 +884,16 @@ class TestAddRule:
         assert answer["data"]["legs"] is None
         assert w.h.sent == ["🤖 agent added 20261218 C8050 |Δ| ≥ 0.20"]
 
+    async def test_adds_a_rule_the_route_links_to_a_holding_and_names_the_holding_in_the_notice(self, writing):
+        # review of #457
+        w = writing()
+        await w.created(await w.h.call("/positions", **json_body(CONDOR)))
+        legs = [{"side": "short", "option_type": "PUT", "strike": 7100}]
+        answer = await w.call("add_rule", {"expiry": D, "legs": legs, "threshold": 0.2})
+        assert answer["isError"] is False, answer["text"]
+        assert [p["name"] for p in answer["data"]["positions"]] == ["1016_IC"]
+        assert w.h.sent == ["🤖 agent added 20261218 P7100 |Δ| ≥ 0.20 on 1016_IC"]
+
     async def test_passes_field_direction_and_compare_only_where_given(self, writing):
         w = writing()
         answer = await w.call("add_rule", {**PUT_SPREAD, "compare": "signed", "direction": "below", "threshold": -4.5})
@@ -1086,6 +1096,17 @@ class TestEditRule:
         assert w.h.sent == []
         watch = await w.created(await w.h.call("/monitors", **json_body({**RULE, "strike": 9000})))
         assert (await w.call("edit_rule", {"id": watch, "threshold": 0.3}))["isError"] is False
+
+    async def test_refuses_a_rule_whose_scope_is_set_though_no_link_is_listed_as_a_holding_s(self, writing):
+        w, _, delta = await _set_up(writing)
+        w.h.db.execute("update monitors set scope = 'leg' where id = ?", (delta,))
+        w.h.db.commit()
+        assert await w.call("edit_rule", {"id": delta, "threshold": 0.3}) == {
+            "isError": True,
+            "text": f'the rule "{delta}" watches a holding: a holding\'s rules are changed on the page, '
+            "and edit_rule changes only a watch rule",
+        }
+        assert w.h.sent == []
 
     async def test_lets_a_rule_muted_by_hand_be_muted_again_which_changes_nothing(self, writing):
         w, _, delta = await _set_up(writing)

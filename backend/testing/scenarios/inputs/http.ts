@@ -2934,6 +2934,14 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/mcp", tool("add_rule", PUT_SPREAD_RULE)),
   },
   {
+    // the route links a rule on a held contract to its holding; the notice names it (review of #457)
+    name: "POST /mcp adds a rule on a held contract, and names the holding to the owner",
+    world: world({ settings: WRITING, provider: { quotes: BOOK }, tables: { positions: [position({ id: "pos-1" })] } }),
+    request: request("POST", "/mcp", tool("add_rule", {
+      expiry: "20261218", threshold: 0.2, legs: [{ side: "short", option_type: "PUT", strike: 6400 }],
+    })),
+  },
+  {
     // one leg is a rule on that contract: its side means nothing, and the route's defaults apply
     name: "POST /mcp adds a rule on one contract with the route's defaults",
     world: world({ settings: WRITING, provider: { quotes: BOOK } }),

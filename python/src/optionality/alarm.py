@@ -238,19 +238,23 @@ class AgentRule(RuleShape):
 
     code: str
     enabled: bool
+    #: the names of the holdings the rule watches, as the route links it; empty for none
+    holdings: list[str] = []
 
 
 def agent_notice(before: AgentRule | None, after: AgentRule) -> str:
     """The one line the owner's phone gets for a write an agent made over MCP (#456, ADR 0028): `before`
     None for a rule added, else the rule as it was and as the write left it. In the alarms' short form
     (#388), the rule named as every alarm names it (`contract_name`), prefixed `🤖 agent` — see
-    `agentNotice` in alarm.ts for every form it takes."""
+    `agentNotice` in alarm.ts for every form it takes, a rule added on holdings naming them sorted."""
 
     def name_of(rule: AgentRule) -> str:
         return contract_name(rule.code, rule.code)
 
     if before is None:
-        return f"🤖 agent added {name_of(after)} {rule_short(after)}"
+        # sorted as JavaScript's `sort` orders strings: by UTF-16 code unit, which UTF-16BE's bytes follow
+        held = sorted(after.holdings, key=lambda name: name.encode("utf-16-be", "surrogatepass"))
+        return f"🤖 agent added {name_of(after)} {rule_short(after)}{f' on {", ".join(held)}' if held else ''}"
     if before.enabled and not after.enabled:
         verb: str | None = "muted"
     elif not before.enabled and after.enabled:

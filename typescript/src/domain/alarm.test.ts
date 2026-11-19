@@ -316,6 +316,15 @@ describe("what the owner is told about an agent's write (#456, ADR 0028)", () =>
       .toBe("🤖 agent muted 1218-6800 |value| ≥ 4.51 → ≥ 4.80");
   });
 
+  it("names the holding a rule added watches, several sorted by name (review of #457)", () => {
+    const put = agentRule({ code: PUT, field: "option_delta", combo: false, threshold: 0.2 });
+    expect(agentNotice(null, { ...put, holdings: ["1016_IC"] }))
+      .toBe("🤖 agent added 20261218 P6800 |Δ| ≥ 0.20 on 1016_IC");
+    expect(agentNotice(null, { ...put, holdings: ["nov-puts", "dec-condor"] }))
+      .toBe("🤖 agent added 20261218 P6800 |Δ| ≥ 0.20 on dec-condor, nov-puts");
+    expect(agentNotice(null, { ...put, holdings: [] })).toBe("🤖 agent added 20261218 P6800 |Δ| ≥ 0.20");
+  });
+
   it("says an edit that changed nothing said here", () => {
     expect(agentNotice(agentRule(), agentRule())).toBe("🤖 agent: 1218-6800 |value| ≥ 4.51, unchanged");
   });

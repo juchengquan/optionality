@@ -824,6 +824,15 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
       expect(h.sent).toEqual(["🤖 agent added 20261218 C8050 |Δ| ≥ 0.20"]);
     });
 
+    it("adds a rule the route links to a holding, and names the holding in the notice (review of #457)", async () => {
+      writing();
+      await created(await h.call("/positions", json(CONDOR)));
+      const answer = await call("add_rule", { expiry: D, legs: [{ side: "short", option_type: "PUT", strike: 7100 }], threshold: 0.2 });
+      expect(answer.isError, answer.text).toBe(false);
+      expect(answer.data.positions).toEqual([{ id: expect.any(String), name: "1016_IC" }]);
+      expect(h.sent).toEqual(["🤖 agent added 20261218 P7100 |Δ| ≥ 0.20 on 1016_IC"]);
+    });
+
     it("passes field, direction and compare only where given", async () => {
       writing();
       const answer = await call("add_rule", { ...PUT_SPREAD, compare: "signed", direction: "below", threshold: -4.5 });
@@ -986,6 +995,16 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
       // none of it counted: the cap of one still has its one, for a watch rule
       const watch = await created(await h.call("/monitors", json({ ...RULE, strike: 9000 })));
       expect((await call("edit_rule", { id: watch, threshold: 0.3 })).isError).toBe(false);
+    });
+
+    it("refuses a rule whose scope is set though no link is listed, as a holding's", async () => {
+      const { delta } = await setUp();
+      h.db.prepare("update monitors set scope = 'leg' where id = ?").run(delta);
+      expect(await call("edit_rule", { id: delta, threshold: 0.3 })).toMatchObject({
+        isError: true,
+        text: `the rule "${delta}" watches a holding: a holding's rules are changed on the page, and edit_rule changes only a watch rule`,
+      });
+      expect(h.sent).toEqual([]);
     });
 
     it("lets a rule muted by hand be muted again, which changes nothing", async () => {

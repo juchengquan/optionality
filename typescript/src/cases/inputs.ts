@@ -1121,6 +1121,12 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "agentNotice", name: "muted and moved in one edit",
       args: [agentRule(), agentRule({ threshold: 4.8, enabled: false })] },
     { fn: "agentNotice", name: "an edit that changed nothing", args: [agentRule(), agentRule()] },
+    // a rule added that the route linked to holdings names them, sorted by name (review of #457)
+    { fn: "agentNotice", name: "a rule added on a holding names it",
+      args: [null, agentRule({ code: "US.SPXW261218P7100000", field: "option_delta", combo: false, threshold: 0.2, holdings: ["1016_IC"] })] },
+    { fn: "agentNotice", name: "a rule added on several holdings names each, sorted",
+      args: [null, agentRule({ holdings: ["nov-puts", "dec-condor", "Dec-B"] })] },
+    { fn: "agentNotice", name: "a rule added on no holding names none", args: [null, agentRule({ holdings: [] })] },
     { fn: "alarmTransition", name: "a breach past a finely typed threshold says by how much",
       args: [{ ...single, field: "mid_price", threshold: 4.505 }, 4.506, "1120_7100", state(false, null), alarms, NOW] },
     { fn: "alarmTransition", name: "a gamma back below a five-place threshold",

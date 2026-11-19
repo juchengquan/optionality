@@ -140,6 +140,8 @@ const agentRule = (row: Record<string, unknown>): AgentRule => ({
   code: String(row.code), field: String(row.field), combo: Array.isArray(row.legs) && row.legs.length > 0,
   compare: String(row.compare), direction: String(row.direction), threshold: Number(row.threshold),
   enabled: row.enabled === true,
+  // the holdings the route linked it to, by name: what a rule added on one is said with (review of #457)
+  holdings: Array.isArray(row.positions) ? (row.positions as { name?: unknown }[]).map((p) => String(p?.name)) : [],
 });
 
 /** What the log says of a notice, by how it went. */

@@ -84,7 +84,11 @@ its probe and its words, unchanged.
 reaches the path. `field` is not an argument. **Only a WATCH rule** (the owner's decision of
 2026-11-19, in the build): a rule linked to any holding — its `positions` non-empty or its `scope` set, as
 that `GET /monitors` row serves it — is refused by the door, before any write and uncounted, with words
-saying a holding's rules are changed on the page. **Unmuting**: `enabled: true` on a rule that is OFF for
+saying a holding's rules are changed on the page. **Accepted, by the owner in review of #457**: the check
+reads the row and then writes, so a holding recorded in that window can link the rule after the check
+passed and the edit still lands on it. Closing that window needs the route to refuse it (a route change),
+which is out of this ADR's scope. `add_rule` is not held to it: a rule the route links to a holding as it
+creates it is allowed, and its notice names the holding. **Unmuting**: `enabled: true` on a rule that is OFF for
 any reason but `manual` — quarantined (`unknown-contract`, `no-figure`, `unreadable`), `expired`,
 `holding-closed` — is refused by the door with that reason, read from the same `GET /monitors` row,
 before any write. So is **`enabled: false` on a rule already off for such a reason**: the route records a
@@ -108,7 +112,8 @@ error in the route's own words: `POST /monitors answered 422: <detail>`.
 form (#388), worded by the domain's **`agentNotice`** (`alarm.ts`, golden-cased, ported as
 `agent_notice`) from the rule before and after:
 
-- `🤖 agent added 1218-6750 |value| ≥ 3.00`
+- `🤖 agent added 1218-6750 |value| ≥ 3.00`, and where the route linked the new rule to holdings, each
+  named, sorted by name: `🤖 agent added 20261218 P7100 |Δ| ≥ 0.20 on 1016_IC` (review of #457)
 - `🤖 agent muted 20261218 P6800 |Δ| ≥ 0.20`, `🤖 agent unmuted …`
 - `🤖 agent: 1218-6800 |value| ≥ 4.51 → ≥ 4.80` — the rule before, then after, its subject not
   repeated where it is the same (`→ value ≥ 4.80` where the compare changed it);
