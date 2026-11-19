@@ -5,6 +5,8 @@
  *  the code takes — the order a refusal is decided in, a call that must NOT be made, a write that
  *  reaches a second table.
  */
+import { buildSpxCode } from "optionality/domain/contract";
+
 import type { EarlierRequest, HttpRequest, World } from "../format.ts";
 import {
   BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, PREMIUM_BOOK, at, chosenInterval, combo, except,
@@ -266,6 +268,34 @@ const references = {
     reference({ id: "ref-2", code: "^VIX", source: "yahoo", created_at: "2026-11-02 14:31:00.000000" }),
     reference({ id: "ref-3", code: "VIX", source: "ibkr", created_at: "2026-11-02 14:32:00.000000" }),
   ],
+};
+
+/** A put spread quoted so its sums carry float noise (#454): mids 10.1 and 6, summed -4.100000000000001;
+ *  gammas 0.0004503 and 0.00041, summed -0.000040300000000000004. */
+const NOISY_PUTS = {
+  [buildSpxCode(EXPIRY, "PUT", 6800)]: quote("SPXW 261218 6800P", 10.1, -0.2345678, {
+    bid_price: 10.05, ask_price: 10.15, option_gamma: 0.0004503, option_theta: -1.2345678,
+    option_vega: 9.8765432, option_implied_volatility: 18.123456,
+  }),
+  [buildSpxCode(EXPIRY, "PUT", 6750)]: quote("SPXW 261218 6750P", 6, -0.2012345, {
+    bid_price: 5.95, ask_price: 6.05, option_gamma: 0.00041, option_theta: -1.1111111,
+    option_vega: 9.1234567, option_implied_volatility: 19.654321,
+  }),
+};
+
+/** C7300 as moomoo's snapshot record carries it, every `RECORD_FIELDS` key (review of #455): text as
+ *  text, counts, strikes and sizes whole, and every other figure with more places than it is written at. */
+const FULL_RECORD = {
+  code: C7300, name: "SPXW 261218 7300C", update_time: "2026-11-09 09:59:58", lot_size: 1, suspension: false,
+  last_price: 2.7512345, open_price: 2.9012345, high_price: 3.0512345, low_price: 2.6012345,
+  prev_close_price: 2.8512345, ask_price: 2.8000000000000003, bid_price: 2.7, ask_vol: 12, bid_vol: 7,
+  volume: 1234, turnover: 339512.3456789, turnover_rate: 0.0123456789, amplitude: 16.12345678,
+  avg_price: 2.7512345678, bid_ask_ratio: 26.315789473684, option_type: "CALL", stock_owner: "US..SPX",
+  option_strike_time: "2026-12-18", option_strike_price: 7300, option_contract_size: 100,
+  option_contract_multiplier: 100, option_open_interest: 4321, option_implied_volatility: 14.523456789,
+  option_premium: 5.8312345678, option_delta: 0.212345678, option_gamma: 0.000123456789,
+  option_vega: 4.2512345678, option_theta: -0.8512345678, option_rho: 0.312345678,
+  option_expiry_date_distance: 39, option_area_type: "EUROPEAN", mid_price: 2.75,
 };
 
 /** One JSON-RPC request to the MCP door, as a client sends it (ADR 0026). */
@@ -2822,6 +2852,49 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/mcp", tool("price_spreads", {
       structures: [{ expiry: "20261218", legs: [{ side: "short", option_type: "CALL", strike: 7300 }] }],
     })),
+  },
+  // --- the MCP door's figures, rounded by key (#454) -----------------------------------------
+  {
+    // a put spread whose mids sum to -4.100000000000001 and whose gammas to -0.0000403: the value
+    // is written -4.1, and the gamma, at six places, survives as -0.00004 rather than reading 0
+    name: "POST /mcp writes a spread's figures rounded, its gamma to six places",
+    world: world({ provider: { quotes: NOISY_PUTS } }),
+    request: request("POST", "/mcp", tool("price_spreads", {
+      structures: [{
+        expiry: "20261218",
+        legs: [{ side: "short", option_type: "PUT", strike: 6800 }, { side: "long", option_type: "PUT", strike: 6750 }],
+      }],
+    })),
+  },
+  {
+    // a rule on Δ: its figure, threshold and distance to four places, by the rule's field
+    name: "POST /mcp writes a rule on delta's figures to four places",
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1", threshold: 0.31234 })] },
+      provider: { quotes: { [C7300]: quote("SPXW 261218 7300C", 2.75, 0.123456789) } },
+    }),
+    request: request("POST", "/mcp", tool("watchlist")),
+  },
+  {
+    // the watchlist's quote is moomoo's whole record (review of #455): every RECORD_FIELDS key, each
+    // figure with float noise and each count a count, so the walk over the scenarios covers them all;
+    // the rule is on ρ, which the by-field table places at four
+    name: "POST /mcp writes every figure of moomoo's quote record rounded",
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1", field: "option_rho", threshold: 0.31234 })] },
+      provider: { quotes: { [C7300]: FULL_RECORD } },
+    }),
+    request: request("POST", "/mcp", tool("watchlist")),
+  },
+  {
+    // a rule on a combo's price: its figure, threshold and distance to two places, by its field;
+    // 4.125 is an exact half, so it goes away from zero, and 3.0249999999999995 is not one
+    name: "POST /mcp writes a rule on price's figures to two places",
+    world: world({
+      tables: { monitors: [combo({ id: "mon-2", threshold: 4.125 })] },
+      provider: { quotes: { [C7300]: quote("SPXW 261218 7300C", 2.7, 0.21), [C7350]: quote("SPXW 261218 7350C", 1.6, 0.15) } },
+    }),
+    request: request("POST", "/mcp", tool("watchlist")),
   },
   // --- /openapi.json and /docs --------------------------------------------------------------
   // The service's description of itself, held word for word (decided 2026-11-10): the Python

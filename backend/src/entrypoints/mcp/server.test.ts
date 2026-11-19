@@ -6,8 +6,11 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { WATCHABLE_FIELDS } from "optionality/domain/monitor";
+import { opendFields } from "optionality/vendors/fields";
+
 import { type FakeProvider, type Harness, body, harness, json, pricedFetcher } from "../../../testing/harness.ts";
-import { LIVE_FOR_MS, toolbox } from "./tools.ts";
+import { DESCRIBED, LIVE_FOR_MS, type Rounding, byKey, canonical, roundTo, rounded, toolbox } from "./tools.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
@@ -245,7 +248,8 @@ describe("the tools", () => {
       expect(answer.isError, `${name}: ${answer.text}`).toBe(false);
       const direct = await h.call(path);
       expect(direct.status, path).toBe(200);
-      expect(answer.data, name).toEqual(await body(direct));
+      // the body as the GET serves it, each figure rounded by its key (#454) and nothing else
+      expect(answer.data, name).toEqual(rounded(await body(direct), DESCRIBED.tools.find((t) => t.name === name)!.round));
       expect(answer.source).toBe(`GET ${path}`);
       expect(answer.read_at).toBe("2026-10-02 13:26:06+08:00");
     }
@@ -323,7 +327,7 @@ describe("price_spreads prices any structure through GET /spreads/quote (#452, A
       + `&spread=${encodeURIComponent(`${EXPIRY}:+C8050,-C8075x2@-1.5`)}`;
     expect(answer.source).toBe(`GET ${path}`);
     expect(asked).toHaveLength(1);
-    expect(answer.data).toEqual(await body(await h.call(path)));
+    expect(answer.data).toEqual(rounded(await body(await h.call(path)), DESCRIBED.tools.find((t) => t.name === "price_spreads")!.round));
     // the harness's quotes carry a mid and no sides, which is no two-sided quote: a shape, then the entry
     expect(answer.data.spreads.map((s: { payoff_basis: string }) => s.payoff_basis)).toEqual(["shape", "entry"]);
   });
@@ -569,6 +573,112 @@ describe("the live reads' shared cache", () => {
     expect((await call("positions")).data[0].name).toBe("1016_IC");
     h.db.prepare("update positions set name = 'renamed'").run();
     expect((await call("positions")).data[0].name).toBe("renamed");
+  });
+});
+
+describe("figures are rounded by key, per tool (#454)", () => {
+  const SHARED = JSON.parse(readFileSync(new URL("../../../../testdata/mcp/rounding.json", import.meta.url), "utf8")) as
+    { cases: [number, number, string][] };
+
+  it("half away from zero on the stored value, to a number, -0 written 0: the cases both backends hold", () => {
+    expect(SHARED.cases.length).toBeGreaterThan(20);
+    for (const [value, places, text] of SHARED.cases) {
+      const r = roundTo(value, places);
+      expect(typeof r).toBe("number");
+      expect(canonical(r), `${value} to ${places}`).toBe(text);
+      expect(Object.is(r, -0), `${value} to ${places}`).toBe(false);
+    }
+  });
+
+  it("round a figure by its key, the numbers of an array under it, a map's every value, and a rule's by its field", () => {
+    const table: Rounding = { keys: { value: 2, breakevens: 2, sigma: 4 }, maps: { legs_delta: 4 }, by_field: ["watched", "threshold"] };
+    const data = {
+      value: -4.100000000000001, sigma: 1.234567, strike: 6800.5, dte: 39, error: "3.14159", nothing: null, flag: true,
+      breakevens: [6301.456, 6398.555],
+      legs_delta: { "US.SPXW261218P6800000": -0.234567, "US.SPXW261218P6750000": null },
+      // an object in a list does not inherit its list's key
+      payoff: [{ value: 1.005, other: 1.23456789 }],
+      rows: [
+        { field: "mid_price", watched: -1.1000000000000003, threshold: 4.125, distance: 3.0249999999999995 },
+        { field: "option_gamma", watched: -0.0000403, threshold: 0.00012 },
+        { field: "option_delta", watched: 0.123456789, threshold: 0.31234 },
+        { field: "something_else", watched: 0.123456789 },
+        { watched: 0.123456789 },
+      ],
+      // a key the prototype carries is not a key the table names
+      constructor: 1.23456789, toString: 2.3456789,
+    };
+    expect(rounded(data, table)).toEqual({
+      value: -4.1, sigma: 1.2346, strike: 6800.5, dte: 39, error: "3.14159", nothing: null, flag: true,
+      breakevens: [6301.46, 6398.56],
+      legs_delta: { "US.SPXW261218P6800000": -0.2346, "US.SPXW261218P6750000": null },
+      payoff: [{ value: 1, other: 1.23456789 }],
+      rows: [
+        { field: "mid_price", watched: -1.1, threshold: 4.13, distance: 3.0249999999999995 },
+        { field: "option_gamma", watched: -0.00004, threshold: 0.00012 },
+        { field: "option_delta", watched: 0.1235, threshold: 0.3123 },
+        { field: "something_else", watched: 0.123456789 },
+        { watched: 0.123456789 },
+      ],
+      constructor: 1.23456789, toString: 2.3456789,
+    });
+  });
+
+  it("are tabled for every tool, to 2, 4 or 6 places, and a rule's figures by the six fields a rule may watch", () => {
+    expect(DESCRIBED.rounding.by_field).toMatchObject({
+      mid_price: 2, option_delta: 4, option_gamma: 6, option_theta: 4, option_vega: 4, option_implied_volatility: 4,
+    });
+    for (const tool of DESCRIBED.tools) {
+      const { keys = {}, maps = {}, by_field = [] } = tool.round;
+      for (const places of [...Object.values(keys), ...Object.values(maps)]) expect([2, 4, 6], tool.name).toContain(places);
+      // a key is in one row of the table, never two
+      const named = [...Object.keys(keys), ...Object.keys(maps), ...by_field];
+      expect(new Set(named).size, tool.name).toBe(named.length);
+    }
+  });
+
+  it("place every field a rule may watch, and nothing else, in the by-field table: a number, or null for never", () => {
+    // a rule on a field with no place would have its watched, threshold and distance left raw
+    // (review of #455, the owner's decision 2)
+    const table = DESCRIBED.rounding.by_field;
+    expect(Object.keys(table).sort()).toEqual([...WATCHABLE_FIELDS].sort());
+    for (const field of WATCHABLE_FIELDS) expect([2, 4, 6, null], field).toContain(table[field]);
+  });
+
+  it("round a quote's figure as a rule watching that field is rounded, and every figure of moomoo's record", () => {
+    // the watchlist's `quote` is moomoo's whole record (review of #455, the owner's decision 1): every
+    // number in it is a watchable field, so the by-field table places each, in every tool alike
+    const numbers = opendFields.RECORD_FIELDS.filter((f) => WATCHABLE_FIELDS.includes(f));
+    expect(numbers.length).toBeGreaterThan(25);
+    const watchlist = DESCRIBED.tools.find((t) => t.name === "watchlist")!.round.keys!;
+    for (const field of numbers) {
+      expect(watchlist[field] ?? null, field).toBe(DESCRIBED.rounding.by_field[field]);
+    }
+    for (const tool of DESCRIBED.tools) {
+      for (const [key, places] of Object.entries(tool.round.keys ?? {})) {
+        if (WATCHABLE_FIELDS.includes(key)) expect(places, `${tool.name}: ${key}`).toBe(DESCRIBED.rounding.by_field[key]);
+      }
+    }
+  });
+
+  it("leave no figure in any MCP scenario's answer under a key the table does not name, nor unrounded under one it does", () => {
+    const dir = new URL("../../../../testdata/scenarios/http/", import.meta.url).pathname;
+    let walked = 0;
+    for (const file of readdirSync(dir).filter((f) => f.startsWith("post-mcp-"))) {
+      const scenario = JSON.parse(readFileSync(join(dir, file), "utf8"));
+      const { method, params } = scenario.request.body ?? {};
+      const result = scenario.expect.response.body?.result;
+      if (method !== "tools/call" || result === undefined || result.isError) continue;
+      const tool = DESCRIBED.tools.find((t) => t.name === params.name)!;
+      byKey(JSON.parse(result.content[0].text).data, tool.round, (value, places) => {
+        walked++;
+        if (places === null) expect(Number.isInteger(value), `${file}: ${value} is under no key the table names`).toBe(true);
+        else expect(roundTo(value, places), `${file}: ${value} is not rounded to ${places}`).toBe(value);
+        return value;
+      });
+    }
+    // what it walked, so a walk of nothing cannot pass
+    expect(walked).toBeGreaterThan(200);
   });
 });
 

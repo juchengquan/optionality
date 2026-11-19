@@ -2,7 +2,8 @@
  *  shared cache in front of the live ones, and the one way an answer is written.
  *
  *  **A tool is a GET of the API's own, and nothing else.** Each names one path the HTTP door
- *  already serves, and its answer's `data` is that GET's body. The tool cannot compute anything of
+ *  already serves, and its answer's `data` is that GET's body, its figures rounded by key (#454:
+ *  `byKey`, by the table in `server.json`, the one change it makes). The tool cannot compute anything of
  *  its own, so it cannot disagree with the route — or with the dashboard, which reads the same
  *  route — and it cannot write: the only thing this module is handed is `read`, which `app.ts`
  *  builds to issue a GET and nothing else. No service, no query and no engine is imported here; a
@@ -11,8 +12,9 @@
  *  **The table is shared ground**, `schema/mcp/server.json`, read by both backends (ADR 0021): the
  *  names, the descriptions an agent reads, the input schemas and which tools are live are written
  *  once, so the two cannot describe the same tool in two ways. What is CODE is here: the argument
- *  check, how a history tool's name becomes an id (`LOOKUPS`), the path a call becomes, the cache
- *  and the text.
+ *  check, how a history tool's name becomes an id (`LOOKUPS`), the path a call becomes, the cache,
+ *  the rounding and the text. Which key is rounded to how many places is the table's (each tool's
+ *  `round`, and `rounding.by_field`), so the two backends round exactly the same figures.
  *
  *  **The cache** is the owner's decision 7 on #447: the live reads — `/quotes`, `/positions/values`,
  *  `/references` — ask the Provider, whose snapshot limit (60 per 30 seconds) is shared with the
@@ -51,6 +53,8 @@ export interface Tool {
   live: boolean;
   /** "route" where the route shares its own answers (ADR 0027), so this door does not */
   cached_by?: "route";
+  /** how its answer's figures are rounded, by key (#454): see `byKey` */
+  round: Rounding;
   inputSchema: {
     type: "object";
     /** a string argument has a `pattern`; a structured one is written by its tool's `QUERIES` entry */
@@ -60,8 +64,21 @@ export interface Tool {
   };
 }
 
+/** How one tool's figures are rounded (#454), by the KEY each figure is under: `keys` names a key
+ *  and its places, for a number under it or each number in a list under it; `maps` names a key whose
+ *  value is a map — a leg's reading by contract code — and the places of its every value; `by_field`
+ *  names the keys a rule's figure is under, rounded by the places of the rule's own `field`. */
+export interface Rounding {
+  keys?: Record<string, number>;
+  maps?: Record<string, number>;
+  by_field?: string[];
+}
+
 export interface Described {
   server: { name: string; title: string; version: string; instructions: string; protocol_versions: string[] };
+  /** the places of a rule's figure, by the field it watches (#454): every watchable field, null where
+   *  it is a count, a strike or a size and never rounded */
+  rounding: { by_field: Record<string, number | null> };
   tools: Tool[];
 }
 
@@ -88,6 +105,54 @@ export function canonical(value: unknown): string {
   const object = value as Record<string, unknown>;
   return `{${Object.keys(object).sort().map((k) => `${JSON.stringify(k)}:${canonical(object[k])}`).join(",")}}`;
 }
+
+/** A figure to `places` decimals, half away from zero on the value the double holds — exactly
+ *  `toFixed`'s rule, which the Python reproduces as `optionality.js.to_fixed` — and a zero rounded
+ *  from a negative made 0, so neither backend can write -0. Held to `testdata/mcp/rounding.json`. */
+export function roundTo(value: number, places: number): number {
+  return Number(value.toFixed(places)) + 0;
+}
+
+const own = <T>(table: Record<string, T> | undefined, key: string): T | undefined =>
+  table !== undefined && Object.hasOwn(table, key) ? table[key] : undefined;
+
+/** `data` with every number replaced by `figure(number, places)`, where `places` is what `rounding`
+ *  says for the key it is under, or null where the table names none (#454).
+ *
+ *  A number takes its places from the key directly above it: `keys`, or — for one of `by_field`'s
+ *  keys — from the object's own `field`, through `DESCRIBED.rounding.by_field`; a list of numbers
+ *  under a key takes that key's (`breakevens`); a map under one of `maps`' keys takes its places for
+ *  every value. An object starts afresh, in a list or not, so nothing is inherited past one level.
+ *  One walk for the answer and for the test that holds the table to every scenario. */
+export function byKey(data: unknown, rounding: Rounding, figure: (value: number, places: number | null) => number): unknown {
+  const each = (value: unknown, places: number | null): unknown => {
+    if (typeof value === "number") return figure(value, places);
+    if (Array.isArray(value)) return value.map((v) => typeof v === "number" ? figure(v, places) : walk(v));
+    return walk(value);
+  };
+  const walk = (value: unknown): unknown => {
+    if (typeof value === "number") return figure(value, null);
+    if (Array.isArray(value)) return value.map(walk);
+    if (value === null || typeof value !== "object") return value;
+    const object = value as Record<string, unknown>;
+    const field = typeof object.field === "string" ? own(DESCRIBED.rounding.by_field, object.field) : undefined;
+    const out: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(object)) {
+      const places = own(rounding.keys, key) ?? (rounding.by_field?.includes(key) ? field : undefined);
+      const mapped = own(rounding.maps, key);
+      if (places !== undefined) out[key] = each(v, places);
+      else if (mapped !== undefined && v !== null && typeof v === "object" && !Array.isArray(v)) {
+        out[key] = Object.fromEntries(Object.entries(v).map(([code, x]) => [code, each(x, mapped)]));
+      } else out[key] = each(v, null);
+    }
+    return out;
+  };
+  return walk(data);
+}
+
+/** `data` with its figures rounded as `rounding` says, and every other value as it was. */
+export const rounded = (data: unknown, rounding: Rounding): unknown =>
+  byKey(data, rounding, (value, places) => places === null ? value : roundTo(value, places));
 
 const failed = (text: string): ToolResult => ({ content: [{ type: "text", text }], isError: true });
 
@@ -343,7 +408,9 @@ export function toolbox(options: { read: Read; now(): Date; displayTz: string })
       const reading = tool.live && tool.cached_by !== "route" ? live(path, authorization) : fresh(path, authorization);
       const { status, body } = await reading.answer;
       if (status !== 200) return failed(`GET ${path} answered ${status}: ${detailOf(body)}`);
-      const answer = { source: `GET ${path}`, read_at: displayTime(reading.at, displayTz), data: JSON.parse(body) };
+      // the GET's body with its figures rounded by key (#454); a refusal above is its words, unrounded
+      const data = rounded(JSON.parse(body), tool.round);
+      const answer = { source: `GET ${path}`, read_at: displayTime(reading.at, displayTz), data };
       return { content: [{ type: "text", text: canonical(answer) }] };
     },
   };
