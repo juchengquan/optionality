@@ -203,20 +203,31 @@ function inTheWay(
 }
 
 /** Two legs on one contract: a typo, or a leg that cancels itself. Held twice over is ONE leg with a
- *  quantity (#351), so that "a Contract held twice" stays a fact about two holdings — a roll day. */
-function twiceOver(spread: Spread): SpreadFault | null {
-  const seen = new Map<string, SpreadLeg>();
-  for (const l of spread.legs) {
+ *  quantity (#351), so that "a Contract held twice" stays a fact about two holdings — a roll day.
+ *
+ *  The words alone, for whatever names the legs: `'<name>'` here, `spread <n>` where
+ *  `GET /spreads/quote` refuses the same two things (#452, the owner's decision) — one set of
+ *  refusals, so the two routes cannot word them apart. */
+export function twiceOverWords(
+  label: string, legs: readonly Pick<SpreadLeg, "side" | "option_type" | "strike">[],
+): string | null {
+  const seen = new Map<string, Pick<SpreadLeg, "side">>();
+  for (const l of legs) {
     const key = `${l.option_type} ${l.strike}`;
     const before = seen.get(key);
     if (before) {
-      return refuse(before.side === l.side
-        ? `'${spread.name}' names ${key} twice: give the one leg a quantity`
-        : `'${spread.name}' is both short and long ${key}`);
+      return before.side === l.side
+        ? `${label} names ${key} twice: give the one leg a quantity`
+        : `${label} is both short and long ${key}`;
     }
     seen.set(key, l);
   }
   return null;
+}
+
+function twiceOver(spread: Spread): SpreadFault | null {
+  const words = twiceOverWords(`'${spread.name}'`, spread.legs);
+  return words === null ? null : refuse(words);
 }
 
 /** What a watch rule's alarm leaves the holding's rule that replaces it (#336): its state — the bell,

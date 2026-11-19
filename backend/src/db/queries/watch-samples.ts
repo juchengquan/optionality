@@ -31,6 +31,24 @@ export function recentPricedWatchSamples(
   );
 }
 
+/** Every row of the latest `limit` priced days of ANY watched set holding `code`, newest first — a
+ *  day's rows by when they were observed, latest first, then by their set: what one contract's last
+ *  close is chosen from (`price-spreads.ts`' `last_known`, ADR 0027). A contract's own mid is stored
+ *  in every set that holds it (`legs_mid`), and in no other table: a holding's samples store its
+ *  Cost to close, never a leg's price. Matched as a whole code between the key's commas. */
+export function pricedWatchSamplesHolding(
+  db: DatabaseSync, code: string, limit: number,
+): WatchSampleRow[] {
+  const holding = "instr(',' || contracts || ',', ',' || ? || ',') > 0 and legs_mid is not null";
+  return rows<WatchSampleRow>(
+    db,
+    `select * from watch_samples where ${holding} and observed_on in (
+       select distinct observed_on from watch_samples where ${holding} order by observed_on desc limit ?)
+     order by observed_on desc, observed_at desc, contracts`,
+    code, code, limit,
+  );
+}
+
 /** The day already stored for this set of contracts, if any: what `takesSample` decides against. */
 export function findWatchSample(
   db: DatabaseSync, contracts: string, observedOn: string,

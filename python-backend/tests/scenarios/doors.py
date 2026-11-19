@@ -5,7 +5,8 @@ The Python's half of the replay, step for step with `backend/testing/scenarios/d
 kept to the steps the README names and nothing clever:
 
   1. open the world (`world.py`) and build the backend on it (`backend.build`, the seam);
-  2. run the earlier sweeps, each at its own instant, and check they left the tables alone;
+  2. run the earlier sweeps, each at its own instant, then an HTTP scenario's earlier requests, and check
+     they left the tables alone;
   3. set the clock to the event, forget the earlier calls, messages and replies, and dump the tables;
   4. do the one thing, dump again, and report the difference with what was said and asked.
 
@@ -45,9 +46,12 @@ def ordered(calls: Calls) -> Calls:
 
 
 @contextmanager
-def opened(world: dict[str, Any], build: Builder | None) -> Iterator[Opened]:
+def opened(
+    world: dict[str, Any], build: Builder | None, requests: list[dict[str, Any]] | None = None
+) -> Iterator[Opened]:
     """Steps 1 to 3: the backend built on the world, with its memory, at the event's instant. The
-    backend is closed before the world it was built on.
+    backend is closed before the world it was built on. `requests` are an HTTP scenario's `earlier`, made
+    before the event, after the earlier sweeps, each at its own instant: a memory no table holds.
 
     `build` is looked up when called rather than bound as a default, so a test that replaces
     `backend.build` replaces it here too."""
@@ -59,12 +63,16 @@ def opened(world: dict[str, Any], build: Builder | None) -> Iterator[Opened]:
             w.clock.now = instant(earlier["at"])
             w.outage.down = earlier["down"]
             service.sweep()
+        w.outage.down = world["provider"]["down"]
+        for e in requests or []:
+            w.clock.now = instant(e["at"])
+            _send(service, e["request"])
         before = dump_tables(w.db)
         touched = diff_tables(w.db, world["tables"], before)
         if touched:
             raise ScenarioError(
-                "an earlier sweep changed the tables; state them as the event finds them and keep "
-                f"the sweeps for the engine's memory:\n{json.dumps(touched, indent=2, ensure_ascii=False)}"
+                "an earlier sweep or request changed the tables; state them as the event finds them and "
+                f"keep those for the service's memory:\n{json.dumps(touched, indent=2, ensure_ascii=False)}"
             )
         w.clock.now = instant(world["clock"])
         w.outage.down = world["provider"]["down"]
@@ -84,17 +92,22 @@ def _after(o: Opened) -> dict[str, Any]:
     return {"rows": diff_tables(o.world.db, o.before, dump_tables(o.world.db)), "calls": ordered(o.world.calls)}
 
 
+def _send(service: Service, request: dict[str, Any]) -> Any:
+    """A request as the README says to send one: the body as JSON with its Content-Type, or none."""
+    headers = dict(request["headers"])
+    body = None
+    if request["body"] is not None:
+        body = json_text(request["body"])
+        headers["Content-Type"] = "application/json"
+    return service.request(request["method"], request["path"], headers, body)
+
+
 def run_http(scenario: dict[str, Any], build: Builder | None = None) -> dict[str, Any]:
-    """One request through the HTTP door. The body goes as JSON with its Content-Type, or not at
-    all when it is null; the answer is parsed JSON, null when empty, the raw text when not JSON."""
-    with opened(scenario["world"], build) as o:
-        request = scenario["request"]
-        headers = dict(request["headers"])
-        body = None
-        if request["body"] is not None:
-            body = json_text(request["body"])
-            headers["Content-Type"] = "application/json"
-        answer = o.service.request(request["method"], request["path"], headers, body)
+    """One request through the HTTP door, after any earlier ones through the same service. The body goes
+    as JSON with its Content-Type, or not at all when it is null; the answer is parsed JSON, null when
+    empty, the raw text when not JSON."""
+    with opened(scenario["world"], build, scenario.get("earlier")) as o:
+        answer = _send(o.service, scenario["request"])
         is_json = "application/json" in answer.content_type
         parsed = None if answer.text == "" else json.loads(answer.text) if is_json else answer.text
         return {"response": {"status": answer.status, "body": parsed}, **_after(o)}

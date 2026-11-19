@@ -14,6 +14,8 @@ import json
 import logging
 from datetime import timedelta
 from pathlib import Path
+from typing import Any, ClassVar
+from urllib.parse import quote
 
 import pytest
 from harness import json_body, priced_fetcher
@@ -263,6 +265,7 @@ class TestTheTools:
             "monitor_history",
             "monitor_closes",
             "references",
+            "price_spreads",
             "health",
         ]
         for tool in tools:
@@ -368,6 +371,119 @@ COMBO = {
 
 def _box(read):
     return Toolbox(read, lambda: __import__("harness").NOW, "UTC")
+
+
+class TestPriceSpreadsPricesAnyStructureThroughGetSpreadsQuote:
+    """#452, ADR 0027."""
+
+    D = EXPIRY.replace("-", "")
+    PUTS: ClassVar[dict[str, Any]] = {
+        "expiry": D,
+        "legs": [
+            {"side": "short", "option_type": "PUT", "strike": 7100},
+            {"side": "long", "option_type": "PUT", "strike": 7075},
+        ],
+    }
+    RATIO: ClassVar[dict[str, Any]] = {
+        "expiry": EXPIRY,
+        "entry": -1.5,
+        "legs": [
+            {"side": "long", "option_type": "CALL", "strike": 8050},
+            {"side": "short", "option_type": "CALL", "strike": 8075, "qty": 2},
+        ],
+    }
+
+    async def test_encodes_the_structures_into_the_route_s_query_and_answers_its_very_body(self, mcp):
+        m = mcp()
+        answer = await m.call("price_spreads", {"structures": [self.PUTS, self.RATIO]})
+        assert answer["isError"] is False, answer["text"]
+        path = (
+            f"/spreads/quote?spread={quote(f'{self.D}:-P7100,+P7075', safe='')}"
+            f"&spread={quote(f'{EXPIRY}:+C8050,-C8075x2@-1.5', safe='')}"
+        )
+        assert answer["source"] == f"GET {path}"
+        assert len(m.asked) == 1
+        assert answer["data"] == (await m.h.call(path)).json()
+        # the harness's quotes carry a mid and no sides, which is no two-sided quote: a shape, then the entry
+        assert [s["payoff_basis"] for s in answer["data"]["spreads"]] == ["shape", "entry"]
+
+    async def test_leaves_the_sharing_to_the_route_so_a_batch_is_never_held_twice_over(self, mcp):
+        m = mcp()
+        await m.call("price_spreads", {"structures": [self.PUTS]})
+        m.h.now = m.h.now + timedelta(milliseconds=4000)
+        # the route's batch is shared, so the Provider is not asked again...
+        again = await m.call("price_spreads", {"structures": [self.PUTS]})
+        assert len(m.asked) == 1
+        # ...but the door read it afresh, at its own instant
+        assert again["read_at"] == "2026-10-02 13:26:10+08:00"
+        m.h.now = m.h.now + timedelta(milliseconds=1000)
+        await m.call("price_spreads", {"structures": [self.PUTS]})
+        assert len(m.asked) == 2
+
+    async def test_carries_the_route_s_refusal_as_a_tool_error_in_its_own_words_asking_nothing(self, mcp):
+        m = mcp()
+        legs = [{"side": "short", "option_type": "PUT", "strike": 7100, "qty": 11}]
+        answer = await m.call("price_spreads", {"structures": [{**self.PUTS, "legs": legs}]})
+        assert answer["isError"] is True
+        assert answer["text"].endswith("answered 422: spread 1, leg 1: a quantity is 1 to 10, not 11")
+        assert m.asked == []
+
+    @pytest.mark.parametrize(
+        ("args", "words"),
+        [
+            ({}, 'missing argument "structures"'),
+            ({"structures": "20261218:-P6800"}, '"structures" must be a list of structures'),
+            ({"structures": [7]}, "structures[0] must be an object"),
+            ({"structures": [{"legs": []}]}, 'structures[0] is missing "expiry"'),
+            (
+                {"structures": [{**PUTS, "expiry": "Dec 18"}]},
+                "structures[0].expiry must be a string matching ^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$",
+            ),
+            ({"structures": [{**PUTS, "legs": "-P7100"}]}, "structures[0].legs must be a list of legs"),
+            (
+                {"structures": [{**PUTS, "size": 2}]},
+                'structures[0] has an unexpected "size": a structure takes only "expiry", "legs", "entry"',
+            ),
+            ({"structures": [{**PUTS, "entry": "1.5"}]}, "structures[0].entry must be a number"),
+            (
+                {"structures": [{**PUTS, "legs": [{"side": "sold", "option_type": "PUT", "strike": 7100}]}]},
+                'structures[0].legs[0].side must be "short" or "long"',
+            ),
+            (
+                {"structures": [{**PUTS, "legs": [{"side": "short", "option_type": "P", "strike": 7100}]}]},
+                'structures[0].legs[0].option_type must be "CALL" or "PUT"',
+            ),
+            (
+                {"structures": [{**PUTS, "legs": [{"side": "short", "option_type": "PUT", "strike": "7100"}]}]},
+                "structures[0].legs[0].strike must be a number",
+            ),
+            (
+                {
+                    "structures": [
+                        {**PUTS, "legs": [{"side": "short", "option_type": "PUT", "strike": 7100, "qty": "2"}]}
+                    ]
+                },
+                "structures[0].legs[0].qty must be a number",
+            ),
+            (
+                {"structures": [{**PUTS, "legs": [{"side": "short", "option_type": "PUT"}]}]},
+                'structures[0].legs[0] is missing "strike"',
+            ),
+            (
+                {
+                    "structures": [
+                        {**PUTS, "legs": [{"side": "short", "option_type": "PUT", "strike": 7100, "sign": -1}]}
+                    ]
+                },
+                'structures[0].legs[0] has an unexpected "sign": a leg takes only "side", "option_type", "strike", "qty"',
+            ),
+        ],
+    )
+    async def test_refuses_arguments_it_cannot_write_as_a_query_before_asking_anything(self, mcp, args, words):
+        m = mcp()
+        answer = await m.call("price_spreads", args)
+        assert (answer["isError"], answer["text"]) == (True, words)
+        assert m.asked == []
 
 
 class TestTheHistoryToolsTakeANameAsWellAsAnId:

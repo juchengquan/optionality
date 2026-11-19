@@ -7,7 +7,9 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { derivedSpx, midPrice, oneSigma, sessionSpx, sigmaDistance, strikeDistances } from "./quote.ts";
+import {
+  derivedSpx, midPrice, naturalPrice, oneSigma, sessionSpx, sigmaDistance, strikeDistances,
+} from "./quote.ts";
 
 /** 2026-11-10 09:30:01 New York; ^GSPC read 7513.09 at the same instant */
 const call = { code: "US.SPXW261113C7475000", last_price: 79.2, option_premium: 0.547 };
@@ -227,5 +229,41 @@ describe("sessionSpx — the derived SPX said stale outside the regular session 
   it("keeps its own reason where there is no price at all", () => {
     const none = { price: null, reason: "no SPX option in the batch to derive it from" };
     expect(sessionSpx(new Date("2026-11-16T01:15:00Z"), none)).toEqual(none);
+  });
+});
+
+describe("naturalPrice: the worst-case fill (#452)", () => {
+  const P6800 = "US.SPXW261218P6800000";
+  const P6750 = "US.SPXW261218P6750000";
+  const book = {
+    [P6800]: { bid_price: 10.5, ask_price: 11 },
+    [P6750]: { bid_price: 8.25, ask_price: 8.75 },
+  };
+  const putSpread = [{ code: P6800, sign: -1 }, { code: P6750, sign: 1 }];
+
+  it("opens at the ask, each long bought at its ask and each short sold at its bid", () => {
+    // ask: 8.75 - 10.5 = -1.75, a credit of 1.75; bid: 8.25 - 11 = -2.75, paid to close
+    expect(naturalPrice(putSpread, book)).toEqual({ bid: -2.75, ask: -1.75 });
+  });
+
+  it("brackets the mid: bid ≤ value ≤ ask", () => {
+    const natural = naturalPrice(putSpread, book)!;
+    const value = (8.25 + 8.75) / 2 - (10.5 + 11) / 2;
+    expect(natural.bid).toBeLessThanOrEqual(value);
+    expect(natural.ask).toBeGreaterThanOrEqual(value);
+  });
+
+  it("counts a leg as many times as its quantity", () => {
+    expect(naturalPrice([{ code: P6800, sign: -1 }, { code: P6750, sign: 1, qty: 2 }], book))
+      .toEqual({ bid: 16.5 - 11, ask: 17.5 - 10.5 });
+  });
+
+  it("is none where any leg has no two-sided quote: no partial fills", () => {
+    expect(naturalPrice(putSpread, { ...book, [P6750]: { bid_price: 0, ask_price: 0 } })).toBeNull();
+    expect(naturalPrice(putSpread, { [P6800]: book[P6800] })).toBeNull();
+  });
+
+  it("is none for no legs at all", () => {
+    expect(naturalPrice([], book)).toBeNull();
   });
 });

@@ -6,7 +6,8 @@
  *
  *    1. open the world (`world.ts`) and build the service on it — the real engine, the real routes,
  *       the real bot, with only the vendors, Telegram, the clock and the ids faked;
- *    2. run the earlier sweeps, each at its own instant, and check they left the tables alone;
+ *    2. run the earlier sweeps, each at its own instant, then an HTTP scenario's earlier requests,
+ *       and check they left the tables alone;
  *    3. set the clock to the event, forget the earlier calls and messages, and dump the tables;
  *    4. do the one thing, dump again, and report the difference with what was said and asked.
  *
@@ -19,8 +20,8 @@ import { TelegramBot } from "../../src/entrypoints/bot/bot.ts";
 import { mcpServer } from "../../src/entrypoints/mcp/index.ts";
 import { MonitorSweeper } from "../../src/engine/index.ts";
 import type {
-  BotExpect, BotScenario, Calls, HttpExpect, HttpScenario, SweepExpect, SweepScenario, Tables,
-  World,
+  BotExpect, BotScenario, Calls, EarlierRequest, HttpExpect, HttpRequest, HttpScenario, SweepExpect,
+  SweepScenario, Tables, World,
 } from "./format.ts";
 import { type OpenWorld, diffTables, dumpTables, openWorld } from "./world.ts";
 
@@ -48,8 +49,11 @@ interface Opened {
   before: Tables;
 }
 
-/** Steps 1 to 3: the service built on the world, with its memory, at the event's instant. */
-async function open(world: World): Promise<Opened> {
+/** Steps 1 to 3: the service built on the world, with its memory, at the event's instant.
+ *  `beforeEvent` runs after the earlier sweeps, at each earlier request's instant: the HTTP door's. */
+async function open(
+  world: World, beforeEvent: (w: OpenWorld, sweeper: MonitorSweeper) => Promise<void> = async () => {},
+): Promise<Opened> {
   const w = openWorld(world);
   try {
     const sweeper = new MonitorSweeper({
@@ -61,11 +65,13 @@ async function open(world: World): Promise<Opened> {
       w.outage.down = earlier.down;
       await sweeper.sweep();
     }
+    w.outage.down = world.provider.down;
+    await beforeEvent(w, sweeper);
     const before = dumpTables(w.db);
     const touched = diffTables(w.db, world.tables, before);
     if (Object.keys(touched).length > 0) {
-      throw new Error("an earlier sweep changed the tables; state them as the event finds them "
-        + `and keep the sweeps for the engine's memory:\n${JSON.stringify(touched, null, 2)}`);
+      throw new Error("an earlier sweep or request changed the tables; state them as the event finds them "
+        + `and keep those for the service's memory:\n${JSON.stringify(touched, null, 2)}`);
     }
     w.clock.now = new Date(world.clock);
     w.outage.down = world.provider.down;
@@ -78,13 +84,24 @@ async function open(world: World): Promise<Opened> {
   }
 }
 
-/** One request through the HTTP door. */
+/** A request as the README says to send one: `body` as JSON with its Content-Type, or none. */
+function sent(request: HttpRequest): RequestInit {
+  const { method, headers, body } = request;
+  const init: RequestInit = { method, headers: { ...headers } };
+  if (body !== null) {
+    init.body = JSON.stringify(body);
+    (init.headers as Record<string, string>)["Content-Type"] = "application/json";
+  }
+  return init;
+}
+
+/** One request through the HTTP door, after any earlier ones through the same app. */
 export async function runHttp(
-  scenario: Pick<HttpScenario, "world" | "request">,
+  scenario: Pick<HttpScenario, "world" | "request" | "earlier">,
 ): Promise<HttpExpect> {
   return quietly(async () => {
-    const { world: w, sweeper, before } = await open(scenario.world);
-    try {
+    let app: ReturnType<typeof createApp> | undefined;
+    const build = (w: OpenWorld, sweeper: MonitorSweeper) => {
       const deps: Deps = {
         settings: w.settings,
         db: w.db,
@@ -94,17 +111,21 @@ export async function runHttp(
         provider: { ...w.provider, close: () => { /* nothing to hang up */ } },
         sources: w.sources,
       };
-      const { method, path, headers, body } = scenario.request;
-      const init: RequestInit = { method, headers: { ...headers } };
-      if (body !== null) {
-        init.body = JSON.stringify(body);
-        (init.headers as Record<string, string>)["Content-Type"] = "application/json";
-      }
       // the MCP door mounted as `main.ts` mounts it (ADR 0026), so `/mcp` is a request like any other
-      const app = createApp(deps, {
+      return createApp(deps, {
         mcp: (read) => mcpServer({ read, now: deps.now, displayTz: w.settings.displayTz }),
       });
-      const resp = await app.request(path, init);
+    };
+    const earlier: EarlierRequest[] = scenario.earlier ?? [];
+    const { world: w, before } = await open(scenario.world, async (opened, sweeper) => {
+      app = build(opened, sweeper);
+      for (const e of earlier) {
+        opened.clock.now = new Date(e.at);
+        await (await app.request(e.request.path, sent(e.request))).text();
+      }
+    });
+    try {
+      const resp = await app!.request(scenario.request.path, sent(scenario.request));
       const text = await resp.text();
       const json = (resp.headers.get("content-type") ?? "").includes("application/json");
       return {

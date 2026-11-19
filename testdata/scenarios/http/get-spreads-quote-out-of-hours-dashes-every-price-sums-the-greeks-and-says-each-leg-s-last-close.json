@@ -1,0 +1,324 @@
+{
+  "name": "GET /spreads/quote out of hours dashes every price, sums the greeks and says each leg's last close",
+  "world": {
+    "clock": "2026-11-14T17:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPXW261218C7300000": {
+          "name": "SPXW 261218 7300C",
+          "bid_price": 0,
+          "ask_price": 0,
+          "last_price": 2.75,
+          "option_delta": 0.21,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218C7350000": {
+          "name": "SPXW 261218 7350C",
+          "bid_price": 0,
+          "ask_price": 0,
+          "last_price": 1.75,
+          "option_delta": 0.15,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6350000": {
+          "name": "SPXW 261218 6350P",
+          "bid_price": 0,
+          "ask_price": 0,
+          "last_price": 2.25,
+          "option_delta": -0.12,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 20,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6400000": {
+          "name": "SPXW 261218 6400P",
+          "bid_price": 0,
+          "ask_price": 0,
+          "last_price": 4.5,
+          "option_delta": -0.18,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 19.25,
+          "option_contract_size": 100
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [
+        {
+          "contracts": "US.SPXW261218C7300000",
+          "observed_on": "2026-11-12",
+          "dte": 36,
+          "legs_mid": {
+            "US.SPXW261218C7300000": 2.9
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-12 21:14:00.000000",
+          "spx": null,
+          "contract_size": null
+        },
+        {
+          "contracts": "US.SPXW261218C7300000,US.SPXW261218C7350000",
+          "observed_on": "2026-11-13",
+          "dte": 35,
+          "legs_mid": {
+            "US.SPXW261218C7300000": 3.1,
+            "US.SPXW261218C7350000": 2.05
+          },
+          "legs_iv": null,
+          "legs_vega": null,
+          "legs_delta": null,
+          "observed_at": "2026-11-13 21:14:00.000000",
+          "spx": null,
+          "contract_size": null
+        }
+      ],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/spreads/quote?spread=20261218%3A-C7300%2C+C7350&spread=20261218%3A-P6400%2C%2BP6350%401.5",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "phase": "closed",
+        "fetched_at": "2026-11-15 01:00:00+08:00",
+        "spreads": [
+          {
+            "expiry": "2026-12-18",
+            "dte": 34,
+            "entry": null,
+            "legs": [
+              {
+                "side": "short",
+                "option_type": "CALL",
+                "strike": 7300,
+                "qty": 1,
+                "code": "US.SPXW261218C7300000",
+                "bid_price": 0,
+                "ask_price": 0,
+                "mid_price": null,
+                "option_implied_volatility": 14.5,
+                "option_delta": 0.21,
+                "option_gamma": 0.00012,
+                "option_theta": -0.85,
+                "option_vega": 4.25,
+                "option_contract_size": 100,
+                "fetched_at": "2026-11-15 01:00:00+08:00",
+                "error": "no two-sided quote",
+                "last_known": {
+                  "price": 3.1,
+                  "observed_on": "2026-11-13",
+                  "observed_at": "2026-11-14 05:14:00+08:00",
+                  "timing": "close"
+                }
+              },
+              {
+                "side": "long",
+                "option_type": "CALL",
+                "strike": 7350,
+                "qty": 1,
+                "code": "US.SPXW261218C7350000",
+                "bid_price": 0,
+                "ask_price": 0,
+                "mid_price": null,
+                "option_implied_volatility": 14.5,
+                "option_delta": 0.15,
+                "option_gamma": 0.00012,
+                "option_theta": -0.85,
+                "option_vega": 4.25,
+                "option_contract_size": 100,
+                "fetched_at": "2026-11-15 01:00:00+08:00",
+                "error": "no two-sided quote",
+                "last_known": {
+                  "price": 2.05,
+                  "observed_on": "2026-11-13",
+                  "observed_at": "2026-11-14 05:14:00+08:00",
+                  "timing": "close"
+                }
+              }
+            ],
+            "value": null,
+            "natural": null,
+            "greeks": {
+              "option_delta": -0.06,
+              "option_gamma": 0,
+              "option_theta": 0,
+              "option_vega": 0
+            },
+            "spx": null,
+            "spx_reason": "the Provider gives no option premium to derive it from",
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218C7300000",
+                "option_type": "CALL",
+                "strike": 7300,
+                "delta": 0.21,
+                "points": null,
+                "sigma": null,
+                "one_sigma": null
+              }
+            ],
+            "payoff": {
+              "at_strikes": [
+                {
+                  "spx": 7300,
+                  "pnl": 0
+                },
+                {
+                  "spx": 7350,
+                  "pnl": -50
+                }
+              ],
+              "slope_below": 0,
+              "slope_above": 0,
+              "breakevens": null,
+              "max_profit": null,
+              "max_loss": null
+            },
+            "payoff_basis": "shape",
+            "error": null
+          },
+          {
+            "expiry": "2026-12-18",
+            "dte": 34,
+            "entry": 1.5,
+            "legs": [
+              {
+                "side": "short",
+                "option_type": "PUT",
+                "strike": 6400,
+                "qty": 1,
+                "code": "US.SPXW261218P6400000",
+                "bid_price": 0,
+                "ask_price": 0,
+                "mid_price": null,
+                "option_implied_volatility": 19.25,
+                "option_delta": -0.18,
+                "option_gamma": 0.00012,
+                "option_theta": -0.85,
+                "option_vega": 4.25,
+                "option_contract_size": 100,
+                "fetched_at": "2026-11-15 01:00:00+08:00",
+                "error": "no two-sided quote",
+                "last_known": null
+              },
+              {
+                "side": "long",
+                "option_type": "PUT",
+                "strike": 6350,
+                "qty": 1,
+                "code": "US.SPXW261218P6350000",
+                "bid_price": 0,
+                "ask_price": 0,
+                "mid_price": null,
+                "option_implied_volatility": 20,
+                "option_delta": -0.12,
+                "option_gamma": 0.00012,
+                "option_theta": -0.85,
+                "option_vega": 4.25,
+                "option_contract_size": 100,
+                "fetched_at": "2026-11-15 01:00:00+08:00",
+                "error": "no two-sided quote",
+                "last_known": null
+              }
+            ],
+            "value": null,
+            "natural": null,
+            "greeks": {
+              "option_delta": 0.06,
+              "option_gamma": 0,
+              "option_theta": 0,
+              "option_vega": 0
+            },
+            "spx": null,
+            "spx_reason": "the Provider gives no option premium to derive it from",
+            "short_strikes": [
+              {
+                "code": "US.SPXW261218P6400000",
+                "option_type": "PUT",
+                "strike": 6400,
+                "delta": -0.18,
+                "points": null,
+                "sigma": null,
+                "one_sigma": null
+              }
+            ],
+            "payoff": {
+              "at_strikes": [
+                {
+                  "spx": 6350,
+                  "pnl": -48.5
+                },
+                {
+                  "spx": 6400,
+                  "pnl": 1.5
+                }
+              ],
+              "slope_below": 0,
+              "slope_above": 0,
+              "breakevens": [
+                6398.5
+              ],
+              "max_profit": 1.5,
+              "max_loss": -48.5
+            },
+            "payoff_basis": "entry",
+            "error": null
+          }
+        ]
+      }
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7300000",
+          "US.SPXW261218C7350000",
+          "US.SPXW261218P6350000",
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
+  }
+}

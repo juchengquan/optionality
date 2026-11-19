@@ -18,8 +18,14 @@ tool's name becomes an id (`_LOOKUPS`), the path a call becomes, the cache and t
 `/references` — ask the Provider, whose snapshot limit (60 per 30 seconds) is shared with the sweep and
 the page, so an agent in a loop could otherwise starve the alarms. Every caller within `LIVE_FOR_MS` of a
 read gets that read, with the time it was made; a read still in flight is joined rather than repeated.
-Keyed by the path alone — the live tools take no arguments — so no argument can bust it. The page and
-the sweep never pass through here.
+Keyed by the path alone — those three take no arguments — so no argument can bust it. The page and the
+sweep never pass through here.
+
+**`price_spreads` is live and NOT cached here** (ADR 0027, `"cached_by": "route"`): its route,
+`GET /spreads/quote`, shares its batch for 5 seconds and caps its calls whoever asks, so a second window
+in front of it would only serve a batch up to ten seconds old. Its arguments are the one structured input
+a tool takes: `_QUERIES` writes them as the route's query, checking only what it must to write it, and
+every other refusal is the route's 422 in the route's words.
 
 **Where the Python differs, and why.**
 
@@ -32,6 +38,9 @@ the sweep never pass through here.
   pattern's surrogate range refuses it, where Python would count one code point and accept it.
 - **A name is trimmed with JavaScript's whitespace** (`_JS_WHITESPACE`), not `str.strip()`'s, which takes
   U+001C–U+001F and U+0085 that `trim` does not and would answer a name the TypeScript does not find.
+- **A number is written into a query as JavaScript writes it** (`js_string`), and the query is encoded as
+  `encodeURIComponent` encodes it (`quote` with `!*'()` kept), because the `source` an answer names is
+  compared as text. A bool is not a number, as `typeof` says.
 - **A shared read is an `asyncio.Task`**, which every caller awaits through `asyncio.shield`: awaiting a
   task directly cancels it when the awaiting request is cancelled, which would cancel it for everyone
   else sharing it. A JavaScript promise has no such reach.
@@ -67,8 +76,11 @@ class Tool(TypedDict):
     description: str
     #: the API path it GETs, with `{id}` where its one argument goes
     path: str
-    #: whether it asks the Provider, and so is shared for `LIVE_FOR_MS`
+    #: whether it asks the Provider, and so is shared for `LIVE_FOR_MS` — unless `cached_by` says its route
+    #: shares it already
     live: bool
+    #: "route" where the route shares its own answers (ADR 0027), so this door does not
+    cached_by: NotRequired[str]
     inputSchema: dict[str, Any]
 
 
@@ -133,11 +145,98 @@ def argument_fault(tool: Tool, args: Any) -> str | None:
         if name not in args:
             continue
         value = args[name]
+        # a structured argument is its tool's to check, as it writes the query (`_QUERIES`)
+        if properties[name].get("type") != "string" or "pattern" not in properties[name]:
+            continue
         pattern = properties[name]["pattern"]
         # anchored with ^…$, so `fullmatch` with ASCII classes, as the README says of such a regex
         if not isinstance(value, str) or re.fullmatch(pattern, _utf16(value), re.ASCII) is None:
             return f'argument "{name}" must be a string matching {pattern}'
     return None
+
+
+class _Fault(Exception):
+    """Why an agent's arguments cannot be written as a query, in words it can correct itself from."""
+
+
+def _is_number(value: object) -> bool:
+    """A finite JSON number, as `typeof value === "number" && Number.isFinite(value)`: a bool is not one."""
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(float(value))
+
+
+def _keys_fault(value: dict[str, Any], at: str, noun: str, keys: list[str], required: list[str]) -> str | None:
+    """Why an object is not one with exactly these keys, these `required`, or None."""
+    for key in required:
+        if key not in value:
+            return f'{at} is missing "{key}"'
+    extra = sorted(k for k in value if k not in keys)
+    if extra:
+        return f'{at} has an unexpected "{extra[0]}": a {noun} takes only ' + ", ".join(f'"{k}"' for k in keys)
+    return None
+
+
+#: The pattern an expiry must match before it is written into a query: `server.json`'s, read there.
+_EXPIRY_PATTERN = "^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$"
+
+
+def _structure_text(value: Any, at: str) -> str:
+    """One structure as the route's `spread` reads it, `<expiry>:<legs>[@<entry>]`, or `_Fault` saying why
+    it cannot be written. Only the shape and the types: what the route would refuse it refuses, in its
+    words. A None `qty` or `entry` is one not given."""
+    if not isinstance(value, dict):
+        raise _Fault(f"{at} must be an object")
+    fault = _keys_fault(value, at, "structure", ["expiry", "legs", "entry"], ["expiry", "legs"])
+    if fault is not None:
+        raise _Fault(fault)
+    expiry, legs, entry = value["expiry"], value["legs"], value.get("entry")
+    if not isinstance(expiry, str) or re.fullmatch(_EXPIRY_PATTERN, _utf16(expiry), re.ASCII) is None:
+        raise _Fault(f"{at}.expiry must be a string matching {_EXPIRY_PATTERN}")
+    if not isinstance(legs, list):
+        raise _Fault(f"{at}.legs must be a list of legs")
+    written: list[str] = []
+    for i, leg in enumerate(legs):
+        where = f"{at}.legs[{i}]"
+        if not isinstance(leg, dict):
+            raise _Fault(f"{where} must be an object")
+        fault = _keys_fault(
+            leg, where, "leg", ["side", "option_type", "strike", "qty"], ["side", "option_type", "strike"]
+        )
+        if fault is not None:
+            raise _Fault(fault)
+        side, type_, strike, qty = leg["side"], leg["option_type"], leg["strike"], leg.get("qty")
+        if side not in ("short", "long") or not isinstance(side, str):
+            raise _Fault(f'{where}.side must be "short" or "long"')
+        if type_ not in ("CALL", "PUT") or not isinstance(type_, str):
+            raise _Fault(f'{where}.option_type must be "CALL" or "PUT"')
+        if not _is_number(strike):
+            raise _Fault(f"{where}.strike must be a number")
+        if qty is not None and not _is_number(qty):
+            raise _Fault(f"{where}.qty must be a number")
+        times = "" if qty is None else f"x{js_string(float(qty))}"
+        written.append(f"{'-' if side == 'short' else '+'}{type_[0]}{js_string(float(strike))}{times}")
+    if entry is not None and not _is_number(entry):
+        raise _Fault(f"{at}.entry must be a number")
+    tail = "" if entry is None else f"@{js_string(float(entry))}"
+    return f"{expiry}:{','.join(written)}{tail}"
+
+
+def _encode_uri_component(text: str) -> str:
+    """JavaScript's `encodeURIComponent`: every byte but the unreserved and `!*'()` escaped."""
+    return quote(text, safe="!*'()")
+
+
+def _price_spreads_query(given: dict[str, Any]) -> str:
+    structures = given.get("structures")
+    if not isinstance(structures, list):
+        raise _Fault('"structures" must be a list of structures')
+    return "&".join(
+        f"spread={_encode_uri_component(_structure_text(s, f'structures[{i}]'))}" for i, s in enumerate(structures)
+    )
+
+
+#: The query a tool's structured arguments become, by tool: its path is the table's, and this is what
+#: follows the `?`. Only `price_spreads` has one (ADR 0027).
+_QUERIES: dict[str, Callable[[dict[str, Any]], str]] = {"price_spreads": _price_spreads_query}
 
 
 def _utf16(text: str) -> str:
@@ -327,7 +426,15 @@ class Toolbox:
             resolved["id"] = found
         # only a RESOLVED id is ever put in a path, never what the caller typed
         path = re.sub(r"\{(\w+)\}", lambda m: quote(resolved[m.group(1)], safe=""), tool["path"])
-        reading = self._live(path, authorization) if tool["live"] else self._fresh(path, authorization)
+        query = _QUERIES.get(tool["name"])
+        if query is not None:
+            try:
+                path = f"{path}?{query(given)}"
+            except _Fault as fault:
+                return _failed(str(fault))
+        # a tool whose route shares its own answers is read afresh here: one window, not two
+        shared = tool["live"] and tool.get("cached_by") != "route"
+        reading = self._live(path, authorization) if shared else self._fresh(path, authorization)
         status, body = await asyncio.shield(reading.answer)
         if status != 200:
             return _failed(f"GET {path} answered {status}: {_detail_of(body)}")

@@ -215,7 +215,7 @@ describe("the tools", () => {
     const { tools } = await result(await rpc("tools/list"));
     expect(tools.map((t: { name: string }) => t.name)).toEqual([
       "holdings", "watchlist", "positions", "holding_history", "monitor_history", "monitor_closes",
-      "references", "health",
+      "references", "price_spreads", "health",
     ]);
     for (const tool of tools) {
       expect(tool.annotations, tool.name).toEqual({
@@ -304,6 +304,72 @@ describe("the tools", () => {
     const answer = await call("watchlist");
     expect(answer.isError).toBe(true);
     expect(answer.text).toMatch(/^GET \/quotes answered 502: .*ECONNREFUSED/);
+  });
+});
+
+describe("price_spreads prices any structure through GET /spreads/quote (#452, ADR 0027)", () => {
+  const D = EXPIRY.replaceAll("-", "");
+  const PUTS = { expiry: D, legs: [{ side: "short", option_type: "PUT", strike: 7100 }, { side: "long", option_type: "PUT", strike: 7075 }] };
+  const RATIO = {
+    expiry: EXPIRY, entry: -1.5,
+    legs: [{ side: "long", option_type: "CALL", strike: 8050 }, { side: "short", option_type: "CALL", strike: 8075, qty: 2 }],
+  };
+
+  it("encodes the structures into the route's query and answers its very body", async () => {
+    start();
+    const answer = await call("price_spreads", { structures: [PUTS, RATIO] });
+    expect(answer.isError, answer.text).toBe(false);
+    const path = `/spreads/quote?spread=${encodeURIComponent(`${D}:-P7100,+P7075`)}`
+      + `&spread=${encodeURIComponent(`${EXPIRY}:+C8050,-C8075x2@-1.5`)}`;
+    expect(answer.source).toBe(`GET ${path}`);
+    expect(asked).toHaveLength(1);
+    expect(answer.data).toEqual(await body(await h.call(path)));
+    // the harness's quotes carry a mid and no sides, which is no two-sided quote: a shape, then the entry
+    expect(answer.data.spreads.map((s: { payoff_basis: string }) => s.payoff_basis)).toEqual(["shape", "entry"]);
+  });
+
+  it("leaves the sharing to the route, so a batch is never held twice over", async () => {
+    start();
+    await call("price_spreads", { structures: [PUTS] });
+    h.now = new Date(h.now.getTime() + 4000);
+    // the route's batch is shared, so the Provider is not asked again...
+    const again = await call("price_spreads", { structures: [PUTS] });
+    expect(asked).toHaveLength(1);
+    // ...but the door read it afresh, at its own instant
+    expect(again.read_at).toBe("2026-10-02 13:26:10+08:00");
+    h.now = new Date(h.now.getTime() + 1000);
+    await call("price_spreads", { structures: [PUTS] });
+    expect(asked).toHaveLength(2);
+  });
+
+  it("carries the route's refusal as a tool error in its own words, asking nothing", async () => {
+    start();
+    const answer = await call("price_spreads", { structures: [{ ...PUTS, legs: [{ side: "short", option_type: "PUT", strike: 7100, qty: 11 }] }] });
+    expect(answer).toMatchObject({ isError: true });
+    expect(answer.text).toMatch(/answered 422: spread 1, leg 1: a quantity is 1 to 10, not 11$/);
+    expect(asked).toEqual([]);
+  });
+
+  it.each([
+    [{}, 'missing argument "structures"'],
+    [{ structures: "20261218:-P6800" }, '"structures" must be a list of structures'],
+    [{ structures: [7] }, "structures[0] must be an object"],
+    [{ structures: [{ legs: [] }] }, "structures[0] is missing \"expiry\""],
+    [{ structures: [{ ...PUTS, expiry: "Dec 18" }] }, "structures[0].expiry must be a string matching ^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$"],
+    [{ structures: [{ ...PUTS, legs: "-P7100" }] }, "structures[0].legs must be a list of legs"],
+    [{ structures: [{ ...PUTS, size: 2 }] }, "structures[0] has an unexpected \"size\": a structure takes only \"expiry\", \"legs\", \"entry\""],
+    [{ structures: [{ ...PUTS, entry: "1.5" }] }, "structures[0].entry must be a number"],
+    [{ structures: [{ ...PUTS, legs: [{ side: "sold", option_type: "PUT", strike: 7100 }] }] }, "structures[0].legs[0].side must be \"short\" or \"long\""],
+    [{ structures: [{ ...PUTS, legs: [{ side: "short", option_type: "P", strike: 7100 }] }] }, "structures[0].legs[0].option_type must be \"CALL\" or \"PUT\""],
+    [{ structures: [{ ...PUTS, legs: [{ side: "short", option_type: "PUT", strike: "7100" }] }] }, "structures[0].legs[0].strike must be a number"],
+    [{ structures: [{ ...PUTS, legs: [{ side: "short", option_type: "PUT", strike: 7100, qty: "2" }] }] }, "structures[0].legs[0].qty must be a number"],
+    [{ structures: [{ ...PUTS, legs: [{ side: "short", option_type: "PUT" }] }] }, "structures[0].legs[0] is missing \"strike\""],
+    [{ structures: [{ ...PUTS, legs: [{ side: "short", option_type: "PUT", strike: 7100, sign: -1 }] }] },
+      "structures[0].legs[0] has an unexpected \"sign\": a leg takes only \"side\", \"option_type\", \"strike\", \"qty\""],
+  ])("refuses arguments it cannot write as a query, before asking anything: %j", async (args, words) => {
+    start();
+    expect(await call("price_spreads", args)).toMatchObject({ isError: true, text: words });
+    expect(asked).toEqual([]);
   });
 });
 

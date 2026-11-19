@@ -92,6 +92,10 @@ class Settings:
     exit_stop_multiple: float
     #: exit schedule: be out of a Position at or inside this DTE whatever the P&L
     exit_manage_by_dte: int
+    #: the most Provider calls `GET /spreads/quote` may make in any 30 seconds, whoever asks — HTTP or
+    #: MCP (ADR 0027). Its own budget inside moomoo's 60, so an agent pricing candidates can never
+    #: starve the sweep. At least 1: a cap of 0 would refuse every call with no time to wait for.
+    spread_quote_calls_per_30s: int
     telegram_bot_token: str
     telegram_chat_id: str
     #: URL prefix when served behind a path-stripping reverse proxy, e.g. "/opt/api"
@@ -131,6 +135,7 @@ DEFAULTS = Settings(
     exit_take_fraction=0.5,
     exit_stop_multiple=2.0,
     exit_manage_by_dte=21,
+    spread_quote_calls_per_30s=12,
     telegram_bot_token="",
     telegram_chat_id="",
     root_path="",
@@ -162,6 +167,7 @@ FROM_ENV = {
     "exit_take_fraction": "EXIT_TAKE_FRACTION",
     "exit_stop_multiple": "EXIT_STOP_MULTIPLE",
     "exit_manage_by_dte": "EXIT_MANAGE_BY_DTE",
+    "spread_quote_calls_per_30s": "SPREAD_QUOTE_CALLS_PER_30S",
     "telegram_bot_token": "TELEGRAM_BOT_TOKEN",
     "telegram_chat_id": "TELEGRAM_CHAT_ID",
     "root_path": "ROOT_PATH",
@@ -182,7 +188,9 @@ FRACTIONAL = frozenset({"exit_take_fraction", "exit_stop_multiple"})
 #: 0 IS off for the three left out — `ALARM_REPEAT_SECONDS`, `QUARANTINE_AFTER_SILENT_SWEEPS`,
 #: `EXPIRED_RETENTION_DAYS` — which is exactly why 0 is a plausible thing to type here, and why this
 #: list has to be explicit rather than "no zeroes anywhere" (review 2026-11-01).
-AT_LEAST_ONE = ("monitor_interval_seconds", "degraded_after_failures")
+#: and `SPREAD_QUOTE_CALLS_PER_30S`, whose 0 would answer every spread quote 429 with no time to wait for
+#: (ADR 0027).
+AT_LEAST_ONE = ("monitor_interval_seconds", "degraded_after_failures", "spread_quote_calls_per_30s")
 
 # JavaScript's `trim`: WhiteSpace (tab, VT, FF, space, NBSP, the BOM and every Zs) and LineTerminator
 # (LF, CR, U+2028, U+2029). Not `str.strip()`, which keeps the BOM and also eats \x1c-\x1f.

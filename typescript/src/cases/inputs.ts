@@ -576,6 +576,44 @@ export const INPUTS: Record<string, CaseInput[]> = {
     { fn: "midPrice", name: "a side that is a boolean", args: [3.5, true] },
     { fn: "midPrice", name: "an infinite ask", args: [3.5, Infinity] },
     { fn: "midPrice", name: "a bid that is not a number", args: [NaN, 4.1] },
+    // --- a structure's natural bid and ask: the worst fill each way (#452, ADR 0027) ---
+    { fn: "naturalPrice", name: "a put credit spread: opened at the ask, closed at the bid",
+      args: [[{ code: "US.SPXW261218P6800000", sign: -1 }, { code: "US.SPXW261218P6750000", sign: 1 }], {
+        "US.SPXW261218P6800000": { bid_price: 10.5, ask_price: 11 },
+        "US.SPXW261218P6750000": { bid_price: 8.25, ask_price: 8.75 },
+      }] },
+    { fn: "naturalPrice", name: "a call debit spread, positive both ways",
+      args: [[{ code: "US.SPXW261218C7300000", sign: 1 }, { code: "US.SPXW261218C7350000", sign: -1 }], {
+        "US.SPXW261218C7300000": { bid_price: 2.7, ask_price: 2.8 },
+        "US.SPXW261218C7350000": { bid_price: 1.7, ask_price: 1.8 },
+      }] },
+    { fn: "naturalPrice", name: "a leg counted as many times as its quantity",
+      args: [[{ code: "US.SPXW261218C7300000", sign: 1 }, { code: "US.SPXW261218C7350000", sign: -1, qty: 2 }], {
+        "US.SPXW261218C7300000": { bid_price: 2.7, ask_price: 2.8 },
+        "US.SPXW261218C7350000": { bid_price: 1.7, ask_price: 1.8 },
+      }] },
+    { fn: "naturalPrice", name: "a worthless wing bid 0 is still two-sided",
+      args: [[{ code: "US.SPXW261218P6400000", sign: -1 }, { code: "US.SPXW261218P5000000", sign: 1 }], {
+        "US.SPXW261218P6400000": { bid_price: 4.4, ask_price: 4.6 },
+        "US.SPXW261218P5000000": { bid_price: 0, ask_price: 0.05 },
+      }] },
+    { fn: "naturalPrice", name: "one leg 0/0 out of hours: no natural price at all",
+      args: [[{ code: "US.SPXW261218P6800000", sign: -1 }, { code: "US.SPXW261218P6750000", sign: 1 }], {
+        "US.SPXW261218P6800000": { bid_price: 10.5, ask_price: 11 },
+        "US.SPXW261218P6750000": { bid_price: 0, ask_price: 0 },
+      }] },
+    { fn: "naturalPrice", name: "a leg missing from the batch",
+      args: [[{ code: "US.SPXW261218P6800000", sign: -1 }, { code: "US.SPXW261218P6750000", sign: 1 }], {
+        "US.SPXW261218P6800000": { bid_price: 10.5, ask_price: 11 },
+      }] },
+    { fn: "naturalPrice", name: "a side that is text is no side",
+      args: [[{ code: "US.SPXW261218P6800000", sign: 1 }], { "US.SPXW261218P6800000": { bid_price: "10.5", ask_price: 11 } }] },
+    { fn: "naturalPrice", name: "no legs: nothing to fill", args: [[], {}] },
+    { fn: "naturalPrice", name: "float noise is summed as it falls, not rounded",
+      args: [[{ code: "US.SPXW261218C7300000", sign: 1 }, { code: "US.SPXW261218C7350000", sign: -1 }], {
+        "US.SPXW261218C7300000": { bid_price: 0.3, ask_price: 0.4 },
+        "US.SPXW261218C7350000": { bid_price: 0.1, ask_price: 0.2 },
+      }] },
 
     // --- the derived SPX said stale outside the regular session (#416) ---
     { fn: "sessionSpx", name: "in the session, as derived", args: [at("2026-11-13T20:00:00Z"), { price: 7561.68, reason: null }] },

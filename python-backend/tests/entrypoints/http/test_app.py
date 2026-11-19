@@ -43,6 +43,8 @@ SURFACE = {
     "GET /positions/values",
     "GET /quotes",
     "GET /references",
+    # any SPX structure priced live, for an agent (#452, ADR 0027)
+    "GET /spreads/quote",
     "PATCH /monitors/:id",
     "PATCH /positions/:id",
     # the sweep's interval, the one knob kept in the database (#442, ADR 0025)
@@ -210,7 +212,7 @@ class TestTheBearerToken:
         # GET, each with no body: auth runs before validation too.
         h = start()
         doors = {d for d in served(h.app) if d.split(" ")[1] not in OPEN}
-        assert len(doors) == 25, "the real number of doors"
+        assert len(doors) == 26, "the real number of doors"
         for door in sorted(doors):
             method, path = door.split(" ")
             resp = await h.call(path.replace(":id", "x"), method=method, anonymous=True)

@@ -124,6 +124,16 @@ describe("the knobs a service must not start on", () => {
       .toThrow(/FLAPPING_REPEAT_SECONDS is set to nothing/);
   });
 
+  it("caps the spreads an agent prices at 12 Provider calls in 30 seconds, never 0 (#452)", () => {
+    // 0 would be a 429 with no answer to "when may I call": a cap of nothing is a broken knob
+    expect(settingsFromEnv({}).spreadQuoteCallsPer30s).toBe(12);
+    expect(settingsFromEnv({ SPREAD_QUOTE_CALLS_PER_30S: "4" }).spreadQuoteCallsPer30s).toBe(4);
+    expect(() => settingsFromEnv({ SPREAD_QUOTE_CALLS_PER_30S: "0" }))
+      .toThrow(/SPREAD_QUOTE_CALLS_PER_30S must be at least 1/);
+    expect(() => settingsFromEnv({ SPREAD_QUOTE_CALLS_PER_30S: "2.5" }))
+      .toThrow(/SPREAD_QUOTE_CALLS_PER_30S is not an integer/);
+  });
+
   it("checks the defaults themselves, so a bad default cannot ship", () => {
     expect(() => settingsFromEnv({})).not.toThrow();
   });

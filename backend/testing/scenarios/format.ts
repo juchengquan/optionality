@@ -111,9 +111,19 @@ export interface HttpExpect {
   calls: Calls;
 }
 
+/** A request made BEFORE the event, through the same service, for the memory it leaves that lives
+ *  in no table — a shared batch, a cap's count (ADR 0027). Held, like an earlier sweep, to changing
+ *  no row; its answer and its calls are not part of the expectation. */
+export interface EarlierRequest {
+  at: string;
+  request: HttpRequest;
+}
+
 export interface HttpScenario {
   name: string;
   world: World;
+  /** absent where there are none */
+  earlier?: EarlierRequest[];
   request: HttpRequest;
   expect: HttpExpect;
 }

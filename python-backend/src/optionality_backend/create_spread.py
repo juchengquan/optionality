@@ -31,7 +31,7 @@ ASCII, and Python's sort is JavaScript's on it.
 """
 
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, TypeGuard, cast
@@ -66,7 +66,7 @@ from .schemas.monitor import (
     DEFAULT_SINGLE_FIELD,
     threshold_error,
 )
-from .schemas.position import DEFAULT_CONTRACTS, LegIn, stored_qty
+from .schemas.position import DEFAULT_CONTRACTS, stored_qty
 from .schemas.spread import MAX_PROBE_LEGS, SpreadIn, SpreadMonitorIn, SpreadsIn
 
 
@@ -224,21 +224,30 @@ def _in_the_way(
     return replaced
 
 
-def _twice_over(spread: SpreadIn) -> SpreadFault | None:
+def twice_over_words(label: str, legs: Iterable[tuple[str, str, float]]) -> str | None:
     """Two legs on one contract: a typo, or a leg that cancels itself. Held twice over is ONE leg with a
-    quantity (#351), so that "a Contract held twice" stays a fact about two holdings — a roll day."""
-    seen: dict[str, LegIn] = {}
-    for leg in spread.legs:
-        key = f"{leg.option_type} {js_string(leg.strike)}"
+    quantity (#351), so that "a Contract held twice" stays a fact about two holdings — a roll day.
+
+    The words alone, for whatever names the legs, each `(side, option_type, strike)`: `'<name>'` here,
+    `spread <n>` where `GET /spreads/quote` refuses the same two things (#452, the owner's decision) — one
+    set of refusals, so the two routes cannot word them apart."""
+    seen: dict[str, str] = {}
+    for side, option_type, strike in legs:
+        key = f"{option_type} {js_string(strike)}"
         before = seen.get(key)
         if before is not None:
-            return _refuse(
-                f"'{spread.name}' names {key} twice: give the one leg a quantity"
-                if before.side == leg.side
-                else f"'{spread.name}' is both short and long {key}"
+            return (
+                f"{label} names {key} twice: give the one leg a quantity"
+                if before == side
+                else f"{label} is both short and long {key}"
             )
-        seen[key] = leg
+        seen[key] = side
     return None
+
+
+def _twice_over(spread: SpreadIn) -> SpreadFault | None:
+    words = twice_over_words(f"'{spread.name}'", ((leg.side, leg.option_type, leg.strike) for leg in spread.legs))
+    return None if words is None else _refuse(words)
 
 
 def _is_unique_clash(err: BaseException) -> bool:

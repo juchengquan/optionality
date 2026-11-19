@@ -152,6 +152,8 @@ describe("the bearer token", () => {
       "GET /positions/values",
       "GET /quotes",
       "GET /references",
+      // any SPX structure priced live, for an agent (#452, ADR 0027)
+      "GET /spreads/quote",
       "PATCH /monitors/:id",
       "PATCH /positions/:id",
       // the sweep's interval, the one knob kept in the database (#442, ADR 0025)
@@ -191,7 +193,7 @@ describe("the bearer token", () => {
         return [`${r.method} ${path}`, { method: r.method, path }] as const;
       })).entries()];
     // the real number of doors, which the route list above enumerates one by one
-    expect(doors.length).toBe(25);
+    expect(doors.length).toBe(26);
     for (const [door, { method, path }] of doors) {
       expect((await h.call(path, { anonymous: true, method })).status, door).toBe(401);
     }

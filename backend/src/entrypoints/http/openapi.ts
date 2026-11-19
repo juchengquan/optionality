@@ -41,6 +41,7 @@ const FAILURES = {
   404: "no such record",
   409: "would duplicate an existing record",
   422: "the request is well-formed but refused",
+  429: "too many calls of this kind: the detail says when the next is allowed",
   502: "the OpenD call failed",
 } as const;
 

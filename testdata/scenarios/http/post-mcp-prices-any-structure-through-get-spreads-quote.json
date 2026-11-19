@@ -1,0 +1,169 @@
+{
+  "name": "POST /mcp prices any structure through GET /spreads/quote",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPXW261218C7300000": {
+          "name": "SPXW 261218 7300C",
+          "mid_price": 2.75,
+          "bid_price": 2.7,
+          "ask_price": 2.8,
+          "last_price": 2.8,
+          "option_delta": 0.21,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100,
+          "option_premium": 5.83
+        },
+        "US.SPXW261218C7350000": {
+          "name": "SPXW 261218 7350C",
+          "mid_price": 1.75,
+          "bid_price": 1.7,
+          "ask_price": 1.8,
+          "last_price": 1.7,
+          "option_delta": 0.15,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 14.5,
+          "option_contract_size": 100,
+          "option_premium": 6.54
+        },
+        "US.SPXW261218P6350000": {
+          "name": "SPXW 261218 6350P",
+          "mid_price": 2.25,
+          "bid_price": 2.2,
+          "ask_price": 2.3,
+          "last_price": 2.3,
+          "option_delta": -0.12,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 20,
+          "option_contract_size": 100,
+          "option_premium": 8.01
+        },
+        "US.SPXW261218P6400000": {
+          "name": "SPXW 261218 6400P",
+          "mid_price": 4.5,
+          "bid_price": 4.45,
+          "ask_price": 4.55,
+          "last_price": 4.4,
+          "option_delta": -0.18,
+          "option_gamma": 0.00012,
+          "option_theta": -0.85,
+          "option_vega": 4.25,
+          "option_implied_volatility": 19.25,
+          "option_contract_size": 100,
+          "option_premium": 7.32
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "price_spreads",
+        "arguments": {
+          "structures": [
+            {
+              "expiry": "20261218",
+              "legs": [
+                {
+                  "side": "short",
+                  "option_type": "CALL",
+                  "strike": 7300
+                },
+                {
+                  "side": "long",
+                  "option_type": "CALL",
+                  "strike": 7350
+                }
+              ]
+            },
+            {
+              "expiry": "2026-12-18",
+              "entry": 1.5,
+              "legs": [
+                {
+                  "side": "short",
+                  "option_type": "PUT",
+                  "strike": 6400
+                },
+                {
+                  "side": "long",
+                  "option_type": "PUT",
+                  "strike": 6350,
+                  "qty": 2
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"data\":{\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"phase\":\"regular\",\"spreads\":[{\"dte\":39,\"entry\":null,\"error\":null,\"expiry\":\"2026-12-18\",\"greeks\":{\"option_delta\":-0.06,\"option_gamma\":0,\"option_theta\":0,\"option_vega\":0},\"legs\":[{\"ask_price\":2.8,\"bid_price\":2.7,\"code\":\"US.SPXW261218C7300000\",\"error\":null,\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"last_known\":null,\"mid_price\":2.75,\"option_contract_size\":100,\"option_delta\":0.21,\"option_gamma\":0.00012,\"option_implied_volatility\":14.5,\"option_theta\":-0.85,\"option_type\":\"CALL\",\"option_vega\":4.25,\"qty\":1,\"side\":\"short\",\"strike\":7300},{\"ask_price\":1.8,\"bid_price\":1.7,\"code\":\"US.SPXW261218C7350000\",\"error\":null,\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"last_known\":null,\"mid_price\":1.75,\"option_contract_size\":100,\"option_delta\":0.15,\"option_gamma\":0.00012,\"option_implied_volatility\":14.5,\"option_theta\":-0.85,\"option_type\":\"CALL\",\"option_vega\":4.25,\"qty\":1,\"side\":\"long\",\"strike\":7350}],\"natural\":{\"ask\":-0.9000000000000001,\"bid\":-1.0999999999999999},\"payoff\":{\"at_strikes\":[{\"pnl\":1,\"spx\":7300},{\"pnl\":-49,\"spx\":7350}],\"breakevens\":[7301],\"max_loss\":-49,\"max_profit\":1,\"slope_above\":0,\"slope_below\":0},\"payoff_basis\":\"mid\",\"short_strikes\":[{\"code\":\"US.SPXW261218C7300000\",\"delta\":0.21,\"one_sigma\":327.06,\"option_type\":\"CALL\",\"points\":399.54,\"sigma\":1.22,\"strike\":7300}],\"spx\":6900.46,\"spx_reason\":null,\"value\":-1},{\"dte\":39,\"entry\":1.5,\"error\":null,\"expiry\":\"2026-12-18\",\"greeks\":{\"option_delta\":-0.06,\"option_gamma\":0.00012,\"option_theta\":-0.85,\"option_vega\":4.25},\"legs\":[{\"ask_price\":4.55,\"bid_price\":4.45,\"code\":\"US.SPXW261218P6400000\",\"error\":null,\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"last_known\":null,\"mid_price\":4.5,\"option_contract_size\":100,\"option_delta\":-0.18,\"option_gamma\":0.00012,\"option_implied_volatility\":19.25,\"option_theta\":-0.85,\"option_type\":\"PUT\",\"option_vega\":4.25,\"qty\":1,\"side\":\"short\",\"strike\":6400},{\"ask_price\":2.3,\"bid_price\":2.2,\"code\":\"US.SPXW261218P6350000\",\"error\":null,\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"last_known\":null,\"mid_price\":2.25,\"option_contract_size\":100,\"option_delta\":-0.12,\"option_gamma\":0.00012,\"option_implied_volatility\":20,\"option_theta\":-0.85,\"option_type\":\"PUT\",\"option_vega\":4.25,\"qty\":2,\"side\":\"long\",\"strike\":6350}],\"natural\":{\"ask\":0.14999999999999947,\"bid\":-0.14999999999999947},\"payoff\":{\"at_strikes\":[{\"pnl\":-48.5,\"spx\":6350},{\"pnl\":1.5,\"spx\":6400}],\"breakevens\":[6301.5,6398.5],\"max_loss\":-48.5,\"max_profit\":6301.5,\"slope_above\":0,\"slope_below\":-1},\"payoff_basis\":\"entry\",\"short_strikes\":[{\"code\":\"US.SPXW261218P6400000\",\"delta\":-0.18,\"one_sigma\":434.2,\"option_type\":\"PUT\",\"points\":500.46,\"sigma\":1.15,\"strike\":6400}],\"spx\":6900.46,\"spx_reason\":null,\"value\":0}]},\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /spreads/quote?spread=20261218%3A-C7300%2C%2BC7350&spread=2026-12-18%3A-P6400%2C%2BP6350x2%401.5\"}"
+            }
+          ]
+        }
+      }
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7300000",
+          "US.SPXW261218C7350000",
+          "US.SPXW261218P6350000",
+          "US.SPXW261218P6400000"
+        ]
+      ]
+    }
+  }
+}
