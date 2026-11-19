@@ -6,6 +6,9 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { WATCHABLE_FIELDS } from "optionality/domain/monitor";
+import { opendFields } from "optionality/vendors/fields";
+
 import { type FakeProvider, type Harness, body, harness, json, pricedFetcher } from "../../../testing/harness.ts";
 import { DESCRIBED, LIVE_FOR_MS, type Rounding, byKey, canonical, roundTo, rounded, toolbox } from "./tools.ts";
 
@@ -622,7 +625,7 @@ describe("figures are rounded by key, per tool (#454)", () => {
   });
 
   it("are tabled for every tool, to 2, 4 or 6 places, and a rule's figures by the six fields a rule may watch", () => {
-    expect(DESCRIBED.rounding.by_field).toEqual({
+    expect(DESCRIBED.rounding.by_field).toMatchObject({
       mid_price: 2, option_delta: 4, option_gamma: 6, option_theta: 4, option_vega: 4, option_implied_volatility: 4,
     });
     for (const tool of DESCRIBED.tools) {
@@ -631,6 +634,30 @@ describe("figures are rounded by key, per tool (#454)", () => {
       // a key is in one row of the table, never two
       const named = [...Object.keys(keys), ...Object.keys(maps), ...by_field];
       expect(new Set(named).size, tool.name).toBe(named.length);
+    }
+  });
+
+  it("place every field a rule may watch, and nothing else, in the by-field table: a number, or null for never", () => {
+    // a rule on a field with no place would have its watched, threshold and distance left raw
+    // (review of #455, the owner's decision 2)
+    const table = DESCRIBED.rounding.by_field;
+    expect(Object.keys(table).sort()).toEqual([...WATCHABLE_FIELDS].sort());
+    for (const field of WATCHABLE_FIELDS) expect([2, 4, 6, null], field).toContain(table[field]);
+  });
+
+  it("round a quote's figure as a rule watching that field is rounded, and every figure of moomoo's record", () => {
+    // the watchlist's `quote` is moomoo's whole record (review of #455, the owner's decision 1): every
+    // number in it is a watchable field, so the by-field table places each, in every tool alike
+    const numbers = opendFields.RECORD_FIELDS.filter((f) => WATCHABLE_FIELDS.includes(f));
+    expect(numbers.length).toBeGreaterThan(25);
+    const watchlist = DESCRIBED.tools.find((t) => t.name === "watchlist")!.round.keys!;
+    for (const field of numbers) {
+      expect(watchlist[field] ?? null, field).toBe(DESCRIBED.rounding.by_field[field]);
+    }
+    for (const tool of DESCRIBED.tools) {
+      for (const [key, places] of Object.entries(tool.round.keys ?? {})) {
+        if (WATCHABLE_FIELDS.includes(key)) expect(places, `${tool.name}: ${key}`).toBe(DESCRIBED.rounding.by_field[key]);
+      }
     }
   });
 

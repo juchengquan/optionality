@@ -1,0 +1,134 @@
+{
+  "name": "POST /mcp writes every figure of moomoo's quote record rounded",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPXW261218C7300000": {
+          "code": "US.SPXW261218C7300000",
+          "name": "SPXW 261218 7300C",
+          "update_time": "2026-11-09 09:59:58",
+          "lot_size": 1,
+          "suspension": false,
+          "last_price": 2.7512345,
+          "open_price": 2.9012345,
+          "high_price": 3.0512345,
+          "low_price": 2.6012345,
+          "prev_close_price": 2.8512345,
+          "ask_price": 2.8000000000000003,
+          "bid_price": 2.7,
+          "ask_vol": 12,
+          "bid_vol": 7,
+          "volume": 1234,
+          "turnover": 339512.3456789,
+          "turnover_rate": 0.0123456789,
+          "amplitude": 16.12345678,
+          "avg_price": 2.7512345678,
+          "bid_ask_ratio": 26.315789473684,
+          "option_type": "CALL",
+          "stock_owner": "US..SPX",
+          "option_strike_time": "2026-12-18",
+          "option_strike_price": 7300,
+          "option_contract_size": 100,
+          "option_contract_multiplier": 100,
+          "option_open_interest": 4321,
+          "option_implied_volatility": 14.523456789,
+          "option_premium": 5.8312345678,
+          "option_delta": 0.212345678,
+          "option_gamma": 0.000123456789,
+          "option_vega": 4.2512345678,
+          "option_theta": -0.8512345678,
+          "option_rho": 0.312345678,
+          "option_expiry_date_distance": 39,
+          "option_area_type": "EUROPEAN",
+          "mid_price": 2.75
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_rho",
+          "threshold": 0.31234,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 1,
+          "disabled_reason": null,
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "watchlist"
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"data\":[{\"code\":\"US.SPXW261218C7300000\",\"compare\":\"abs\",\"cost_to_close\":null,\"direction\":\"above\",\"distance\":0,\"dte\":39,\"entry\":null,\"field\":\"option_rho\",\"fill\":100,\"held\":false,\"id\":\"mon-1\",\"in_combos\":[],\"option_type\":\"CALL\",\"pnl\":null,\"positions\":[],\"quote\":{\"amplitude\":16.1235,\"ask_price\":2.8,\"ask_vol\":12,\"avg_price\":2.75,\"bid_ask_ratio\":26.3158,\"bid_price\":2.7,\"bid_vol\":7,\"code\":\"US.SPXW261218C7300000\",\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"high_price\":3.05,\"last_price\":2.75,\"lot_size\":1,\"low_price\":2.6,\"mid_price\":2.75,\"name\":\"SPXW 261218 7300C\",\"open_price\":2.9,\"option_area_type\":\"EUROPEAN\",\"option_contract_multiplier\":100,\"option_contract_size\":100,\"option_delta\":0.2123,\"option_expiry_date_distance\":39,\"option_gamma\":0.000123,\"option_implied_volatility\":14.5235,\"option_open_interest\":4321,\"option_premium\":5.8312,\"option_rho\":0.3123,\"option_strike_price\":7300,\"option_strike_time\":\"2026-12-18\",\"option_theta\":-0.8512,\"option_type\":\"CALL\",\"option_vega\":4.2512,\"prev_close_price\":2.85,\"stock_owner\":\"US..SPX\",\"suspension\":false,\"turnover\":339512.35,\"turnover_rate\":0.0123,\"update_time\":\"2026-11-09 22:59:58+08:00\",\"volume\":1234},\"schedule\":null,\"scope\":null,\"short_strikes\":[],\"spx\":6900.37,\"spx_reason\":null,\"strike_date\":\"2026-12-18\",\"threshold\":0.3123,\"triggered\":true,\"watched\":0.3123}],\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /quotes\"}"
+            }
+          ]
+        }
+      }
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218C7300000"
+        ]
+      ]
+    }
+  }
+}

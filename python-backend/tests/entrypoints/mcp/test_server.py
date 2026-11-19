@@ -19,6 +19,8 @@ from urllib.parse import quote
 
 import pytest
 from harness import json_body, priced_fetcher
+from optionality.monitor import WATCHABLE_FIELDS
+from optionality.opend import RECORD_FIELDS
 
 from optionality_backend.entrypoints.mcp.tools import (
     DESCRIBED,
@@ -817,6 +819,27 @@ class TestFiguresAreRoundedByKeyPerTool:
         }
         # a bool is not a number, as `typeof` says, even under a key the table names
         assert rounded({"value": True}, table) == {"value": True}
+
+    def test_place_every_field_a_rule_may_watch_and_nothing_else_in_the_by_field_table_a_number_or_none_for_never(self):
+        # a rule on a field with no place would have its watched, threshold and distance left raw
+        # (review of #455, the owner's decision 2)
+        table = DESCRIBED["rounding"]["by_field"]
+        assert sorted(table) == sorted(WATCHABLE_FIELDS)
+        for field in WATCHABLE_FIELDS:
+            assert table[field] in (2, 4, 6, None), field
+
+    def test_round_a_quote_s_figure_as_a_rule_watching_that_field_is_rounded_and_every_figure_of_moomoo_s_record(self):
+        # the watchlist's `quote` is moomoo's whole record (review of #455, the owner's decision 1)
+        numbers = [f for f in RECORD_FIELDS if f in WATCHABLE_FIELDS]
+        assert len(numbers) > 25
+        by_field = DESCRIBED["rounding"]["by_field"]
+        watchlist = _table("watchlist")["keys"]
+        for field in numbers:
+            assert watchlist.get(field) == by_field[field], field
+        for tool in DESCRIBED["tools"]:
+            for key, places in tool["round"].get("keys", {}).items():
+                if key in WATCHABLE_FIELDS:
+                    assert places == by_field[key], f"{tool['name']}: {key}"
 
     def test_leave_no_figure_in_any_mcp_scenario_s_answer_under_a_key_the_table_does_not_name_nor_unrounded_under_one_it_does(
         self,

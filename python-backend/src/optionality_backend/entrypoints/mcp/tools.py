@@ -158,7 +158,8 @@ def by_key(data: Any, rounding: Rounding, figure: Callable[[float, int | None], 
     keys = rounding.get("keys", {})
     maps = rounding.get("maps", {})
     by_field = rounding.get("by_field", [])
-    fields: dict[str, int] = DESCRIBED["rounding"]["by_field"]
+    # every watchable field, None where it is a count, a strike or a size and never rounded
+    fields: dict[str, int | None] = DESCRIBED["rounding"]["by_field"]
 
     def each(value: Any, places: int | None) -> Any:
         if _is_number(value):

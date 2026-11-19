@@ -164,11 +164,16 @@ and the routes' door scenarios keep the unrounded figures, and nothing a figure 
   `option_implied_volatility` wherever they appear, a short strike's `delta`, and every value in a
   `legs_delta`, `legs_vega` or `legs_iv` map (the holdings' included, the owner's ruling in the build) to
   **4**. `option_gamma` to **6**, because a spread's gamma (about −0.00004) reads 0 at four. The other
-  fractions — `sigma`, `captured`, a Reference's `change`, a rule's `fill` — to **4**. A rule's `watched`,
-  `threshold` and `distance` by its `field`: 2 for `mid_price`, 6 for `option_gamma`, 4 for every other
-  Greek and IV; a history's `price_rule.threshold` is a price rule's, so 2. Never: ids, counts, `dte`,
-  `qty`, `strike`, `contracts`, contract sizes, the payoff's slopes, `delayed_by_minutes`, the health
-  settings and times.
+  fractions — `sigma`, `captured`, a Reference's `change`, a rule's `fill` — to **4**. The watchlist's
+  `quote` is moomoo's whole record, so its other figures too (decided in review, #455): `open_price`,
+  `high_price`, `low_price`, `prev_close_price`, `avg_price` and `turnover` to 2; `option_rho`,
+  `option_premium`, `amplitude`, `turnover_rate` and `bid_ask_ratio` to 4; its volumes, open interest,
+  lot and contract sizes, strike and days never. A rule's `watched`, `threshold` and `distance` by its
+  `field`, and `rounding.by_field` places EVERY field a rule may watch (`WATCHABLE_FIELDS`) — each at the
+  places that figure takes in a quote, null for one never rounded — held so by a test in each language;
+  a history's `price_rule.threshold` is a price rule's, so 2. Never: ids, counts, `dte`, `qty`,
+  `strike`, `contracts`, contract sizes, the payoff's slopes, `delayed_by_minutes`, the health settings
+  and times.
 - **How.** Half away from zero on the value the double HOLDS, to a JSON number: JavaScript's `toFixed`,
   which the Python reproduces as `optionality.js.to_fixed` and never `round()` (half to even). So 0.125
   is 0.13, and 2.675 — stored as 2.67499… — is 2.67 (the owner's ruling in the build). A zero rounded

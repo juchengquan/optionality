@@ -283,6 +283,21 @@ const NOISY_PUTS = {
   }),
 };
 
+/** C7300 as moomoo's snapshot record carries it, every `RECORD_FIELDS` key (review of #455): text as
+ *  text, counts, strikes and sizes whole, and every other figure with more places than it is written at. */
+const FULL_RECORD = {
+  code: C7300, name: "SPXW 261218 7300C", update_time: "2026-11-09 09:59:58", lot_size: 1, suspension: false,
+  last_price: 2.7512345, open_price: 2.9012345, high_price: 3.0512345, low_price: 2.6012345,
+  prev_close_price: 2.8512345, ask_price: 2.8000000000000003, bid_price: 2.7, ask_vol: 12, bid_vol: 7,
+  volume: 1234, turnover: 339512.3456789, turnover_rate: 0.0123456789, amplitude: 16.12345678,
+  avg_price: 2.7512345678, bid_ask_ratio: 26.315789473684, option_type: "CALL", stock_owner: "US..SPX",
+  option_strike_time: "2026-12-18", option_strike_price: 7300, option_contract_size: 100,
+  option_contract_multiplier: 100, option_open_interest: 4321, option_implied_volatility: 14.523456789,
+  option_premium: 5.8312345678, option_delta: 0.212345678, option_gamma: 0.000123456789,
+  option_vega: 4.2512345678, option_theta: -0.8512345678, option_rho: 0.312345678,
+  option_expiry_date_distance: 39, option_area_type: "EUROPEAN", mid_price: 2.75,
+};
+
 /** One JSON-RPC request to the MCP door, as a client sends it (ADR 0026). */
 const rpc = (method: string, params?: unknown) =>
   ({ jsonrpc: "2.0", id: 1, method, ...(params === undefined ? {} : { params }) });
@@ -2857,6 +2872,17 @@ export const HTTP: readonly HttpInput[] = [
     world: world({
       tables: { monitors: [monitor({ id: "mon-1", threshold: 0.31234 })] },
       provider: { quotes: { [C7300]: quote("SPXW 261218 7300C", 2.75, 0.123456789) } },
+    }),
+    request: request("POST", "/mcp", tool("watchlist")),
+  },
+  {
+    // the watchlist's quote is moomoo's whole record (review of #455): every RECORD_FIELDS key, each
+    // figure with float noise and each count a count, so the walk over the scenarios covers them all;
+    // the rule is on ρ, which the by-field table places at four
+    name: "POST /mcp writes every figure of moomoo's quote record rounded",
+    world: world({
+      tables: { monitors: [monitor({ id: "mon-1", field: "option_rho", threshold: 0.31234 })] },
+      provider: { quotes: { [C7300]: FULL_RECORD } },
     }),
     request: request("POST", "/mcp", tool("watchlist")),
   },

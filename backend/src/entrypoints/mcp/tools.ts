@@ -76,8 +76,9 @@ export interface Rounding {
 
 export interface Described {
   server: { name: string; title: string; version: string; instructions: string; protocol_versions: string[] };
-  /** the places of a rule's figure, by the field it watches (#454) */
-  rounding: { by_field: Record<string, number> };
+  /** the places of a rule's figure, by the field it watches (#454): every watchable field, null where
+   *  it is a count, a strike or a size and never rounded */
+  rounding: { by_field: Record<string, number | null> };
   tools: Tool[];
 }
 
