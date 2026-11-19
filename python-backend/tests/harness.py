@@ -44,6 +44,7 @@ from optionality_backend.db.open import create_database
 from optionality_backend.entrypoints.http import Deps, Surfaces, create_app
 from optionality_backend.entrypoints.mcp import McpOptions, mcp_server
 from optionality_backend.env import Settings, settings_for
+from optionality_backend.notify import NotifySender, delivery
 from optionality_backend.ports import AlarmState, QuoteFetcher
 
 TOKEN = "tok"
@@ -165,6 +166,9 @@ class Harness:
     folder: Path
     #: what the clock returns. Set it to state the time rather than wait for it.
     clock: dict[str, datetime] = field(default_factory=lambda: {"now": NOW})
+    #: every Telegram message the MCP door's writes delivered (ADR 0028), in order: none while Telegram is
+    #: not configured, which it is not unless a test sets its two settings
+    sent: list[str] = field(default_factory=list)
 
     @property
     def now(self) -> datetime:
@@ -201,6 +205,7 @@ def harness(
     provider_name: str = "moomoo",
     fetch_quotes: FakeProvider | None = None,
     reference_sources: dict[str, QuoteFetcher] | None = None,
+    send: NotifySender | None = None,
 ) -> Harness:
     folder = Path(tempfile.mkdtemp(prefix="optionality-http-"))
     db = create_database(folder / "test.db")
@@ -231,10 +236,24 @@ def harness(
     )
     # with the MCP door mounted as `__main__` mounts it (ADR 0026), so the app a test drives is the whole
     # of what the server serves
+    sent: list[str] = []
     app = create_app(
-        deps, Surfaces(mcp=lambda read: mcp_server(McpOptions(read=read, now=deps.now, display_tz=s.display_tz)))
+        deps,
+        Surfaces(
+            mcp=lambda read, write: mcp_server(
+                McpOptions(
+                    read=read,
+                    write=write,
+                    notify=delivery(s, send if send is not None else sent.append),
+                    now=deps.now,
+                    display_tz=s.display_tz,
+                    writes=s.mcp_writes,
+                    writes_per_10_min=s.mcp_writes_per_10_min,
+                )
+            )
+        ),
     )
-    return Harness(app=app, db=db, settings=s, sweeper=sweeper, folder=folder, clock=clock)
+    return Harness(app=app, db=db, settings=s, sweeper=sweeper, folder=folder, clock=clock, sent=sent)
 
 
 #: the mid each leg of the position tests' condor is priced at, by the end of its code

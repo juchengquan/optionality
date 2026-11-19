@@ -25,7 +25,7 @@ cased verdicts, `unverifiable_verdict` and `verify_verdict`, around one awaited 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from optionality.quote import Batch, unverifiable_verdict, verify_verdict
 
@@ -140,3 +140,14 @@ async def verify_contracts(codes: list[str], fetch: QuoteFetcher) -> str | None:
 #: door, its whole reach. The method is not a parameter, which is what makes that door read-only by
 #: construction. Here because two surfaces speak it and neither may import the other.
 type Read = Callable[[str, str | None], Awaitable[tuple[int, str]]]
+
+#: A write of the app's own (ADR 0028): the method, the path, the JSON body, and the caller's Authorization
+#: header passed on as `Read` passes it — answering the status and the body. `app.py` builds it as it builds
+#: `Read`, and hands both to the MCP door, whose `allowed_write` (`writes.py`) lets through only the method
+#: and path pairs `schema/mcp/server.json` lists for a write tool.
+type Write = Callable[[str, str, Any, str | None], Awaitable[tuple[int, str]]]
+
+#: Telling the owner, as a surface is handed it: `notify.py`'s `delivery`, which says whether the message was
+#: sent, not sent because Telegram is not configured, or refused — and never raises. Here because the MCP
+#: door may import nothing that runs.
+type Notify = Callable[[str], Awaitable[Literal["sent", "unconfigured", "failed"]]]

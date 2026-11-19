@@ -788,6 +788,7 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
         ["PATCH", "/settings"], ["POST", "/monitors/mon-1/total-entry"], ["PATCH", "/monitors/../positions/pos-1"],
         ["PATCH", "/monitors/mon 1"], ["PATCH", "/monitors/mon-1?x=1"], ["post", "/monitors"], ["POST", "/monitors/"],
         ["DELETE", "/positions/pos-1"], ["POST", "/positions/pos-1/close"], ["PATCH", `/monitors/${"x".repeat(65)}`],
+        ["PATCH", "/monitors/mon-1\n"],
       ]) {
         await expect(write(method!, path!, {}, null), `${method} ${path}`).rejects
           .toThrow(`the MCP door may not ${method} ${path}: it writes only POST /monitors and PATCH /monitors/{id}`);

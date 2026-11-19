@@ -89,6 +89,11 @@ the service a memory that lives in no table — `GET /spreads/quote`'s shared ba
 calls (ADR 0027) — so, like the sweeps, **they may not change a row**, and their answers and calls are
 not part of the expectation. A scenario without the key has none.
 
+`expect.messages` is every Telegram message the request delivered, in order, as a sweep's is — and
+present only where it delivered any, which is only an agent's write over MCP (ADR 0028): absent is
+none, so every other HTTP scenario is unchanged. The service's Telegram is built from the world's
+`TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, so with either blank nothing is delivered.
+
 ### `bot/`
 
 `update` is a Telegram update, in Telegram's shape. Hand it to the bot's update handler (not the

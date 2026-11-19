@@ -31,8 +31,9 @@ still in force. Git holds the full history of each.
 | [23](0023-a-terminal-on-the-desk-cards-on-the-phone.md) | A terminal on the desk, cards on the phone | built 2026-11-13 (#301); amends 3, 7, 8 and 12; amended 2026-11-13: one page by the session, Live and Review merged (not yet built) |
 | [24](0024-spx-is-derived-from-the-premiums.md) | SPX's price is derived from the options' premiums | built, in both backends; amends 11 |
 | [25](0025-the-sweep-interval-is-set-from-the-page.md) | The sweep interval is set from the page | built, in both backends (#442); amends the "no DB config layer" invariant for that one knob, and 11's citing it |
-| [26](0026-agents-read-the-book-over-mcp.md) | Agents read the book over MCP | built, in both backends (#447): `/mcp`, read-only, each tool a GET of the API's own behind a 5s shared cache; its decision 5 superseded by 27 |
+| [26](0026-agents-read-the-book-over-mcp.md) | Agents read the book over MCP | built, in both backends (#447): `/mcp`, read-only, each tool a GET of the API's own behind a 5s shared cache; its decision 5 superseded by 27; "every tool is a GET" amended by 28 |
 | [27](0027-agents-price-any-spx-spread.md) | Agents price any SPX spread | built, in both backends (#452): `GET /spreads/quote` and the `price_spreads` tool, one bounded call capped by `SPREAD_QUOTE_CALLS_PER_30S`; supersedes 26's "no tool prices an unwatched contract" |
+| [28](0028-agents-add-and-edit-alarm-rules.md) | Agents add and edit alarm rules, behind a switch | built, in both backends (#456): `add_rule` and `edit_rule` over MCP, off unless `MCP_WRITES`, held to `POST /monitors` and `PATCH /monitors/{id}`, each told on Telegram and capped by `MCP_WRITES_PER_10_MIN`; amends 26's "every tool is a GET" |
 
 2 (server-rendered HTML over a SPA) was deleted once 5 replaced it entirely; nothing of it remained
 in force. A new decision takes the next number, and numbers are never reused.

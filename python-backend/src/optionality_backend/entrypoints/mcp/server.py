@@ -39,18 +39,28 @@ from typing import Any
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-from ...ports import Read
+from ...ports import Notify, Read, Write
 from .tools import DESCRIBED, Toolbox
+from .writes import Writer
 
 
 @dataclass(frozen=True)
 class McpOptions:
-    #: a GET of the API's own (`app.py`); the only way this door reaches anything
+    #: a GET of the API's own (`app.py`); the only way this door reads anything
     read: Read
+    #: a write of the API's own (`app.py`), which the door holds to the two `server.json` lists
+    #: (`allowed_write`, ADR 0028) — and makes none of while `writes` is off
+    write: Write
+    #: telling the owner of each write an agent made (ADR 0028): the service's `delivery`
+    notify: Notify
     #: the clock, injected as the routes' is, for the cache and every answer's `read_at`
     now: Callable[[], datetime]
     #: the zone `read_at` is written in, the API's `DISPLAY_TZ`
     display_tz: str
+    #: `MCP_WRITES`: whether `add_rule` and `edit_rule` are listed and answered
+    writes: bool
+    #: `MCP_WRITES_PER_10_MIN`
+    writes_per_10_min: int
 
 
 # JSON-RPC's own error codes, and the one the transport leaves to the server
@@ -109,8 +119,21 @@ class _Refusal(Exception):
 def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
     """The handler `app.py` mounts at `/mcp`."""
     tools = Toolbox(options.read, options.now, options.display_tz)
+    writes = Writer(
+        options.read,
+        options.write,
+        options.notify,
+        options.now,
+        options.display_tz,
+        options.writes,
+        options.writes_per_10_min,
+    )
     server = DESCRIBED["server"]
-    listed = DESCRIBED["tools"]
+    # off, a write tool is not listed (ADR 0028): an agent is not offered what it would be refused
+    listed = [t for t in DESCRIBED["tools"] if options.writes or "method" not in t]
+    said = (
+        server["writes_on"].replace("{cap}", str(options.writes_per_10_min)) if options.writes else server["writes_off"]
+    )
 
     async def initialize(params: dict[str, Any], authorization: str | None) -> Any:
         asked = params.get("protocolVersion")
@@ -122,7 +145,7 @@ def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
             "protocolVersion": protocol_version,
             "capabilities": {"tools": {"listChanged": False}},
             "serverInfo": {"name": server["name"], "title": server["title"], "version": server["version"]},
-            "instructions": server["instructions"],
+            "instructions": f"{server['instructions']} {said}",
         }
 
     async def ping(params: dict[str, Any], authorization: str | None) -> Any:
@@ -136,13 +159,8 @@ def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
                     "title": t["title"],
                     "description": t["description"],
                     "inputSchema": t["inputSchema"],
-                    # what a client may tell its user before calling: nothing here changes anything
-                    "annotations": {
-                        "readOnlyHint": True,
-                        "destructiveHint": False,
-                        "idempotentHint": True,
-                        "openWorldHint": False,
-                    },
+                    # what a client may tell its user before calling (ADR 0028): each tool's, from the table
+                    "annotations": t["annotations"],
                 }
                 for t in listed
             ]
@@ -152,6 +170,9 @@ def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
         name = params.get("name")
         if not isinstance(name, str):
             raise _Refusal(INVALID_PARAMS, "tools/call needs the tool's name")
+        # a write tool is known whether writes are on or off: off, it answers that they are
+        if writes.has(name):
+            return await writes.call(name, params.get("arguments"), authorization)
         if not tools.has(name):
             raise _Refusal(INVALID_PARAMS, f"Unknown tool: {name}")
         return await tools.call(name, params.get("arguments"), authorization)

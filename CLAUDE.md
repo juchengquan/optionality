@@ -1,7 +1,8 @@
 # CLAUDE.md
 
 SPX options monitoring service: a JSON API, an alarm engine, a Telegram bot, a React dashboard and
-a read-only MCP server for agents (ADR 0026).
+an MCP server for agents (ADR 0026) — read-only unless `MCP_WRITES` lets agents add and edit alarm
+rules (ADR 0028).
 **Two launchd agents** serve it, and a third watches what it depends on, on the owner's
 always-on machine, behind one tailnet hostname (ADR 0006):
 the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving `frontend/dist`, `/opt`).
@@ -338,12 +339,16 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   stream — `GET /mcp` is 405; an `Origin` is refused 403) rather than with either official SDK,
   because the door scenarios compare the two backends' words exactly. Mounted at `/mcp` on the
   HTTP server by `main.ts`, which hands `createApp(deps, { mcp })` the factory and gets back a
-  `Read` — a GET of the app's OWN, the caller's Authorization passed on. That is the door's whole
-  reach: no service, query or engine is imported (`server.test.ts` holds its imports), so a tool
-  cannot write, cannot compute a figure, and its answer's `data` IS the GET's body — its figures
+  `Read` — a GET of the app's OWN, the caller's Authorization passed on — and a `Write` of the
+  app's own (ADR 0028), which `writes.ts` wraps at once in `allowedWrite`: only the method and path
+  pairs `server.json` lists for a write tool get through, `POST /monitors` and `PATCH
+  /monitors/{id}` (the id one of the service's own), and anything else is refused before the app is
+  asked. That is the door's whole reach: no service, query or engine is imported (`server.test.ts`
+  holds its imports), so a read tool cannot write, no tool can compute a figure, and a read's
+  answer's `data` IS the GET's body — its figures
   ROUNDED by key, the one change the door makes (#454: prices, P&L and SPX levels to 2 decimals,
   Δ Θ ν and IV to 4, Γ to 6, by each tool's `round` in `server.json`; `byKey`, held to
-  `testdata/mcp/rounding.json` in both languages; the HTTP API keeps them raw). Nine tools
+  `testdata/mcp/rounding.json` in both languages; the HTTP API keeps them raw). Nine read tools
   (`tools.ts`), each one GET: `holdings` (`/positions/values`), `watchlist` (`/quotes`),
   `positions` (`/positions`, closed trades included), `holding_history`, `monitor_history`,
   `monitor_closes`, `references`, `price_spreads` (`/spreads/quote`, ADR 0027: any SPX structure,
@@ -355,8 +360,21 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   share one read per path for `LIVE_FOR_MS` (5s) across every caller, a read in flight joined, a
   refusal shared too — the page and the sweep never pass through it. The fourth, `price_spreads`,
   is `"cached_by": "route"`: its route already shares its batch and caps its calls, so the door
-  reads it afresh rather than holding a second window. The table — names,
-  descriptions, input schemas, which are live, how each rounds — is shared ground, `schema/mcp/server.json`. Behind
+  reads it afresh rather than holding a second window. **Two WRITE tools** (`writes.ts`, ADR 0028,
+  #456), OFF unless `.env` says `MCP_WRITES=1` — off, `tools/list` omits them and a call to either is
+  a tool error before anything is read or counted, and `initialize`'s instructions say which:
+  `add_rule` (`POST /monitors`; `price_spreads`' structure, one leg the single-contract body and
+  several a combo's, each side its sign; the door refuses a `qty` but 1, a combo with no name and a
+  name on one contract) and `edit_rule` (`PATCH /monitors/{id}`: threshold, direction, compare,
+  name, enabled — never `field`; the rule found as `monitor_history` finds it, and `enabled: true`
+  refused on a rule the SERVICE switched off, anything but `manual`). Every write reaching the
+  route counts against `MCP_WRITES_PER_10_MIN` (10 in any ten minutes, the route's refusals
+  included, the door's not; the page and the bot uncounted), each success sends ONE Telegram line
+  worded by the domain's `agentNotice` (`🤖 agent added 1218-6750 |value| ≥ 3.00`) through the
+  service's `delivery` — Telegram unconfigured or refusing is logged and the write stands — and
+  every write attempted is one log line. Every tool carries its MCP `annotations` from the
+  table. The table — names, descriptions, input schemas, which are live, how each rounds, which
+  write which route — is shared ground, `schema/mcp/server.json`. Behind
   the token like every route; not in `/openapi.json` (one JSON-RPC endpoint), so `hc.types.ts`
   is untouched. **Connect**: the tailnet already maps `/opt/api` to the API with the prefix
   stripped, so it is `https://<tailnet-host>/opt/api/mcp` with NO change
@@ -659,7 +677,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   in any 30 seconds whoever asks, HTTP or MCP — over it a 429 saying when. The door's other live
   tools ARE `/quotes`, `/positions/values` and `/references`, read through the app itself
   behind a 5-second cache shared by every agent, so however many agents loop, each of those three
-  is made at most once per 5s on their behalf. The payoff at expiry (`GET /positions/{id}/payoff`,
+  is made at most once per 5s on their behalf. An agent's `add_rule` (ADR 0028, off unless
+  `MCP_WRITES`) is `POST /monitors`' own creation probe, at most `MCP_WRITES_PER_10_MIN` (10) of
+  them in any ten minutes. The payoff at expiry (`GET /positions/{id}/payoff`,
   `POST /positions/payoff`, #291) is not on that list because it asks for NO market data: legs,
   an Entry and a count, and its door scenarios run with the Provider down. Nor are a holding's daily
   samples (`GET /positions/{id}/samples`, #295): stored history, read once when a holding's history
