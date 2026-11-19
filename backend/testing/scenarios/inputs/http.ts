@@ -2995,6 +2995,32 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", enabled: true })),
   },
   {
+    // review of #457: muting a quarantined rule would have rewritten its reason to "manual" and let
+    // the unmute through. The mute is refused first (an earlier request, which writes nothing), and the
+    // unmute after it still finds the service's reason
+    name: "POST /mcp refuses to mute a quarantined rule and then to unmute it, writing nothing",
+    world: world({
+      settings: WRITING, tables: { monitors: [monitor({ id: "mon-1", enabled: 0, disabled_reason: "no-figure" })] },
+    }),
+    earlier: [{ at: at(-5), request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", enabled: false })) }],
+    request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", enabled: true })),
+  },
+  {
+    name: "POST /mcp refuses to mute a rule the service switched off",
+    world: world({
+      settings: WRITING, tables: { monitors: [monitor({ id: "mon-1", enabled: 0, disabled_reason: "expired" })] },
+    }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", enabled: false })),
+  },
+  {
+    // an edit that leaves enabled alone is the route's, and keeps the service's reason
+    name: "POST /mcp moves a quarantined rule's threshold, keeping it off for the service's reason",
+    world: world({
+      settings: WRITING, tables: { monitors: [monitor({ id: "mon-1", enabled: 0, disabled_reason: "no-figure" })] },
+    }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", threshold: 0.35 })),
+  },
+  {
     name: "POST /mcp refuses to change the figure a rule watches",
     world: world({ settings: WRITING, tables: { monitors: [monitor({ id: "mon-1" })] } }),
     request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", field: "mid_price" })),

@@ -82,7 +82,11 @@ its probe and its words, unchanged.
 reaches the path. `field` is not an argument. **Unmuting**: `enabled: true` on a rule that is OFF for
 any reason but `manual` — quarantined (`unknown-contract`, `no-figure`, `unreadable`), `expired`,
 `holding-closed` — is refused by the door with that reason, read from the same `GET /monitors` row,
-before any write. A rule already on may be sent `enabled: true`; it changes nothing.
+before any write. So is **`enabled: false` on a rule already off for such a reason**: the route records a
+mute as `manual`, so muting a quarantined rule again would make it one this door could then unmute
+(found in review of #457). An edit that leaves `enabled` alone keeps the reason — the route rewrites it
+only when `enabled` is given. A rule already on may be sent `enabled: true`, and one muted by hand
+`enabled: false`; neither changes anything.
 
 **The cap**, `MCP_WRITES_PER_10_MIN` (default 10, at least 1): at most that many writes reach the route
 in any 600 seconds, service-wide and over MCP only — the page and the bot are not counted. Every write

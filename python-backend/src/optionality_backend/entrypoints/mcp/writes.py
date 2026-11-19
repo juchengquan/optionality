@@ -310,12 +310,24 @@ class Writer:
         )
         if not is_row(row):
             return self._refuse(name, args, row["content"][0]["text"])  # type: ignore[index]
-        if change.get("enabled") is True and row.get("enabled") is not True and row.get("disabled_reason") != "manual":
+        # a rule the SERVICE switched off is the owner's to look at: unmuting it is refused, and so is muting it
+        # again, which the route records as "manual" — after which it could be unmuted here (review of #457).
+        # An edit that leaves `enabled` alone keeps the reason: the route rewrites it only when `enabled` is given.
+        off_by_service = row.get("enabled") is not True and row.get("disabled_reason") != "manual"
+        reason = _reason(row.get("disabled_reason"))
+        if change.get("enabled") is True and off_by_service:
             return self._refuse(
                 name,
                 args,
-                f'the rule "{row["id"]}" is off as "{_reason(row.get("disabled_reason"))}", not muted by hand: '
+                f'the rule "{row["id"]}" is off as "{reason}", not muted by hand: '
                 'edit_rule unmutes only a rule muted by hand (disabled_reason "manual")',
+            )
+        if change.get("enabled") is False and off_by_service:
+            return self._refuse(
+                name,
+                args,
+                f'the rule "{row["id"]}" is already off as "{reason}", not muted by hand: '
+                'edit_rule does not mute it again, which would make it a rule muted by hand (disabled_reason "manual")',
             )
         # only the RESOLVED id is put in the path, as a history tool's is
         path = tool["path"].replace("{id}", _encode_uri_component(row["id"]))

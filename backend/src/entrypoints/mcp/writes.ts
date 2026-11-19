@@ -221,9 +221,18 @@ export function writer(options: WriterOptions) {
       // found exactly as monitor_history finds it, through the same GET
       const row = await resolveRow(read, LOOKUPS.monitor_history!, (asked.id as string).trim(), authorization);
       if (!isRow(row)) return refuse(row.content[0]!.text);
-      if (change.enabled === true && row.enabled !== true && row.disabled_reason !== "manual") {
+      // a rule the SERVICE switched off is the owner's to look at: unmuting it is refused, and so is
+      // muting it again, which the route records as "manual" — after which it could be unmuted here
+      // (review of #457). An edit that leaves `enabled` alone keeps the reason: the route rewrites it
+      // only when `enabled` is given.
+      const offByService = row.enabled !== true && row.disabled_reason !== "manual";
+      if (change.enabled === true && offByService) {
         return refuse(`the rule "${row.id}" is off as "${String(row.disabled_reason)}", not muted by hand: `
           + 'edit_rule unmutes only a rule muted by hand (disabled_reason "manual")');
+      }
+      if (change.enabled === false && offByService) {
+        return refuse(`the rule "${row.id}" is already off as "${String(row.disabled_reason)}", not muted by hand: `
+          + 'edit_rule does not mute it again, which would make it a rule muted by hand (disabled_reason "manual")');
       }
       // only the RESOLVED id is put in the path, as a history tool's is
       return send(tool, args, tool.path.replace("{id}", encodeURIComponent(row.id)), change, row, authorization);

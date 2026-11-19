@@ -1042,6 +1042,37 @@ class TestEditRule:
         assert w.h.sent == []
         assert (await w.call("edit_rule", {"id": delta, "threshold": 0.3}))["isError"] is False
 
+    async def test_refuses_to_mute_a_rule_the_service_switched_off_which_would_make_it_unmutable_here(self, writing):
+        # review of #457: muting first rewrote its reason to "manual", and the unmute guard then let it on
+        w, _, delta = await _set_up(writing, {"mcp_writes_per_10_min": 1})
+        for reason in ["unknown-contract", "no-figure", "unreadable", "expired", "holding-closed"]:
+            w.h.db.execute("update monitors set enabled = 0, disabled_reason = ? where id = ?", (reason, delta))
+            w.h.db.commit()
+            assert await w.call("edit_rule", {"id": delta, "enabled": False}) == {
+                "isError": True,
+                "text": f'the rule "{delta}" is already off as "{reason}", not muted by hand: edit_rule does not '
+                'mute it again, which would make it a rule muted by hand (disabled_reason "manual")',
+            }, reason
+            assert (await w.call("edit_rule", {"id": delta, "enabled": True}))["isError"] is True
+            rule = next(r for r in await w.rules() if r["id"] == delta)
+            assert (rule["enabled"], rule["disabled_reason"]) == (False, reason)
+        assert w.h.sent == []
+        # an edit that leaves enabled alone keeps the service's reason, and the cap of one was never spent
+        moved = await w.call("edit_rule", {"id": delta, "threshold": 0.3})
+        assert moved["isError"] is False, moved["text"]
+        assert (moved["data"]["enabled"], moved["data"]["disabled_reason"], moved["data"]["threshold"]) == (
+            False,
+            "holding-closed",
+            0.3,
+        )
+
+    async def test_lets_a_rule_muted_by_hand_be_muted_again_which_changes_nothing(self, writing):
+        w, _, delta = await _set_up(writing)
+        await w.call("edit_rule", {"id": delta, "enabled": False})
+        again = await w.call("edit_rule", {"id": delta, "enabled": False})
+        assert again["isError"] is False, again["text"]
+        assert (again["data"]["enabled"], again["data"]["disabled_reason"]) == (False, "manual")
+
     async def test_lets_a_rule_already_on_be_sent_enabled_true_which_changes_nothing(self, writing):
         w, _, _ = await _set_up(writing)
         assert (await w.call("edit_rule", {"id": "1218-6800", "enabled": True}))["isError"] is False

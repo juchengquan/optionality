@@ -948,6 +948,34 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
       expect((await call("edit_rule", { id: delta, threshold: 0.3 })).isError).toBe(false);
     });
 
+    it("refuses to mute a rule the service switched off, which would make it one muted by hand and so unmutable here", async () => {
+      // review of #457: muting first rewrote its reason to "manual", and the unmute guard then let it on
+      const { delta } = await setUp({ mcpWritesPer10Min: 1 });
+      for (const reason of ["unknown-contract", "no-figure", "unreadable", "expired", "holding-closed"]) {
+        h.db.prepare("update monitors set enabled = 0, disabled_reason = ? where id = ?").run(reason, delta);
+        expect(await call("edit_rule", { id: delta, enabled: false }), reason).toMatchObject({
+          isError: true,
+          text: `the rule "${delta}" is already off as "${reason}", not muted by hand: edit_rule does not mute it again, `
+            + 'which would make it a rule muted by hand (disabled_reason "manual")',
+        });
+        expect(await call("edit_rule", { id: delta, enabled: true }), reason).toMatchObject({ isError: true });
+        expect((await rules()).find((r) => r.id === delta), reason).toMatchObject({ enabled: false, disabled_reason: reason });
+      }
+      expect(h.sent).toEqual([]);
+      // an edit that leaves enabled alone keeps the service's reason, and the cap of one was never spent
+      const moved = await call("edit_rule", { id: delta, threshold: 0.3 });
+      expect(moved.isError, moved.text).toBe(false);
+      expect(moved.data).toMatchObject({ enabled: false, disabled_reason: "holding-closed", threshold: 0.3 });
+    });
+
+    it("lets a rule muted by hand be muted again, which changes nothing", async () => {
+      const { delta } = await setUp();
+      await call("edit_rule", { id: delta, enabled: false });
+      const again = await call("edit_rule", { id: delta, enabled: false });
+      expect(again.isError, again.text).toBe(false);
+      expect(again.data).toMatchObject({ enabled: false, disabled_reason: "manual" });
+    });
+
     it("lets a rule already on be sent enabled true, which changes nothing", async () => {
       await setUp();
       const answer = await call("edit_rule", { id: "1218-6800", enabled: true });
