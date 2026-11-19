@@ -30,6 +30,7 @@ what the transport asks of a server to stop DNS rebinding.
 """
 
 import json
+import logging
 import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -43,12 +44,14 @@ from ...ports import Notify, Read, Write
 from .tools import DESCRIBED, Toolbox
 from .writes import Writer
 
+log = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class McpOptions:
     #: a GET of the API's own (`app.py`); the only way this door reads anything
     read: Read
-    #: a write of the API's own (`app.py`), which the door holds to the two `server.json` lists
+    #: a write of the API's own (`app.py`), which the door holds to the four `server.json` lists
     #: (`allowed_write`, ADR 0028) — and makes none of while `writes` is off
     write: Write
     #: telling the owner of each write an agent made (ADR 0028): the service's `delivery`
@@ -59,6 +62,9 @@ class McpOptions:
     display_tz: str
     #: `MCP_WRITES`: whether `add_rule` and `edit_rule` are listed and answered
     writes: bool
+    #: `MCP_WRITES_POSITIONS` as `.env` says it (ADR 0029): whether `record_holding` and `correct_close` are
+    #: listed and answered — in force only while `writes` is on too
+    writes_positions: bool
     #: `MCP_WRITES_PER_10_MIN`
     writes_per_10_min: int
 
@@ -119,6 +125,14 @@ class _Refusal(Exception):
 def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
     """The handler `app.py` mounts at `/mcp`."""
     tools = Toolbox(options.read, options.now, options.display_tz)
+    # the book's switch is in force only beside the rules' (ADR 0029): on alone, it is said once — this door is
+    # built once, at boot — and treated as off
+    positions = options.writes and options.writes_positions
+    if options.writes_positions and not options.writes:
+        log.warning(
+            "MCP_WRITES_POSITIONS is on but MCP_WRITES is off: "
+            "an agent's writes to the book stay off until MCP_WRITES is on too"
+        )
     writes = Writer(
         options.read,
         options.write,
@@ -126,13 +140,21 @@ def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
         options.now,
         options.display_tz,
         options.writes,
+        positions,
         options.writes_per_10_min,
     )
     server = DESCRIBED["server"]
-    # off, a write tool is not listed (ADR 0028): an agent is not offered what it would be refused
-    listed = [t for t in DESCRIBED["tools"] if options.writes or "method" not in t]
+    # off, a write tool is not listed (ADR 0028, 0029): an agent is not offered what it would be refused
+    listed = [
+        t
+        for t in DESCRIBED["tools"]
+        if "method" not in t or (positions if t.get("tier") == "positions" else options.writes)
+    ]
     said = (
-        server["writes_on"].replace("{cap}", str(options.writes_per_10_min)) if options.writes else server["writes_off"]
+        f"{server['writes_on'].replace('{cap}', str(options.writes_per_10_min))} "
+        f"{server['positions_on'] if positions else server['positions_off']}"
+        if options.writes
+        else server["writes_off"]
     )
 
     async def initialize(params: dict[str, Any], authorization: str | None) -> Any:

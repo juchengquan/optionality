@@ -90,7 +90,9 @@ calls (ADR 0027) — so, like the sweeps, **they may not change a row**, and the
 not part of the expectation. A scenario without the key has none.
 
 `expect.messages` is every Telegram message the request delivered, in order, as a sweep's is — and
-present only where it delivered any, which is only an agent's write over MCP (ADR 0028): absent is
+present only where it delivered any, which is only an agent's write over MCP (ADR 0028, and ADR 0029's
+writes to the book, whose switch `MCP_WRITES_POSITIONS` a world's `.env` lines set as they set
+`MCP_WRITES`): absent is
 none, so every other HTTP scenario is unchanged. The service's Telegram is built from the world's
 `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, so with either blank nothing is delivered.
 

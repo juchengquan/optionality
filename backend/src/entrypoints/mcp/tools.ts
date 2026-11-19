@@ -48,6 +48,9 @@ export interface Tool {
   description: string;
   /** a WRITE tool's method (ADR 0028); absent, the tool is a GET */
   method?: "POST" | "PATCH";
+  /** a WRITE tool's tier, which decides the switch it answers to: `rules` is `MCP_WRITES` (ADR 0028),
+   *  `positions` is `MCP_WRITES_POSITIONS` beside it (ADR 0029) */
+  tier?: "rules" | "positions";
   /** the API path it GETs (or writes), with `{id}` where its one argument goes */
   path: string;
   /** what a client may tell its user before calling it (ADR 0028), listed as they are */
@@ -83,6 +86,8 @@ export interface Described {
     name: string; title: string; version: string; instructions: string; protocol_versions: string[];
     /** what the instructions add, by whether an agent's writes are on (ADR 0028); `{cap}` is the cap */
     writes_on: string; writes_off: string;
+    /** what they add after `writes_on`, by whether an agent's writes to the book are on (ADR 0029) */
+    positions_on: string; positions_off: string;
   };
   /** the places of a rule's figure, by the field it watches (#454): every watchable field, null where
    *  it is a count, a strike or a size and never rounded */

@@ -144,6 +144,14 @@ describe("the knobs a service must not start on", () => {
     }
   });
 
+  it("leaves an agent's writes to the book off unless MCP_WRITES_POSITIONS says on, read as MCP_WRITES is (#458)", () => {
+    expect(settingsFromEnv({}).mcpWritesPositions).toBe(false);
+    for (const on of ["1", "true", " TRUE "]) expect(settingsFromEnv({ MCP_WRITES_POSITIONS: on }).mcpWritesPositions, on).toBe(true);
+    for (const off of ["0", "false", "", "  "]) expect(settingsFromEnv({ MCP_WRITES_POSITIONS: off }).mcpWritesPositions, off).toBe(false);
+    expect(() => settingsFromEnv({ MCP_WRITES_POSITIONS: "yes" }))
+      .toThrow("MCP_WRITES_POSITIONS is not a switch: yes (1 or true for on, 0, false or nothing for off)");
+  });
+
   it("caps an agent's writes at 10 in ten minutes, never 0 (#456)", () => {
     expect(settingsFromEnv({}).mcpWritesPer10Min).toBe(10);
     expect(settingsFromEnv({ MCP_WRITES_PER_10_MIN: "3" }).mcpWritesPer10Min).toBe(3);

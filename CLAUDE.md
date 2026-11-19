@@ -2,7 +2,8 @@
 
 SPX options monitoring service: a JSON API, an alarm engine, a Telegram bot, a React dashboard and
 an MCP server for agents (ADR 0026) — read-only unless `MCP_WRITES` lets agents add and edit alarm
-rules (ADR 0028).
+rules (ADR 0028), and `MCP_WRITES_POSITIONS` beside it lets them record a holding and correct a close
+(ADR 0029).
 **Two launchd agents** serve it, and a third watches what it depends on, on the owner's
 always-on machine, behind one tailnet hostname (ADR 0006):
 the API on 127.0.0.1:31415 (`/opt/api`) and `com.optionality.ui` (Caddy serving `frontend/dist`, `/opt`).
@@ -341,9 +342,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   HTTP server by `main.ts`, which hands `createApp(deps, { mcp })` the factory and gets back a
   `Read` — a GET of the app's OWN, the caller's Authorization passed on — and a `Write` of the
   app's own (ADR 0028), which `writes.ts` wraps at once in `allowedWrite`: only the method and path
-  pairs `server.json` lists for a write tool get through, `POST /monitors` and `PATCH
-  /monitors/{id}` (the id one of the service's own), and anything else is refused before the app is
-  asked. That is the door's whole reach: no service, query or engine is imported (`server.test.ts`
+  pairs `server.json` lists for a write tool get through, `POST /monitors`, `PATCH
+  /monitors/{id}`, `POST /positions` and `PATCH /positions/{id}` (an id one of the service's own), and
+  anything else — a close, a delete — is refused before the app is asked. That is the door's whole reach: no service, query or engine is imported (`server.test.ts`
   holds its imports), so a read tool cannot write, no tool can compute a figure, and a read's
   answer's `data` IS the GET's body — its figures
   ROUNDED by key, the one change the door makes (#454: prices, P&L and SPX levels to 2 decimals,
@@ -373,7 +374,18 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   included, the door's not; the page and the bot uncounted), each success sends ONE Telegram line
   worded by the domain's `agentNotice` (`🤖 agent added 1218-6750 |value| ≥ 3.00`) through the
   service's `delivery` — Telegram unconfigured or refusing is logged and the write stands — and
-  every write attempted is one log line. Every tool carries its MCP `annotations` from the
+  every write attempted is one log line. **Two writes to the BOOK** (ADR 0029, #458), each with
+  `"tier": "positions"` in the table, OFF unless `MCP_WRITES_POSITIONS=1` AND `MCP_WRITES=1` (the
+  first alone is said once in the log at boot and treated as off; off, they are unlisted and
+  refused as the rule writes are, naming the switch): `record_holding` (`POST /positions`;
+  `price_spreads`' structure, quantities included, with `entry`, `contracts` and `opened_at`
+  REQUIRED, the last no later than New York's market day by the injected clock and no more than
+  `OPENED_WITHIN_DAYS` (5) before it; its notice, the domain's `agentHoldingNotice`, names the rules
+  the route linked to it, read back from `GET /monitors`) and `correct_close` (`PATCH
+  /positions/{id}`: a closed holding's `exit` and `closed_on` and nothing else — the body is built
+  from those two keys alone; found as `holding_history` finds it; a change to nothing refused; an
+  open holding is the route's own 422, counted). Both share the one cap. No tool closes, deletes or
+  re-shapes a holding. Every tool carries its MCP `annotations` from the
   table. The table — names, descriptions, input schemas, which are live, how each rounds, which
   write which route — is shared ground, `schema/mcp/server.json`. Behind
   the token like every route; not in `/openapi.json` (one JSON-RPC endpoint), so `hc.types.ts`
@@ -679,8 +691,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   tools ARE `/quotes`, `/positions/values` and `/references`, read through the app itself
   behind a 5-second cache shared by every agent, so however many agents loop, each of those three
   is made at most once per 5s on their behalf. An agent's `add_rule` (ADR 0028, off unless
-  `MCP_WRITES`) is `POST /monitors`' own creation probe, at most `MCP_WRITES_PER_10_MIN` (10) of
-  them in any ten minutes. The payoff at expiry (`GET /positions/{id}/payoff`,
+  `MCP_WRITES`) is `POST /monitors`' own creation probe, and its `record_holding` (ADR 0029, off
+  unless `MCP_WRITES_POSITIONS` too) `POST /positions`', at most `MCP_WRITES_PER_10_MIN` (10) writes
+  of either kind in any ten minutes. The payoff at expiry (`GET /positions/{id}/payoff`,
   `POST /positions/payoff`, #291) is not on that list because it asks for NO market data: legs,
   an Entry and a count, and its door scenarios run with the Provider down. Nor are a holding's daily
   samples (`GET /positions/{id}/samples`, #295): stored history, read once when a holding's history

@@ -16,8 +16,9 @@
  *  all. Collapsing them is how a throttled alarm re-announces itself on every sweep after — the
  *  flag never got written, so the next sweep sees the breach as fresh again.
  */
-import { contractName } from "./contract.ts";
+import { compactStrikeDate, contractName } from "./contract.ts";
 import { isBreached, thresholdDistance, type Monitor } from "./monitor.ts";
+import type { Leg } from "./position.ts";
 
 /** What the database says about this rule right now — re-read after the fetch, in the sweep. */
 export interface AlarmState {
@@ -254,4 +255,64 @@ export function agentNotice(before: AgentRule | null, after: AgentRule): string 
   const rule = was === now ? now : `${was} → ${then}`;
   const changed = verb !== null || before.code !== after.code || was !== now;
   return `${verb === null ? "🤖 agent:" : `🤖 agent ${verb}`} ${name} ${rule}${changed ? "" : ", unchanged"}`;
+}
+
+/** A holding as the notice of an agent's write to the book reads it (#458, ADR 0029): what it was
+ *  recorded with, and its close. Dates as the route serves them, YYYY-MM-DD (either spelling reads). */
+export interface AgentHolding {
+  name: string;
+  strike_date: string;
+  legs: Leg[];
+  entry: number | null;
+  contracts: number;
+  opened_at: string | null;
+  exit: number | null;
+  closed_on: string | null;
+}
+
+/** A leg as every place writes it: its sign (a real minus for a short), a quantity of more than one
+ *  between the sign and the contract, the type's letter and the strike — `−2P6800`, `+C7350`. */
+function legShort(leg: Leg): string {
+  const many = leg.qty !== undefined && leg.qty !== 1 ? String(leg.qty) : "";
+  return `${leg.side === "short" ? "\u2212" : "+"}${many}${leg.option_type === "CALL" ? "C" : "P"}${leg.strike}`;
+}
+
+/** A price a person typed — an entry, an exit — to its typed places (two at least), a real minus. */
+const typedPrice = (value: number) => minus(value.toFixed(typedPlaces(value)));
+
+/** "A", "A and B", "A, B and C". */
+function listed(items: string[]): string {
+  return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/** The one line the owner's phone gets for a write an agent made to the BOOK over MCP (#458, ADR 0029):
+ *  `before` null for a holding recorded, else the holding as it was and as the write left it, whose close
+ *  was corrected. Prefixed `🤖 agent`, as `agentNotice`'s are:
+ *
+ *    🤖 agent recorded dec-condor 20261218 −P6800 +P6750 ×2 @ 1.25, opened 20261119
+ *    🤖 agent corrected the close of dec-condor: exit 0.40 → 0.35, closed 20261118 → 20261119
+ *
+ *  A record writes the legs short first, each as every place writes a leg, `×` the contracts, `@` the
+ *  entry and the day it was opened, each left out where it is null; and where the route linked
+ *  existing rules to the new holding (`taken`), it names them in the alarms' short form, sorted (in
+ *  UTF-16 code units, as `sort` orders strings): `…, taking over 1218-6800 |value| ≥ 4.51`. A
+ *  correction says only what changed — a blank exit is `—` — and `unchanged` where nothing did. */
+export function agentHoldingNotice(before: AgentHolding | null, after: AgentHolding, taken: AgentRule[] = []): string {
+  if (before === null) {
+    const legs = [...after.legs.filter((l) => l.side === "short"), ...after.legs.filter((l) => l.side !== "short")];
+    const parts = [`🤖 agent recorded ${after.name} ${compactStrikeDate(after.strike_date)} ${legs.map(legShort).join(" ")} ×${after.contracts}`];
+    if (after.entry !== null) parts[0] += ` @ ${typedPrice(after.entry)}`;
+    if (after.opened_at !== null) parts.push(`opened ${compactStrikeDate(after.opened_at)}`);
+    const rules = taken.map((r) => `${contractName(r.code, r.code)} ${ruleShort(r)}`).sort();
+    if (rules.length > 0) parts.push(`taking over ${listed(rules)}`);
+    return parts.join(", ");
+  }
+  const exitText = (exit: number | null) => (exit === null ? "—" : typedPrice(exit));
+  const dayText = (day: string | null) => (day === null ? "—" : compactStrikeDate(day));
+  const changed: string[] = [];
+  if (before.exit !== after.exit) changed.push(`exit ${exitText(before.exit)} → ${exitText(after.exit)}`);
+  if (dayText(before.closed_on) !== dayText(after.closed_on)) {
+    changed.push(`closed ${dayText(before.closed_on)} → ${dayText(after.closed_on)}`);
+  }
+  return `🤖 agent corrected the close of ${after.name}: ${changed.length > 0 ? changed.join(", ") : "unchanged"}`;
 }

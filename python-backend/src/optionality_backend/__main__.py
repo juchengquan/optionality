@@ -243,7 +243,8 @@ async def _run() -> NoReturn:
     # 127.0.0.1 (take_port's default): reachable only via the tailscale serve proxy and localhost,
     # never the LAN. Requests stop being answered 503 from here.
     # `/mcp` beside the routes (ADR 0026): the MCP door, handed a GET of the app's own, a write it holds to
-    # two routes and makes none of unless MCP_WRITES is on (ADR 0028), and the owner's Telegram
+    # four routes and makes none of unless MCP_WRITES is on (ADR 0028) — none to the book unless
+    # MCP_WRITES_POSITIONS is on beside it (ADR 0029) — and the owner's Telegram
     held.serve(
         create_app(
             deps,
@@ -256,6 +257,7 @@ async def _run() -> NoReturn:
                         now=deps.now,
                         display_tz=settings.display_tz,
                         writes=settings.mcp_writes,
+                        writes_positions=settings.mcp_writes_positions,
                         writes_per_10_min=settings.mcp_writes_per_10_min,
                     )
                 )

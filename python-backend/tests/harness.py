@@ -248,6 +248,7 @@ def harness(
                     now=deps.now,
                     display_tz=s.display_tz,
                     writes=s.mcp_writes,
+                    writes_positions=s.mcp_writes_positions,
                     writes_per_10_min=s.mcp_writes_per_10_min,
                 )
             )

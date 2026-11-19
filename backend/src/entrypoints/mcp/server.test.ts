@@ -12,7 +12,8 @@ import { opendFields } from "optionality/vendors/fields";
 import { type FakeProvider, type Harness, body, harness, json, pricedFetcher } from "../../../testing/harness.ts";
 import type { Settings } from "../../env.ts";
 import { DESCRIBED, LIVE_FOR_MS, type Rounding, byKey, canonical, roundTo, rounded, toolbox } from "./tools.ts";
-import { WRITES, allowedWrite } from "./writes.ts";
+import { mcpServer } from "./server.ts";
+import { OPENED_WITHIN_DAYS, WRITES, allowedWrite } from "./writes.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
@@ -760,16 +761,19 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
       expect(annotations.add_rule).toEqual({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false });
       expect(annotations.edit_rule).toEqual({ readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false });
       const { instructions } = await result(await rpc("initialize", { protocolVersion: "2025-11-25" }));
-      expect(instructions).toContain("WRITES ARE ON, for alarm rules only");
-      expect(instructions).toContain("at most 7 writes may reach the service in any ten minutes");
+      expect(instructions).toContain("WRITES ARE ON, for alarm rules");
+      expect(instructions).toContain("Writes to the BOOK are off");
+      expect(instructions).toContain("at most 7 writes of any kind may reach the service in any ten minutes");
       expect(instructions).not.toContain("{cap}");
     });
   });
 
   describe("the door's reach for a write", () => {
-    it("lists exactly two writes in server.json, POST /monitors and PATCH /monitors/{id}, each a route the API documents", async () => {
+    it("lists exactly four writes in server.json, two of rules and two of the book, each a route the API documents (ADR 0029)", async () => {
       start();
-      expect(WRITES.map((w) => `${w.method} ${w.path}`)).toEqual(["POST /monitors", "PATCH /monitors/{id}"]);
+      expect(WRITES.map((w) => `${w.tier} ${w.method} ${w.path}`)).toEqual([
+        "rules POST /monitors", "rules PATCH /monitors/{id}", "positions POST /positions", "positions PATCH /positions/{id}",
+      ]);
       const spec = await body(await h.call("/openapi.json"));
       for (const { method, path } of WRITES) {
         expect(spec.paths[path]?.[method.toLowerCase()], `${method} ${path} is not documented`).toBeTruthy();
@@ -782,18 +786,26 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
       await write("POST", "/monitors", {}, null);
       await write("PATCH", "/monitors/mon-1", {}, null);
       await write("PATCH", "/monitors/00000000000000000000000000000001", {}, null);
+      await write("POST", "/positions", {}, null);
+      await write("PATCH", "/positions/pos-1", {}, null);
       for (const [method, path] of [
         ["GET", "/monitors"], ["DELETE", "/monitors/mon-1"], ["PUT", "/monitors/mon-1"], ["POST", "/monitors/mon-1"],
-        ["PATCH", "/monitors"], ["POST", "/positions"], ["PATCH", "/positions/pos-1"], ["POST", "/spreads"],
+        ["PATCH", "/monitors"], ["PATCH", "/positions"], ["POST", "/positions/pos-1"], ["PUT", "/positions/pos-1"],
+        ["POST", "/positions/payoff"], ["PATCH", "/positions/pos-1/close"], ["POST", "/positions/"],
+        ["PATCH", "/positions/../monitors/mon-1"], ["PATCH", "/positions/pos-1?exit=1"], ["patch", "/positions/pos-1"],
+        ["POST", "/spreads"],
         ["PATCH", "/settings"], ["POST", "/monitors/mon-1/total-entry"], ["PATCH", "/monitors/../positions/pos-1"],
         ["PATCH", "/monitors/mon 1"], ["PATCH", "/monitors/mon-1?x=1"], ["post", "/monitors"], ["POST", "/monitors/"],
         ["DELETE", "/positions/pos-1"], ["POST", "/positions/pos-1/close"], ["PATCH", `/monitors/${"x".repeat(65)}`],
         ["PATCH", "/monitors/mon-1\n"],
       ]) {
         await expect(write(method!, path!, {}, null), `${method} ${path}`).rejects
-          .toThrow(`the MCP door may not ${method} ${path}: it writes only POST /monitors and PATCH /monitors/{id}`);
+          .toThrow(`the MCP door may not ${method} ${path}: it writes only POST /monitors, PATCH /monitors/{id}, POST /positions and PATCH /positions/{id}`);
       }
-      expect(made).toEqual(["POST /monitors", "PATCH /monitors/mon-1", "PATCH /monitors/00000000000000000000000000000001"]);
+      expect(made).toEqual([
+        "POST /monitors", "PATCH /monitors/mon-1", "PATCH /monitors/00000000000000000000000000000001",
+        "POST /positions", "PATCH /positions/pos-1",
+      ]);
     });
   });
 
@@ -1107,11 +1119,394 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
       expect(said.find((line) => line.startsWith("mcp add_rule"))).toMatch(/, its notice not sent$/);
     });
   });
+  // --- the second tier: writes to the book (#458, ADR 0029) ------------------------------------
+  describe("record_holding and correct_close, behind MCP_WRITES_POSITIONS (#458, ADR 0029)", () => {
+    const BOOK_OFF = "writes to the book are off on this service: record_holding and correct_close need "
+      + "MCP_WRITES_POSITIONS=1, beside MCP_WRITES=1, in its .env, which only its owner sets";
+    /** today's New York market day on the harness's clock, 2026-10-02 */
+    const TODAY = "20261002";
+    const PUT_HOLDING = {
+      name: "oct-puts", expiry: D, entry: 1.25, contracts: 2, opened_at: TODAY,
+      legs: [{ side: "long", option_type: "PUT", strike: 7075 }, { side: "short", option_type: "PUT", strike: 7100 }],
+    };
+    const booking = (settings: Partial<Settings> = {}, fetchQuotes?: FakeProvider) =>
+      writing({ mcpWritesPositions: true, ...settings }, fetchQuotes);
+    const holdings = async () => (await body(await h.call("/positions"))) as Record<string, unknown>[];
+    /** a holding recorded through the page and closed there, as the owner would have */
+    const closedCondor = async () => {
+      const id = await created(await h.call("/positions", json({ ...CONDOR, opened_at: "2026-09-28" })));
+      const closed = await h.call(`/positions/${id}/close`, json({ exit: 0.4, closed_on: "2026-10-01" }));
+      expect(closed.status, await closed.clone().text()).toBe(200);
+      asked = [];
+      return id;
+    };
+
+    describe("the switch", () => {
+      it("with rule writes on and this one unset, lists the rule tools only and refuses either, asking nothing and counting nothing", async () => {
+        writing({ mcpWritesPer10Min: 1 });
+        await closedCondor();
+        const { tools } = await result(await rpc("tools/list"));
+        expect(tools.map((t: { name: string }) => t.name)).toEqual([...READS, "add_rule", "edit_rule"]);
+        const before = await holdings();
+        for (const [name, args] of [["record_holding", PUT_HOLDING], ["correct_close", { id: "1016_IC", exit: 0.35 }]] as const) {
+          expect(await call(name, args), name).toMatchObject({ isError: true, text: BOOK_OFF });
+        }
+        expect(await call("correct_close", { nonsense: true })).toMatchObject({ isError: true, text: BOOK_OFF });
+        expect(asked).toEqual([]);
+        expect(await holdings()).toEqual(before);
+        expect(h.sent).toEqual([]);
+        // nothing counted: the cap of one still has its one
+        expect((await call("add_rule", PUT_SPREAD)).isError).toBe(false);
+      });
+
+      it("on while MCP_WRITES is off, is off: no write is listed, the instructions say writes are off, and the log says why once", async () => {
+        let said: string[] = [];
+        said = await logged(async () => {
+          asked = [];
+          h = harness({ settings: { mcpWritesPositions: true, ...TELEGRAM } });
+          const { tools } = await result(await rpc("tools/list"));
+          expect(tools.map((t: { name: string }) => t.name)).toEqual(READS);
+          const { instructions } = await result(await rpc("initialize", { protocolVersion: "2025-11-25" }));
+          expect(instructions).toContain("WRITES ARE OFF on this service");
+          expect(instructions).not.toContain("BOOK");
+          expect(await call("record_holding", PUT_HOLDING)).toMatchObject({ isError: true, text: BOOK_OFF });
+        });
+        expect(said.filter((line) => line.includes("MCP_WRITES_POSITIONS is on but MCP_WRITES is off"))).toEqual([
+          "MCP_WRITES_POSITIONS is on but MCP_WRITES is off: an agent's writes to the book stay off until MCP_WRITES is on too",
+        ]);
+        expect(await holdings()).toEqual([]);
+        expect(h.sent).toEqual([]);
+      });
+
+      it("with both on, lists all four writes after the reads, annotated, and the instructions say the book's are on", async () => {
+        const said = await logged(async () => { booking(); });
+        expect(said.filter((line) => line.includes("MCP_WRITES_POSITIONS"))).toEqual([]);
+        const { tools } = await result(await rpc("tools/list"));
+        expect(tools.map((t: { name: string }) => t.name)).toEqual([...READS, "add_rule", "edit_rule", "record_holding", "correct_close"]);
+        const annotations = Object.fromEntries(tools.map((t: { name: string; annotations: unknown }) => [t.name, t.annotations]));
+        expect(annotations.record_holding).toEqual({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false });
+        expect(annotations.correct_close).toEqual({ readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false });
+        const { instructions } = await result(await rpc("initialize", { protocolVersion: "2025-11-25" }));
+        expect(instructions).toContain("WRITES ARE ON, for alarm rules");
+        expect(instructions).toContain("Writes to the BOOK are ON, for two things only");
+      });
+
+      it("states the 5 days of record_holding's window in its description, as the door holds it", () => {
+        expect(OPENED_WITHIN_DAYS).toBe(5);
+        const tool = DESCRIBED.tools.find((t) => t.name === "record_holding")!;
+        expect(tool.description).toContain(`at most ${OPENED_WITHIN_DAYS} calendar days before it`);
+        expect(tool.inputSchema.properties.opened_at!.description).toContain(`at most ${OPENED_WITHIN_DAYS} calendar days before it`);
+      });
+    });
+
+    describe("record_holding", () => {
+      it("records a put spread through POST /positions as given, answers it as recorded, and tells the owner once", async () => {
+        booking();
+        const answer = await call("record_holding", { ...PUT_HOLDING, strategy: "put spread" });
+        expect(answer.isError, answer.text).toBe(false);
+        expect(answer.source).toBe("POST /positions");
+        const [made] = await holdings();
+        expect(answer.data).toEqual(made);
+        expect(made).toMatchObject({
+          name: "oct-puts", strike_date: EXPIRY, entry: 1.25, contracts: 2, opened_at: "2026-10-02", strategy: "put spread",
+          closed_on: null, exit: null,
+          legs: [{ side: "long", option_type: "PUT", strike: 7075 }, { side: "short", option_type: "PUT", strike: 7100 }],
+        });
+        // the route's own probe, of both legs, in one call
+        expect(asked).toHaveLength(1);
+        expect([...asked[0]!].sort()).toEqual(["US.SPXW261218P7075000", "US.SPXW261218P7100000"]);
+        expect(h.sent).toEqual(["🤖 agent recorded oct-puts 20261218 −P7100 +P7075 ×2 @ 1.25, opened 20261002"]);
+      });
+
+      it("passes a leg's quantity, and leaves strategy to the route where it is not given", async () => {
+        booking();
+        const answer = await call("record_holding", {
+          ...PUT_HOLDING, legs: [{ ...PUT_HOLDING.legs[0], qty: 2 }, PUT_HOLDING.legs[1]], entry: -0.5, contracts: 1,
+        });
+        expect(answer.isError, answer.text).toBe(false);
+        expect(answer.data).toMatchObject({ strategy: null, legs: [{ side: "long", option_type: "PUT", strike: 7075, qty: 2 }, { strike: 7100 }] });
+        expect(h.sent).toEqual(["🤖 agent recorded oct-puts 20261218 −P7100 +2P7075 ×1 @ −0.50, opened 20261002"]);
+      });
+
+      it("names the watch rule the new holding took over, which edit_rule then refuses as the holding's", async () => {
+        booking();
+        const rule = await created(await h.call("/monitors", json({
+          name: "1218-7100", strike_date: EXPIRY, field: "mid_price", threshold: 4.51,
+          legs: [{ sign: -1, option_type: "PUT", strike: 7100 }, { sign: 1, option_type: "PUT", strike: 7075 }],
+        })));
+        // a rule on another contract stays a watch rule, and is not named
+        await created(await h.call("/monitors", json({ ...RULE, strike: 9000 })));
+        asked = [];
+        const answer = await call("record_holding", PUT_HOLDING);
+        expect(answer.isError, answer.text).toBe(false);
+        expect((await rules()).find((r) => r.id === rule)!.positions).toEqual([{ id: answer.data.id, name: "oct-puts" }]);
+        expect(h.sent).toEqual([
+          "🤖 agent recorded oct-puts 20261218 −P7100 +P7075 ×2 @ 1.25, opened 20261002, taking over 1218-7100 |value| ≥ 4.51",
+        ]);
+        expect(await call("edit_rule", { id: rule, threshold: 5 })).toMatchObject({ isError: true });
+      });
+
+      it("refuses a missing or empty entry, contracts or opened_at, and a wrong shape, asking nothing and counting nothing", async () => {
+        booking({ mcpWritesPer10Min: 1 });
+        for (const [args, words] of [
+          [{ ...PUT_HOLDING, entry: undefined }, 'missing argument "entry"'],
+          [{ ...PUT_HOLDING, contracts: undefined }, 'missing argument "contracts"'],
+          [{ ...PUT_HOLDING, opened_at: undefined }, 'missing argument "opened_at"'],
+          [{ ...PUT_HOLDING, entry: null }, '"entry" must be a number'],
+          [{ ...PUT_HOLDING, contracts: null }, '"contracts" must be a number'],
+          [{ ...PUT_HOLDING, opened_at: null }, 'argument "opened_at" must be a string matching ^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$'],
+          [{ ...PUT_HOLDING, name: 7 }, '"name" must be a string'],
+          [{ ...PUT_HOLDING, strategy: 7 }, '"strategy" must be a string'],
+          [{ ...PUT_HOLDING, legs: [] }, '"legs" must hold one leg or more'],
+          [{ ...PUT_HOLDING, legs: [{ side: "sold", option_type: "PUT", strike: 7100 }] }, 'legs[0].side must be "short" or "long"'],
+          [{ ...PUT_HOLDING, legs: [{ side: "short", option_type: "PUT", strike: 7100, qty: "2" }] }, "legs[0].qty must be a number"],
+          [{ ...PUT_HOLDING, opened_at: "20261340" }, "opened_at 20261340 is not a day: use YYYY-MM-DD or YYYYMMDD"],
+          [{ ...PUT_HOLDING, exit: 1 }, 'unexpected argument "exit": record_holding takes only "name", "expiry", "legs", "entry", "contracts", "opened_at", "strategy"'],
+        ] as const) {
+          const clean = JSON.parse(JSON.stringify(args));
+          expect(await call("record_holding", clean), JSON.stringify(clean)).toMatchObject({ isError: true, text: words });
+        }
+        expect(asked).toEqual([]);
+        expect(await holdings()).toEqual([]);
+        expect((await call("record_holding", PUT_HOLDING)).isError).toBe(false);
+      });
+
+      it("takes an opened_at from today's New York market day back 5 days, and refuses tomorrow and 6 days back, uncounted", async () => {
+        booking({ mcpWritesPer10Min: 1 });
+        expect(await call("record_holding", { ...PUT_HOLDING, opened_at: "2026-10-03" })).toMatchObject({
+          isError: true,
+          text: "opened_at 2026-10-03 is after today's New York market day, 2026-10-02: a holding is recorded here once it is opened",
+        });
+        expect(await call("record_holding", { ...PUT_HOLDING, opened_at: "20260926" })).toMatchObject({
+          isError: true,
+          text: "opened_at 2026-09-26 is more than 5 days before today's New York market day, 2026-10-02: "
+            + "a holding opened earlier is recorded on the page",
+        });
+        expect(asked).toEqual([]);
+        const answer = await call("record_holding", { ...PUT_HOLDING, opened_at: "20260927" });
+        expect(answer.isError, answer.text).toBe(false);
+        expect(answer.data.opened_at).toBe("2026-09-27");
+      });
+
+      it("reads the market day from the injected clock in New York, not UTC's: at 22:00 there, UTC's tomorrow is refused", async () => {
+        booking();
+        h.now = new Date("2026-10-03T02:00:00Z");
+        expect(await call("record_holding", { ...PUT_HOLDING, opened_at: "20261003" })).toMatchObject({
+          isError: true,
+          text: "opened_at 2026-10-03 is after today's New York market day, 2026-10-02: a holding is recorded here once it is opened",
+        });
+        expect((await call("record_holding", { ...PUT_HOLDING, opened_at: "20261002" })).isError).toBe(false);
+        // and five days back from New York's day, not from UTC's
+        expect((await call("record_holding", { ...PUT_HOLDING, name: "b", opened_at: "20260927" })).isError).toBe(false);
+      });
+
+      it("carries the route's 409 on a name already recorded in its words, and counts it", async () => {
+        booking({ mcpWritesPer10Min: 2 });
+        expect((await call("record_holding", PUT_HOLDING)).isError).toBe(false);
+        const refused = await call("record_holding", PUT_HOLDING);
+        expect(refused).toMatchObject({ isError: true, text: "POST /positions answered 409: position 'oct-puts' already exists" });
+        expect(await call("record_holding", { ...PUT_HOLDING, name: "other" })).toMatchObject({
+          isError: true, text: "agent writes are capped at 2 in ten minutes: the next is allowed in 600s",
+        });
+        expect(h.sent).toHaveLength(1);
+      });
+    });
+
+    describe("correct_close", () => {
+      it("corrects a closed holding's exit by its name, and tells the owner only what changed", async () => {
+        booking();
+        const id = await closedCondor();
+        const answer = await call("correct_close", { id: "1016_IC", exit: 0.35 });
+        expect(answer.isError, answer.text).toBe(false);
+        expect(answer.source).toBe(`PATCH /positions/${id}`);
+        expect(answer.data).toMatchObject({ id, exit: 0.35, closed_on: "2026-10-01", entry: 3 });
+        expect((await holdings())[0]).toMatchObject({ exit: 0.35, closed_on: "2026-10-01" });
+        expect(h.sent).toEqual(["🤖 agent corrected the close of 1016_IC: exit 0.40 → 0.35"]);
+        expect(asked).toEqual([]);
+      });
+
+      it("corrects both, by id, saying both", async () => {
+        booking();
+        const id = await closedCondor();
+        const answer = await call("correct_close", { id, exit: 0.35, closed_on: "20261002" });
+        expect(answer.isError, answer.text).toBe(false);
+        expect(h.sent).toEqual(["🤖 agent corrected the close of 1016_IC: exit 0.40 → 0.35, closed 20261001 → 20261002"]);
+      });
+
+      it("on an OPEN holding is the route's refusal, which closes nothing, and counts", async () => {
+        booking({ mcpWritesPer10Min: 1 });
+        await created(await h.call("/positions", json(CONDOR)));
+        expect(await call("correct_close", { id: "1016_IC", exit: 0.35 })).toMatchObject({
+          isError: true, text: expect.stringMatching(/^PATCH \/positions\/[0-9a-f]{32} answered 422: position '1016_IC' is not closed: close it first$/),
+        });
+        expect((await holdings())[0]).toMatchObject({ closed_on: null, exit: null });
+        expect(h.sent).toEqual([]);
+        expect(await call("add_rule", PUT_SPREAD)).toMatchObject({ isError: true, text: expect.stringMatching(/^agent writes are capped at 1/) });
+      });
+
+      it("refuses any other field, no change, an unknown holding and a wrong type before writing, counting nothing", async () => {
+        booking({ mcpWritesPer10Min: 1 });
+        const id = await closedCondor();
+        for (const [args, words] of [
+          [{ id, entry: 2 }, 'unexpected argument "entry": correct_close takes only "id", "exit", "closed_on"'],
+          [{ id, exit: 0.35, contracts: 2 }, 'unexpected argument "contracts": correct_close takes only "id", "exit", "closed_on"'],
+          [{ id, legs: [] }, 'unexpected argument "legs": correct_close takes only "id", "exit", "closed_on"'],
+          [{ id }, "correct_close needs at least one change: exit or closed_on"],
+          [{ id, exit: null }, "correct_close needs at least one change: exit or closed_on"],
+          [{ id, exit: 0.4 }, `the close of 1016_IC already says exit 0.4: correct_close needs a change`],
+          [{ id, exit: 0.4, closed_on: "2026-10-01" }, `the close of 1016_IC already says exit 0.4 and closed_on 2026-10-01: correct_close needs a change`],
+          [{ id, exit: "0.35" }, '"exit" must be a number'],
+          [{ id, closed_on: "2026-13-01" }, "closed_on 2026-13-01 is not a day: use YYYY-MM-DD or YYYYMMDD"],
+          [{ id: "nobody", exit: 0.35 }, 'no holding is "nobody": tried it as a holding\'s id and as its name. positions lists every holding\'s id'],
+        ] as const) {
+          expect(await call("correct_close", args), JSON.stringify(args)).toMatchObject({ isError: true, text: words });
+        }
+        expect((await holdings())[0]).toMatchObject({ exit: 0.4, closed_on: "2026-10-01", entry: 3, contracts: 1 });
+        expect(h.sent).toEqual([]);
+        expect((await call("correct_close", { id, closed_on: "2026-10-01", exit: 0.3 })).isError).toBe(false);
+      });
+
+      it("writes the route a body of exit and closed_on alone, to the resolved id's path", async () => {
+        const writes: { method: string; path: string; body: unknown }[] = [];
+        const row = {
+          id: "pos-1", name: "1016_IC", strike_date: EXPIRY, entry: 3, contracts: 1, opened_at: "2026-09-28",
+          legs: CONDOR.legs, exit: 0.4, closed_on: "2026-10-01",
+        };
+        const serve = mcpServer({
+          read: async () => ({ status: 200, body: JSON.stringify([row]) }),
+          write: async (method, path, payload) => {
+            writes.push({ method, path, body: payload });
+            return { status: 200, body: JSON.stringify({ ...row, ...(payload as object) }) };
+          },
+          notify: async () => "sent", now: () => new Date("2026-10-02T05:26:06Z"), displayTz: "UTC",
+          writes: true, writesPositions: true, writesPer10Min: 10,
+        });
+        const ask = (args: unknown) => serve(new Request("http://x/mcp", {
+          method: "POST", body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "correct_close", arguments: args } }),
+        }));
+        await ask({ id: "1016_IC", exit: 0.35 });
+        await ask({ id: "1016_IC", closed_on: "20261002" });
+        await ask({ id: "1016_IC", exit: 0.35, closed_on: "2026-10-02" });
+        expect(writes).toEqual([
+          { method: "PATCH", path: "/positions/pos-1", body: { exit: 0.35 } },
+          { method: "PATCH", path: "/positions/pos-1", body: { closed_on: "20261002" } },
+          { method: "PATCH", path: "/positions/pos-1", body: { exit: 0.35, closed_on: "2026-10-02" } },
+        ]);
+      });
+    });
+
+    describe("a number too large for a double (review of #459)", () => {
+      it("is no number: a tool error in the door's words, as the Python says it, writing nothing", async () => {
+        booking();
+        const HUGE = "1".repeat(400);
+        // written by hand, as JSON.stringify cannot write the digits an agent may send
+        const raw = async (name: string, args: string) => {
+          const text = `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"${name}","arguments":${args}}}`;
+          const r = await result(await h.call("/mcp", { method: "POST", body: text, headers: { "Content-Type": "application/json" } }));
+          return { isError: r.isError === true, text: r.content[0].text as string };
+        };
+        const holding = (key: string) => JSON.stringify({ ...PUT_HOLDING, [key]: 0 }).replace(`"${key}":0`, `"${key}":${HUGE}`);
+        for (const [name, args, words] of [
+          ["record_holding", holding("entry"), '"entry" must be a number'],
+          ["record_holding", holding("contracts"), '"contracts" must be a number'],
+          ["record_holding", JSON.stringify({ ...PUT_HOLDING, legs: [] }).replace('"legs":[]', `"legs":[{"side":"short","option_type":"PUT","strike":${HUGE}}]`),
+            "legs[0].strike must be a number"],
+          ["record_holding", JSON.stringify({ ...PUT_HOLDING, legs: [] }).replace('"legs":[]', `"legs":[{"side":"short","option_type":"PUT","strike":7100,"qty":${HUGE}}]`),
+            "legs[0].qty must be a number"],
+          ["add_rule", JSON.stringify(PUT_SPREAD).replace('"threshold":3', `"threshold":${HUGE}`), '"threshold" must be a number'],
+          ["correct_close", `{"id":"x","exit":${HUGE}}`, '"exit" must be a number'],
+        ] as const) {
+          expect(await raw(name, args), `${name} ${words}`).toEqual({ isError: true, text: words });
+        }
+        expect(await holdings()).toEqual([]);
+        expect(asked).toEqual([]);
+        // and its log line writes the number as JSON.stringify writes Infinity, as the Python does
+        const said = await logged(() => raw("correct_close", `{"id":"x","exit":${HUGE}}`));
+        expect(said).toEqual(['mcp correct_close {"exit":null,"id":"x"}: refused by the door: "exit" must be a number']);
+      });
+    });
+
+    describe("the read after a record (review of #459)", () => {
+      const recordWith = async (monitors: () => Promise<{ status: number; body: string }>) => {
+        const sent: string[] = [];
+        const serve = mcpServer({
+          read: (path) => (path === "/monitors" ? monitors() : Promise.resolve({ status: 200, body: "[]" })),
+          write: async (_method, _path, payload) =>
+            ({ status: 201, body: JSON.stringify({ id: "pos-9", ...(payload as object), strike_date: EXPIRY, exit: null, closed_on: null }) }),
+          notify: async (text) => { sent.push(text); return "sent"; },
+          now: () => new Date("2026-10-02T05:26:06Z"), displayTz: "UTC",
+          writes: true, writesPositions: true, writesPer10Min: 10,
+        });
+        let answer: { result: { isError?: boolean; content: { text: string }[] } } | undefined;
+        const said = await logged(async () => {
+          const resp = await serve(new Request("http://x/mcp", {
+            method: "POST",
+            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "record_holding", arguments: PUT_HOLDING } }),
+          }));
+          answer = (await resp.json()) as typeof answer;
+        });
+        return { answer: answer!, sent, line: said.find((l) => l.startsWith("mcp record_holding"))! };
+      };
+
+      it("names no rule where GET /monitors throws, answers non-JSON or no list, and the write stands, said in the log", async () => {
+        for (const [monitors, why] of [
+          [() => Promise.reject(new Error("socket hang up")), "GET /monitors failed: socket hang up"],
+          [() => Promise.resolve({ status: 200, body: "<html>" }), "GET /monitors answered 200 with no list of rules"],
+          [() => Promise.resolve({ status: 200, body: "{\"a\":1}" }), "GET /monitors answered 200 with no list of rules"],
+          [() => Promise.resolve({ status: 200, body: "[null, 5]" }), null],
+          [() => Promise.resolve({ status: 500, body: "{}" }), "GET /monitors answered 500"],
+        ] as const) {
+          const { answer, sent, line } = await recordWith(monitors);
+          expect(answer.result.isError, `${why}: ${answer.result.content[0]!.text}`).toBeUndefined();
+          expect(JSON.parse(answer.result.content[0]!.text).source).toBe("POST /positions");
+          expect(sent).toEqual(["🤖 agent recorded oct-puts 20261218 −P7100 +P7075 ×2 @ 1.25, opened 20261002"]);
+          expect(line).toBe(`mcp record_holding ${canonical(PUT_HOLDING)}: POST /positions answered 201: holding pos-9, notice sent${why === null ? "" : `; its rules not named: ${why}`}`);
+        }
+      });
+    });
+
+    describe("the cap, shared", () => {
+      it("counts rule and book writes together: 6 add_rule and 4 record_holding, then the 11th of either is refused with the wait", async () => {
+        booking();
+        for (let i = 0; i < 6; i++) {
+          const added = await call("add_rule", { ...PUT_SPREAD, name: `r-${i}` });
+          expect(added.isError, added.text).toBe(false);
+          h.now = new Date(h.now.getTime() + 1000);
+        }
+        for (let i = 0; i < 4; i++) {
+          const recorded = await call("record_holding", { ...PUT_HOLDING, name: `h-${i}` });
+          expect(recorded.isError, recorded.text).toBe(false);
+          h.now = new Date(h.now.getTime() + 1000);
+        }
+        const capped = "agent writes are capped at 10 in ten minutes: the next is allowed in 590s";
+        expect(await call("record_holding", { ...PUT_HOLDING, name: "h-4" })).toMatchObject({ isError: true, text: capped });
+        expect(await call("add_rule", { ...PUT_SPREAD, name: "r-6" })).toMatchObject({ isError: true, text: capped });
+        expect(await holdings()).toHaveLength(4);
+      });
+    });
+
+    describe("the log", () => {
+      it("logs one line for every write to the book attempted, refusals included", async () => {
+        booking();
+        const said = await logged(async () => {
+          await call("record_holding", PUT_HOLDING);
+          await call("record_holding", { ...PUT_HOLDING, opened_at: "20261003" });
+          await call("correct_close", { id: "oct-puts", exit: 0.1 });
+        });
+        const mcp = said.filter((line) => line.startsWith("mcp "));
+        expect(mcp).toHaveLength(3);
+        expect(mcp[0]).toMatch(/^mcp record_holding \{.*"name":"oct-puts".*\}: POST \/positions answered 201: holding [0-9a-f]{32}, notice sent$/);
+        expect(mcp[1]).toMatch(/^mcp record_holding \{.*\}: refused by the door: opened_at 2026-10-03 is after today's/);
+        expect(mcp[2]).toMatch(/^mcp correct_close \{"exit":0.1,"id":"oct-puts"\}: PATCH \/positions\/[0-9a-f]{32} answered 422: position 'oct-puts' is not closed/);
+      });
+    });
+  });
+
 });
 
 describe("the door's reach", () => {
   it("imports nothing of the service: no route, no query, no engine, no write", () => {
-    // It is handed a GET of the API's own, a write it holds to two routes and a notifier, and that
+    // It is handed a GET of the API's own, a write it holds to four routes and a notifier, and that
     // is all it may use (ADR 0026, 0028). Read from the source, so a write path added later fails
     // here rather than in a review.
     const dir = new URL(".", import.meta.url).pathname;
@@ -1122,10 +1517,11 @@ describe("the door's reach", () => {
     const outside = reached.filter((spec) => !spec.startsWith("./"));
     // `ports.ts` for the types it is handed, `Read`, `Write` and `Notify`, and nothing that runs; and the library's
     // pure domain for the words — a contract as the page writes it is read by `/unwatch`'s own
-    // parser, and a rule is said in its short form — which reach nothing of the service either
+    // parser, and a rule is said in its short form; New York's market day bounds a holding's open
+    // day (ADR 0029) — which reach nothing of the service either
     expect([...new Set(outside)].sort()).toEqual([
       "../../ports.ts", "node:fs", "optionality/domain/alarm", "optionality/domain/contract",
-      "optionality/domain/timefmt",
+      "optionality/domain/expiry", "optionality/domain/timefmt",
     ]);
   });
 });

@@ -3,8 +3,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  agentNotice, alarmPolicy, alarmTransition, distanceShort, figureShort, ruleShape, ruleShort,
-  type AgentRule, type AlarmPolicy, type AlarmState, type RuleShape,
+  agentHoldingNotice, agentNotice, alarmPolicy, alarmTransition, distanceShort, figureShort, ruleShape, ruleShort,
+  type AgentHolding, type AgentRule, type AlarmPolicy, type AlarmState, type RuleShape,
 } from "./alarm.ts";
 import type { Monitor } from "./monitor.ts";
 
@@ -327,5 +327,56 @@ describe("what the owner is told about an agent's write (#456, ADR 0028)", () =>
 
   it("says an edit that changed nothing said here", () => {
     expect(agentNotice(agentRule(), agentRule())).toBe("🤖 agent: 1218-6800 |value| ≥ 4.51, unchanged");
+  });
+});
+
+describe("what the owner is told about an agent's write to the book (#458, ADR 0029)", () => {
+  const holding = (over: Partial<AgentHolding> = {}): AgentHolding => ({
+    name: "dec-condor", strike_date: "2026-12-18",
+    legs: [{ side: "long", option_type: "PUT", strike: 6750 }, { side: "short", option_type: "PUT", strike: 6800 }],
+    entry: 1.25, contracts: 2, opened_at: "2026-11-19", exit: null, closed_on: null, ...over,
+  });
+  const rule = (over: Partial<AgentRule> = {}): AgentRule => ({
+    code: "1218-6800", field: "mid_price", combo: true, compare: "abs", direction: "above", threshold: 4.51,
+    enabled: true, ...over,
+  });
+
+  it("says a holding recorded: its legs short first, its contracts, its entry and the day it was opened", () => {
+    expect(agentHoldingNotice(null, holding()))
+      .toBe("🤖 agent recorded dec-condor 20261218 −P6800 +P6750 ×2 @ 1.25, opened 20261119");
+  });
+
+  it("writes a leg's quantity, one contract, a debit and an entry typed finer as everywhere else", () => {
+    expect(agentHoldingNotice(null, holding({
+      legs: [{ side: "short", option_type: "CALL", strike: 7300, qty: 2 }, { side: "long", option_type: "CALL", strike: 7350 }],
+      contracts: 1, entry: -0.125,
+    }))).toBe("🤖 agent recorded dec-condor 20261218 −2C7300 +C7350 ×1 @ −0.125, opened 20261119");
+  });
+
+  it("names the rules the new holding took over, sorted", () => {
+    const put = rule({ code: "US.SPXW261218P6800000", field: "option_delta", combo: false, threshold: 0.2 });
+    expect(agentHoldingNotice(null, holding(), [rule()]))
+      .toBe("🤖 agent recorded dec-condor 20261218 −P6800 +P6750 ×2 @ 1.25, opened 20261119, taking over 1218-6800 |value| ≥ 4.51");
+    expect(agentHoldingNotice(null, holding(), [put, rule(), rule({ code: "1218-6750" })]))
+      .toBe("🤖 agent recorded dec-condor 20261218 −P6800 +P6750 ×2 @ 1.25, opened 20261119, taking over "
+        + "1218-6750 |value| ≥ 4.51, 1218-6800 |value| ≥ 4.51 and 20261218 P6800 |Δ| ≥ 0.20");
+  });
+
+  it("leaves out an entry and an open day it was not given", () => {
+    expect(agentHoldingNotice(null, holding({ entry: null, opened_at: null })))
+      .toBe("🤖 agent recorded dec-condor 20261218 −P6800 +P6750 ×2");
+  });
+
+  it("says a close corrected, only what changed", () => {
+    const closed = holding({ exit: 0.4, closed_on: "2026-11-18" });
+    expect(agentHoldingNotice(closed, { ...closed, exit: 0.35, closed_on: "2026-11-19" }))
+      .toBe("🤖 agent corrected the close of dec-condor: exit 0.40 → 0.35, closed 20261118 → 20261119");
+    expect(agentHoldingNotice(closed, { ...closed, exit: -1.5 }))
+      .toBe("🤖 agent corrected the close of dec-condor: exit 0.40 → −1.50");
+    expect(agentHoldingNotice(closed, { ...closed, closed_on: "2026-11-17" }))
+      .toBe("🤖 agent corrected the close of dec-condor: closed 20261118 → 20261117");
+    expect(agentHoldingNotice({ ...closed, exit: null }, closed))
+      .toBe("🤖 agent corrected the close of dec-condor: exit — → 0.40");
+    expect(agentHoldingNotice(closed, closed)).toBe("🤖 agent corrected the close of dec-condor: unchanged");
   });
 });

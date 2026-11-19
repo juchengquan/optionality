@@ -16,9 +16,10 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
 
-from optionality.contract import contract_name
-from optionality.js import to_fixed
+from optionality.contract import compact_strike_date, contract_name
+from optionality.js import js_string, to_fixed
 from optionality.monitor import Monitor, is_breached, threshold_distance
+from optionality.position import Leg
 
 
 class AlarmState(BaseModel):
@@ -272,3 +273,74 @@ def agent_notice(before: AgentRule | None, after: AgentRule) -> str:
     changed = verb is not None or before.code != after.code or was != now
     head = "🤖 agent:" if verb is None else f"🤖 agent {verb}"
     return f"{head} {name} {rule}{'' if changed else ', unchanged'}"
+
+
+class AgentHolding(BaseModel):
+    """A holding as the notice of an agent's write to the book reads it (#458, ADR 0029): what it was
+    recorded with, and its close. Dates as the route serves them, YYYY-MM-DD (either spelling reads)."""
+
+    model_config = ConfigDict(frozen=True)
+    name: str
+    strike_date: str
+    legs: list[Leg]
+    entry: float | None
+    contracts: int
+    opened_at: str | None
+    exit: float | None
+    closed_on: str | None
+
+
+def _leg_short(leg: Leg) -> str:
+    """A leg as every place writes it: `−2P6800`, `+C7350` — a quantity of one not written."""
+    many = "" if leg.qty == 1 else js_string(leg.qty)
+    sign = "\u2212" if leg.side == "short" else "+"
+    return f"{sign}{many}{'C' if leg.option_type == 'CALL' else 'P'}{js_string(leg.strike)}"
+
+
+def _typed_price(value: float) -> str:
+    """A price a person typed — an entry, an exit — to its typed places (two at least), a real minus."""
+    return _minus(_fixed(value, _typed_places(value)))
+
+
+def _listed(items: list[str]) -> str:
+    """ "A", "A and B", "A, B and C"."""
+    return "".join(items) if len(items) <= 1 else f"{', '.join(items[:-1])} and {items[-1]}"
+
+
+def _utf16_key(text: str) -> bytes:
+    """Sorted as JavaScript's `sort` orders strings: by UTF-16 code unit, which UTF-16BE's bytes follow."""
+    return text.encode("utf-16-be", "surrogatepass")
+
+
+def agent_holding_notice(before: AgentHolding | None, after: AgentHolding, taken: list[AgentRule] | None = None) -> str:
+    """The one line the owner's phone gets for a write an agent made to the BOOK over MCP (#458, ADR 0029):
+    `before` None for a holding recorded, else the holding as it was and as the write left it, whose close
+    was corrected — see `agentHoldingNotice` in alarm.ts for every form it takes."""
+    if before is None:
+        legs = [leg for leg in after.legs if leg.side == "short"] + [leg for leg in after.legs if leg.side != "short"]
+        head = (
+            f"🤖 agent recorded {after.name} {compact_strike_date(after.strike_date)} "
+            f"{' '.join(_leg_short(leg) for leg in legs)} ×{js_string(after.contracts)}"
+        )
+        if after.entry is not None:
+            head += f" @ {_typed_price(after.entry)}"
+        parts = [head]
+        if after.opened_at is not None:
+            parts.append(f"opened {compact_strike_date(after.opened_at)}")
+        rules = sorted((f"{contract_name(r.code, r.code)} {rule_short(r)}" for r in taken or []), key=_utf16_key)
+        if rules:
+            parts.append(f"taking over {_listed(rules)}")
+        return ", ".join(parts)
+
+    def exit_text(value: float | None) -> str:
+        return "—" if value is None else _typed_price(value)
+
+    def day_text(day: str | None) -> str:
+        return "—" if day is None else compact_strike_date(day)
+
+    changed: list[str] = []
+    if before.exit != after.exit:
+        changed.append(f"exit {exit_text(before.exit)} → {exit_text(after.exit)}")
+    if day_text(before.closed_on) != day_text(after.closed_on):
+        changed.append(f"closed {day_text(before.closed_on)} → {day_text(after.closed_on)}")
+    return f"🤖 agent corrected the close of {after.name}: {', '.join(changed) if changed else 'unchanged'}"

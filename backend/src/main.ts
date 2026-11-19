@@ -78,11 +78,12 @@ const deps: Deps = {
 // 127.0.0.1 (takePort's default): reachable only via the tailscale serve proxy and localhost,
 // never the LAN. Requests stop being answered 503 from here.
 // `/mcp` beside the routes (ADR 0026): the MCP door, handed a GET of the app's own, a write it holds
-// to two routes and makes none of unless MCP_WRITES is on (ADR 0028), and the owner's Telegram
+// to four routes and makes none of unless MCP_WRITES is on (ADR 0028) — none to the book unless
+// MCP_WRITES_POSITIONS is on beside it (ADR 0029) — and the owner's Telegram
 held.serve(createApp(deps, {
   mcp: (read, write) => mcpServer({
     read, write, notify: delivery(settings, send), now: deps.now, displayTz: settings.displayTz,
-    writes: settings.mcpWrites, writesPer10Min: settings.mcpWritesPer10Min,
+    writes: settings.mcpWrites, writesPositions: settings.mcpWritesPositions, writesPer10Min: settings.mcpWritesPer10Min,
   }),
 }).fetch);
 

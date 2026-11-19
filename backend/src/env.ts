@@ -75,6 +75,10 @@ export interface Settings {
   /** whether an agent may add and edit alarm rules over MCP (#456, ADR 0028). Off unless `.env` says
    *  `1` or `true`: off, the door lists no write tool and refuses a call to one. */
   mcpWrites: boolean;
+  /** whether an agent may also record a holding and correct a close over MCP (#458, ADR 0029). Off
+   *  unless `.env` says `1` or `true`, and in force only while `mcpWrites` is on too: the MCP door
+   *  says so at boot and treats it as off otherwise. */
+  mcpWritesPositions: boolean;
   /** the most writes an agent's MCP tools may make reach the route in any ten minutes, the route's
    *  refusals counted (ADR 0028). At least 1, as a cap of 0 would refuse with no time to wait for. */
   mcpWritesPer10Min: number;
@@ -120,6 +124,7 @@ export const DEFAULTS: Settings = {
   exitManageByDte: 21,
   spreadQuoteCallsPer30s: 12,
   mcpWrites: false,
+  mcpWritesPositions: false,
   mcpWritesPer10Min: 10,
   telegramBotToken: "",
   telegramChatId: "",
@@ -154,6 +159,7 @@ const FROM_ENV = {
   exitManageByDte: "EXIT_MANAGE_BY_DTE",
   spreadQuoteCallsPer30s: "SPREAD_QUOTE_CALLS_PER_30S",
   mcpWrites: "MCP_WRITES",
+  mcpWritesPositions: "MCP_WRITES_POSITIONS",
   mcpWritesPer10Min: "MCP_WRITES_PER_10_MIN",
   telegramBotToken: "TELEGRAM_BOT_TOKEN",
   telegramChatId: "TELEGRAM_CHAT_ID",

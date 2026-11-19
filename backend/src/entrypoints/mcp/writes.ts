@@ -1,10 +1,12 @@
-/** The MCP door's writes (ADR 0028, #456): `add_rule` and `edit_rule`, behind `MCP_WRITES`, capped by
- *  `MCP_WRITES_PER_10_MIN`, each one said to the owner's phone and in the log.
+/** The MCP door's writes (ADR 0028, #456; ADR 0029, #458): `add_rule` and `edit_rule`, behind
+ *  `MCP_WRITES`, and `record_holding` and `correct_close`, behind `MCP_WRITES_POSITIONS` beside it — all
+ *  four capped together by `MCP_WRITES_PER_10_MIN`, each one said to the owner's phone and in the log.
  *
- *  **What this module can write is two routes, and nothing else.** It is handed a `Write` of the app's
+ *  **What this module can write is four routes, and nothing else.** It is handed a `Write` of the app's
  *  own (`app.ts`) and wraps it at once in `allowedWrite`, which lets through only the method and path
- *  pairs `schema/mcp/server.json` lists for a write tool — `POST /monitors` and `PATCH /monitors/{id}`,
- *  the id one of the service's own — and refuses any other before the app is asked. No service, query
+ *  pairs `schema/mcp/server.json` lists for a write tool — `POST /monitors`, `PATCH /monitors/{id}`,
+ *  `POST /positions` and `PATCH /positions/{id}`, an id one of the service's own — and refuses any other
+ *  (a close, a delete) before the app is asked. No service, query
  *  or engine is imported here, as none is in `tools.ts` (`server.test.ts` holds both): a rule is
  *  written by the very routes the dashboard writes it through, their probe, their checks and their
  *  words, and this door adds only what an agent must not be able to do that the page may.
@@ -13,7 +15,9 @@
  *  every write while the switch is off; arguments that are not the tool's shape; a `qty` other than 1
  *  (a rule on a structure with quantities is made on the page); a combo with no name, or a name on
  *  one contract; an edit of nothing; and unmuting a rule the service switched off — only a rule muted
- *  by hand (`manual`) may be unmuted here. Everything else is the route's to refuse, and is said in its
+ *  by hand (`manual`) may be unmuted here. Of the book's: a holding with no entry, contracts or open day,
+ *  or one opened after today's New York market day or more than `OPENED_WITHIN_DAYS` before it; and a
+ *  correction of anything but a close's exit and day, or of nothing. Everything else is the route's to refuse, and is said in its
  *  words, and counted: a refused probe still asked the Provider.
  *
  *  **The notice** is the domain's `agentNotice`, from the rule before (the `GET /monitors` row the
@@ -21,19 +25,21 @@
  *  the service's `delivery`, which logs a Telegram that is not configured or refuses; the write stands
  *  either way. The log line is this module's, one per write attempted.
  */
-import { type AgentRule, agentNotice } from "optionality/domain/alarm";
+import { type AgentHolding, type AgentRule, agentHoldingNotice, agentNotice } from "optionality/domain/alarm";
+import { normalizeStrikeDate } from "optionality/domain/contract";
+import { marketDate } from "optionality/domain/expiry";
 import { displayTime } from "optionality/domain/timefmt";
 
 import type { Notify, Read, Write } from "../../ports.ts";
 import {
-  DESCRIBED, EXPIRY_PATTERN, LOOKUPS, type Row, type Tool, type ToolResult, argumentFault, canonical,
+  DESCRIBED, EXPIRY_PATTERN, LOOKUPS, type Tool, type ToolResult, argumentFault, canonical,
   detailOf, failed, isObject, isRow, keysFault, resolveRow, rounded, written,
 } from "./tools.ts";
 
 /** The writes `server.json` lists, one per write tool: the whole of what this door may write. */
-export const WRITES: { tool: string; method: string; path: string }[] = DESCRIBED.tools
+export const WRITES: { tool: string; method: string; path: string; tier: "rules" | "positions" }[] = DESCRIBED.tools
   .filter((t) => t.method !== undefined)
-  .map((t) => ({ tool: t.name, method: t.method!, path: t.path }));
+  .map((t) => ({ tool: t.name, method: t.method!, path: t.path, tier: t.tier! }));
 
 /** What `{id}` in a write's path may be: one of the service's own ids, as a history tool's is. */
 const AN_ID = "[A-Za-z0-9_-]{1,64}";
@@ -47,7 +53,8 @@ const PAIRS = WRITES.map(({ method, path }) => ({
  *  `{id}` one of the service's ids — and refusing any other before the app is asked anything. The
  *  only write the rest of this door is given. */
 export function allowedWrite(write: Write): Write {
-  const listed = WRITES.map((w) => `${w.method} ${w.path}`).join(" and ");
+  const pairs = WRITES.map((w) => `${w.method} ${w.path}`);
+  const listed = `${pairs.slice(0, -1).join(", ")} and ${pairs[pairs.length - 1]}`;
   return async (method, path, body, authorization) => {
     if (!PAIRS.some((p) => p.method === method && p.path.test(path))) {
       throw new Error(`the MCP door may not ${method} ${path}: it writes only ${listed}`);
@@ -61,6 +68,14 @@ export const CAP_WINDOW_MS = 600_000;
 
 export const WRITES_OFF =
   "writes are off on this service: add_rule and edit_rule need MCP_WRITES=1 in its .env, which only its owner sets";
+
+/** What a write to the book answers while it is off (ADR 0029): its switch named, and the one it needs. */
+export const BOOK_OFF = "writes to the book are off on this service: record_holding and correct_close need "
+  + "MCP_WRITES_POSITIONS=1, beside MCP_WRITES=1, in its .env, which only its owner sets";
+
+/** How far back `record_holding`'s `opened_at` may be, in calendar days before today's New York market
+ *  day (#458, the owner's decision): further back is recorded on the page. Stated in its description. */
+export const OPENED_WITHIN_DAYS = 5;
 
 /** A value an agent sent, checked: what it becomes, or the words for why it cannot. */
 type Checked<T> = T | { fault: string };
@@ -135,6 +150,96 @@ function editBody(args: Record<string, unknown>): Checked<Record<string, unknown
   return change;
 }
 
+/** A day as the route reads one, dashed, or null where it is no day. */
+function dayOf(text: string): string | null {
+  try {
+    return normalizeStrikeDate(text);
+  } catch {
+    return null;
+  }
+}
+
+/** Whole days from `from` to `to`, both YYYY-MM-DD: calendar days, whatever the zone. */
+const daysBetween = (from: string, to: string) =>
+  (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+
+/** `POST /positions`' body for `record_holding`'s arguments, or why there is none (#458, ADR 0029): a
+ *  structure as `price_spreads` takes one, and what a holding is recorded with. Only the shape, the types
+ *  and the `opened_at` window, against `today` — New York's market day by the injected clock; the rest
+ *  is the route's. */
+function holdingBody(args: Record<string, unknown>, today: string): Checked<Record<string, unknown>> {
+  const { name, expiry, legs, entry, contracts, opened_at: opened, strategy } = args;
+  if (typeof name !== "string") return { fault: '"name" must be a string' };
+  if (typeof expiry !== "string" || !new RegExp(EXPIRY_PATTERN).test(expiry)) {
+    return { fault: `"expiry" must be a string matching ${EXPIRY_PATTERN}` };
+  }
+  if (!Array.isArray(legs)) return { fault: '"legs" must be a list of legs' };
+  if (legs.length === 0) return { fault: '"legs" must hold one leg or more' };
+  const out: Record<string, unknown>[] = [];
+  for (const [i, leg] of legs.entries()) {
+    const where = `legs[${i}]`;
+    if (!isObject(leg)) return { fault: `${where} must be an object` };
+    const fault = keysFault(leg, where, "leg", ["side", "option_type", "strike", "qty"], ["side", "option_type", "strike"]);
+    if (fault !== null) return { fault };
+    const { side, option_type: type, strike, qty } = leg;
+    if (side !== "short" && side !== "long") return { fault: `${where}.side must be "short" or "long"` };
+    if (type !== "CALL" && type !== "PUT") return { fault: `${where}.option_type must be "CALL" or "PUT"` };
+    if (typeof strike !== "number" || !Number.isFinite(strike)) return { fault: `${where}.strike must be a number` };
+    if (given(qty) && (typeof qty !== "number" || !Number.isFinite(qty))) return { fault: `${where}.qty must be a number` };
+    // the quantity as given — the route holds it to 1–10 — and none where none was given
+    out.push({ side, option_type: type, strike, ...(given(qty) ? { qty } : {}) });
+  }
+  // required, and a null is not one: the route would read it as "unknown", which an agent may not leave
+  if (typeof entry !== "number" || !Number.isFinite(entry)) return { fault: '"entry" must be a number' };
+  if (typeof contracts !== "number" || !Number.isFinite(contracts)) return { fault: '"contracts" must be a number' };
+  if (given(strategy) && typeof strategy !== "string") return { fault: '"strategy" must be a string' };
+  if (typeof opened !== "string") return { fault: `"opened_at" must be a string matching ${EXPIRY_PATTERN}` };
+  const day = dayOf(opened);
+  if (day === null) return { fault: `opened_at ${opened} is not a day: use YYYY-MM-DD or YYYYMMDD` };
+  const back = daysBetween(day, today);
+  if (back < 0) {
+    return { fault: `opened_at ${day} is after today's New York market day, ${today}: a holding is recorded here once it is opened` };
+  }
+  if (back > OPENED_WITHIN_DAYS) {
+    return { fault: `opened_at ${day} is more than ${OPENED_WITHIN_DAYS} days before today's New York market day, ${today}: `
+      + "a holding opened earlier is recorded on the page" };
+  }
+  return {
+    name, strike_date: expiry, legs: out, entry, contracts, opened_at: opened, ...(given(strategy) ? { strategy } : {}),
+  };
+}
+
+/** What `correct_close` may change (ADR 0029): a closed holding's exit and close day, and nothing else. */
+const CORRECTABLE = ["exit", "closed_on"] as const;
+
+/** `PATCH /positions/{id}`'s body for `correct_close`'s arguments, or why there is none: built from
+ *  `CORRECTABLE` alone, so no other field of a holding can reach the route whatever was sent. */
+function closeBody(args: Record<string, unknown>): Checked<Record<string, unknown>> {
+  const change: Record<string, unknown> = {};
+  for (const key of CORRECTABLE) {
+    const value = args[key];
+    if (!given(value)) continue;
+    if (key === "exit" && (typeof value !== "number" || !Number.isFinite(value))) return { fault: '"exit" must be a number' };
+    if (key === "closed_on") {
+      if (typeof value !== "string") return { fault: `"closed_on" must be a string matching ${EXPIRY_PATTERN}` };
+      if (dayOf(value) === null) return { fault: `closed_on ${value} is not a day: use YYYY-MM-DD or YYYYMMDD` };
+    }
+    change[key] = value;
+  }
+  if (Object.keys(change).length === 0) return { fault: "correct_close needs at least one change: exit or closed_on" };
+  return change;
+}
+
+/** A holding as the route serves it, as `agentHoldingNotice` reads it. */
+const agentHolding = (row: Record<string, unknown>): AgentHolding => ({
+  name: String(row.name), strike_date: String(row.strike_date),
+  legs: (Array.isArray(row.legs) ? row.legs : []) as AgentHolding["legs"],
+  entry: typeof row.entry === "number" ? row.entry : null, contracts: Number(row.contracts),
+  opened_at: typeof row.opened_at === "string" ? row.opened_at : null,
+  exit: typeof row.exit === "number" ? row.exit : null,
+  closed_on: typeof row.closed_on === "string" ? row.closed_on : null,
+});
+
 /** A rule as the route serves it, as `agentNotice` reads it. */
 const agentRule = (row: Record<string, unknown>): AgentRule => ({
   code: String(row.code), field: String(row.field), combo: Array.isArray(row.legs) && row.legs.length > 0,
@@ -156,13 +261,15 @@ export interface WriterOptions {
   displayTz: string;
   /** `MCP_WRITES` */
   on: boolean;
+  /** `MCP_WRITES_POSITIONS`, in force: already false unless `on` is true too (ADR 0029) */
+  positions: boolean;
   /** `MCP_WRITES_PER_10_MIN` */
   per10Min: number;
 }
 
 /** The write tools, bound to the app they write to: `call` answers one `tools/call` of either. */
 export function writer(options: WriterOptions) {
-  const { read, notify, now, displayTz, on, per10Min } = options;
+  const { read, notify, now, displayTz, on, positions, per10Min } = options;
   const write = allowedWrite(options.write);
   /** When each write that reached the route was made, oldest first: the cap's memory. */
   const made: number[] = [];
@@ -170,10 +277,11 @@ export function writer(options: WriterOptions) {
   const log = (tool: string, args: unknown, outcome: string, refused: boolean) =>
     (refused ? console.warn : console.info)(`mcp ${tool} ${canonical(args ?? {})}: ${outcome}`);
 
-  /** The write itself, once the door has nothing to refuse: counted, made, said and answered. */
+  /** The write itself, once the door has nothing to refuse: counted, made, said and answered. `tell` is
+   *  the notice for the route's answer, and anything the log should add to it. */
   const send = async (
-    tool: Tool, args: unknown, path: string, body: Record<string, unknown>, before: Row | null,
-    authorization: string | null,
+    tool: Tool, args: unknown, path: string, body: Record<string, unknown>, authorization: string | null,
+    tell: (data: Record<string, unknown>) => Promise<{ notice: string; also?: string }>,
   ): Promise<ToolResult> => {
     const at = now();
     const t = at.getTime();
@@ -193,11 +301,38 @@ export function writer(options: WriterOptions) {
       return failed(text);
     }
     const data = JSON.parse(answer.body) as Record<string, unknown>;
-    const went = await notify(agentNotice(before === null ? null : agentRule(before), agentRule(data)));
-    log(tool.name, args, `${source} answered ${answer.status}: rule ${String(data.id)}, ${NOTICE[went]}`, false);
+    const { notice, also } = await tell(data);
+    const went = await notify(notice);
+    const noun = tool.tier === "positions" ? "holding" : "rule";
+    log(tool.name, args, `${source} answered ${answer.status}: ${noun} ${String(data.id)}, ${NOTICE[went]}${also ?? ""}`, false);
     // the route's body with its figures rounded by key (#454), as every tool's answer is
     const text = canonical({ source, read_at: displayTime(at, displayTz), data: rounded(data, tool.round) });
     return { content: [{ type: "text", text }] };
+  };
+
+  /** The rules the route linked to a holding it has just recorded, read back from `GET /monitors` (a
+   *  read, never counted): what the record's notice names as taken over. A read that fails — refused,
+   *  thrown, or answered with no list (review of #459) — names none, and the log says so; the write has
+   *  been made, and it stands. */
+  const takenBy = async (id: string, authorization: string | null): Promise<{ taken: AgentRule[]; also?: string }> => {
+    const unnamed = (why: string) => ({ taken: [], also: `; its rules not named: ${why}` });
+    let answer: { status: number; body: string };
+    try {
+      answer = await read("/monitors", authorization);
+    } catch (err) {
+      return unnamed(`GET /monitors failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (answer.status !== 200) return unnamed(`GET /monitors answered ${answer.status}`);
+    let rows: unknown;
+    try {
+      rows = JSON.parse(answer.body);
+    } catch {
+      rows = null;
+    }
+    if (!Array.isArray(rows)) return unnamed("GET /monitors answered 200 with no list of rules");
+    const linked = rows.filter(isObject).filter((r) => Array.isArray(r.positions)
+      && (r.positions as unknown[]).some((p) => isObject(p) && p.id === id));
+    return { taken: linked.map(agentRule) };
   };
 
   return {
@@ -208,15 +343,43 @@ export function writer(options: WriterOptions) {
         log(name, args, `refused by the door: ${text}`, true);
         return failed(text);
       };
-      // the switch first: off, nothing is read, checked, written or counted
-      if (!on) return refuse(WRITES_OFF);
+      // the switch first, the tool's own tier's (ADR 0029): off, nothing is read, checked, written or counted
+      if (tool.tier === "positions" ? !positions : !on) return refuse(tool.tier === "positions" ? BOOK_OFF : WRITES_OFF);
       const fault = argumentFault(tool, args);
       if (fault !== null) return refuse(fault);
       const asked = (args ?? {}) as Record<string, unknown>;
       if (name === "add_rule") {
         const body = ruleBody(asked);
         if (isFault(body)) return refuse(body.fault);
-        return send(tool, args, tool.path, body, null, authorization);
+        return send(tool, args, tool.path, body, authorization, async (data) => ({ notice: agentNotice(null, agentRule(data)) }));
+      }
+      if (name === "record_holding") {
+        // today in New York's reckoning, from the injected clock: never the machine's zone, nor UTC's day
+        const body = holdingBody(asked, marketDate(now()));
+        if (isFault(body)) return refuse(body.fault);
+        return send(tool, args, tool.path, body, authorization, async (data) => {
+          const { taken, also } = await takenBy(String(data.id), authorization);
+          return { notice: agentHoldingNotice(null, agentHolding(data), taken), also };
+        });
+      }
+      if (name === "correct_close") {
+        const change = closeBody(asked);
+        if (isFault(change)) return refuse(change.fault);
+        // found exactly as holding_history finds it, through the same GET
+        const row = await resolveRow(read, LOOKUPS.holding_history!, (asked.id as string).trim(), authorization);
+        if (!isRow(row)) return refuse(row.content[0]!.text);
+        // a correction must correct something: each value given already what the holding says is none
+        const same = CORRECTABLE.filter((key) => key in change && (key === "exit"
+          ? change.exit === row.exit
+          : typeof row.closed_on === "string" && dayOf(change.closed_on as string) === dayOf(row.closed_on)));
+        if (same.length === Object.keys(change).length) {
+          const says = same.map((key) => `${key} ${key === "exit" ? written(row.exit as number) : dayOf(row.closed_on as string)}`);
+          return refuse(`the close of ${String(row.name)} already says ${says.join(" and ")}: correct_close needs a change`);
+        }
+        // only the RESOLVED id is put in the path; the route refuses an exit or a close day on a holding
+        // still open, so this can never close one
+        return send(tool, args, tool.path.replace("{id}", encodeURIComponent(row.id)), change, authorization,
+          async (data) => ({ notice: agentHoldingNotice(agentHolding(row), agentHolding(data)) }));
       }
       const change = editBody(asked);
       if (isFault(change)) return refuse(change.fault);
@@ -246,7 +409,8 @@ export function writer(options: WriterOptions) {
           + 'edit_rule does not mute it again, which would make it a rule muted by hand (disabled_reason "manual")');
       }
       // only the RESOLVED id is put in the path, as a history tool's is
-      return send(tool, args, tool.path.replace("{id}", encodeURIComponent(row.id)), change, row, authorization);
+      return send(tool, args, tool.path.replace("{id}", encodeURIComponent(row.id)), change, authorization,
+        async (data) => ({ notice: agentNotice(agentRule(row), agentRule(data)) }));
     },
   };
 }

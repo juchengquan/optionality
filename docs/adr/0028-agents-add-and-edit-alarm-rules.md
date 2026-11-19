@@ -7,6 +7,11 @@ Date: 2026-11-19
 Accepted and built (#456). Decided by the owner on 2026-11-19. Both backends carry it, in lockstep
 (ADR 0021).
 
+**Amended by ADR 0029** (2026-11-19, #458): the allow-list holds four pairs — `POST /positions`
+and `PATCH /positions/{id}` (exit and close day only) beside this ADR's two — for `record_holding` and
+`correct_close`, behind a second switch, `MCP_WRITES_POSITIONS`, in force only with `MCP_WRITES`, and
+under the same cap. "No holdings, no closes" below reads with that amendment: still no close, no delete.
+
 **Amends ADR 0026**: "every tool is a GET the API already serves, and nothing else" becomes **every
 tool is one GET the API already serves, or one of the WRITES `schema/mcp/server.json` lists**; and
 decision 4, "read-only", holds whenever the switch below is off, which is the default. Everything

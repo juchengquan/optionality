@@ -98,6 +98,9 @@ class Settings:
     spread_quote_calls_per_30s: int
     #: whether an agent may add and edit alarm rules over MCP (#456, ADR 0028); off unless `1` or `true`
     mcp_writes: bool
+    #: whether an agent may also record a holding and correct a close over MCP (#458, ADR 0029); off unless
+    #: `1` or `true`, and in force only while `mcp_writes` is on too
+    mcp_writes_positions: bool
     #: the most writes an agent's MCP tools may make reach the route in any ten minutes (ADR 0028)
     mcp_writes_per_10_min: int
     telegram_bot_token: str
@@ -141,6 +144,7 @@ DEFAULTS = Settings(
     exit_manage_by_dte=21,
     spread_quote_calls_per_30s=12,
     mcp_writes=False,
+    mcp_writes_positions=False,
     mcp_writes_per_10_min=10,
     telegram_bot_token="",
     telegram_chat_id="",
@@ -175,6 +179,7 @@ FROM_ENV = {
     "exit_manage_by_dte": "EXIT_MANAGE_BY_DTE",
     "spread_quote_calls_per_30s": "SPREAD_QUOTE_CALLS_PER_30S",
     "mcp_writes": "MCP_WRITES",
+    "mcp_writes_positions": "MCP_WRITES_POSITIONS",
     "mcp_writes_per_10_min": "MCP_WRITES_PER_10_MIN",
     "telegram_bot_token": "TELEGRAM_BOT_TOKEN",
     "telegram_chat_id": "TELEGRAM_CHAT_ID",

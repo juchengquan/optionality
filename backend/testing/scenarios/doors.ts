@@ -116,7 +116,8 @@ export async function runHttp(
       return createApp(deps, {
         mcp: (read, write) => mcpServer({
           read, write, notify: delivery(w.settings, w.send), now: deps.now, displayTz: w.settings.displayTz,
-          writes: w.settings.mcpWrites, writesPer10Min: w.settings.mcpWritesPer10Min,
+          writes: w.settings.mcpWrites, writesPositions: w.settings.mcpWritesPositions,
+          writesPer10Min: w.settings.mcpWritesPer10Min,
         }),
       });
     };

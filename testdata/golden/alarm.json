@@ -1782,6 +1782,437 @@
       "expect": "🤖 agent added 1218-6800 |value| ≥ 4.51"
     },
     {
+      "fn": "agentHoldingNotice",
+      "name": "a put spread recorded, its short leg first",
+      "args": [
+        null,
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": null,
+          "closed_on": null
+        }
+      ],
+      "expect": "🤖 agent recorded dec-condor 20261218 −P6800 +P6750 ×2 @ 1.25, opened 20261119"
+    },
+    {
+      "fn": "agentHoldingNotice",
+      "name": "a ratio recorded at a debit typed finer, one contract",
+      "args": [
+        null,
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300,
+              "qty": 2
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            }
+          ],
+          "entry": -0.125,
+          "contracts": 1,
+          "opened_at": "2026-11-19",
+          "exit": null,
+          "closed_on": null
+        }
+      ],
+      "expect": "🤖 agent recorded dec-condor 20261218 −2C7300 +C7350 ×1 @ −0.125, opened 20261119"
+    },
+    {
+      "fn": "agentHoldingNotice",
+      "name": "a holding with no entry and no open day says neither",
+      "args": [
+        null,
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": null,
+          "contracts": 2,
+          "opened_at": null,
+          "exit": null,
+          "closed_on": null
+        }
+      ],
+      "expect": "🤖 agent recorded dec-condor 20261218 −P6800 +P6750 ×2"
+    },
+    {
+      "fn": "agentHoldingNotice",
+      "name": "a holding recorded names the rule it took over",
+      "args": [
+        null,
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": null,
+          "closed_on": null
+        },
+        [
+          {
+            "code": "1218-6800",
+            "field": "mid_price",
+            "combo": true,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 4.51,
+            "enabled": true
+          }
+        ]
+      ],
+      "expect": "🤖 agent recorded dec-condor 20261218 −P6800 +P6750 ×2 @ 1.25, opened 20261119, taking over 1218-6800 |value| ≥ 4.51"
+    },
+    {
+      "fn": "agentHoldingNotice",
+      "name": "and several, sorted",
+      "args": [
+        null,
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": null,
+          "closed_on": null
+        },
+        [
+          {
+            "code": "US.SPXW261218P6800000",
+            "field": "option_delta",
+            "combo": false,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 0.2,
+            "enabled": true
+          },
+          {
+            "code": "1218-6800",
+            "field": "mid_price",
+            "combo": true,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 4.51,
+            "enabled": true
+          },
+          {
+            "code": "1218-6750",
+            "field": "mid_price",
+            "combo": true,
+            "compare": "abs",
+            "direction": "above",
+            "threshold": 3,
+            "enabled": true
+          }
+        ]
+      ],
+      "expect": "🤖 agent recorded dec-condor 20261218 −P6800 +P6750 ×2 @ 1.25, opened 20261119, taking over 1218-6750 |value| ≥ 3.00, 1218-6800 |value| ≥ 4.51 and 20261218 P6800 |Δ| ≥ 0.20"
+    },
+    {
+      "fn": "agentHoldingNotice",
+      "name": "a close's exit and day corrected",
+      "args": [
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": 0.4,
+          "closed_on": "2026-11-18"
+        },
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": 0.35,
+          "closed_on": "2026-11-19"
+        }
+      ],
+      "expect": "🤖 agent corrected the close of dec-condor: exit 0.40 → 0.35, closed 20261118 → 20261119"
+    },
+    {
+      "fn": "agentHoldingNotice",
+      "name": "a close's exit corrected to a long's sale",
+      "args": [
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": 0.4,
+          "closed_on": "2026-11-18"
+        },
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": -1.5,
+          "closed_on": "2026-11-18"
+        }
+      ],
+      "expect": "🤖 agent corrected the close of dec-condor: exit 0.40 → −1.50"
+    },
+    {
+      "fn": "agentHoldingNotice",
+      "name": "a close's day corrected alone",
+      "args": [
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": 0.4,
+          "closed_on": "2026-11-18"
+        },
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": 0.4,
+          "closed_on": "2026-11-17"
+        }
+      ],
+      "expect": "🤖 agent corrected the close of dec-condor: closed 20261118 → 20261117"
+    },
+    {
+      "fn": "agentHoldingNotice",
+      "name": "a blank exit filled in",
+      "args": [
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": null,
+          "closed_on": "2026-11-18"
+        },
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": 0.4,
+          "closed_on": "2026-11-18"
+        }
+      ],
+      "expect": "🤖 agent corrected the close of dec-condor: exit — → 0.40"
+    },
+    {
+      "fn": "agentHoldingNotice",
+      "name": "a correction that changed nothing",
+      "args": [
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": 0.4,
+          "closed_on": "2026-11-18"
+        },
+        {
+          "name": "dec-condor",
+          "strike_date": "2026-12-18",
+          "legs": [
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6750
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6800
+            }
+          ],
+          "entry": 1.25,
+          "contracts": 2,
+          "opened_at": "2026-11-19",
+          "exit": 0.4,
+          "closed_on": "2026-11-18"
+        }
+      ],
+      "expect": "🤖 agent corrected the close of dec-condor: unchanged"
+    },
+    {
       "fn": "alarmTransition",
       "name": "a breach past a finely typed threshold says by how much",
       "args": [
