@@ -229,7 +229,7 @@ def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
         message: Any = None
         parsed = True
         try:
-            # "utf-8-sig": one leading BOM is ignored, as the Fetch API's text() ignores it in the TypeScript (#462)
+            # "utf-8-sig": exactly one leading BOM is ignored, as the TypeScript's own TextDecoder ignores one (#462)
             message = json.loads(body.decode("utf-8-sig", errors="replace"), parse_constant=_no_constants)
         except ValueError:
             parsed = False

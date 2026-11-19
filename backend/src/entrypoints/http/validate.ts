@@ -55,13 +55,21 @@ export function valid<T extends ZodType, Target extends keyof ValidationTargets>
     // `bodyCache` is typed as holding text, but what Hono stores and reads there is the PROMISE of
     // it (`raw[key]()`, then awaited), so the cache is written as it is really read
     const cache = c.req.bodyCache as { text?: Promise<string> };
-    if (target === "json" && cache.text === undefined) cache.text = c.req.raw.arrayBuffer().then(decodeBody);
+    // primed ONLY where Hono's validator will read it — a JSON type, by its own pattern: a read
+    // nobody awaits would turn a failed upload into an unhandled rejection, which is fatal here
+    if (target === "json" && cache.text === undefined && JSON_TYPE.test(c.req.header("Content-Type") ?? "")) {
+      cache.text = c.req.raw.arrayBuffer().then(decodeBody);
+    }
     return middleware(c, next);
   }) as typeof middleware;
   // the tag hono-openapi's own validator carries, so /openapi.json documents this request from the
   // very schema that checks it (openapi.ts)
   return Object.assign(primed, { [uniqueSymbol]: { target, ...resolver(schema) } });
 }
+
+/** The Content-Types Hono's json validator reads a body for (`jsonRegex` in hono/validator, which
+ *  it does not export): the body is primed for exactly these and no others. */
+const JSON_TYPE = /^application\/([a-z-\.]+\+)?json(;\s*[a-zA-Z0-9\-]+\=([^;]+))*$/i;
 
 /** A request body's bytes as text: UTF-8, exactly one leading BOM ignored (the Encoding spec's
  *  decode), malformed sequences replaced — as the Python's `body.decode("utf-8-sig", "replace")`. */
