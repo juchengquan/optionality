@@ -179,7 +179,7 @@ describe("the protocol", () => {
       headers: { "Content-Type": "application/json", ...headers },
     });
     const init = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2026-07-28" } });
-    for (const headers of [{}, { "MCP-Protocol-Version": "2026-07-28" }]) {
+    for (const headers of [{}, { "MCP-Protocol-Version": "2026-07-28" }] as Record<string, string>[]) {
       const answered = await post(init, headers);
       expect(answered.status).toBe(200);
       expect((await body(answered)).result.protocolVersion).toBe("2025-11-25");
