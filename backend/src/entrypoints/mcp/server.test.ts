@@ -148,6 +148,19 @@ describe("the protocol", () => {
     for (const method of ["ping", "tools/list"]) {
       expect((await rpc(method, undefined, { headers: { "MCP-Protocol-Version": "2026-07-28" } })).status).toBe(400);
     }
+    // and the header's 400 still comes BEFORE the body's own faults: a body that is not JSON, sent
+    // with a version this server does not speak, is refused for the version, as it was before #460
+    const both = await h.call("/mcp", {
+      method: "POST", body: "{nope",
+      headers: { "Content-Type": "application/json", "MCP-Protocol-Version": "2026-07-28" },
+    });
+    expect(both.status).toBe(400);
+    expect(await body(both)).toEqual({
+      jsonrpc: "2.0", id: null, error: {
+        code: -32600,
+        message: "Bad Request: unsupported MCP-Protocol-Version 2026-07-28; this server speaks 2025-11-25, 2025-06-18",
+      },
+    });
   });
 
   it("echoes an integral id as an integer, whatever way it was written", async () => {

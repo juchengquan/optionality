@@ -209,6 +209,23 @@ class TestTheProtocol:
         # the exemption is initialize's alone: the same header on any other request is still refused
         for method in ("ping", "tools/list"):
             assert (await m.rpc(method, headers={"MCP-Protocol-Version": "2026-07-28"})).status_code == 400
+        # and the header's 400 still comes BEFORE the body's own faults: a body that is not JSON, sent
+        # with a version this server does not speak, is refused for the version, as it was before #460
+        both = await m.h.call(
+            "/mcp",
+            method="POST",
+            content="{nope",
+            headers={"Content-Type": "application/json", "MCP-Protocol-Version": "2026-07-28"},
+        )
+        assert both.status_code == 400
+        assert both.json() == {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": -32600,
+                "message": "Bad Request: unsupported MCP-Protocol-Version 2026-07-28; this server speaks 2025-11-25, 2025-06-18",
+            },
+        }
 
     async def test_echoes_an_integral_id_as_an_integer_whatever_way_it_was_written(self, mcp):
         m = mcp()
