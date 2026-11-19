@@ -135,6 +135,42 @@ describe("the protocol", () => {
     }
   });
 
+  it("negotiates initialize from its body, whatever version its header names (#460)", async () => {
+    // a newer client sends the version it asks for in the header of initialize as well; the
+    // header rule is the transport's for requests AFTER initialization, so it never refuses this
+    start();
+    for (const header of ["2026-07-28", "2025-03-26", "2025-06-18"]) {
+      const answered = await rpc("initialize", { protocolVersion: "2026-07-28" }, { headers: { "MCP-Protocol-Version": header } });
+      expect(answered.status).toBe(200);
+      expect((await result(answered)).protocolVersion).toBe("2025-11-25");
+    }
+    // the exemption is initialize's alone: the same header on any other request is still refused
+    for (const method of ["ping", "tools/list"]) {
+      expect((await rpc(method, undefined, { headers: { "MCP-Protocol-Version": "2026-07-28" } })).status).toBe(400);
+    }
+    // and an initialize REQUEST's alone (the owner, 2026-11-20): an initialize sent as a
+    // notification, with no id, negotiates nothing and is refused for the header as before
+    const notification = await h.call("/mcp", {
+      method: "POST", body: JSON.stringify({ jsonrpc: "2.0", method: "initialize" }),
+      headers: { "Content-Type": "application/json", "MCP-Protocol-Version": "2026-07-28" },
+    });
+    expect(notification.status).toBe(400);
+    expect((await body(notification)).error.code).toBe(-32600);
+    // and the header's 400 still comes BEFORE the body's own faults: a body that is not JSON, sent
+    // with a version this server does not speak, is refused for the version, as it was before #460
+    const both = await h.call("/mcp", {
+      method: "POST", body: "{nope",
+      headers: { "Content-Type": "application/json", "MCP-Protocol-Version": "2026-07-28" },
+    });
+    expect(both.status).toBe(400);
+    expect(await body(both)).toEqual({
+      jsonrpc: "2.0", id: null, error: {
+        code: -32600,
+        message: "Bad Request: unsupported MCP-Protocol-Version 2026-07-28; this server speaks 2025-11-25, 2025-06-18",
+      },
+    });
+  });
+
   it("echoes an integral id as an integer, whatever way it was written", async () => {
     start();
     const resp = await h.call("/mcp", {

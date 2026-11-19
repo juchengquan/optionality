@@ -196,6 +196,47 @@ class TestTheProtocol:
         for spoken in ("2025-11-25", "2025-06-18"):
             assert await m.result(await m.rpc("ping", headers={"MCP-Protocol-Version": spoken})) == {}
 
+    async def test_negotiates_initialize_from_its_body_whatever_version_its_header_names(self, mcp):
+        # #460: a newer client sends the version it asks for in the header of initialize as well; the
+        # header rule is the transport's for requests AFTER initialization, so it never refuses this
+        m = mcp()
+        for header in ("2026-07-28", "2025-03-26", "2025-06-18"):
+            answered = await m.rpc(
+                "initialize", {"protocolVersion": "2026-07-28"}, headers={"MCP-Protocol-Version": header}
+            )
+            assert answered.status_code == 200
+            assert (await m.result(answered))["protocolVersion"] == "2025-11-25"
+        # the exemption is initialize's alone: the same header on any other request is still refused
+        for method in ("ping", "tools/list"):
+            assert (await m.rpc(method, headers={"MCP-Protocol-Version": "2026-07-28"})).status_code == 400
+        # and an initialize REQUEST's alone (the owner, 2026-11-20): an initialize sent as a
+        # notification, with no id, negotiates nothing and is refused for the header as before
+        notification = await m.h.call(
+            "/mcp",
+            method="POST",
+            content=json.dumps({"jsonrpc": "2.0", "method": "initialize"}),
+            headers={"Content-Type": "application/json", "MCP-Protocol-Version": "2026-07-28"},
+        )
+        assert notification.status_code == 400
+        assert notification.json()["error"]["code"] == -32600
+        # and the header's 400 still comes BEFORE the body's own faults: a body that is not JSON, sent
+        # with a version this server does not speak, is refused for the version, as it was before #460
+        both = await m.h.call(
+            "/mcp",
+            method="POST",
+            content="{nope",
+            headers={"Content-Type": "application/json", "MCP-Protocol-Version": "2026-07-28"},
+        )
+        assert both.status_code == 400
+        assert both.json() == {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {
+                "code": -32600,
+                "message": "Bad Request: unsupported MCP-Protocol-Version 2026-07-28; this server speaks 2025-11-25, 2025-06-18",
+            },
+        }
+
     async def test_echoes_an_integral_id_as_an_integer_whatever_way_it_was_written(self, mcp):
         m = mcp()
         resp = await m.h.call(

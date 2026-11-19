@@ -59,6 +59,12 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
 
 const failure = (id: Id, code: number, message: string) => ({ jsonrpc: "2.0", id, error: { code, message } });
 
+/** Whether a parsed body is a JSON-RPC initialize REQUEST — one with an id: the one message the
+ *  version header never refuses (#460). An initialize sent as a notification negotiates nothing. */
+const isInitialize = (message: unknown): boolean =>
+  message !== null && typeof message === "object" && !Array.isArray(message)
+  && (message as Message).method === "initialize" && "id" in message;
+
 /** An id JSON-RPC allows on a request: a string or a number, never null on one that wants an answer. */
 const isId = (id: unknown): id is string | number =>
   typeof id === "string" || (typeof id === "number" && Number.isFinite(id));
@@ -140,18 +146,24 @@ export function mcpServer(options: McpOptions): (request: Request) => Promise<Re
       return json(405, failure(null, REFUSED, "Method not allowed: /mcp takes one JSON-RPC message per POST, and offers no stream"),
         { Allow: "POST" });
     }
-    // the transport's rule for a request after initialization: a version this server does not
-    // speak is a 400, never answered as though it were one it does
+    const text = await request.text();
+    let message: unknown;
+    let parsed = true;
+    try {
+      message = JSON.parse(text);
+    } catch {
+      parsed = false;
+    }
+    // the transport's rule for a request AFTER initialization: a version this server does not
+    // speak is a 400, never answered as though it were one it does. initialize itself is exempt
+    // (#460) — it is where the version is negotiated, from its body, and a newer client names the
+    // version it asks for in the header too. Every other message keeps this check's place, before
+    // the body's own faults.
     const version = request.headers.get("MCP-Protocol-Version");
-    if (version !== null && !server.protocol_versions.includes(version)) {
+    if (version !== null && !server.protocol_versions.includes(version) && !isInitialize(message)) {
       return json(400, failure(null, INVALID_REQUEST, `Bad Request: unsupported MCP-Protocol-Version ${version}; this server speaks ${server.protocol_versions.join(", ")}`));
     }
-    let message: unknown;
-    try {
-      message = JSON.parse(await request.text());
-    } catch {
-      return json(400, failure(null, PARSE_ERROR, "Parse error: the body is not JSON"));
-    }
+    if (!parsed) return json(400, failure(null, PARSE_ERROR, "Parse error: the body is not JSON"));
     if (Array.isArray(message)) {
       return json(400, failure(null, INVALID_REQUEST, "Invalid Request: one message per POST; batches are not supported"));
     }

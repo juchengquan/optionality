@@ -2500,6 +2500,26 @@ export const HTTP: readonly HttpInput[] = [
     },
   },
   {
+    // #460: a newer client puts the version it asks for in the header of initialize too; the
+    // header rule is for requests AFTER initialization, so initialize negotiates from its body
+    name: "POST /mcp initializes a client whose header names a version it does not speak",
+    world: world(),
+    request: {
+      ...request("POST", "/mcp", rpc("initialize", {
+        protocolVersion: "2026-07-28", capabilities: {}, clientInfo: { name: "claude-code", version: "3" },
+      })),
+      headers: { Authorization: "Bearer tok", "MCP-Protocol-Version": "2026-07-28" },
+    },
+  },
+  {
+    name: "POST /mcp still refuses a version it does not speak on a request after initialize",
+    world: world(),
+    request: {
+      ...request("POST", "/mcp", rpc("tools/list")),
+      headers: { Authorization: "Bearer tok", "MCP-Protocol-Version": "2026-07-28" },
+    },
+  },
+  {
     name: "POST /mcp answers a request carrying a version it speaks",
     world: world(),
     request: {

@@ -83,6 +83,12 @@ def _json(status: int, body: Any, headers: dict[str, str] | None = None) -> Resp
     return JSONResponse(body, status_code=status, headers=headers)
 
 
+def _is_initialize(message: Any) -> bool:
+    """Whether a parsed body is a JSON-RPC initialize REQUEST — one with an id: the one message the
+    version header never refuses (#460). An initialize sent as a notification negotiates nothing."""
+    return isinstance(message, dict) and message.get("method") == "initialize" and "id" in message
+
+
 def _failure(id_: Id, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": id_, "error": {"code": code, "message": message}}
 
@@ -219,10 +225,19 @@ def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
                 ),
                 {"Allow": "POST"},
             )
-        # the transport's rule for a request after initialization: a version this server does not speak
-        # is a 400, never answered as though it were one it does
+        body = await request.body()
+        message: Any = None
+        parsed = True
+        try:
+            message = json.loads(body.decode("utf-8", errors="replace"), parse_constant=_no_constants)
+        except ValueError:
+            parsed = False
+        # the transport's rule for a request AFTER initialization: a version this server does not speak
+        # is a 400, never answered as though it were one it does. initialize itself is exempt (#460) — it
+        # is where the version is negotiated, from its body, and a newer client names the version it asks
+        # for in the header too. Every other message keeps this check's place, before the body's own faults.
         version = request.headers.get("mcp-protocol-version")
-        if version is not None and version not in server["protocol_versions"]:
+        if version is not None and version not in server["protocol_versions"] and not _is_initialize(message):
             spoken = ", ".join(server["protocol_versions"])
             return _json(
                 400,
@@ -232,9 +247,7 @@ def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
                     f"Bad Request: unsupported MCP-Protocol-Version {version}; this server speaks {spoken}",
                 ),
             )
-        try:
-            message = json.loads((await request.body()).decode("utf-8", errors="replace"), parse_constant=_no_constants)
-        except ValueError:
+        if not parsed:
             return _json(400, _failure(None, PARSE_ERROR, "Parse error: the body is not JSON"))
         if isinstance(message, list):
             return _json(
