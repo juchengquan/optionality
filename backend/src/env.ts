@@ -72,6 +72,12 @@ export interface Settings {
    *  or MCP (ADR 0027). Its own budget inside moomoo's 60, so an agent pricing candidates can never
    *  starve the sweep. At least 1: a cap of 0 would refuse every call with no time to wait for. */
   spreadQuoteCallsPer30s: number;
+  /** whether an agent may add and edit alarm rules over MCP (#456, ADR 0028). Off unless `.env` says
+   *  `1` or `true`: off, the door lists no write tool and refuses a call to one. */
+  mcpWrites: boolean;
+  /** the most writes an agent's MCP tools may make reach the route in any ten minutes, the route's
+   *  refusals counted (ADR 0028). At least 1, as a cap of 0 would refuse with no time to wait for. */
+  mcpWritesPer10Min: number;
   telegramBotToken: string;
   telegramChatId: string;
   /** URL prefix when served behind a path-stripping reverse proxy, e.g. "/opt/api" */
@@ -113,6 +119,8 @@ export const DEFAULTS: Settings = {
   exitStopMultiple: 2,
   exitManageByDte: 21,
   spreadQuoteCallsPer30s: 12,
+  mcpWrites: false,
+  mcpWritesPer10Min: 10,
   telegramBotToken: "",
   telegramChatId: "",
   rootPath: "",
@@ -145,6 +153,8 @@ const FROM_ENV = {
   exitStopMultiple: "EXIT_STOP_MULTIPLE",
   exitManageByDte: "EXIT_MANAGE_BY_DTE",
   spreadQuoteCallsPer30s: "SPREAD_QUOTE_CALLS_PER_30S",
+  mcpWrites: "MCP_WRITES",
+  mcpWritesPer10Min: "MCP_WRITES_PER_10_MIN",
   telegramBotToken: "TELEGRAM_BOT_TOKEN",
   telegramChatId: "TELEGRAM_CHAT_ID",
   rootPath: "ROOT_PATH",
@@ -170,6 +180,8 @@ const AT_LEAST_ONE: readonly (keyof Settings)[] = [
   "monitorIntervalSeconds", "degradedAfterFailures",
   // a cap of 0 would answer every spread quote 429 with no time to wait for (ADR 0027)
   "spreadQuoteCallsPer30s",
+  // likewise for an agent's writes over MCP (ADR 0028)
+  "mcpWritesPer10Min",
 ];
 
 /** Every count is non-negative; some must be positive. Fatal, as a mistyped setting already is in
@@ -193,12 +205,24 @@ function checkSettings(settings: Settings): Settings {
   return settings;
 }
 
+/** A switch, as `.env` says it: `1` or `true` on, `0`, `false` or nothing off, any case and spacing.
+ *  Anything else is fatal, as a mistyped count is — a switch read as off by a typo is a feature the
+ *  owner turned on and never got, and one read as on is the opposite (#456). */
+function readSwitch(variable: string, raw: string): boolean {
+  const said = raw.trim().toLowerCase();
+  if (said === "1" || said === "true") return true;
+  if (said === "0" || said === "false" || said === "") return false;
+  throw new Error(`${variable} is not a switch: ${raw} (1 or true for on, 0, false or nothing for off)`);
+}
+
 export function settingsFromEnv(env: Record<string, string | undefined> = process.env): Settings {
   const out = { ...DEFAULTS };
   for (const [key, variable] of Object.entries(FROM_ENV) as [keyof Settings, string][]) {
     const raw = env[variable];
     if (raw === undefined) continue;
-    if (typeof DEFAULTS[key] === "number") {
+    if (typeof DEFAULTS[key] === "boolean") {
+      (out[key] as boolean) = readSwitch(variable, raw);
+    } else if (typeof DEFAULTS[key] === "number") {
       // an EMPTY value is not zero. `Number("")` is 0 and `Number.isInteger(0)` is true, so
       // `MONITOR_INTERVAL_SECONDS=` used to mean a zero interval rather than an error — every
       // numeric knob had that hole, and a knob set to nothing is a mistake, never an intent.

@@ -96,6 +96,10 @@ class Settings:
     #: MCP (ADR 0027). Its own budget inside moomoo's 60, so an agent pricing candidates can never
     #: starve the sweep. At least 1: a cap of 0 would refuse every call with no time to wait for.
     spread_quote_calls_per_30s: int
+    #: whether an agent may add and edit alarm rules over MCP (#456, ADR 0028); off unless `1` or `true`
+    mcp_writes: bool
+    #: the most writes an agent's MCP tools may make reach the route in any ten minutes (ADR 0028)
+    mcp_writes_per_10_min: int
     telegram_bot_token: str
     telegram_chat_id: str
     #: URL prefix when served behind a path-stripping reverse proxy, e.g. "/opt/api"
@@ -136,6 +140,8 @@ DEFAULTS = Settings(
     exit_stop_multiple=2.0,
     exit_manage_by_dte=21,
     spread_quote_calls_per_30s=12,
+    mcp_writes=False,
+    mcp_writes_per_10_min=10,
     telegram_bot_token="",
     telegram_chat_id="",
     root_path="",
@@ -168,6 +174,8 @@ FROM_ENV = {
     "exit_stop_multiple": "EXIT_STOP_MULTIPLE",
     "exit_manage_by_dte": "EXIT_MANAGE_BY_DTE",
     "spread_quote_calls_per_30s": "SPREAD_QUOTE_CALLS_PER_30S",
+    "mcp_writes": "MCP_WRITES",
+    "mcp_writes_per_10_min": "MCP_WRITES_PER_10_MIN",
     "telegram_bot_token": "TELEGRAM_BOT_TOKEN",
     "telegram_chat_id": "TELEGRAM_CHAT_ID",
     "root_path": "ROOT_PATH",
@@ -190,7 +198,12 @@ FRACTIONAL = frozenset({"exit_take_fraction", "exit_stop_multiple"})
 #: list has to be explicit rather than "no zeroes anywhere" (review 2026-11-01).
 #: and `SPREAD_QUOTE_CALLS_PER_30S`, whose 0 would answer every spread quote 429 with no time to wait for
 #: (ADR 0027).
-AT_LEAST_ONE = ("monitor_interval_seconds", "degraded_after_failures", "spread_quote_calls_per_30s")
+AT_LEAST_ONE = (
+    "monitor_interval_seconds",
+    "degraded_after_failures",
+    "spread_quote_calls_per_30s",
+    "mcp_writes_per_10_min",
+)
 
 # JavaScript's `trim`: WhiteSpace (tab, VT, FF, space, NBSP, the BOM and every Zs) and LineTerminator
 # (LF, CR, U+2028, U+2029). Not `str.strip()`, which keeps the BOM and also eats \x1c-\x1f.
@@ -221,6 +234,17 @@ def _check_settings(settings: Settings) -> Settings:
     return settings
 
 
+def _read_switch(variable: str, raw: str) -> bool:
+    """A switch, as `.env` says it: `1` or `true` on, `0`, `false` or nothing off, any case and spacing —
+    trimmed as JavaScript trims. Anything else is fatal, as a mistyped count is (#456)."""
+    said = raw.strip(_JS_WHITESPACE).lower()
+    if said in ("1", "true"):
+        return True
+    if said in ("0", "false", ""):
+        return False
+    raise ValueError(f"{variable} is not a switch: {raw} (1 or true for on, 0, false or nothing for off)")
+
+
 def settings_from_env(env: Mapping[str, str] | None = None) -> Settings:
     """Settings from `env`, the process environment when None. Raises `ValueError` on a knob the
     service must not start on, naming its variable."""
@@ -231,7 +255,9 @@ def settings_from_env(env: Mapping[str, str] | None = None) -> Settings:
         raw = env.get(variable)
         if raw is None:
             continue
-        if _is_number(getattr(DEFAULTS, key)):
+        if isinstance(getattr(DEFAULTS, key), bool):
+            out[key] = _read_switch(variable, raw)
+        elif _is_number(getattr(DEFAULTS, key)):
             # an EMPTY value is not zero. `Number("")` is 0 and 0 is an integer, so
             # `MONITOR_INTERVAL_SECONDS=` used to mean a zero interval rather than an error — every
             # numeric knob had that hole, and a knob set to nothing is a mistake, never an intent.

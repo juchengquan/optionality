@@ -134,6 +134,29 @@ class TestTheKnobsAServiceMustNotStartOn:
         with pytest.raises(ValueError, match="SPREAD_QUOTE_CALLS_PER_30S is not an integer"):
             settings_from_env({"SPREAD_QUOTE_CALLS_PER_30S": "2.5"})
 
+    def test_leaves_an_agent_s_writes_off_unless_mcp_writes_says_on_and_refuses_a_switch_it_cannot_read(self):
+        # #456
+        assert settings_from_env({}).mcp_writes is False
+        for on in ("1", "true", " TRUE "):
+            assert settings_from_env({"MCP_WRITES": on}).mcp_writes is True, on
+        for off in ("0", "false", "", "  "):
+            assert settings_from_env({"MCP_WRITES": off}).mcp_writes is False, off
+        for typo in ("yes", "on", "2", "ture"):
+            with pytest.raises(ValueError) as refused:
+                settings_from_env({"MCP_WRITES": typo})
+            assert str(refused.value) == (
+                f"MCP_WRITES is not a switch: {typo} (1 or true for on, 0, false or nothing for off)"
+            )
+
+    def test_caps_an_agent_s_writes_at_10_in_ten_minutes_never_0(self):
+        # #456
+        assert settings_from_env({}).mcp_writes_per_10_min == 10
+        assert settings_from_env({"MCP_WRITES_PER_10_MIN": "3"}).mcp_writes_per_10_min == 3
+        with pytest.raises(ValueError, match="MCP_WRITES_PER_10_MIN must be at least 1"):
+            settings_from_env({"MCP_WRITES_PER_10_MIN": "0"})
+        with pytest.raises(ValueError, match="MCP_WRITES_PER_10_MIN is not an integer"):
+            settings_from_env({"MCP_WRITES_PER_10_MIN": "2.5"})
+
     def test_checks_the_defaults_themselves_so_a_bad_default_cannot_ship(self):
         settings_from_env({})
 
