@@ -715,6 +715,9 @@ describe("GET /spreads/quote", () => {
     // a strike of any length built `…PInfinity000` or `…P1e+21000` and went to the Provider (#453 review)
     ["a strike of seven digits", [`${D}:-P1000000`], "leg 1 \"-P1000000\" is not"],
     ["a strike of 400 digits", [`${D}:-P${"9".repeat(400)}`], "leg 1 \"-P999"],
+    // POST /spreads' own refusals, in its words (owner's decision on #452)
+    ["a contract named twice", [`${D}:-P6800,+P6750,-P6800`], "spread 1 names PUT 6800 twice: give the one leg a quantity"],
+    ["a contract both short and long", [PUT_SPREAD, `${D}:-C7300,+C7300`], "spread 2 is both short and long CALL 7300"],
     ["an expiry that is no date", ["20261332:-P6800"], "invalid expiry"],
     ["quantity 0", [`${D}:-P6800x0`], "a quantity is 1 to 10, not 0"],
     ["quantity 11", [`${D}:-P6800x11`], "a quantity is 1 to 10, not 11"],
@@ -753,6 +756,25 @@ describe("GET /spreads/quote", () => {
     at(new Date(SESSION.getTime() + 5000));
     await ask(PUT_SPREAD, CALL_SPREAD);
     expect(asked).toHaveLength(2);
+  });
+
+  it("shares one call between the same contracts at another entry, each answer drawn at its own", async () => {
+    // keyed on the contracts asked for, never the entry (owner's decision on #452): an agent trying
+    // entries for one candidate spends one call, and each answer's payoff is its own entry's
+    const { asked, fetch } = quotingBook();
+    h = harness({ fetchQuotes: (codes) => fetch(codes), settings: { spreadQuoteCallsPer30s: 1 } });
+    at(SESSION);
+    const [first] = (await body(await ask(`${PUT_SPREAD}@1.25`))).spreads;
+    at(new Date(SESSION.getTime() + 2000));
+    const second = await ask(`${PUT_SPREAD}@2.5`);
+    expect(second.status).toBe(200);
+    const [other] = (await body(second)).spreads;
+    expect(asked).toHaveLength(1);
+    expect([first.entry, first.payoff.max_profit]).toEqual([1.25, 1.25]);
+    expect([other.entry, other.payoff.max_profit]).toEqual([2.5, 2.5]);
+    // and the cap, at 1, was never spent a second time: the same contracts grouped another way are free
+    expect((await ask(`${D}:-P6800`, `${D}:+P6750`)).status).toBe(200);
+    expect(asked).toHaveLength(1);
   });
 
   it("joins a call still in flight rather than making a second", async () => {

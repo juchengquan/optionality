@@ -931,6 +931,9 @@ class TestGetSpreadsQuote:
             # a strike of any length built a code past a double's range, or a 500 here (#453 review)
             ([f"{D}:-P1000000"], 'leg 1 "-P1000000" is not'),
             ([f"{D}:-P{'9' * 400}"], 'leg 1 "-P999'),
+            # POST /spreads' own refusals, in its words (owner's decision on #452)
+            ([f"{D}:-P6800,+P6750,-P6800"], "spread 1 names PUT 6800 twice: give the one leg a quantity"),
+            ([f"{D}:-P6800,+P6750", f"{D}:-C7300,+C7300"], "spread 2 is both short and long CALL 7300"),
             (["20261332:-P6800"], "invalid expiry"),
             ([f"{D}:-P6800x0"], "a quantity is 1 to 10, not 0"),
             ([f"{D}:-P6800x11"], "a quantity is 1 to 10, not 11"),
@@ -947,6 +950,8 @@ class TestGetSpreadsQuote:
             "a leg that is not the grammar",
             "a strike of seven digits",
             "a strike of 400 digits",
+            "a contract named twice",
+            "a contract both short and long",
             "an expiry that is no date",
             "quantity 0",
             "quantity 11",
@@ -983,6 +988,26 @@ class TestGetSpreadsQuote:
         h.now = self.SESSION + timedelta(milliseconds=5000)
         await self.ask(h, self.PUT_SPREAD, self.CALL_SPREAD)
         assert len(asked) == 2
+
+    async def test_shares_one_call_between_the_same_contracts_at_another_entry_each_answer_drawn_at_its_own(
+        self, start
+    ):
+        # keyed on the contracts asked for, never the entry (owner's decision on #452): an agent trying
+        # entries for one candidate spends one call, and each answer's payoff is its own entry's
+        asked, fetch = self.quoting_book()
+        h = start(fetch_quotes=fetch, settings={"spread_quote_calls_per_30s": 1})
+        h.now = self.SESSION
+        (first,) = (await self.ask(h, f"{self.PUT_SPREAD}@1.25")).json()["spreads"]
+        h.now = self.SESSION + timedelta(seconds=2)
+        second = await self.ask(h, f"{self.PUT_SPREAD}@2.5")
+        assert second.status_code == 200
+        (other,) = second.json()["spreads"]
+        assert len(asked) == 1
+        assert [first["entry"], first["payoff"]["max_profit"]] == [1.25, 1.25]
+        assert [other["entry"], other["payoff"]["max_profit"]] == [2.5, 2.5]
+        # and the cap, at 1, was never spent a second time: the same contracts grouped another way are free
+        assert (await self.ask(h, f"{self.D}:-P6800", f"{self.D}:+P6750")).status_code == 200
+        assert len(asked) == 1
 
     async def test_joins_a_call_still_in_flight_rather_than_making_a_second(self, start):
         gate = asyncio.Event()

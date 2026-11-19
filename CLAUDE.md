@@ -411,8 +411,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   that ambiguous), and a UNIQUE clash inside the write is the checks' own 409, not a 500. Beside it,
   `price-spreads.ts` behind `GET /spreads/quote` (#452, ADR 0027): any SPX structure an agent names,
   `?spread=<expiry>:<legs>[@<entry>]` once per structure, priced from ONE batch of every distinct
-  leg — every refusal (422) decided first; the batch shared for `SHARED_FOR_MS` (5s) by any request
-  that normalises to the same structures, a call in flight joined, a failure shared too; at most
+  leg — every refusal (422) decided first, a contract named twice or both ways in `POST /spreads`'
+  own words (`twiceOverWords`); the batch shared for `SHARED_FOR_MS` (5s), keyed on the contracts
+  alone, so the same contracts at another entry or grouping spend nothing, a call in flight joined, a failure shared too; at most
   `SPREAD_QUOTE_CALLS_PER_30S` (12) Provider calls in any 30 seconds whoever asks, then 429 with the
   wait. ONE `SpreadPricer` per app, so the HTTP and MCP doors share both. Each leg carries its last
   stored regular-session close (`last_known`, from `watch_samples`, the one table storing a
@@ -651,7 +652,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   capped** (ADR 0027, superseding ADR 0026's "no tool prices a contract the service does not
   already watch"): `GET /spreads/quote` — the `price_spreads` tool — prices any SPX structure an
   agent names in one bounded batch (at most 32 legs, six to a structure), shared for 5s by the same
-  request normalised, and at most `SPREAD_QUOTE_CALLS_PER_30S` (default 12 of moomoo's 60) such calls
+  contracts at any entry, and at most `SPREAD_QUOTE_CALLS_PER_30S` (default 12 of moomoo's 60) such calls
   in any 30 seconds whoever asks, HTTP or MCP — over it a 429 saying when. The door's other live
   tools ARE `/quotes`, `/positions/values` and `/references`, read through the app itself
   behind a 5-second cache shared by every agent, so however many agents loop, each of those three

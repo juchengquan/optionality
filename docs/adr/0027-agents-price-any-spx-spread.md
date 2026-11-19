@@ -4,7 +4,9 @@ Date: 2026-11-19
 
 ## Status
 
-Accepted and built (#452). Decided by the owner on 2026-11-19. Both backends carry it, in lockstep
+Accepted and built (#452). Decided by the owner on 2026-11-19, and settled the same day in review
+(#452's decision record): a contract named twice or both ways is refused, and the cache is keyed on
+the contracts alone. Both backends carry it, in lockstep
 (ADR 0021).
 
 **Supersedes ADR 0026's "no tool prices a contract the service does not already watch"** (its decision
@@ -26,7 +28,7 @@ it needs a decision of its own and a bound of its own. The owner's decisions on 
 2. **The door stays GET-only**, the legs in the query; a POST is for later, if ever.
 3. **Batching:** several structures per call, in ONE bounded batch, with `POST /spreads`' caps.
 4. **A service-wide cap**, `SPREAD_QUOTE_CALLS_PER_30S` (default 12), counting every caller, plus a 5s
-   cache keyed by the normalised request.
+   cache — keyed, as settled in review, on the contracts asked for alone.
 5. **Output:** per-leg quotes, the value, the natural bid and ask, signed Greeks, `spx` and the short
    strikes, `dte`, the payoff at expiry and the market's `phase`. No probability, no expected move.
 6. **Out of hours as `/quotes`:** no last-trade fallback; Greeks still served; the stored
@@ -50,8 +52,10 @@ it needs a decision of its own and a bound of its own. The owner's decisions on 
   not the grammar, a quantity outside 1–10, an expiry before New York's market day (the sweep's own rule
   for an expired rule, `expiry < today`; `POST /spreads` has no rule of its own and leaves it to its
   probe), more than 6 legs in a structure, more than 32 in the request (`POST /spreads`' caps, and its
-  sentence for the second). Nothing else is refused: a contract named twice in one structure is priced as
-  named.
+  sentence for the second), and a contract named twice in one structure or held both short and long
+  in it — `POST /spreads`' own two refusals, in its words through one function (`twiceOverWords`),
+  `spread <n>` standing where its `'<name>'` stands. A strike is at most six digits. Nothing else is
+  refused.
 
 **One bounded call.** Every distinct code of every structure, sorted, goes in ONE batch through the
 Provider's `fetchQuotes` — the call `/quotes` and the creation probes make. A code the Provider names
@@ -61,13 +65,14 @@ in `/quotes`' words.
 **The cap and the cache are the route's**, so the HTTP door and the MCP door share both
 (`price-spreads.ts`, `price_spreads.py`, one instance per app):
 
-- **Cache:** an answer's BATCH is kept for 5 seconds (`SHARED_FOR_MS`), keyed by the request
-  normalised — each structure's expiry, its legs and its entry in a fixed order, the structures in a
-  fixed order — so the same structures asked in another order are the same key, and are answered in the
-  order asked. A batch still in flight is joined. A batch that failed (the 502) is kept as the batch is,
+- **Cache:** an answer's BATCH is kept for 5 seconds (`SHARED_FOR_MS`), keyed on the contracts it
+  asked for and nothing else — the distinct codes, sorted (`contractsAsked`): not an entry, a side, a
+  quantity, nor how the legs are grouped into structures. Each request's answer is built afresh from
+  the batch, in its own order and at its own entries, so an agent trying entries for one candidate, or
+  regrouping its legs, spends one call. A batch still in flight is joined. A batch that failed (the 502) is kept as the batch is,
   so a Provider that is down is asked once per window, as ADR 0026's door does. A cached answer spends
-  nothing from the cap, and is the same answer, figures and `fetched_at` alike: everything time-bound in
-  it is reckoned at the instant the batch was fetched.
+  nothing from the cap, and carries the same figures and `fetched_at`: everything time-bound in it is
+  reckoned at the instant the batch was fetched.
 - **Cap:** at most `SPREAD_QUOTE_CALLS_PER_30S` Provider calls by this route in any 30 seconds, whoever
   asks. One more is **429** in the error shape, saying in whole seconds when the next is allowed. A
   failed call counts: it was made. At least 1 (`.env`'s guard refuses 0, which would be a 429 with no

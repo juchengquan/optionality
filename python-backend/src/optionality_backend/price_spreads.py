@@ -6,7 +6,7 @@ Three parts, in the order a request meets them:
   1. **The grammar** (`parse_spreads`): `<expiry>:<legs>[@<entry>]`, one per `spread=`, every refusal
      decided here, before anything leaves the machine.
   2. **The budget** (`SpreadPricer`): ONE Provider batch for every distinct leg of every structure,
-     shared for `SHARED_FOR_MS` by any request that normalises to the same one, and at most
+     shared for `SHARED_FOR_MS` by any request asking for the same contracts, and at most
      `spread_quote_calls_per_30s` of them in any 30 seconds whoever asks — the HTTP door and the MCP door
      reach this one instance through the one app, so they share both. A batch in flight is joined; a
      cached one spends nothing.
@@ -64,6 +64,7 @@ from optionality.quote import (
 )
 from optionality.timefmt import display_time
 
+from .create_spread import twice_over_words
 from .db.queries import priced_watch_samples_holding
 from .db.time import display_stored
 from .ports import QuoteFetcher
@@ -71,7 +72,7 @@ from .schemas.position import MAX_LEG_QTY
 from .schemas.spread import MAX_PROBE_LEGS
 from .watch_history import LAST_CLOSE_DAYS, LastClose, stored_leg_map
 
-#: How long a batch is shared by the requests that normalise to it (#452: "5-second shared cache"), the
+#: How long a batch is shared by the requests asking for its contracts (#452: "5-second shared cache"), the
 #: MCP door's `LIVE_FOR_MS` by another name, because here it is the route's.
 SHARED_FOR_MS = 5000
 #: The window `spread_quote_calls_per_30s` counts calls over.
@@ -119,7 +120,8 @@ def parse_spreads(given: list[str], now: datetime) -> list[Structure] | QuoteFau
     """The structures `given` asks for, or why not — every refusal before any Provider call (ADR 0027): no
     `spread`, a structure or a leg that is not the grammar, a quantity outside 1–10, an expiry before New
     York's market day (the sweep's own rule for an expired rule), more than `MAX_STRUCTURE_LEGS` in a
-    structure, more than `MAX_PROBE_LEGS` in all."""
+    structure, a contract named twice in one or held both short and long (`POST /spreads`' own refusals, in
+    its words), more than `MAX_PROBE_LEGS` in all."""
     if not given:
         return _refuse(f"give at least one spread: ?spread=<expiry>:<legs>, {_EXAMPLE}")
     today = market_date(now)
@@ -152,6 +154,9 @@ def parse_spreads(given: list[str], now: datetime) -> list[Structure] | QuoteFau
             )
         if len(legs) > MAX_STRUCTURE_LEGS:
             return _refuse(f"{which} has {len(legs)} legs: at most {MAX_STRUCTURE_LEGS} in a spread")
+        twice = twice_over_words(which, ((lg["side"], lg["option_type"], lg["strike"]) for lg in legs))
+        if twice is not None:
+            return _refuse(twice)
         if expiry < today:
             return _refuse(f"{which}: {date} has expired")
         out.append(Structure(expiry=expiry, legs=legs, entry=None if entry_text is None else float(entry_text)))
@@ -165,14 +170,12 @@ def _leg_code(expiry: str, leg: PricedLeg) -> str:
     return build_spx_code(expiry, leg["option_type"], leg["strike"])
 
 
-def normalised(structures: list[Structure]) -> str:
-    """The key a request is shared under: each structure's expiry, legs and entry in a fixed order, and the
-    structures in a fixed order — so the same structures asked another way round are one key."""
-    keys = []
-    for s in structures:
-        legs = ",".join(sorted(f"{lg['side']} {lg['option_type']} {lg['strike']} x{lg['qty']}" for lg in s.legs))
-        keys.append(f"{s.expiry} {legs} @{'' if s.entry is None else s.entry}")
-    return "|".join(sorted(keys))
+def contracts_asked(structures: list[Structure]) -> list[str]:
+    """Every contract a request asks the Provider for, each once and sorted: the batch it is, and the key that
+    batch is shared under (the owner's decision on #452). Nothing else is in the key — not an entry, a side, a
+    quantity, nor how the legs are grouped into structures — because each request's answer is built afresh
+    from the batch: the same contracts at another entry spend nothing."""
+    return sorted({_leg_code(s.expiry, lg) for s in structures for lg in s.legs})
 
 
 def _figure(value: object) -> float | None:
@@ -383,7 +386,7 @@ class SpreadPricer:
     """The budget and the cache, one per app: every caller of `GET /spreads/quote` shares them."""
 
     deps: PricerDeps
-    #: batches by normalised request, each until it is `SHARED_FOR_MS` old
+    #: batches by the contracts they asked for (`contracts_asked`), each until it is `SHARED_FOR_MS` old
     _shared: dict[str, _Reading] = field(default_factory=dict)
     #: when each Provider call was made, the oldest first, for as long as it counts
     _calls: list[int] = field(default_factory=list)
@@ -393,7 +396,8 @@ class SpreadPricer:
         structures = parse_spreads(given, now)
         if isinstance(structures, QuoteFault):
             return Priced(refused=structures)
-        key = normalised(structures)
+        codes = contracts_asked(structures)
+        key = ",".join(codes)
         t = _ms(now)
         # forget what can no longer be shared or counted; a clock that went BACK trusts nothing old
         for k, r in list(self._shared.items()):
@@ -414,7 +418,6 @@ class SpreadPricer:
                         429,
                     )
                 )
-            codes = sorted({_leg_code(s.expiry, lg) for s in structures for lg in s.legs})
             self._calls.append(t)
             task = asyncio.Task(self.deps.fetch_quotes(codes), loop=asyncio.get_running_loop(), eager_start=True)
             # a failure is shared like an answer, so a Provider that is down is asked once per window;
@@ -426,6 +429,5 @@ class SpreadPricer:
             batch = await asyncio.shield(reading.batch)
         except Exception as err:  # noqa: BLE001 — the TypeScript's bare catch: the route words it as the 502
             return Priced(failed=err)
-        codes = list(dict.fromkeys(_leg_code(s.expiry, lg) for s in structures for lg in s.legs))
         last_known = last_known_closes(self.deps.db, codes, self.deps.display_tz, reading.at)
         return Priced(answer=price_structures(structures, batch, reading.at, self.deps.display_tz, last_known))

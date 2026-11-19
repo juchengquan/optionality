@@ -2718,6 +2718,17 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/spreads/quote?spread=20261218%3A-C7300%2C%2BQ7350"),
   },
   {
+    // POST /spreads' own refusals, in its words (the owner's decision on #452)
+    name: "GET /spreads/quote refuses a contract named twice in one structure, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", "/spreads/quote?spread=20261218%3A-C7300%2C%2BC7350%2C-C7300"),
+  },
+  {
+    name: "GET /spreads/quote refuses a contract both short and long in one structure, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("GET", `/spreads/quote?spread=${QUOTE_PUTS}&spread=20261218%3A-C7300%2C%2BC7300`),
+  },
+  {
     // a strike past six digits is no SPX strike, and unbounded it built a code no Provider has
     name: "GET /spreads/quote refuses a strike of more than six digits, asking nothing",
     world: world({ provider: { quotes: BOOK } }),
@@ -2750,6 +2761,15 @@ export const HTTP: readonly HttpInput[] = [
     world: world({ provider: { quotes: PREMIUM_BOOK } }),
     earlier: [{ at: at(-3), request: request("GET", `/spreads/quote?spread=${QUOTE_CALLS}&spread=${QUOTE_PUTS}`) }],
     request: request("GET", `/spreads/quote?spread=${QUOTE_PUTS}&spread=20261218%3A%2BC7350%2C-C7300`),
+  },
+  {
+    // the batch is keyed on the contracts alone (the owner's decision on #452): the put spread at
+    // another entry, its legs as two structures beside it, is answered from the call 3s ago — the cap
+    // at 1 spent once — and each structure's payoff is drawn at its own entry
+    name: "GET /spreads/quote answers the same contracts at another entry from the same call, spending nothing",
+    world: world({ settings: { SPREAD_QUOTE_CALLS_PER_30S: "1" }, provider: { quotes: BOOK } }),
+    earlier: [{ at: at(-3), request: request("GET", `/spreads/quote?spread=${QUOTE_PUTS}%401.5`) }],
+    request: request("GET", `/spreads/quote?spread=${QUOTE_PUTS}%402&spread=20261218%3A-P6400&spread=20261218%3A%2BP6350`),
   },
   {
     // the cap at 2 calls in 30 seconds, both spent 10s and 20s ago on other structures: the next is

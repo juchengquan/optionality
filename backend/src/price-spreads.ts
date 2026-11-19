@@ -6,7 +6,7 @@
  *    1. **The grammar** (`parseSpreads`): `<expiry>:<legs>[@<entry>]`, one per `spread=`, every
  *       refusal decided here, before anything leaves the machine.
  *    2. **The budget** (`SpreadPricer`): ONE Provider batch for every distinct leg of every
- *       structure, shared for `SHARED_FOR_MS` by any request that normalises to the same one, and at
+ *       structure, shared for `SHARED_FOR_MS` by any request asking for the same contracts, and at
  *       most `spreadQuoteCallsPer30s` of them in any 30 seconds whoever asks — the HTTP door and the
  *       MCP door reach this one instance through the one app, so they share both. A batch in flight
  *       is joined; a cached one spends nothing.
@@ -31,13 +31,14 @@ import {
 } from "optionality/domain/quote";
 import { displayTime } from "optionality/domain/timefmt";
 import type { QuoteBatch, QuoteFetcher } from "optionality/quotes";
+import { twiceOverWords } from "./create-spread.ts";
 import { pricedWatchSamplesHolding } from "./db/queries/index.ts";
 import { displayStored } from "./db/time.ts";
 import { MAX_LEG_QTY } from "./schemas/position.ts";
 import { MAX_PROBE_LEGS } from "./schemas/spread.ts";
 import { LAST_CLOSE_DAYS, type LastClose, storedLegMap } from "./watch-history.ts";
 
-/** How long a batch is shared by the requests that normalise to it (#452: "5-second shared cache"),
+/** How long a batch is shared by the requests asking for its contracts (#452: "5-second shared cache"),
  *  the MCP door's `LIVE_FOR_MS` by another name, because here it is the route's. */
 export const SHARED_FOR_MS = 5000;
 /** The window `spreadQuoteCallsPer30s` counts calls over. */
@@ -76,9 +77,10 @@ const LEG = /^([-+ ])([CP])([1-9]\d{0,5})(?:x(\d+))?$/;
 const EXAMPLE = "e.g. ?spread=20261218:-P6800,%2BP6750";
 
 /** The structures `given` asks for, or why not — every refusal before any Provider call (ADR 0027):
- *  no `spread`, a structure or a leg that is not the grammar, a quantity outside 1–10, an expiry
- *  before New York's market day (the sweep's own rule for an expired rule), more than
- *  `MAX_STRUCTURE_LEGS` in a structure, more than `MAX_PROBE_LEGS` in all. */
+ *  no `spread`, a structure or a leg that is not the grammar, a quantity outside 1–10, more than
+ *  `MAX_STRUCTURE_LEGS` in a structure, a contract named twice in one or held both short and long
+ *  (`POST /spreads`' own refusals, in its words), an expiry before New York's market day (the
+ *  sweep's own rule for an expired rule), more than `MAX_PROBE_LEGS` in all. */
 export function parseSpreads(given: string[], now: Date): Structure[] | QuoteFault {
   if (given.length === 0) return refuse(`give at least one spread: ?spread=<expiry>:<legs>, ${EXAMPLE}`);
   const today = marketDate(now);
@@ -111,6 +113,8 @@ export function parseSpreads(given: string[], now: Date): Structure[] | QuoteFau
     if (legs.length > MAX_STRUCTURE_LEGS) {
       return refuse(`${which} has ${legs.length} legs: at most ${MAX_STRUCTURE_LEGS} in a spread`);
     }
+    const twice = twiceOverWords(which, legs);
+    if (twice !== null) return refuse(twice);
     if (expiry < today) return refuse(`${which}: ${date} has expired`);
     out.push({ expiry, legs, entry: entryText === undefined ? null : Number(entryText) });
   }
@@ -123,13 +127,12 @@ export function parseSpreads(given: string[], now: Date): Structure[] | QuoteFau
 
 const legCode = (expiry: string, l: PricedLeg) => buildSpxCode(expiry, l.option_type, l.strike);
 
-/** The key a request is shared under: each structure's expiry, legs and entry in a fixed order, and
- *  the structures in a fixed order — so the same structures asked another way round are one key. */
-export function normalised(structures: Structure[]): string {
-  return structures
-    .map((s) => `${s.expiry} ${s.legs.map((l) => `${l.side} ${l.option_type} ${l.strike} x${l.qty}`).sort().join(",")} @${s.entry ?? ""}`)
-    .sort()
-    .join("|");
+/** Every contract a request asks the Provider for, each once and sorted: the batch it is, and the key
+ *  that batch is shared under (the owner's decision on #452). Nothing else is in the key — not an
+ *  entry, a side, a quantity, nor how the legs are grouped into structures — because each request's
+ *  answer is built afresh from the batch: the same contracts at another entry spend nothing. */
+export function contractsAsked(structures: Structure[]): string[] {
+  return [...new Set(structures.flatMap((s) => s.legs.map((l) => legCode(s.expiry, l))))].sort();
 }
 
 /** One leg as answered: as asked, its code, the quote's figures, its mid by `midPrice`'s one rule,
@@ -309,7 +312,7 @@ export type Priced = { answer: SpreadsQuote } | { refused: QuoteFault } | { fail
 /** The budget and the cache, one per app: every caller of `GET /spreads/quote` shares them. */
 export class SpreadPricer {
   private readonly deps: PricerDeps;
-  /** batches by normalised request, each until it is `SHARED_FOR_MS` old */
+  /** batches by the contracts they asked for (`contractsAsked`), each until it is `SHARED_FOR_MS` old */
   private readonly shared = new Map<string, Reading>();
   /** when each Provider call was made, the oldest first, for as long as it counts */
   private readonly calls: number[] = [];
@@ -322,7 +325,8 @@ export class SpreadPricer {
     const now = this.deps.now();
     const structures = parseSpreads(given, now);
     if (!Array.isArray(structures)) return { refused: structures };
-    const key = normalised(structures);
+    const codes = contractsAsked(structures);
+    const key = codes.join(",");
     const t = now.getTime();
     // forget what can no longer be shared or counted; a clock that went BACK trusts nothing old
     for (const [k, r] of this.shared) {
@@ -340,7 +344,6 @@ export class SpreadPricer {
           refused: refuse(`spread quotes are capped at ${cap} Provider calls in 30 seconds: the next is allowed in ${wait}s`, 429),
         };
       }
-      const codes = [...new Set(structures.flatMap((s) => s.legs.map((l) => legCode(s.expiry, l))))].sort();
       this.calls.push(t);
       reading = { at: now, batch: this.deps.fetchQuotes(codes) };
       // a failure is shared like an answer, so a Provider that is down is asked once per window;
@@ -354,7 +357,6 @@ export class SpreadPricer {
     } catch (err) {
       return { failed: err };
     }
-    const codes = [...new Set(structures.flatMap((s) => s.legs.map((l) => legCode(s.expiry, l))))];
     const lastKnown = lastKnownCloses(this.deps.db, codes, this.deps.displayTz, reading.at);
     return { answer: priceStructures(structures, batch, reading.at, this.deps.displayTz, lastKnown) };
   }
