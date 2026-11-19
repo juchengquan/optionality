@@ -125,7 +125,11 @@ Python; the query URI-encoded), then GETs `/spreads/quote`. Every other refusal 
 returned as a tool error in the route's words, so the rules are said once. **The door does not cache
 it** (`"cached_by": "route"` in the table): the route already shares its batch, and a second 5s cache in
 front would serve a batch up to ten seconds old. The answer is `{source, read_at, data}` as for every
-tool; `data.fetched_at` is when the prices were read.
+tool; `data.fetched_at` is when the prices were read. Since 2026-11-19 (#454, ADR 0026's amendment of that
+date) `data` is the route's body with its figures ROUNDED by key, as every tool's are: the legs' prices,
+`value`, `natural`, `spx`, the short strikes' points and the payoff to 2 decimals, Δ Θ ν and IV to 4, Γ to
+6 — a spread's gamma is about −0.00004 and would read 0 at four — and `sigma` to 4. The route itself still
+serves them unrounded.
 
 **Door scenarios** hold every status, both doors and both backends. A scenario may now state
 **`earlier`** requests — each with its instant, run through the same app before the event, their answers

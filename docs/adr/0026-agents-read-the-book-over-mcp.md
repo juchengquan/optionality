@@ -10,6 +10,9 @@ histories take a name. Both backends carry it, in lockstep (ADR 0021).
 Decision 5, "no tool prices an arbitrary contract", is **superseded by ADR 0027** (2026-11-19): the
 `price_spreads` tool prices any SPX structure through a bounded, capped call of its own.
 
+**Amended 2026-11-19** (#454, below): a tool's `data` is its GET's body with its figures rounded by
+key; "that GET's body" and "The text is canonical" are read with that amendment.
+
 ## Context
 
 Agents — Claude Code and any other MCP client — should be able to read optionality's data, not only
@@ -90,7 +93,8 @@ in words an agent can correct from — the service's own `detail` for a refused 
 `^[A-Za-z0-9_-]{1,64}$` before any path is built from it (since the amendment below, the RESOLVED id). A request with an `Origin` is refused 403:
 only a browser sends one, and the transport asks a server to refuse it against DNS rebinding.
 
-**The text is canonical**: an answer is written with every object's keys sorted, no whitespace, and
+**The text is canonical** (its figures rounded first, since the amendment of 2026-11-19): an answer is
+written with every object's keys sorted, no whitespace, and
 numbers as JavaScript writes them (`js_string` in the Python), because the scenarios compare the TEXT,
 and the two backends build their bodies in their own key order.
 
@@ -138,6 +142,42 @@ counts it (the Python matches against that view of the string, so a character be
 in both). Neither tool is live, so neither is cached: each call reads the list afresh. Door scenarios hold
 every road in both backends: by id, by combo name, by contract code, by the page's spelling, by a
 holding's name and a closed holding's, an ambiguous contract, no match, a path-like name and a refused one.
+
+## Amendment, 2026-11-19: the figures are rounded
+
+The owner's decision on #454. An agent read `"value":-4.100000000000001` for a spread and
+`0.014551340999999995` for its delta: float noise from summing legs, which the API serves as computed.
+**The MCP door now rounds its answers' figures** — in this door only: the HTTP API, the dashboard, the bot
+and the routes' door scenarios keep the unrounded figures, and nothing a figure IS changes.
+
+- **By key, per tool, from shared ground.** Each tool in `schema/mcp/server.json` carries a `round`
+  table: `keys` (a key and its places, for a number under it or each number in a list under it, as
+  `breakevens`), `maps` (a key whose value is a map of a leg's readings by contract code, and the places
+  of its every value) and `by_field` (the keys of a rule's own figures). `rounding.by_field` gives those
+  by the rule's `field`. Both backends read the one table and walk the body by one rule (`byKey`,
+  `by_key`): a number takes the places of the key directly above it, and an object starts afresh. A key
+  no table names is never rounded.
+- **What to.** Prices in points, money and SPX levels — every quote's prices, `value`, `natural`,
+  `combo_value`, `cost_to_close`, `entry`, `exit`, the schedule's costs, `realized_points`, a history's
+  `price`, `pnl`, the payoff, `spx`, `breakevens`, the short strikes' `points` and `one_sigma`, a
+  Reference's `figure` — to **2**. `option_delta`, `option_theta`, `option_vega` and
+  `option_implied_volatility` wherever they appear, a short strike's `delta`, and every value in a
+  `legs_delta`, `legs_vega` or `legs_iv` map (the holdings' included, the owner's ruling in the build) to
+  **4**. `option_gamma` to **6**, because a spread's gamma (about −0.00004) reads 0 at four. The other
+  fractions — `sigma`, `captured`, a Reference's `change`, a rule's `fill` — to **4**. A rule's `watched`,
+  `threshold` and `distance` by its `field`: 2 for `mid_price`, 6 for `option_gamma`, 4 for every other
+  Greek and IV; a history's `price_rule.threshold` is a price rule's, so 2. Never: ids, counts, `dte`,
+  `qty`, `strike`, `contracts`, contract sizes, the payoff's slopes, `delayed_by_minutes`, the health
+  settings and times.
+- **How.** Half away from zero on the value the double HOLDS, to a JSON number: JavaScript's `toFixed`,
+  which the Python reproduces as `optionality.js.to_fixed` and never `round()` (half to even). So 0.125
+  is 0.13, and 2.675 — stored as 2.67499… — is 2.67 (the owner's ruling in the build). A zero rounded
+  from a negative is written 0, never -0. Null stays null; a figure already short is unchanged. Held to
+  one set of cases in both languages, `testdata/mcp/rounding.json`.
+- **A tool error's text is not rounded**: it is the service's own words.
+- **The text is still canonical**, as above, written from the rounded body. A test in each language
+  walks every `POST /mcp` scenario's `data` and fails on a non-integer number under a key no table names,
+  or one not rounded to its key's places.
 
 ## Consequences
 

@@ -20,7 +20,15 @@ from urllib.parse import quote
 import pytest
 from harness import json_body, priced_fetcher
 
-from optionality_backend.entrypoints.mcp.tools import DESCRIBED, LIVE_FOR_MS, Toolbox, canonical
+from optionality_backend.entrypoints.mcp.tools import (
+    DESCRIBED,
+    LIVE_FOR_MS,
+    Toolbox,
+    by_key,
+    canonical,
+    round_to,
+    rounded,
+)
 
 EXPIRY = "2026-12-18"
 CONDOR = {
@@ -296,7 +304,8 @@ class TestTheTools:
             assert answer["isError"] is False, f"{name}: {answer['text']}"
             direct = await m.h.call(path)
             assert direct.status_code == 200, path
-            assert answer["data"] == direct.json(), name
+            # the body as the GET serves it, each figure rounded by its key (#454) and nothing else
+            assert answer["data"] == rounded(direct.json(), _table(name)), name
             assert answer["source"] == f"GET {path}"
             assert answer["read_at"] == "2026-10-02 13:26:06+08:00"
 
@@ -403,7 +412,7 @@ class TestPriceSpreadsPricesAnyStructureThroughGetSpreadsQuote:
         )
         assert answer["source"] == f"GET {path}"
         assert len(m.asked) == 1
-        assert answer["data"] == (await m.h.call(path)).json()
+        assert answer["data"] == rounded((await m.h.call(path)).json(), _table("price_spreads"))
         # the harness's quotes carry a mid and no sides, which is no two-sided quote: a shape, then the entry
         assert [s["payoff_basis"] for s in answer["data"]["spreads"]] == ["shape", "entry"]
 
@@ -728,6 +737,110 @@ class TestTheDoorsReach:
             "typing",
             "urllib.parse",
         }
+
+
+def _table(name: str) -> dict[str, Any]:
+    return next(t for t in DESCRIBED["tools"] if t["name"] == name)["round"]
+
+
+_REPO = Path(__file__).resolve().parents[4]
+
+
+class TestFiguresAreRoundedByKeyPerTool:
+    """#454: the MCP door rounds its answers' figures by key, by the table in `schema/mcp/server.json`."""
+
+    SHARED: ClassVar[dict[str, Any]] = json.loads((_REPO / "testdata" / "mcp" / "rounding.json").read_text("utf-8"))
+
+    def test_half_away_from_zero_on_the_stored_value_to_a_number_minus_0_written_0_the_cases_both_backends_hold(self):
+        assert len(self.SHARED["cases"]) > 20
+        for value, places, text in self.SHARED["cases"]:
+            r = round_to(value, places)
+            assert isinstance(r, float | int) and not isinstance(r, bool)
+            assert canonical(r) == text, f"{value} to {places}"
+            assert str(r) != "-0.0", f"{value} to {places}"
+
+    def test_round_a_figure_by_its_key_the_numbers_of_a_list_under_it_a_map_s_every_value_and_a_rule_s_by_its_field(
+        self,
+    ):
+        table = {
+            "keys": {"value": 2, "breakevens": 2, "sigma": 4},
+            "maps": {"legs_delta": 4},
+            "by_field": ["watched", "threshold"],
+        }
+        data = {
+            "value": -4.100000000000001,
+            "sigma": 1.234567,
+            "strike": 6800.5,
+            "dte": 39,
+            "error": "3.14159",
+            "nothing": None,
+            "flag": True,
+            "breakevens": [6301.456, 6398.555],
+            "legs_delta": {"US.SPXW261218P6800000": -0.234567, "US.SPXW261218P6750000": None},
+            # an object in a list does not inherit its list's key
+            "payoff": [{"value": 1.005, "other": 1.23456789}],
+            "rows": [
+                {
+                    "field": "mid_price",
+                    "watched": -1.1000000000000003,
+                    "threshold": 4.125,
+                    "distance": 3.0249999999999995,
+                },
+                {"field": "option_gamma", "watched": -0.0000403, "threshold": 0.00012},
+                {"field": "option_delta", "watched": 0.123456789, "threshold": 0.31234},
+                {"field": "something_else", "watched": 0.123456789},
+                {"watched": 0.123456789},
+            ],
+            "constructor": 1.23456789,
+            "toString": 2.3456789,
+        }
+        assert rounded(data, table) == {
+            "value": -4.1,
+            "sigma": 1.2346,
+            "strike": 6800.5,
+            "dte": 39,
+            "error": "3.14159",
+            "nothing": None,
+            "flag": True,
+            "breakevens": [6301.46, 6398.56],
+            "legs_delta": {"US.SPXW261218P6800000": -0.2346, "US.SPXW261218P6750000": None},
+            "payoff": [{"value": 1, "other": 1.23456789}],
+            "rows": [
+                {"field": "mid_price", "watched": -1.1, "threshold": 4.13, "distance": 3.0249999999999995},
+                {"field": "option_gamma", "watched": -0.00004, "threshold": 0.00012},
+                {"field": "option_delta", "watched": 0.1235, "threshold": 0.3123},
+                {"field": "something_else", "watched": 0.123456789},
+                {"watched": 0.123456789},
+            ],
+            "constructor": 1.23456789,
+            "toString": 2.3456789,
+        }
+        # a bool is not a number, as `typeof` says, even under a key the table names
+        assert rounded({"value": True}, table) == {"value": True}
+
+    def test_leave_no_figure_in_any_mcp_scenario_s_answer_under_a_key_the_table_does_not_name_nor_unrounded_under_one_it_does(
+        self,
+    ):
+        walked = 0
+        for file in sorted((_REPO / "testdata" / "scenarios" / "http").glob("post-mcp-*.json")):
+            scenario = json.loads(file.read_text("utf-8"))
+            body = scenario["request"].get("body") or {}
+            result = (scenario["expect"]["response"].get("body") or {}).get("result")
+            if body.get("method") != "tools/call" or result is None or result.get("isError"):
+                continue
+
+            def figure(value: float, places: int | None, file: Path = file) -> float:
+                nonlocal walked
+                walked += 1
+                if places is None:
+                    assert float(value).is_integer(), f"{file.name}: {value} is under no key the table names"
+                else:
+                    assert round_to(value, places) == value, f"{file.name}: {value} is not rounded to {places}"
+                return value
+
+            by_key(json.loads(result["content"][0]["text"])["data"], _table(body["params"]["name"]), figure)
+        # what it walked, so a walk of nothing cannot pass
+        assert walked > 200
 
 
 class TestWhatOnlyThePythonCanGetWrong:

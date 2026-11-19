@@ -103,7 +103,7 @@
           "content": [
             {
               "type": "text",
-              "text": "{\"data\":[{\"id\":\"mon-2\",\"last_close\":{\"observed_at\":\"2026-11-07 05:14:00+08:00\",\"observed_on\":\"2026-11-06\",\"price\":-1.0500000000000003,\"timing\":\"close\"}}],\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /monitors/closes\"}"
+              "text": "{\"data\":[{\"id\":\"mon-2\",\"last_close\":{\"observed_at\":\"2026-11-07 05:14:00+08:00\",\"observed_on\":\"2026-11-06\",\"price\":-1.05,\"timing\":\"close\"}}],\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /monitors/closes\"}"
             }
           ]
         }

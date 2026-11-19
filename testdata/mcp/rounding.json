@@ -1,0 +1,30 @@
+{
+  "about": "How the MCP door rounds a figure (#454, ADR 0026 as amended 2026-11-19), held to the same cases in both backends: `backend/src/entrypoints/mcp/server.test.ts` and `python-backend/tests/entrypoints/mcp/test_server.py`. Written by hand, never generated. Each case is [the figure, the decimal places, the text the answer writes]. Half away from zero on the STORED BINARY value, as JavaScript's toFixed rounds and optionality.js's to_fixed reproduces (the owner's decision on #454): an exact half goes away from zero, where Python's round() would go to the even neighbour, and a figure stored a shade below a half goes down whatever its shortest decimal says. A zero rounded from a negative is written 0, never -0. The result is a JSON number, never a string, with no trailing zeros.",
+  "cases": [
+    [-4.100000000000001, 2, "-4.1"],
+    [0.014551340999999995, 4, "0.0146"],
+    [0.0145513, 4, "0.0146"],
+    [0.125, 2, "0.13"],
+    [-0.125, 2, "-0.13"],
+    [0.375, 2, "0.38"],
+    [2.675, 2, "2.67"],
+    [1.005, 2, "1"],
+    [0.00005, 4, "0.0001"],
+    [-0.0000403, 6, "-0.00004"],
+    [-0.000040300000000000004, 6, "-0.00004"],
+    [-0.0000403, 4, "0"],
+    [-0.001, 2, "0"],
+    [-0.0, 2, "0"],
+    [0, 4, "0"],
+    [0.21, 4, "0.21"],
+    [0.00012, 6, "0.00012"],
+    [315, 2, "315"],
+    [-49, 2, "-49"],
+    [6.245760466870613, 2, "6.25"],
+    [-1.6328667870116522, 2, "-1.63"],
+    [0.49218750000000006, 4, "0.4922"],
+    [3.0249999999999995, 2, "3.02"],
+    [6900.455, 2, "6900.45"],
+    [1e21, 2, "1e+21"]
+  ]
+}

@@ -340,7 +340,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   HTTP server by `main.ts`, which hands `createApp(deps, { mcp })` the factory and gets back a
   `Read` — a GET of the app's OWN, the caller's Authorization passed on. That is the door's whole
   reach: no service, query or engine is imported (`server.test.ts` holds its imports), so a tool
-  cannot write, cannot compute a figure, and its answer's `data` IS the GET's body. Nine tools
+  cannot write, cannot compute a figure, and its answer's `data` IS the GET's body — its figures
+  ROUNDED by key, the one change the door makes (#454: prices, P&L and SPX levels to 2 decimals,
+  Δ Θ ν and IV to 4, Γ to 6, by each tool's `round` in `server.json`; `byKey`, held to
+  `testdata/mcp/rounding.json` in both languages; the HTTP API keeps them raw). Nine tools
   (`tools.ts`), each one GET: `holdings` (`/positions/values`), `watchlist` (`/quotes`),
   `positions` (`/positions`, closed trades included), `holding_history`, `monitor_history`,
   `monitor_closes`, `references`, `price_spreads` (`/spreads/quote`, ADR 0027: any SPX structure,
@@ -353,7 +356,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   refusal shared too — the page and the sweep never pass through it. The fourth, `price_spreads`,
   is `"cached_by": "route"`: its route already shares its batch and caps its calls, so the door
   reads it afresh rather than holding a second window. The table — names,
-  descriptions, input schemas, which are live — is shared ground, `schema/mcp/server.json`. Behind
+  descriptions, input schemas, which are live, how each rounds — is shared ground, `schema/mcp/server.json`. Behind
   the token like every route; not in `/openapi.json` (one JSON-RPC endpoint), so `hc.types.ts`
   is untouched. **Connect**: the tailnet already maps `/opt/api` to the API with the prefix
   stripped, so it is `https://<tailnet-host>/opt/api/mcp` with NO change

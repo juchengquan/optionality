@@ -1,0 +1,120 @@
+{
+  "name": "POST /mcp writes a spread's figures rounded, its gamma to six places",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {
+        "US.SPXW261218P6750000": {
+          "name": "SPXW 261218 6750P",
+          "mid_price": 6,
+          "bid_price": 5.95,
+          "ask_price": 6.05,
+          "last_price": 6,
+          "option_delta": -0.2012345,
+          "option_gamma": 0.00041,
+          "option_theta": -1.1111111,
+          "option_vega": 9.1234567,
+          "option_implied_volatility": 19.654321,
+          "option_contract_size": 100
+        },
+        "US.SPXW261218P6800000": {
+          "name": "SPXW 261218 6800P",
+          "mid_price": 10.1,
+          "bid_price": 10.05,
+          "ask_price": 10.15,
+          "last_price": 10.1,
+          "option_delta": -0.2345678,
+          "option_gamma": 0.0004503,
+          "option_theta": -1.2345678,
+          "option_vega": 9.8765432,
+          "option_implied_volatility": 18.123456,
+          "option_contract_size": 100
+        }
+      }
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "price_spreads",
+        "arguments": {
+          "structures": [
+            {
+              "expiry": "20261218",
+              "legs": [
+                {
+                  "side": "short",
+                  "option_type": "PUT",
+                  "strike": 6800
+                },
+                {
+                  "side": "long",
+                  "option_type": "PUT",
+                  "strike": 6750
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"data\":{\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"phase\":\"regular\",\"spreads\":[{\"dte\":39,\"entry\":null,\"error\":null,\"expiry\":\"2026-12-18\",\"greeks\":{\"option_delta\":0.0333,\"option_gamma\":-0.00004,\"option_theta\":0.1235,\"option_vega\":-0.7531},\"legs\":[{\"ask_price\":10.15,\"bid_price\":10.05,\"code\":\"US.SPXW261218P6800000\",\"error\":null,\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"last_known\":null,\"mid_price\":10.1,\"option_contract_size\":100,\"option_delta\":-0.2346,\"option_gamma\":0.00045,\"option_implied_volatility\":18.1235,\"option_theta\":-1.2346,\"option_type\":\"PUT\",\"option_vega\":9.8765,\"qty\":1,\"side\":\"short\",\"strike\":6800},{\"ask_price\":6.05,\"bid_price\":5.95,\"code\":\"US.SPXW261218P6750000\",\"error\":null,\"fetched_at\":\"2026-11-09 23:00:00+08:00\",\"last_known\":null,\"mid_price\":6,\"option_contract_size\":100,\"option_delta\":-0.2012,\"option_gamma\":0.00041,\"option_implied_volatility\":19.6543,\"option_theta\":-1.1111,\"option_type\":\"PUT\",\"option_vega\":9.1235,\"qty\":1,\"side\":\"long\",\"strike\":6750}],\"natural\":{\"ask\":-4,\"bid\":-4.2},\"payoff\":{\"at_strikes\":[{\"pnl\":-45.9,\"spx\":6750},{\"pnl\":4.1,\"spx\":6800}],\"breakevens\":[6795.9],\"max_loss\":-45.9,\"max_profit\":4.1,\"slope_above\":0,\"slope_below\":0},\"payoff_basis\":\"mid\",\"short_strikes\":[{\"code\":\"US.SPXW261218P6800000\",\"delta\":-0.2346,\"one_sigma\":null,\"option_type\":\"PUT\",\"points\":null,\"sigma\":null,\"strike\":6800}],\"spx\":null,\"spx_reason\":\"the Provider gives no option premium to derive it from\",\"value\":-4.1}]},\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"GET /spreads/quote?spread=20261218%3A-P6800%2C%2BP6750\"}"
+            }
+          ]
+        }
+      }
+    },
+    "rows": {},
+    "calls": {
+      "moomoo": [
+        [
+          "US.SPXW261218P6750000",
+          "US.SPXW261218P6800000"
+        ]
+      ]
+    }
+  }
+}
