@@ -69,7 +69,7 @@ export function valid<T extends ZodType, Target extends keyof ValidationTargets>
 
 /** The Content-Types Hono's json validator reads a body for (`jsonRegex` in hono/validator, which
  *  it does not export): the body is primed for exactly these and no others. */
-const JSON_TYPE = /^application\/([a-z-\.]+\+)?json(;\s*[a-zA-Z0-9\-]+\=([^;]+))*$/i;
+export const JSON_TYPE = /^application\/([a-z-\.]+\+)?json(;\s*[a-zA-Z0-9\-]+\=([^;]+))*$/i;
 
 /** A request body's bytes as text: UTF-8, exactly one leading BOM ignored (the Encoding spec's
  *  decode), malformed sequences replaced — as the Python's `body.decode("utf-8-sig", "replace")`. */
