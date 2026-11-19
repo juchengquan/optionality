@@ -1395,6 +1395,76 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
       });
     });
 
+    describe("a number too large for a double (review of #459)", () => {
+      it("is no number: a tool error in the door's words, as the Python says it, writing nothing", async () => {
+        booking();
+        const HUGE = "1".repeat(400);
+        // written by hand, as JSON.stringify cannot write the digits an agent may send
+        const raw = async (name: string, args: string) => {
+          const text = `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"${name}","arguments":${args}}}`;
+          const r = await result(await h.call("/mcp", { method: "POST", body: text, headers: { "Content-Type": "application/json" } }));
+          return { isError: r.isError === true, text: r.content[0].text as string };
+        };
+        const holding = (key: string) => JSON.stringify({ ...PUT_HOLDING, [key]: 0 }).replace(`"${key}":0`, `"${key}":${HUGE}`);
+        for (const [name, args, words] of [
+          ["record_holding", holding("entry"), '"entry" must be a number'],
+          ["record_holding", holding("contracts"), '"contracts" must be a number'],
+          ["record_holding", JSON.stringify({ ...PUT_HOLDING, legs: [] }).replace('"legs":[]', `"legs":[{"side":"short","option_type":"PUT","strike":${HUGE}}]`),
+            "legs[0].strike must be a number"],
+          ["record_holding", JSON.stringify({ ...PUT_HOLDING, legs: [] }).replace('"legs":[]', `"legs":[{"side":"short","option_type":"PUT","strike":7100,"qty":${HUGE}}]`),
+            "legs[0].qty must be a number"],
+          ["add_rule", JSON.stringify(PUT_SPREAD).replace('"threshold":3', `"threshold":${HUGE}`), '"threshold" must be a number'],
+          ["correct_close", `{"id":"x","exit":${HUGE}}`, '"exit" must be a number'],
+        ] as const) {
+          expect(await raw(name, args), `${name} ${words}`).toEqual({ isError: true, text: words });
+        }
+        expect(await holdings()).toEqual([]);
+        expect(asked).toEqual([]);
+        // and its log line writes the number as JSON.stringify writes Infinity, as the Python does
+        const said = await logged(() => raw("correct_close", `{"id":"x","exit":${HUGE}}`));
+        expect(said).toEqual(['mcp correct_close {"exit":null,"id":"x"}: refused by the door: "exit" must be a number']);
+      });
+    });
+
+    describe("the read after a record (review of #459)", () => {
+      const recordWith = async (monitors: () => Promise<{ status: number; body: string }>) => {
+        const sent: string[] = [];
+        const serve = mcpServer({
+          read: (path) => (path === "/monitors" ? monitors() : Promise.resolve({ status: 200, body: "[]" })),
+          write: async (_method, _path, payload) =>
+            ({ status: 201, body: JSON.stringify({ id: "pos-9", ...(payload as object), strike_date: EXPIRY, exit: null, closed_on: null }) }),
+          notify: async (text) => { sent.push(text); return "sent"; },
+          now: () => new Date("2026-10-02T05:26:06Z"), displayTz: "UTC",
+          writes: true, writesPositions: true, writesPer10Min: 10,
+        });
+        let answer: { result: { isError?: boolean; content: { text: string }[] } } | undefined;
+        const said = await logged(async () => {
+          const resp = await serve(new Request("http://x/mcp", {
+            method: "POST",
+            body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "record_holding", arguments: PUT_HOLDING } }),
+          }));
+          answer = await resp.json();
+        });
+        return { answer: answer!, sent, line: said.find((l) => l.startsWith("mcp record_holding"))! };
+      };
+
+      it("names no rule where GET /monitors throws, answers non-JSON or no list, and the write stands, said in the log", async () => {
+        for (const [monitors, why] of [
+          [() => Promise.reject(new Error("socket hang up")), "GET /monitors failed: socket hang up"],
+          [() => Promise.resolve({ status: 200, body: "<html>" }), "GET /monitors answered 200 with no list of rules"],
+          [() => Promise.resolve({ status: 200, body: "{\"a\":1}" }), "GET /monitors answered 200 with no list of rules"],
+          [() => Promise.resolve({ status: 200, body: "[null, 5]" }), null],
+          [() => Promise.resolve({ status: 500, body: "{}" }), "GET /monitors answered 500"],
+        ] as const) {
+          const { answer, sent, line } = await recordWith(monitors);
+          expect(answer.result.isError, `${why}: ${answer.result.content[0]!.text}`).toBeUndefined();
+          expect(JSON.parse(answer.result.content[0]!.text).source).toBe("POST /positions");
+          expect(sent).toEqual(["🤖 agent recorded oct-puts 20261218 −P7100 +P7075 ×2 @ 1.25, opened 20261002"]);
+          expect(line).toBe(`mcp record_holding ${canonical(PUT_HOLDING)}: POST /positions answered 201: holding pos-9, notice sent${why === null ? "" : `; its rules not named: ${why}`}`);
+        }
+      });
+    });
+
     describe("the cap, shared", () => {
       it("counts rule and book writes together: 6 add_rule and 4 record_holding, then the 11th of either is refused with the wait", async () => {
         booking();

@@ -134,7 +134,11 @@ def canonical(value: Any) -> str:
     if value is None or value is True or value is False:
         return json.dumps(value)
     if isinstance(value, int | float):
-        number = float(value)
+        try:
+            number = float(value)
+        except OverflowError:
+            # an integer too large for a double, which `JSON.parse` read as Infinity (review of #459)
+            number = math.inf
         # JSON.stringify writes what JSON cannot hold as null
         return js_string(number) if math.isfinite(number) else "null"
     if isinstance(value, str):
@@ -242,8 +246,15 @@ class _Fault(Exception):
 
 
 def _is_number(value: object) -> bool:
-    """A finite JSON number, as `typeof value === "number" && Number.isFinite(value)`: a bool is not one."""
-    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(float(value))
+    """A finite JSON number, as `typeof value === "number" && Number.isFinite(value)`: a bool is not one. An
+    integer too large for a double is not one either: `JSON.parse` reads 400 digits as Infinity, where Python
+    keeps the integer and `float` raises (review of #459)."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        return False
 
 
 def _keys_fault(value: dict[str, Any], at: str, noun: str, keys: list[str], required: list[str]) -> str | None:

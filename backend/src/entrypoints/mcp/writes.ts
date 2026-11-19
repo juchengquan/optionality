@@ -311,14 +311,27 @@ export function writer(options: WriterOptions) {
   };
 
   /** The rules the route linked to a holding it has just recorded, read back from `GET /monitors` (a
-   *  read, never counted): what the record's notice names as taken over. A read that fails names none,
-   *  and the log says so; the write stands. */
+   *  read, never counted): what the record's notice names as taken over. A read that fails — refused,
+   *  thrown, or answered with no list (review of #459) — names none, and the log says so; the write has
+   *  been made, and it stands. */
   const takenBy = async (id: string, authorization: string | null): Promise<{ taken: AgentRule[]; also?: string }> => {
-    const { status, body } = await read("/monitors", authorization);
-    if (status !== 200) return { taken: [], also: `; its rules not named: GET /monitors answered ${status}` };
-    const rows = JSON.parse(body) as Record<string, unknown>[];
-    const linked = rows.filter((r) => Array.isArray(r.positions)
-      && (r.positions as { id?: unknown }[]).some((p) => p?.id === id));
+    const unnamed = (why: string) => ({ taken: [], also: `; its rules not named: ${why}` });
+    let answer: { status: number; body: string };
+    try {
+      answer = await read("/monitors", authorization);
+    } catch (err) {
+      return unnamed(`GET /monitors failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (answer.status !== 200) return unnamed(`GET /monitors answered ${answer.status}`);
+    let rows: unknown;
+    try {
+      rows = JSON.parse(answer.body);
+    } catch {
+      rows = null;
+    }
+    if (!Array.isArray(rows)) return unnamed("GET /monitors answered 200 with no list of rules");
+    const linked = rows.filter(isObject).filter((r) => Array.isArray(r.positions)
+      && (r.positions as unknown[]).some((p) => isObject(p) && p.id === id));
     return { taken: linked.map(agentRule) };
   };
 

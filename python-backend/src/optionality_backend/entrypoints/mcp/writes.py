@@ -456,15 +456,30 @@ class Writer:
 
     async def _taken_by(self, id_: str, authorization: str | None) -> tuple[list[AgentRule], str]:
         """The rules the route linked to a holding it has just recorded, read back from `GET /monitors` (a read,
-        never counted): what the record's notice names as taken over. A read that fails names none, and the log
-        says so; the write stands."""
-        status, body = await self._read("/monitors", authorization)
+        never counted): what the record's notice names as taken over. A read that fails — refused, raised, or
+        answered with no list (review of #459) — names none, and the log says so; the write has been made, and it
+        stands."""
+
+        def unnamed(why: str) -> tuple[list[AgentRule], str]:
+            return [], f"; its rules not named: {why}"
+
+        try:
+            status, body = await self._read("/monitors", authorization)
+        except Exception as err:  # noqa: BLE001 — any failure of the read is said, and the write stands
+            return unnamed(f"GET /monitors failed: {err}")
         if status != 200:
-            return [], f"; its rules not named: GET /monitors answered {status}"
+            return unnamed(f"GET /monitors answered {status}")
+        try:
+            rows = json.loads(body)
+        except ValueError:
+            rows = None
+        if not isinstance(rows, list):
+            return unnamed("GET /monitors answered 200 with no list of rules")
         linked = [
             row
-            for row in json.loads(body)
-            if isinstance(row.get("positions"), list)
+            for row in rows
+            if isinstance(row, dict)
+            and isinstance(row.get("positions"), list)
             and any(isinstance(p, dict) and p.get("id") == id_ for p in row["positions"])
         ]
         return [_agent_rule(row) for row in linked], ""

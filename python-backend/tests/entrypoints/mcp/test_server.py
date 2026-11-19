@@ -1632,6 +1632,129 @@ class TestCorrectClose:
         ]
 
 
+class TestANumberTooLargeForADouble:
+    """Review of #459: 400 digits are no number, a tool error in the door's words, as the TypeScript says it."""
+
+    async def test_is_no_number_a_tool_error_in_the_door_s_words_writing_nothing(self, booking):
+        w = booking()
+        huge = "1" * 400
+
+        def holding(key: str) -> str:
+            return json.dumps({**PUT_HOLDING, key: 0}).replace(f'"{key}": 0', f'"{key}": {huge}')
+
+        def legs(leg: str) -> str:
+            return json.dumps({**PUT_HOLDING, "legs": []}).replace('"legs": []', f'"legs": [{leg}]')
+
+        for name, args, words in [
+            ("record_holding", holding("entry"), '"entry" must be a number'),
+            ("record_holding", holding("contracts"), '"contracts" must be a number'),
+            (
+                "record_holding",
+                legs(f'{{"side":"short","option_type":"PUT","strike":{huge}}}'),
+                "legs[0].strike must be a number",
+            ),
+            (
+                "record_holding",
+                legs(f'{{"side":"short","option_type":"PUT","strike":7100,"qty":{huge}}}'),
+                "legs[0].qty must be a number",
+            ),
+            (
+                "add_rule",
+                json.dumps(PUT_SPREAD).replace('"threshold": 3', f'"threshold": {huge}'),
+                '"threshold" must be a number',
+            ),
+            ("correct_close", f'{{"id":"x","exit":{huge}}}', '"exit" must be a number'),
+        ]:
+            text = f'{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{name}","arguments":{args}}}}}'
+            resp = await w.h.call("/mcp", method="POST", content=text, headers={"Content-Type": "application/json"})
+            r = await w.result(resp)
+            assert (r.get("isError"), r["content"][0]["text"]) == (True, words), (name, words)
+        assert await _holdings(w) == []
+        assert w.asked == []
+
+    async def test_writes_it_in_the_log_as_json_stringify_writes_infinity(self, booking, caplog):
+        w = booking()
+        text = '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"correct_close","arguments":'
+        text += f'{{"id":"x","exit":{"1" * 400}}}}}}}'
+        with caplog.at_level(logging.INFO, logger=WRITES_LOG):
+            await w.h.call("/mcp", method="POST", content=text, headers={"Content-Type": "application/json"})
+        assert [r.getMessage() for r in caplog.records if r.name == WRITES_LOG] == [
+            'mcp correct_close {"exit":null,"id":"x"}: refused by the door: "exit" must be a number'
+        ]
+
+
+class TestTheReadAfterARecord:
+    """Review of #459: the post-write read of GET /monitors names no rule where it fails, and the write stands."""
+
+    async def _record_with(self, monitors, caplog):
+        sent: list[str] = []
+
+        async def read(path, authorization):
+            return await monitors() if path == "/monitors" else (200, "[]")
+
+        async def write(method, path, body, authorization):
+            return 201, json.dumps({"id": "pos-9", **body, "strike_date": EXPIRY, "exit": None, "closed_on": None})
+
+        async def notify(text):
+            sent.append(text)
+            return "sent"
+
+        serve = mcp_server(
+            McpOptions(
+                read=read,
+                write=write,
+                notify=notify,
+                now=lambda: datetime(2026, 10, 2, 5, 26, 6, tzinfo=UTC),
+                display_tz="UTC",
+                writes=True,
+                writes_positions=True,
+                writes_per_10_min=10,
+            )
+        )
+        app = Starlette(routes=[Route("/mcp", serve, methods=["POST"])])
+        message = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": "record_holding", "arguments": PUT_HOLDING},
+        }
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger=WRITES_LOG):
+            async with httpx2.AsyncClient(transport=httpx2.ASGITransport(app=app), base_url="http://x") as client:
+                answer = (await client.post("/mcp", content=json.dumps(message))).json()
+        line = next(r.getMessage() for r in caplog.records if r.name == WRITES_LOG)
+        return answer, sent, line
+
+    async def test_names_no_rule_where_get_monitors_throws_answers_non_json_or_no_list_and_the_write_stands(
+        self, caplog
+    ):
+        async def thrown():
+            raise RuntimeError("socket hang up")
+
+        def answering(status: int, body: str):
+            async def monitors():
+                return status, body
+
+            return monitors
+
+        for monitors, why in [
+            (thrown, "GET /monitors failed: socket hang up"),
+            (answering(200, "<html>"), "GET /monitors answered 200 with no list of rules"),
+            (answering(200, '{"a":1}'), "GET /monitors answered 200 with no list of rules"),
+            (answering(200, "[null, 5]"), None),
+            (answering(500, "{}"), "GET /monitors answered 500"),
+        ]:
+            answer, sent, line = await self._record_with(monitors, caplog)
+            assert "isError" not in answer["result"], (why, answer)
+            assert json.loads(answer["result"]["content"][0]["text"])["source"] == "POST /positions"
+            assert sent == ["🤖 agent recorded oct-puts 20261218 −P7100 +P7075 ×2 @ 1.25, opened 20261002"]
+            tail = "" if why is None else f"; its rules not named: {why}"
+            assert line == (
+                f"mcp record_holding {canonical(PUT_HOLDING)}: POST /positions answered 201: "
+                f"holding pos-9, notice sent{tail}"
+            )
+
+
 class TestTheCapShared:
     async def test_counts_rule_and_book_writes_together_6_add_rule_and_4_record_holding_then_the_11th_is_refused(
         self, booking
