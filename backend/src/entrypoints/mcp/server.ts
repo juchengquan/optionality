@@ -59,10 +59,11 @@ const json = (status: number, body: unknown, headers: Record<string, string> = {
 
 const failure = (id: Id, code: number, message: string) => ({ jsonrpc: "2.0", id, error: { code, message } });
 
-/** Whether a parsed body is a JSON-RPC initialize: the one message the version header never refuses. */
+/** Whether a parsed body is a JSON-RPC initialize REQUEST — one with an id: the one message the
+ *  version header never refuses (#460). An initialize sent as a notification negotiates nothing. */
 const isInitialize = (message: unknown): boolean =>
   message !== null && typeof message === "object" && !Array.isArray(message)
-  && (message as Message).method === "initialize";
+  && (message as Message).method === "initialize" && "id" in message;
 
 /** An id JSON-RPC allows on a request: a string or a number, never null on one that wants an answer. */
 const isId = (id: unknown): id is string | number =>

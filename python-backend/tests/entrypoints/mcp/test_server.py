@@ -209,6 +209,16 @@ class TestTheProtocol:
         # the exemption is initialize's alone: the same header on any other request is still refused
         for method in ("ping", "tools/list"):
             assert (await m.rpc(method, headers={"MCP-Protocol-Version": "2026-07-28"})).status_code == 400
+        # and an initialize REQUEST's alone (the owner, 2026-11-20): an initialize sent as a
+        # notification, with no id, negotiates nothing and is refused for the header as before
+        notification = await m.h.call(
+            "/mcp",
+            method="POST",
+            content=json.dumps({"jsonrpc": "2.0", "method": "initialize"}),
+            headers={"Content-Type": "application/json", "MCP-Protocol-Version": "2026-07-28"},
+        )
+        assert notification.status_code == 400
+        assert notification.json()["error"]["code"] == -32600
         # and the header's 400 still comes BEFORE the body's own faults: a body that is not JSON, sent
         # with a version this server does not speak, is refused for the version, as it was before #460
         both = await m.h.call(

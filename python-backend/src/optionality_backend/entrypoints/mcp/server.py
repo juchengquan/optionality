@@ -84,8 +84,9 @@ def _json(status: int, body: Any, headers: dict[str, str] | None = None) -> Resp
 
 
 def _is_initialize(message: Any) -> bool:
-    """Whether a parsed body is a JSON-RPC initialize: the one message the version header never refuses."""
-    return isinstance(message, dict) and message.get("method") == "initialize"
+    """Whether a parsed body is a JSON-RPC initialize REQUEST — one with an id: the one message the
+    version header never refuses (#460). An initialize sent as a notification negotiates nothing."""
+    return isinstance(message, dict) and message.get("method") == "initialize" and "id" in message
 
 
 def _failure(id_: Id, code: int, message: str) -> dict[str, Any]:
