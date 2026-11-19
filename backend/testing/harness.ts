@@ -177,7 +177,7 @@ export function harness(options: HarnessOptions = {}): Harness {
   const app = createApp(deps, {
     mcp: (read, write) => mcpServer({
       read, write, notify: delivery(settings, send), now: deps.now, displayTz: settings.displayTz,
-      writes: settings.mcpWrites, writesPer10Min: settings.mcpWritesPer10Min,
+      writes: settings.mcpWrites, writesPositions: settings.mcpWritesPositions, writesPer10Min: settings.mcpWritesPer10Min,
     }),
   });
   const h: Harness = {

@@ -1,0 +1,132 @@
+{
+  "name": "POST /mcp corrects a closed holding's exit and close day by its id",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MCP_WRITES": "1",
+      "MCP_WRITES_POSITIONS": "1",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [
+        {
+          "id": "pos-1",
+          "name": "dec-condor",
+          "strategy": "iron condor",
+          "strike_date": "2026-12-18",
+          "contracts": 1,
+          "entry": 6.4,
+          "legs": [
+            {
+              "side": "short",
+              "option_type": "CALL",
+              "strike": 7300
+            },
+            {
+              "side": "long",
+              "option_type": "CALL",
+              "strike": 7350
+            },
+            {
+              "side": "short",
+              "option_type": "PUT",
+              "strike": 6400
+            },
+            {
+              "side": "long",
+              "option_type": "PUT",
+              "strike": 6350
+            }
+          ],
+          "created_at": "2026-11-02 14:30:00.000000",
+          "opened_at": "2026-10-12",
+          "manage_notified_at": null,
+          "closed_on": "2026-11-06",
+          "exit": 0.4,
+          "qty_corrected_at": null
+        }
+      ],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "correct_close",
+        "arguments": {
+          "id": "pos-1",
+          "exit": 0.35,
+          "closed_on": "20261109"
+        }
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"data\":{\"closed_on\":\"2026-11-09\",\"contracts\":1,\"created_at\":\"2026-11-02 22:30:00+08:00\",\"entry\":6.4,\"exit\":0.35,\"followed_monitors\":[],\"id\":\"pos-1\",\"legs\":[{\"option_type\":\"CALL\",\"side\":\"short\",\"strike\":7300},{\"option_type\":\"CALL\",\"side\":\"long\",\"strike\":7350},{\"option_type\":\"PUT\",\"side\":\"short\",\"strike\":6400},{\"option_type\":\"PUT\",\"side\":\"long\",\"strike\":6350}],\"name\":\"dec-condor\",\"opened_at\":\"2026-10-12\",\"realized_points\":6.05,\"rescoped_monitors\":[],\"strategy\":\"iron condor\",\"strike_date\":\"2026-12-18\",\"unreadable\":null},\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"PATCH /positions/pos-1\"}"
+            }
+          ]
+        }
+      }
+    },
+    "messages": [
+      "🤖 agent corrected the close of dec-condor: exit 0.40 → 0.35, closed 20261106 → 20261109"
+    ],
+    "rows": {
+      "positions": {
+        "changed": [
+          {
+            "key": {
+              "id": "pos-1"
+            },
+            "from": {
+              "closed_on": "2026-11-06",
+              "exit": 0.4
+            },
+            "to": {
+              "closed_on": "2026-11-09",
+              "exit": 0.35
+            }
+          }
+        ]
+      }
+    },
+    "calls": {}
+  }
+}

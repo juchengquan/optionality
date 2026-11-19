@@ -33,6 +33,9 @@ export interface McpOptions {
   notify: Notify;
   /** `MCP_WRITES`: whether `add_rule` and `edit_rule` are listed and answered */
   writes: boolean;
+  /** `MCP_WRITES_POSITIONS` as `.env` says it (ADR 0029): whether `record_holding` and `correct_close`
+   *  are listed and answered — in force only while `writes` is on too */
+  writesPositions: boolean;
   /** `MCP_WRITES_PER_10_MIN` */
   writesPer10Min: number;
   /** the clock, injected as the routes' is, for the cache and every answer's `read_at` */
@@ -78,14 +81,21 @@ class Refusal extends Error {
 /** The handler `app.ts` mounts at `/mcp`. */
 export function mcpServer(options: McpOptions): (request: Request) => Promise<Response> {
   const tools = toolbox(options);
+  // the book's switch is in force only beside the rules' (ADR 0029): on alone, it is said once — this
+  // door is built once, at boot — and treated as off
+  const positions = options.writes && options.writesPositions;
+  if (options.writesPositions && !options.writes) {
+    console.warn("MCP_WRITES_POSITIONS is on but MCP_WRITES is off: an agent's writes to the book stay off until MCP_WRITES is on too");
+  }
   const writes = writer({
     read: options.read, write: options.write, notify: options.notify, now: options.now,
-    displayTz: options.displayTz, on: options.writes, per10Min: options.writesPer10Min,
+    displayTz: options.displayTz, on: options.writes, positions, per10Min: options.writesPer10Min,
   });
   const { server } = DESCRIBED;
-  // off, a write tool is not listed (ADR 0028): an agent is not offered what it would be refused
-  const listed = DESCRIBED.tools.filter((t) => options.writes || t.method === undefined);
-  const said = options.writes ? server.writes_on.replaceAll("{cap}", String(options.writesPer10Min)) : server.writes_off;
+  // off, a write tool is not listed (ADR 0028, 0029): an agent is not offered what it would be refused
+  const listed = DESCRIBED.tools.filter((t) => t.method === undefined || (t.tier === "positions" ? positions : options.writes));
+  const said = !options.writes ? server.writes_off
+    : `${server.writes_on.replaceAll("{cap}", String(options.writesPer10Min))} ${positions ? server.positions_on : server.positions_off}`;
 
   const methods: Record<string, (params: Message, authorization: string | null) => Promise<unknown>> = {
     async initialize(params) {

@@ -5,7 +5,9 @@
     "version": "1",
     "instructions": "Access to one trader's SPX options book: what is held, the rules (Monitors) that watch it, their histories, the Reference securities on the page and the service's own health. Every successful tool answers one JSON object: `source`, the API's own GET it served (for a write, the write it made); `read_at`, when the service read it, in the service's display zone; and `data`, that GET's body as the HTTP API serves it, its keys sorted and its figures ROUNDED, half away from zero: prices, P&L and SPX levels (and the distances and payoffs in points) to 2 decimals; option_delta, option_theta, option_vega and option_implied_volatility to 4; option_gamma to 6, where a spread's gamma lives; `sigma`, `captured`, a Reference's `change` and a rule's `fill` to 4; a quote's other figures likewise (open/high/low/prev-close/average prices and turnover to 2; option_rho, option_premium, amplitude, turnover_rate and bid_ask_ratio to 4); and a rule's `watched`, `threshold` and `distance` as its `field` is rounded (a price to 2, option_gamma to 6, another Greek, IV or ratio to 4, a count never). Ids, counts, volumes, days, strikes, sizes, quantities and times are never rounded. The HTTP API and the dashboard keep the unrounded figures. The LIVE tools ask the market-data Provider, which allows 60 calls per 30 seconds shared with the alarm sweep and the dashboard. Three (holdings, watchlist, references) read only what the service already watches: their answers are shared by every caller for 5 seconds, so asking again sooner returns the same answer with the same `read_at` — there is no point polling faster. The fourth, price_spreads, prices ANY SPX structure you name, in one bounded call: the same contracts asked again within 5 seconds — at any entry, grouped any way — are answered from the same call, and the service makes at most a capped number of such calls in any 30 seconds whoever asks (12 unless the owner set otherwise) — past it the tool error says how many seconds to wait, so price several structures in ONE call rather than one per call. Prices are in index points per contract unless a field says money; P&L is money. A failed read is a tool error carrying the service's own words.",
     "writes_off": "WRITES ARE OFF on this service: every tool reads, and nothing here adds, edits, mutes, deletes, records or closes anything.",
-    "writes_on": "WRITES ARE ON, for alarm rules only: add_rule adds a watch rule (POST /monitors), and edit_rule changes one's threshold, direction, compare or name, or mutes it (enabled false) or unmutes one muted by hand (PATCH /monitors/{id}) — a watch rule only, never a holding's. Every write is sent to the owner's phone as one line, so nothing changes the book unseen, and at most {cap} writes may reach the service in any ten minutes, its refusals counted — past that the tool error says how many seconds to wait. Nothing here records, closes or deletes anything, and nothing places an order.",
+    "writes_on": "WRITES ARE ON, for alarm rules: add_rule adds a watch rule (POST /monitors), and edit_rule changes one's threshold, direction, compare or name, or mutes it (enabled false) or unmutes one muted by hand (PATCH /monitors/{id}) — a watch rule only, never a holding's. Every write is sent to the owner's phone as one line, so nothing changes the book unseen, and at most {cap} writes of any kind may reach the service in any ten minutes, its refusals counted — past that the tool error says how many seconds to wait. Nothing here closes or deletes anything, and nothing places an order.",
+    "positions_on": "Writes to the BOOK are ON, for two things only: record_holding records a holding just opened (POST /positions), and correct_close corrects a CLOSED holding's exit or close day (PATCH /positions/{id}). No tool closes a holding, deletes one, or changes its legs, entry, contracts or open day: those are the page's. They are sent to the owner's phone and share the cap above.",
+    "positions_off": "Writes to the BOOK are off: nothing here records a holding or corrects a close.",
     "protocol_versions": ["2025-11-25", "2025-06-18"]
   },
   "rounding": {
@@ -164,6 +166,7 @@
       "name": "add_rule",
       "title": "Add an alarm rule",
       "method": "POST",
+      "tier": "rules",
       "path": "/monitors",
       "live": false,
       "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false },
@@ -203,6 +206,7 @@
       "name": "edit_rule",
       "title": "Edit, mute or unmute an alarm rule",
       "method": "PATCH",
+      "tier": "rules",
       "path": "/monitors/{id}",
       "live": false,
       "annotations": { "readOnlyHint": false, "destructiveHint": true, "idempotentHint": true, "openWorldHint": false },
@@ -217,6 +221,67 @@
           "compare": { "type": "string", "enum": ["abs", "signed"] },
           "name": { "type": "string", "description": "a combo's new name, which becomes its code; a rule on one contract is named by its contract and cannot be renamed" },
           "enabled": { "type": "boolean", "description": "false mutes the rule; true unmutes one muted by hand" }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "record_holding",
+      "title": "Record a holding just opened",
+      "method": "POST",
+      "tier": "positions",
+      "path": "/positions",
+      "live": false,
+      "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false },
+      "round": { "keys": { "entry": 2, "exit": 2, "realized_points": 2 } },
+      "description": "Records a holding the owner has just OPENED through POST /positions, exactly as the dashboard's add form does: the service first asks the market-data Provider whether every contract exists (one bounded call) and refuses one it does not know, refuses a name already recorded (open or closed), and then links to the new holding every watch rule on its contracts — after which those rules are the holding's, and edit_rule no longer changes them. Give the structure as price_spreads takes one: `expiry`, and `legs`, each `side` (short or long — the leg you sold is short), `option_type`, `strike` and optional `qty` (how many of that contract ONE of the structure holds, 1–10: the 2 of a 1×2 ratio). Then `name` (unique: how holdings, positions and the histories name it), `entry` (what one structure was opened at, points per contract, signed: a credit received POSITIVE, a debit paid negative), `contracts` (how many of the structure), `opened_at` (the New York market day it was put on — today's, or at most 5 calendar days before it; neither later than today nor earlier than that is taken here: a holding opened earlier is recorded on the page) and optional `strategy` (free text, \"iron condor\"). `entry`, `contracts` and `opened_at` are REQUIRED. Nothing here closes a holding, changes one, or deletes one. ONLY WHILE WRITES TO THE BOOK ARE ON (the server's instructions say): every holding recorded is sent to the owner's phone, naming any rule it took over, and writes are capped per ten minutes, shared with the rule writes. Answers `{source, read_at, data}`: `source` is `POST /positions`, `data` the holding as recorded (as positions lists it, with its `id`), `entry` rounded to 2. A refusal — a contract that does not exist, a name already recorded, a field the service will not take — is a tool error in the service's own words.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "the holding's name, unique among every holding recorded, open or closed: \"dec-condor\"" },
+          "expiry": { "type": "string", "pattern": "^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$", "description": "the expiry, YYYYMMDD or YYYY-MM-DD: \"20261218\"" },
+          "legs": {
+            "type": "array",
+            "minItems": 1,
+            "description": "the contracts held, on one expiry",
+            "items": {
+              "type": "object",
+              "properties": {
+                "side": { "type": "string", "enum": ["short", "long"] },
+                "option_type": { "type": "string", "enum": ["CALL", "PUT"] },
+                "strike": { "type": "integer", "minimum": 1, "description": "the strike, in index points: 6800" },
+                "qty": { "type": "integer", "minimum": 1, "maximum": 10, "description": "how many of this contract one structure holds; 1 when not given" }
+              },
+              "required": ["side", "option_type", "strike"],
+              "additionalProperties": false
+            }
+          },
+          "entry": { "type": "number", "description": "what one structure was opened at, points per contract: a credit received POSITIVE (1.25), a debit paid negative" },
+          "contracts": { "type": "integer", "minimum": 1, "description": "how many of the structure were opened: 2" },
+          "opened_at": { "type": "string", "pattern": "^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$", "description": "the New York market day it was put on, YYYYMMDD or YYYY-MM-DD: today's, or at most 5 calendar days before it" },
+          "strategy": { "type": "string", "description": "what kind of trade it is, free text: \"iron condor\"" }
+        },
+        "required": ["name", "expiry", "legs", "entry", "contracts", "opened_at"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "correct_close",
+      "title": "Correct a closed holding's exit or close day",
+      "method": "PATCH",
+      "tier": "positions",
+      "path": "/positions/{id}",
+      "live": false,
+      "annotations": { "readOnlyHint": false, "destructiveHint": true, "idempotentHint": true, "openWorldHint": false },
+      "round": { "keys": { "entry": 2, "exit": 2, "realized_points": 2 } },
+      "description": "Corrects a CLOSED holding's close, typed wrong, through PATCH /positions/{id}, as the dashboard's correction does: its `exit` (the cost to close actually got, points per contract, signed like positions' exit: a credit bought back positive, a long sold negative) and/or its `closed_on` (the New York market day it was closed). At least one of them, and at least one that differs from what the holding already says; nothing else of a holding is changed here. The holding is named by `id`: its id OR its name, open or closed, found as holding_history finds it. A holding still OPEN is refused by the service (\"is not closed: close it first\") — nothing here closes a holding — and that refusal is counted. ONLY WHILE WRITES TO THE BOOK ARE ON (the server's instructions say): every correction is sent to the owner's phone, saying what changed, and writes are capped per ten minutes, shared with the rule writes. Answers `{source, read_at, data}`: `source` is `PATCH /positions/<id>`, `data` the holding as it now stands, `entry`, `exit` and `realized_points` rounded to 2. A refusal — a close day before the open, after the expiry or after today, a holding still open — is a tool error in the service's own words.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\ud800-\\udfff]{1,64}$", "description": "the holding's id OR its name, as positions gives them: \"pos-1\" or \"dec-condor\"" },
+          "exit": { "type": "number", "description": "the corrected exit, points per contract: 0.35" },
+          "closed_on": { "type": "string", "pattern": "^[0-9]{4}-?[0-9]{2}-?[0-9]{2}$", "description": "the corrected close day, YYYYMMDD or YYYY-MM-DD: \"20261119\"" }
         },
         "required": ["id"],
         "additionalProperties": false

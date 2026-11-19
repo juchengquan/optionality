@@ -313,6 +313,16 @@ const PUT_SPREAD_RULE = {
   legs: [{ side: "short", option_type: "PUT", strike: 6400 }, { side: "long", option_type: "PUT", strike: 6350 }],
 };
 
+/** An agent's writes to the book switched on too (#458, ADR 0029). */
+const BOOKING = { ...WRITING, MCP_WRITES_POSITIONS: "1" };
+/** The condor's put spread, as `record_holding` takes it, opened on the clock's market day. */
+const PUT_SPREAD_HOLDING = {
+  name: "dec-puts", expiry: "20261218", entry: 1.25, contracts: 2, opened_at: "20261109",
+  legs: [{ side: "long", option_type: "PUT", strike: 6350 }, { side: "short", option_type: "PUT", strike: 6400 }],
+};
+/** The condor, closed on Friday at 0.40 — the close an agent corrects. */
+const closedCondor = { positions: [position({ id: "pos-1", closed_on: "2026-11-06", exit: 0.4 })] };
+
 /** Rules to name (#447's follow-up): the short call watched for its Δ (`mon-1`) and its price
  *  (`mon-3`), the short put for its Δ alone (`mon-4`), and the call spread as the combo `1218-6800`. */
 const RULES = world({
@@ -3054,6 +3064,130 @@ export const HTTP: readonly HttpInput[] = [
     name: "POST /mcp adds a rule while Telegram refuses, the write standing",
     world: world({ settings: WRITING, telegram: "down", provider: { quotes: BOOK } }),
     request: request("POST", "/mcp", tool("add_rule", PUT_SPREAD_RULE)),
+  },
+  // --- an agent's writes to the book over MCP (#458, ADR 0029) -------------------------------
+  // record_holding and correct_close, behind MCP_WRITES_POSITIONS beside MCP_WRITES: each a write of
+  // the route the dashboard writes through, said to the owner's phone, counted under the same cap
+  // (with MCP_WRITES alone the rule writes are listed and the book's are not: "POST /mcp lists the two
+  // writes after the reads while writes are on", above)
+  {
+    name: "POST /mcp refuses record_holding while writes to the book are off, asking nothing",
+    world: world({ settings: WRITING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("record_holding", PUT_SPREAD_HOLDING)),
+  },
+  {
+    name: "POST /mcp refuses correct_close while writes to the book are off, reading nothing",
+    world: world({ settings: WRITING, tables: closedCondor }),
+    request: request("POST", "/mcp", tool("correct_close", { id: "dec-condor", exit: 0.35 })),
+  },
+  {
+    // the book's switch alone is no switch: every write stays off, and the log says why at boot
+    name: "POST /mcp lists no write while MCP_WRITES_POSITIONS is on without MCP_WRITES",
+    world: world({ settings: { MCP_WRITES_POSITIONS: "1" } }),
+    request: request("POST", "/mcp", rpc("tools/list")),
+  },
+  {
+    name: "POST /mcp lists all four writes after the reads while both switches are on",
+    world: world({ settings: BOOKING }),
+    request: request("POST", "/mcp", rpc("tools/list")),
+  },
+  {
+    name: "POST /mcp says in its instructions that writes to the book are on",
+    world: world({ settings: BOOKING }),
+    request: request("POST", "/mcp", rpc("initialize", { protocolVersion: "2025-11-25" })),
+  },
+  {
+    // the route's probe of both legs, its row, and one line on the owner's phone
+    name: "POST /mcp records a put spread, and tells the owner",
+    world: world({ settings: BOOKING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("record_holding", { ...PUT_SPREAD_HOLDING, strategy: "put spread" })),
+  },
+  {
+    // the route links the watch rule on exactly its contracts to the new holding; the notice names it
+    name: "POST /mcp records a put spread that takes over a watch rule, and names the rule to the owner",
+    world: world({
+      settings: BOOKING, provider: { quotes: BOOK },
+      tables: {
+        monitors: [combo({
+          id: "mon-2", code: "1218-6400", threshold: 2.25,
+          legs: [{ sign: -1, option_type: "PUT", strike: 6400 }, { sign: 1, option_type: "PUT", strike: 6350 }],
+        })],
+      },
+    }),
+    request: request("POST", "/mcp", tool("record_holding", PUT_SPREAD_HOLDING)),
+  },
+  {
+    name: "POST /mcp records a holding opened five days back",
+    world: world({ settings: BOOKING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("record_holding", { ...PUT_SPREAD_HOLDING, opened_at: "2026-11-04" })),
+  },
+  {
+    name: "POST /mcp refuses record_holding opened six days back, asking nothing",
+    world: world({ settings: BOOKING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("record_holding", { ...PUT_SPREAD_HOLDING, opened_at: "2026-11-03" })),
+  },
+  {
+    name: "POST /mcp refuses record_holding opened tomorrow, asking nothing",
+    world: world({ settings: BOOKING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("record_holding", { ...PUT_SPREAD_HOLDING, opened_at: "20261110" })),
+  },
+  {
+    // at 21:00 in New York UTC's day is already the 10th, and New York's market day is the one held
+    name: "POST /mcp refuses record_holding opened on UTC's tomorrow in New York's evening",
+    world: world({ settings: BOOKING, provider: { quotes: BOOK }, clock: "2026-11-10T02:00:00.000Z" }),
+    request: request("POST", "/mcp", tool("record_holding", { ...PUT_SPREAD_HOLDING, opened_at: "20261110" })),
+  },
+  {
+    name: "POST /mcp refuses record_holding with no entry, asking nothing",
+    world: world({ settings: BOOKING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("record_holding", { ...PUT_SPREAD_HOLDING, entry: undefined })),
+  },
+  {
+    name: "POST /mcp carries the route's refusal of a holding's name already recorded",
+    world: world({ settings: BOOKING, provider: { quotes: BOOK }, tables: { positions: [position({ id: "pos-1", name: "dec-puts" })] } }),
+    request: request("POST", "/mcp", tool("record_holding", PUT_SPREAD_HOLDING)),
+  },
+  {
+    name: "POST /mcp corrects a closed holding's exit by its name, and tells the owner only that",
+    world: world({ settings: BOOKING, tables: closedCondor }),
+    request: request("POST", "/mcp", tool("correct_close", { id: "dec-condor", exit: 0.35 })),
+  },
+  {
+    name: "POST /mcp corrects a closed holding's exit and close day by its id",
+    world: world({ settings: BOOKING, tables: closedCondor }),
+    request: request("POST", "/mcp", tool("correct_close", { id: "pos-1", exit: 0.35, closed_on: "20261109" })),
+  },
+  {
+    // the route refuses an exit on a holding still held, so an agent can never close one this way
+    name: "POST /mcp carries the route's refusal of a close corrected on an open holding",
+    world: world({ settings: BOOKING, tables: { positions: [position({ id: "pos-1" })] } }),
+    request: request("POST", "/mcp", tool("correct_close", { id: "dec-condor", exit: 0.35 })),
+  },
+  {
+    name: "POST /mcp refuses correct_close of a holding's entry, writing nothing",
+    world: world({ settings: BOOKING, tables: closedCondor }),
+    request: request("POST", "/mcp", tool("correct_close", { id: "dec-condor", entry: 6.5 })),
+  },
+  {
+    name: "POST /mcp refuses correct_close that changes nothing, writing nothing",
+    world: world({ settings: BOOKING, tables: closedCondor }),
+    request: request("POST", "/mcp", tool("correct_close", { id: "dec-condor", exit: 0.4, closed_on: "2026-11-06" })),
+  },
+  {
+    // six rules and four holdings asked for in the last ten minutes — each refused by the route's
+    // probe, which writes no row and still counts — so one cap for both refuses the eleventh write of
+    // either kind. The first, 500s ago, leaves the window in 100s
+    name: "POST /mcp refuses the eleventh write in ten minutes, rule and book writes counted together",
+    world: world({ settings: BOOKING, provider: { quotes: BOOK, unknown: [P6350] } }),
+    earlier: [
+      ...Array.from({ length: 6 }, (_, i) => ({
+        at: at(-500 + 10 * i), request: request("POST", "/mcp", tool("add_rule", { ...PUT_SPREAD_RULE, name: `r-${i}` })),
+      })),
+      ...Array.from({ length: 4 }, (_, i) => ({
+        at: at(-440 + 10 * i), request: request("POST", "/mcp", tool("record_holding", { ...PUT_SPREAD_HOLDING, name: `h-${i}` })),
+      })),
+    ],
+    request: request("POST", "/mcp", tool("record_holding", { ...PUT_SPREAD_HOLDING, name: "h-4" })),
   },
   // --- /openapi.json and /docs --------------------------------------------------------------
   // The service's description of itself, held word for word (decided 2026-11-10): the Python
