@@ -120,11 +120,14 @@ describe("the MCP door's coverage", () => {
 
   it("has a scenario reading every tool the door lists, and one for each method it answers", async () => {
     const answer = await runHttp({
-      world: world(), request: request("POST", MCP, { jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      // with an agent's writes on (ADR 0028), so the two write tools are listed and need theirs too
+      world: world({ settings: { MCP_WRITES: "1" } }),
+      request: request("POST", MCP, { jsonrpc: "2.0", id: 1, method: "tools/list" }),
     });
     const listed = ((answer.response.body as { result: { tools: { name: string }[] } }).result.tools)
       .map((t) => t.name);
     expect(listed.length, "the MCP door lists no tools").toBeGreaterThanOrEqual(8);
+    expect(listed, "the writes are not listed: is MCP_WRITES read?").toEqual(expect.arrayContaining(["add_rule", "edit_rule"]));
     const read = new Set(mcp().filter((s) => asked(s)?.method === "tools/call"
       && !(s.expect.response.body as { result?: { isError?: boolean } }).result?.isError)
       .map((s) => asked(s)?.params?.name));

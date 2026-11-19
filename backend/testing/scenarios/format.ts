@@ -107,6 +107,9 @@ export interface HttpRequest {
 export interface HttpExpect {
   /** `body` is the parsed JSON, null for an empty one, and the raw text for anything else */
   response: { status: number; body: unknown };
+  /** every Telegram message the request delivered, in order — absent where it delivered none, which
+   *  is every request but an agent's write over MCP (ADR 0028) */
+  messages?: string[];
   rows: Diff;
   calls: Calls;
 }

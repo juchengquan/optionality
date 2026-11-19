@@ -1,0 +1,114 @@
+{
+  "name": "POST /mcp unmutes a rule muted by hand",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MCP_WRITES": "1",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [
+        {
+          "id": "mon-1",
+          "code": "US.SPXW261218C7300000",
+          "strike_date": "2026-12-18",
+          "option_type": "CALL",
+          "strike": 7300,
+          "field": "option_delta",
+          "threshold": 0.3,
+          "direction": "above",
+          "compare": "abs",
+          "legs": null,
+          "scope": null,
+          "enabled": 0,
+          "disabled_reason": "manual",
+          "triggered": 0,
+          "last_value": null,
+          "last_checked_at": null,
+          "last_alarm_at": null,
+          "created_at": "2026-11-02 14:30:00.000000"
+        }
+      ],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/mcp",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "method": "tools/call",
+      "params": {
+        "name": "edit_rule",
+        "arguments": {
+          "id": "mon-1",
+          "enabled": true
+        }
+      }
+    }
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"data\":{\"code\":\"US.SPXW261218C7300000\",\"compare\":\"abs\",\"created_at\":\"2026-11-02 22:30:00+08:00\",\"direction\":\"above\",\"disabled_reason\":null,\"enabled\":true,\"field\":\"option_delta\",\"id\":\"mon-1\",\"last_checked_at\":null,\"last_value\":null,\"legs\":null,\"option_type\":\"CALL\",\"positions\":[],\"scope\":null,\"strike\":7300,\"strike_date\":\"2026-12-18\",\"threshold\":0.3,\"triggered\":false},\"read_at\":\"2026-11-09 23:00:00+08:00\",\"source\":\"PATCH /monitors/mon-1\"}"
+            }
+          ]
+        }
+      }
+    },
+    "messages": [
+      "🤖 agent unmuted 20261218 C7300 |Δ| ≥ 0.30"
+    ],
+    "rows": {
+      "monitors": {
+        "changed": [
+          {
+            "key": {
+              "id": "mon-1"
+            },
+            "from": {
+              "enabled": 0,
+              "disabled_reason": "manual"
+            },
+            "to": {
+              "enabled": 1,
+              "disabled_reason": null
+            }
+          }
+        ]
+      }
+    },
+    "calls": {}
+  }
+}

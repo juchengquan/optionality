@@ -305,6 +305,14 @@ const rpc = (method: string, params?: unknown) =>
 const tool = (name: string, args?: Record<string, unknown>) =>
   rpc("tools/call", { name, ...(args === undefined ? {} : { arguments: args }) });
 
+/** An agent's writes switched on (#456, ADR 0028). */
+const WRITING = { MCP_WRITES: "1" };
+/** The condor's put spread, as `add_rule` takes it: the structure `price_spreads` takes, and a name. */
+const PUT_SPREAD_RULE = {
+  expiry: "20261218", name: "1218-6400", threshold: 2.25,
+  legs: [{ side: "short", option_type: "PUT", strike: 6400 }, { side: "long", option_type: "PUT", strike: 6350 }],
+};
+
 /** Rules to name (#447's follow-up): the short call watched for its Δ (`mon-1`) and its price
  *  (`mon-3`), the short put for its Δ alone (`mon-4`), and the call spread as the combo `1218-6800`. */
 const RULES = world({
@@ -2895,6 +2903,117 @@ export const HTTP: readonly HttpInput[] = [
       provider: { quotes: { [C7300]: quote("SPXW 261218 7300C", 2.7, 0.21), [C7350]: quote("SPXW 261218 7350C", 1.6, 0.15) } },
     }),
     request: request("POST", "/mcp", tool("watchlist")),
+  },
+  // --- an agent's writes over MCP (#456, ADR 0028) -------------------------------------------
+  // add_rule and edit_rule, behind MCP_WRITES: off by default, not listed and refused; on, each a
+  // write of the route the dashboard writes through, said to the owner's phone in one line
+  {
+    name: "POST /mcp lists the two writes after the reads while writes are on",
+    world: world({ settings: WRITING }),
+    request: request("POST", "/mcp", rpc("tools/list")),
+  },
+  {
+    name: "POST /mcp says in its instructions that writes are on, and their cap",
+    world: world({ settings: { ...WRITING, MCP_WRITES_PER_10_MIN: "4" } }),
+    request: request("POST", "/mcp", rpc("initialize", { protocolVersion: "2025-11-25" })),
+  },
+  {
+    name: "POST /mcp refuses add_rule while writes are off, asking nothing",
+    world: world({ provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("add_rule", PUT_SPREAD_RULE)),
+  },
+  {
+    name: "POST /mcp refuses edit_rule while writes are off, reading nothing",
+    world: world({ tables: { monitors: [combo({ id: "mon-2", code: "1218-6800" })] } }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "1218-6800", threshold: 4.8 })),
+  },
+  {
+    // the route's own probe of both legs, its row, and one line on the owner's phone
+    name: "POST /mcp adds a rule on a put spread, and tells the owner",
+    world: world({ settings: WRITING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("add_rule", PUT_SPREAD_RULE)),
+  },
+  {
+    // one leg is a rule on that contract: its side means nothing, and the route's defaults apply
+    name: "POST /mcp adds a rule on one contract with the route's defaults",
+    world: world({ settings: WRITING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("add_rule", {
+      expiry: "2026-12-18", threshold: 0.25, legs: [{ side: "short", option_type: "CALL", strike: 7300, qty: 1 }],
+    })),
+  },
+  {
+    name: "POST /mcp refuses add_rule with a quantity, asking nothing",
+    world: world({ settings: WRITING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("add_rule", {
+      ...PUT_SPREAD_RULE, legs: [PUT_SPREAD_RULE.legs[0], { ...PUT_SPREAD_RULE.legs[1], qty: 2 }],
+    })),
+  },
+  {
+    name: "POST /mcp refuses add_rule on a combo with no name, asking nothing",
+    world: world({ settings: WRITING, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("add_rule", { expiry: "20261218", threshold: 2.25, legs: PUT_SPREAD_RULE.legs })),
+  },
+  {
+    name: "POST /mcp carries the route's refusal of a contract the Provider does not know",
+    world: world({ settings: WRITING, provider: { quotes: BOOK, unknown: [P6350] } }),
+    request: request("POST", "/mcp", tool("add_rule", PUT_SPREAD_RULE)),
+  },
+  {
+    // ten writes reached the route in the last ten minutes — each refused there, which writes no
+    // row and still counts, since its probe asked the Provider — so the eleventh is not made; the
+    // first, 500s ago, leaves the window in 100s
+    name: "POST /mcp refuses the eleventh write in ten minutes, the route's refusals counted",
+    world: world({ settings: WRITING, provider: { quotes: BOOK, unknown: [P6350] } }),
+    earlier: Array.from({ length: 10 }, (_, i) => ({
+      at: at(-500 + 10 * i), request: request("POST", "/mcp", tool("add_rule", PUT_SPREAD_RULE)),
+    })),
+    request: request("POST", "/mcp", tool("add_rule", { ...PUT_SPREAD_RULE, legs: [PUT_SPREAD_RULE.legs[0]], name: undefined })),
+  },
+  {
+    name: "POST /mcp edits a rule's threshold by its combo name, and tells the owner",
+    world: world({ settings: WRITING, tables: { monitors: [combo({ id: "mon-2", code: "1218-6800", threshold: 4.5 })] } }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "1218-6800", threshold: 4.8 })),
+  },
+  {
+    name: "POST /mcp mutes a rule as the owner would by hand",
+    world: world({ settings: WRITING, tables: { monitors: [monitor({ id: "mon-1" })] } }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "20261218 C7300", enabled: false })),
+  },
+  {
+    name: "POST /mcp unmutes a rule muted by hand",
+    world: world({
+      settings: WRITING, tables: { monitors: [monitor({ id: "mon-1", enabled: 0, disabled_reason: "manual" })] },
+    }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", enabled: true })),
+  },
+  {
+    // only the owner unmutes what the service switched off: refused with the reason, nothing written
+    name: "POST /mcp refuses to unmute a quarantined rule, writing nothing",
+    world: world({
+      settings: WRITING, tables: { monitors: [monitor({ id: "mon-1", enabled: 0, disabled_reason: "no-figure" })] },
+    }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", enabled: true })),
+  },
+  {
+    name: "POST /mcp refuses to change the figure a rule watches",
+    world: world({ settings: WRITING, tables: { monitors: [monitor({ id: "mon-1" })] } }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", field: "mid_price" })),
+  },
+  {
+    name: "POST /mcp carries the route's refusal of an edit in its words",
+    world: world({ settings: WRITING, tables: { monitors: [monitor({ id: "mon-1" })] } }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", name: "renamed" })),
+  },
+  {
+    // the write stands, and no notice is sent: the log says so
+    name: "POST /mcp adds a rule with Telegram not configured, sending nothing",
+    world: world({ settings: { ...WRITING, TELEGRAM_BOT_TOKEN: "" }, provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("add_rule", PUT_SPREAD_RULE)),
+  },
+  {
+    name: "POST /mcp adds a rule while Telegram refuses, the write standing",
+    world: world({ settings: WRITING, telegram: "down", provider: { quotes: BOOK } }),
+    request: request("POST", "/mcp", tool("add_rule", PUT_SPREAD_RULE)),
   },
   // --- /openapi.json and /docs --------------------------------------------------------------
   // The service's description of itself, held word for word (decided 2026-11-10): the Python

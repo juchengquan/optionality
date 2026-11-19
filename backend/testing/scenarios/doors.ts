@@ -18,6 +18,7 @@
 import { type Deps, createApp } from "../../src/entrypoints/http/index.ts";
 import { TelegramBot } from "../../src/entrypoints/bot/bot.ts";
 import { mcpServer } from "../../src/entrypoints/mcp/index.ts";
+import { delivery } from "../../src/notify.ts";
 import { MonitorSweeper } from "../../src/engine/index.ts";
 import type {
   BotExpect, BotScenario, Calls, EarlierRequest, HttpExpect, HttpRequest, HttpScenario, SweepExpect,
@@ -113,7 +114,10 @@ export async function runHttp(
       };
       // the MCP door mounted as `main.ts` mounts it (ADR 0026), so `/mcp` is a request like any other
       return createApp(deps, {
-        mcp: (read) => mcpServer({ read, now: deps.now, displayTz: w.settings.displayTz }),
+        mcp: (read, write) => mcpServer({
+          read, write, notify: delivery(w.settings, w.send), now: deps.now, displayTz: w.settings.displayTz,
+          writes: w.settings.mcpWrites, writesPer10Min: w.settings.mcpWritesPer10Min,
+        }),
       });
     };
     const earlier: EarlierRequest[] = scenario.earlier ?? [];
@@ -130,6 +134,8 @@ export async function runHttp(
       const json = (resp.headers.get("content-type") ?? "").includes("application/json");
       return {
         response: { status: resp.status, body: text === "" ? null : json ? JSON.parse(text) : text },
+        // the Telegram messages it sent, only where it sent any: an agent's write over MCP (ADR 0028)
+        ...(w.sent.length > 0 ? { messages: [...w.sent] } : {}),
         rows: diffTables(w.db, before, dumpTables(w.db)),
         calls: ordered(w.calls),
       };

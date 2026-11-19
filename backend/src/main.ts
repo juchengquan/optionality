@@ -19,6 +19,7 @@ import { sweepInterval } from "./sweep-interval.ts";
 import { telegramApi, telegramSender } from "./telegram.ts";
 import { TelegramBot } from "./entrypoints/bot/bot.ts";
 import { mcpServer } from "./entrypoints/mcp/index.ts";
+import { delivery } from "./notify.ts";
 
 /** The port, before anything else: it is the lock between the two backends (ADR 0021). Either may
  *  be the live one and they share the database, the bot token and the gateway client id, so a
@@ -76,9 +77,13 @@ const deps: Deps = {
 
 // 127.0.0.1 (takePort's default): reachable only via the tailscale serve proxy and localhost,
 // never the LAN. Requests stop being answered 503 from here.
-// `/mcp` beside the routes (ADR 0026): the MCP door, handed a GET of the app's own and nothing else
+// `/mcp` beside the routes (ADR 0026): the MCP door, handed a GET of the app's own, a write it holds
+// to two routes and makes none of unless MCP_WRITES is on (ADR 0028), and the owner's Telegram
 held.serve(createApp(deps, {
-  mcp: (read) => mcpServer({ read, now: deps.now, displayTz: settings.displayTz }),
+  mcp: (read, write) => mcpServer({
+    read, write, notify: delivery(settings, send), now: deps.now, displayTz: settings.displayTz,
+    writes: settings.mcpWrites, writesPer10Min: settings.mcpWritesPer10Min,
+  }),
 }).fetch);
 
 const bot = new TelegramBot({

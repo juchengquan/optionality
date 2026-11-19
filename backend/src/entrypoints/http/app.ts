@@ -7,7 +7,7 @@
  */
 import { Hono } from "hono";
 
-import type { Read } from "../../ports.ts";
+import type { Read, Write } from "../../ports.ts";
 import type { Deps } from "./deps.ts";
 import { mountDocs } from "./openapi.ts";
 import { healthRoutes } from "./routes/health.ts";
@@ -28,10 +28,10 @@ export const MCP_PATH = "/mcp";
 
 
 /** The other surfaces this server carries, built by `main.ts` from their own doors (ADR 0020):
- *  each is handed a `Read` of this app and answers a request. Passed in rather than imported, so
- *  that this door depends on no other surface and no other surface on it. */
+ *  each is handed a `Read` and a `Write` of this app and answers a request. Passed in rather than
+ *  imported, so that this door depends on no other surface and no other surface on it. */
 export interface Surfaces {
-  mcp?: (read: Read) => (request: Request) => Promise<Response>;
+  mcp?: (read: Read, write: Write) => (request: Request) => Promise<Response>;
 }
 
 /** A refusal says so, once, with enough to find it.
@@ -119,7 +119,20 @@ export function createApp(deps: Deps, surfaces: Surfaces = {}) {
       });
       return { status: answer.status, body: await answer.text() };
     };
-    const serve = surfaces.mcp(read);
+    // the same, for a write (ADR 0028): what the door may write is the door's own allow-list,
+    // `allowedWrite`, applied before this is ever reached
+    const write: Write = async (method, path, payload, authorization) => {
+      const answer = await app.request(path, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          ...(authorization === null ? {} : { Authorization: authorization }),
+        },
+        body: JSON.stringify(payload),
+      });
+      return { status: answer.status, body: await answer.text() };
+    };
+    const serve = surfaces.mcp(read, write);
     app.post(MCP_PATH, (c) => serve(c.req.raw));
     // the transport's "no stream offered" is a 405, which only the handler words
     app.get(MCP_PATH, (c) => serve(c.req.raw));

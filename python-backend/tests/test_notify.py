@@ -70,3 +70,21 @@ async def test_lets_cancellation_through():
 
     with pytest.raises(asyncio.CancelledError):
         await notifier(CONFIGURED, send)("hello")
+
+
+async def test_delivery_says_which_of_the_three_happened():
+    # the MCP door's writes (#456, ADR 0028) log whether their notice went: "sent", Telegram "unconfigured"
+    # — a write that stands with nothing sent — or "failed"; `notifier` is this, read as delivered or not
+    from optionality_backend.notify import delivery
+
+    sent: list[str] = []
+    assert await delivery(CONFIGURED, sent.append)("hello") == "sent"
+    assert sent == ["hello"]
+    blank = SimpleNamespace(telegram_bot_token="", telegram_chat_id="42")
+    assert await delivery(blank, sent.append)("again") == "unconfigured"
+    assert sent == ["hello"]
+
+    def down(text: str) -> None:
+        raise RuntimeError("telegram is down")
+
+    assert await delivery(CONFIGURED, down)("hello") == "failed"

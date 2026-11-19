@@ -19,12 +19,22 @@
  *  A request carrying an `Origin` is refused: only a browser sends one, no page of this service
  *  speaks MCP, and refusing it is what the transport asks of a server to stop DNS rebinding.
  */
-import type { Read } from "../../ports.ts";
+import type { Notify, Read, Write } from "../../ports.ts";
 import { DESCRIBED, type ToolResult, toolbox } from "./tools.ts";
+import { writer } from "./writes.ts";
 
 export interface McpOptions {
-  /** a GET of the API's own (`app.ts`); the only way this door reaches anything */
+  /** a GET of the API's own (`app.ts`); the only way this door reads anything */
   read: Read;
+  /** a write of the API's own (`app.ts`), which the door holds to the two `server.json` lists
+   *  (`allowedWrite`, ADR 0028) — and makes none of while `writes` is off */
+  write: Write;
+  /** telling the owner of each write an agent made (ADR 0028): the service's `delivery` */
+  notify: Notify;
+  /** `MCP_WRITES`: whether `add_rule` and `edit_rule` are listed and answered */
+  writes: boolean;
+  /** `MCP_WRITES_PER_10_MIN` */
+  writesPer10Min: number;
   /** the clock, injected as the routes' is, for the cache and every answer's `read_at` */
   now(): Date;
   /** the zone `read_at` is written in, the API's `DISPLAY_TZ` */
@@ -68,7 +78,14 @@ class Refusal extends Error {
 /** The handler `app.ts` mounts at `/mcp`. */
 export function mcpServer(options: McpOptions): (request: Request) => Promise<Response> {
   const tools = toolbox(options);
-  const { server, tools: listed } = DESCRIBED;
+  const writes = writer({
+    read: options.read, write: options.write, notify: options.notify, now: options.now,
+    displayTz: options.displayTz, on: options.writes, per10Min: options.writesPer10Min,
+  });
+  const { server } = DESCRIBED;
+  // off, a write tool is not listed (ADR 0028): an agent is not offered what it would be refused
+  const listed = DESCRIBED.tools.filter((t) => options.writes || t.method === undefined);
+  const said = options.writes ? server.writes_on.replaceAll("{cap}", String(options.writesPer10Min)) : server.writes_off;
 
   const methods: Record<string, (params: Message, authorization: string | null) => Promise<unknown>> = {
     async initialize(params) {
@@ -81,7 +98,7 @@ export function mcpServer(options: McpOptions): (request: Request) => Promise<Re
         protocolVersion,
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: server.name, title: server.title, version: server.version },
-        instructions: server.instructions,
+        instructions: `${server.instructions} ${said}`,
       };
     },
     async ping() {
@@ -89,16 +106,17 @@ export function mcpServer(options: McpOptions): (request: Request) => Promise<Re
     },
     async "tools/list"() {
       return {
-        tools: listed.map(({ name, title, description, inputSchema }) => ({
-          name, title, description, inputSchema,
-          // what a client may tell its user before calling: nothing here changes anything
-          annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+        // what a client may tell its user before calling (ADR 0028): each tool's, from the table
+        tools: listed.map(({ name, title, description, inputSchema, annotations }) => ({
+          name, title, description, inputSchema, annotations,
         })),
       };
     },
     async "tools/call"(params, authorization): Promise<ToolResult> {
       const { name } = params;
       if (typeof name !== "string") throw new Refusal(INVALID_PARAMS, "tools/call needs the tool's name");
+      // a write tool is known whether writes are on or off: off, it answers that they are
+      if (writes.has(name)) return writes.call(name, params.arguments, authorization);
       if (!tools.has(name)) throw new Refusal(INVALID_PARAMS, `Unknown tool: ${name}`);
       return tools.call(name, params.arguments, authorization);
     },
