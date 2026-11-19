@@ -1066,6 +1066,27 @@ class TestEditRule:
             0.3,
         )
 
+    async def test_changes_only_a_watch_rule_a_holding_s_rule_is_refused_before_any_write_counting_nothing(
+        self, writing
+    ):
+        # the owner, #456
+        w = writing({"mcp_writes_per_10_min": 1})
+        await w.created(await w.h.call("/positions", **json_body(CONDOR)))
+        held = await w.created(await w.h.call("/monitors", **json_body(RULE)))
+        rule = next(r for r in await w.rules() if r["id"] == held)
+        assert [p["name"] for p in rule["positions"]] == ["1016_IC"]
+        for change in ({"threshold": 0.3}, {"enabled": False}, {"direction": "below"}):
+            assert await w.call("edit_rule", {"id": held, **change}) == {
+                "isError": True,
+                "text": f'the rule "{held}" watches the holding 1016_IC: a holding\'s rules are changed on the page, '
+                "and edit_rule changes only a watch rule",
+            }, change
+        rule = next(r for r in await w.rules() if r["id"] == held)
+        assert (rule["threshold"], rule["enabled"]) == (0.2, True)
+        assert w.h.sent == []
+        watch = await w.created(await w.h.call("/monitors", **json_body({**RULE, "strike": 9000})))
+        assert (await w.call("edit_rule", {"id": watch, "threshold": 0.3}))["isError"] is False
+
     async def test_lets_a_rule_muted_by_hand_be_muted_again_which_changes_nothing(self, writing):
         w, _, delta = await _set_up(writing)
         await w.call("edit_rule", {"id": delta, "enabled": False})

@@ -366,8 +366,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `add_rule` (`POST /monitors`; `price_spreads`' structure, one leg the single-contract body and
   several a combo's, each side its sign; the door refuses a `qty` but 1, a combo with no name and a
   name on one contract) and `edit_rule` (`PATCH /monitors/{id}`: threshold, direction, compare,
-  name, enabled — never `field`; the rule found as `monitor_history` finds it, and `enabled: true`
-  refused on a rule the SERVICE switched off, anything but `manual`). Every write reaching the
+  name, enabled — never `field`; the rule found as `monitor_history` finds it; a WATCH rule only,
+  a holding's rule refused as the page's to change; and `enabled` either way refused on a rule the
+  SERVICE switched off, anything but `manual`). Every write reaching the
   route counts against `MCP_WRITES_PER_10_MIN` (10 in any ten minutes, the route's refusals
   included, the door's not; the page and the bot uncounted), each success sends ONE Telegram line
   worded by the domain's `agentNotice` (`🤖 agent added 1218-6750 |value| ≥ 3.00`) through the

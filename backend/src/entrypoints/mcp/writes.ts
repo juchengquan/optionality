@@ -221,6 +221,15 @@ export function writer(options: WriterOptions) {
       // found exactly as monitor_history finds it, through the same GET
       const row = await resolveRow(read, LOOKUPS.monitor_history!, (asked.id as string).trim(), authorization);
       if (!isRow(row)) return refuse(row.content[0]!.text);
+      // only a WATCH rule (the owner's decision on #456): a rule linked to a holding — `positions` or
+      // `scope`, as GET /monitors serves it — is the page's to change
+      const holdings = Array.isArray(row.positions)
+        ? (row.positions as { name?: unknown }[]).map((p) => String(p?.name)) : [];
+      if (holdings.length > 0 || (row.scope !== null && row.scope !== undefined)) {
+        const which = holdings.length === 0 ? "a holding" : `the holding${holdings.length > 1 ? "s" : ""} ${holdings.join(", ")}`;
+        return refuse(`the rule "${row.id}" watches ${which}: a holding's rules are changed on the page, `
+          + "and edit_rule changes only a watch rule");
+      }
       // a rule the SERVICE switched off is the owner's to look at: unmuting it is refused, and so is
       // muting it again, which the route records as "manual" — after which it could be unmuted here
       // (review of #457). An edit that leaves `enabled` alone keeps the reason: the route rewrites it

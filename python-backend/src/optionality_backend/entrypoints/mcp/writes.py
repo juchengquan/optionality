@@ -310,6 +310,20 @@ class Writer:
         )
         if not is_row(row):
             return self._refuse(name, args, row["content"][0]["text"])  # type: ignore[index]
+        # only a WATCH rule (the owner's decision on #456): a rule linked to a holding — `positions` or `scope`,
+        # as GET /monitors serves it — is the page's to change
+        positions = row.get("positions")
+        holdings = [_reason(p.get("name")) for p in positions] if isinstance(positions, list) else []
+        if holdings or row.get("scope") is not None:
+            which = (
+                "a holding" if not holdings else f"the holding{'s' if len(holdings) > 1 else ''} {', '.join(holdings)}"
+            )
+            return self._refuse(
+                name,
+                args,
+                f'the rule "{row["id"]}" watches {which}: a holding\'s rules are changed on the page, '
+                "and edit_rule changes only a watch rule",
+            )
         # a rule the SERVICE switched off is the owner's to look at: unmuting it is refused, and so is muting it
         # again, which the route records as "manual" — after which it could be unmuted here (review of #457).
         # An edit that leaves `enabled` alone keeps the reason: the route rewrites it only when `enabled` is given.

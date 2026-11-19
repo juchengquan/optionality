@@ -968,6 +968,26 @@ describe("an agent's writes: add_rule and edit_rule, behind MCP_WRITES (#456, AD
       expect(moved.data).toMatchObject({ enabled: false, disabled_reason: "holding-closed", threshold: 0.3 });
     });
 
+    it("changes only a watch rule: a holding's rule is refused before any write, counting nothing (the owner, #456)", async () => {
+      writing({ mcpWritesPer10Min: 1 });
+      await created(await h.call("/positions", json(CONDOR)));
+      const held = await created(await h.call("/monitors", json(RULE)));
+      const [rule] = (await rules()).filter((r) => r.id === held);
+      expect(rule!.positions).toEqual([{ id: expect.any(String), name: "1016_IC" }]);
+      for (const change of [{ threshold: 0.3 }, { enabled: false }, { direction: "below" }]) {
+        expect(await call("edit_rule", { id: held, ...change }), JSON.stringify(change)).toMatchObject({
+          isError: true,
+          text: `the rule "${held}" watches the holding 1016_IC: a holding's rules are changed on the page, `
+            + "and edit_rule changes only a watch rule",
+        });
+      }
+      expect((await rules()).find((r) => r.id === held)).toMatchObject({ threshold: 0.2, enabled: true });
+      expect(h.sent).toEqual([]);
+      // none of it counted: the cap of one still has its one, for a watch rule
+      const watch = await created(await h.call("/monitors", json({ ...RULE, strike: 9000 })));
+      expect((await call("edit_rule", { id: watch, threshold: 0.3 })).isError).toBe(false);
+    });
+
     it("lets a rule muted by hand be muted again, which changes nothing", async () => {
       const { delta } = await setUp();
       await call("edit_rule", { id: delta, enabled: false });

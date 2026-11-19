@@ -33,6 +33,8 @@ deletes, no settings, and never an order. The owner's decisions on #456, final:
 7. **No quantities**: a `qty` other than 1 is refused and pointed to the page.
 8. **`add_rule`'s input mirrors `price_spreads`'**, and the route's defaults apply.
 9. **Only a rule muted by hand** (`manual`) can be unmuted by an agent.
+9a. **Only a watch rule** can be edited by an agent: a rule linked to a holding is changed on the page
+   (decided in the build, 2026-11-19).
 10. **MCP annotations** on every tool.
 11. **The answer is rounded by #454's table.**
 
@@ -79,7 +81,10 @@ its probe and its words, unchanged.
 `id` is resolved exactly as `monitor_history` resolves it (`LOOKUPS`, ADR 0026's amendment of
 2026-11-18): the rule's id, its code or combo name, or its contract as the page writes it, through
 `GET /monitors`; ambiguity and no match are tool errors in the same words, and only the resolved id
-reaches the path. `field` is not an argument. **Unmuting**: `enabled: true` on a rule that is OFF for
+reaches the path. `field` is not an argument. **Only a WATCH rule** (the owner's decision of
+2026-11-19, in the build): a rule linked to any holding — its `positions` non-empty or its `scope` set, as
+that `GET /monitors` row serves it — is refused by the door, before any write and uncounted, with words
+saying a holding's rules are changed on the page. **Unmuting**: `enabled: true` on a rule that is OFF for
 any reason but `manual` — quarantined (`unknown-contract`, `no-figure`, `unreadable`), `expired`,
 `holding-closed` — is refused by the door with that reason, read from the same `GET /monitors` row,
 before any write. So is **`enabled: false` on a rule already off for such a reason**: the route records a

@@ -3021,6 +3021,12 @@ export const HTTP: readonly HttpInput[] = [
     request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", threshold: 0.35 })),
   },
   {
+    // the owner's decision on #456: an agent changes only a WATCH rule; a holding's are the page's
+    name: "POST /mcp refuses to edit a holding's rule, writing nothing",
+    world: world({ settings: WRITING, tables: held }),
+    request: request("POST", "/mcp", tool("edit_rule", { id: "dec-calls", threshold: 4.8 })),
+  },
+  {
     name: "POST /mcp refuses to change the figure a rule watches",
     world: world({ settings: WRITING, tables: { monitors: [monitor({ id: "mon-1" })] } }),
     request: request("POST", "/mcp", tool("edit_rule", { id: "mon-1", field: "mid_price" })),
