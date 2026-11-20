@@ -46,7 +46,31 @@ export function valid<T extends ZodType, Target extends keyof ValidationTargets>
     if (!result.success) return c.json({ detail: z.prettifyError(result.error) }, 422);
     return result.data as z.output<T>;
   });
+  // A JSON body is decoded HERE, by TextDecoder, before Hono's validator asks for it: its
+  // `c.req.json()` parses the text in `bodyCache`, so priming that cache decides the decoding.
+  // Node's own Request.text()/.json() strip TWO leading BOMs (measured on v25.9.0), where the
+  // Encoding spec — and the Python's utf-8-sig — strip one; the service's own decoding makes the
+  // two backends read the same bytes the same way whatever Node runs (#462, the owner 2026-11-20).
+  const primed = (async (c, next) => {
+    // `bodyCache` is typed as holding text, but what Hono stores and reads there is the PROMISE of
+    // it (`raw[key]()`, then awaited), so the cache is written as it is really read
+    const cache = c.req.bodyCache as { text?: Promise<string> };
+    // primed ONLY where Hono's validator will read it — a JSON type, by its own pattern: a read
+    // nobody awaits would turn a failed upload into an unhandled rejection, which is fatal here
+    if (target === "json" && cache.text === undefined && JSON_TYPE.test(c.req.header("Content-Type") ?? "")) {
+      cache.text = c.req.raw.arrayBuffer().then(decodeBody);
+    }
+    return middleware(c, next);
+  }) as typeof middleware;
   // the tag hono-openapi's own validator carries, so /openapi.json documents this request from the
   // very schema that checks it (openapi.ts)
-  return Object.assign(middleware, { [uniqueSymbol]: { target, ...resolver(schema) } });
+  return Object.assign(primed, { [uniqueSymbol]: { target, ...resolver(schema) } });
 }
+
+/** The Content-Types Hono's json validator reads a body for (`jsonRegex` in hono/validator, which
+ *  it does not export): the body is primed for exactly these and no others. */
+export const JSON_TYPE = /^application\/([a-z-\.]+\+)?json(;\s*[a-zA-Z0-9\-]+\=([^;]+))*$/i;
+
+/** A request body's bytes as text: UTF-8, exactly one leading BOM ignored (the Encoding spec's
+ *  decode), malformed sequences replaced — as the Python's `body.decode("utf-8-sig", "replace")`. */
+export const decodeBody = (bytes: ArrayBuffer): string => new TextDecoder().decode(bytes);

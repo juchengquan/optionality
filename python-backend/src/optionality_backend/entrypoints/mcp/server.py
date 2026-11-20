@@ -229,7 +229,8 @@ def mcp_server(options: McpOptions) -> Callable[[Request], Awaitable[Response]]:
         message: Any = None
         parsed = True
         try:
-            message = json.loads(body.decode("utf-8", errors="replace"), parse_constant=_no_constants)
+            # "utf-8-sig": exactly one leading BOM is ignored, as the TypeScript's own TextDecoder ignores one (#462)
+            message = json.loads(body.decode("utf-8-sig", errors="replace"), parse_constant=_no_constants)
         except ValueError:
             parsed = False
         # the transport's rule for a request AFTER initialization: a version this server does not speak

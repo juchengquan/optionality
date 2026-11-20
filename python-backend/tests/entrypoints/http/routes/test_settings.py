@@ -1,6 +1,7 @@
 """`PATCH /settings`: the sweep's interval, set from the page (#442, ADR 0025). Port of
 backend/src/entrypoints/http/routes/settings.test.ts."""
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -113,3 +114,29 @@ class TestWhatOnlyThePythonCanGetWrong:
         )
         assert resp.status_code == 200
         assert read_sweep_interval(h.db)["seconds"] == 5
+
+
+class TestABodyThatStartsWithAUtf8Bom:
+    """#462: exactly ONE leading BOM is ignored (utf-8-sig), as the TypeScript's own TextDecoder ignores
+    one; Node's Request.json() would strip two, so the TypeScript no longer uses it (2026-11-20)."""
+
+    @staticmethod
+    async def raw(h, data: bytes):
+        return await h.call("/settings", method="PATCH", content=data, headers={"Content-Type": "application/json"})
+
+    async def test_is_read_as_the_json_after_the_mark(self, begin):
+        h = begin()
+        resp = await self.raw(h, b"\xef\xbb\xbf" + json.dumps({"sweep_seconds": 5}).encode())
+        assert resp.status_code == 200
+        assert resp.json()["sweep_seconds"] == 5
+
+    async def test_is_still_malformed_when_what_follows_the_mark_is_not_json(self, begin):
+        h = begin()
+        assert (await self.raw(h, b"\xef\xbb\xbf{nope")).status_code == 400
+
+    async def test_strips_one_mark_only_a_second_or_third_is_malformed_json(self, begin):
+        h = begin()
+        for marks in (2, 3):
+            resp = await self.raw(h, b"\xef\xbb\xbf" * marks + json.dumps({"sweep_seconds": 5}).encode())
+            assert resp.status_code == 400
+            assert resp.text == "Malformed JSON in request body"

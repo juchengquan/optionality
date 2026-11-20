@@ -62,6 +62,54 @@ describe("choosing the sweep's interval", () => {
   });
 });
 
+describe("a body that starts with a UTF-8 BOM (#462)", () => {
+  // exactly ONE leading BOM is ignored, by the service's own decoding (TextDecoder, as the Encoding
+  // spec has it) — not by Node's Request.json(), which on v25.9.0 strips two. The Python's
+  // utf-8-sig strips one, so the two backends agree whatever Node runs (the owner, 2026-11-20).
+  const raw = (bytes: Uint8Array) => h.call("/settings", {
+    method: "PATCH", body: bytes, headers: { "Content-Type": "application/json" },
+  });
+  const BOM = [0xef, 0xbb, 0xbf];
+  const withBom = (text: string) => new Uint8Array([...BOM, ...new TextEncoder().encode(text)]);
+
+  it("is read as the JSON after the mark", async () => {
+    start(ENV_15);
+    const resp = await raw(withBom(JSON.stringify({ sweep_seconds: 5 })));
+    expect(resp.status).toBe(200);
+    expect((await body(resp)).sweep_seconds).toBe(5);
+  });
+
+  it("is still malformed when what follows the mark is not JSON", async () => {
+    start(ENV_15);
+    expect((await raw(withBom("{nope"))).status).toBe(400);
+  });
+
+  it("never reads a body Hono's validator will not read: a non-JSON type is left alone", async () => {
+    // a body that fails as it is read, sent as text/plain: Hono's validator reads only a JSON type,
+    // so a read started regardless would reject with nobody awaiting it — an unhandled rejection,
+    // which main.ts treats as fatal. Reading only what the validator reads keeps the stream unread.
+    start(ENV_15);
+    let pulled = false;
+    // highWaterMark 0: the stream pulls only when something reads it, never to fill a queue
+    const failing = new ReadableStream({ pull() { pulled = true; throw new Error("client went away"); } }, { highWaterMark: 0 });
+    const resp = await h.call("/settings", {
+      method: "PATCH", body: failing, headers: { "Content-Type": "text/plain" }, duplex: "half",
+    } as RequestInit);
+    expect(resp.status).toBe(422);
+    expect(pulled).toBe(false);
+  });
+
+  it("strips one mark only: a second or third is malformed JSON", async () => {
+    start(ENV_15);
+    const valid = JSON.stringify({ sweep_seconds: 5 });
+    for (const marks of [2, 3]) {
+      const resp = await raw(new Uint8Array([...Array(marks).fill(BOM).flat(), ...new TextEncoder().encode(valid)]));
+      expect(resp.status).toBe(400);
+      expect(await resp.text()).toBe("Malformed JSON in request body");
+    }
+  });
+});
+
 describe("/health's sweep interval", () => {
   it("is .env's, said to be, with the default and the presets beside it", async () => {
     start(ENV_15);

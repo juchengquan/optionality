@@ -171,6 +171,31 @@ describe("the protocol", () => {
     });
   });
 
+  it("reads a body that starts with a UTF-8 BOM as the JSON after it (#462)", async () => {
+    start();
+    const BOM = [0xef, 0xbb, 0xbf];
+    const post = (text: string, headers: Record<string, string> = {}) => h.call("/mcp", {
+      method: "POST", body: new Uint8Array([...BOM, ...new TextEncoder().encode(text)]),
+      headers: { "Content-Type": "application/json", ...headers },
+    });
+    const init = JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2026-07-28" } });
+    for (const headers of [{}, { "MCP-Protocol-Version": "2026-07-28" }] as Record<string, string>[]) {
+      const answered = await post(init, headers);
+      expect(answered.status).toBe(200);
+      expect((await body(answered)).result.protocolVersion).toBe("2025-11-25");
+    }
+    const notJson = await post("{nope");
+    expect(notJson.status).toBe(400);
+    expect((await body(notJson)).error.code).toBe(-32700);
+    // one mark only, by the service's own TextDecoder (Node's Request.text() would strip two)
+    const twice = await h.call("/mcp", {
+      method: "POST", body: new Uint8Array([...BOM, ...BOM, ...new TextEncoder().encode(init)]),
+      headers: { "Content-Type": "application/json" },
+    });
+    expect(twice.status).toBe(400);
+    expect((await body(twice)).error.code).toBe(-32700);
+  });
+
   it("echoes an integral id as an integer, whatever way it was written", async () => {
     start();
     const resp = await h.call("/mcp", {
