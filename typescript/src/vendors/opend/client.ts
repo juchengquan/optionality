@@ -100,8 +100,8 @@ export class OpendClient {
   private instance: MoomooClient | null = null;
   private connecting: Promise<MoomooClient> | null = null;
   /** The quote grade (#464), and whether the next successful fetch must read it: true until the
-   *  first one has, and again after every failed fetch — each of which hangs up, so it is once per
-   *  login, never once per sweep or poll. */
+   *  first one has, again after every failed fetch — each of which hangs up — and again when the
+   *  library logs in again by itself. So it is once per login, never once per sweep or poll. */
   private grade: GradeReading = { read: null, failure: null };
   private gradeDue = true;
 
@@ -135,11 +135,20 @@ export class OpendClient {
     this.instance ??= create();
     const client = this.instance;
     await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(
-        () => reject(new Error(`OpenD login timed out after ${loginTimeoutMs}ms`)),
-        loginTimeoutMs,
-      );
+      let settled = false;
+      const timer = setTimeout(() => {
+        settled = true;
+        reject(new Error(`OpenD login timed out after ${loginTimeoutMs}ms`));
+      }, loginTimeoutMs);
       client.onlogin = (ok, msg) => {
+        // The library reconnects by ITSELF when the socket closes (`base.js`' onclose) and calls
+        // this again: OpenD restarted between two sweeps is logged in afresh with no fetch having
+        // failed. That is a new login, so the grade is read again after the next fetch (#465).
+        if (settled) {
+          if (ok) this.gradeDue = true;
+          return;
+        }
+        settled = true;
         clearTimeout(timer);
         if (ok) resolve();
         else reject(new Error(`OpenD login refused: ${describe(msg)}`));
@@ -147,6 +156,7 @@ export class OpendClient {
       try {
         client.start(host, port, false, key);
       } catch (err) {
+        settled = true;
         clearTimeout(timer);
         reject(err instanceof Error ? err : new Error(String(err)));
       }

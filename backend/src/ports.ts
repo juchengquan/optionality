@@ -43,12 +43,6 @@ export interface VendorClient {
   close(): void;
 }
 
-/** The Provider: the one vendor the alarms read from, chosen before boot (ADR 0015).
- *
- *  `vendors.ts` builds whichever one `.env` names. `name` and `reachable` exist for `/health`,
- *  which until ADR 0015 reported `opend: true` — the vendor's name on the API contract, and a
- *  sentence on the dashboard that would have been a lie the moment anything else was behind it.
- */
 /** What a Provider last read of the account's quote grade for US options (#464): whether the option
  *  prices it serves are real-time. moomoo grades the ACCOUNT, by level, and never a quote; its
  *  client reads it once per connection episode and keeps it, so asking for this asks OpenD nothing —
@@ -62,6 +56,13 @@ export interface QuoteGradeReading {
   failure: string | null;
 }
 
+/** The Provider: the one vendor the alarms read from, chosen before boot (ADR 0015).
+ *
+ *  `vendors.ts` builds whichever one `.env` names. `name`, `reachable` and `quoteGrade` exist for
+ *  `/health`, which until ADR 0015 reported `opend: true` — the vendor's name on the API contract,
+ *  and a sentence on the dashboard that would have been a lie the moment anything else was behind
+ *  it.
+ */
 export interface ProviderClient extends VendorClient {
   /** Whether the gateway is there AT ALL, in whatever terms this Provider has — a TCP connect for
    *  moomoo's OpenD, a handshake for IB Gateway's socket.

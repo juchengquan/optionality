@@ -20,7 +20,6 @@ import pytest
 import uvicorn
 from fastapi.openapi.utils import get_openapi
 from harness import NOW, TOKEN, json_body
-from optionality.timefmt import display_time
 
 from optionality_backend.db.queries import insert_position
 from optionality_backend.ports import GradeRead, QuoteGradeReading
@@ -103,15 +102,15 @@ EARLIER = NOW - timedelta(hours=1)
 GRADES = {
     "real-time, read, in the display zone": (
         QuoteGradeReading(read=GradeRead(us_option="LV1", realtime=True, at=NOW), failure=None),
-        {"us_option": "LV1", "realtime": True, "read_at": display_time(NOW, "Asia/Singapore"), "reason": None},
+        {"us_option": "LV1", "realtime": True, "read_at": "2026-10-02 13:26:06+08:00", "reason": None},
     ),
     "not real-time, and never by how much": (
         QuoteGradeReading(read=GradeRead(us_option="BMP", realtime=False, at=NOW), failure=None),
-        {"us_option": "BMP", "realtime": False, "read_at": display_time(NOW, "Asia/Singapore"), "reason": None},
+        {"us_option": "BMP", "realtime": False, "read_at": "2026-10-02 13:26:06+08:00", "reason": None},
     ),
     "moomoo's Unknow says nothing either way, beside its name": (
         QuoteGradeReading(read=GradeRead(us_option="N/A", realtime=None, at=NOW), failure=None),
-        {"us_option": "N/A", "realtime": None, "read_at": display_time(NOW, "Asia/Singapore"), "reason": None},
+        {"us_option": "N/A", "realtime": None, "read_at": "2026-10-02 13:26:06+08:00", "reason": None},
     ),
     "not read yet": (
         QuoteGradeReading(read=None, failure=None),
@@ -128,7 +127,7 @@ GRADES = {
     ),
     "a failed read keeps the earlier grade, its time saying how old it is": (
         QuoteGradeReading(read=GradeRead(us_option="LV1", realtime=True, at=EARLIER), failure="busy"),
-        {"us_option": "LV1", "realtime": True, "read_at": display_time(EARLIER, "Asia/Singapore"), "reason": None},
+        {"us_option": "LV1", "realtime": True, "read_at": "2026-10-02 12:26:06+08:00", "reason": None},
     ),
     # IB Gateway grades each request, which is not this
     "a Provider that reports no account grade says so": (

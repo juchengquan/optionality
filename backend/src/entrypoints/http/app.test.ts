@@ -8,7 +8,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GOLDEN_CASES } from "optionality/golden";
-import { displayTime } from "optionality/domain/timefmt";
 import { type Harness, NOW, body, harness } from "../../../testing/harness.ts";
 import type { QuoteGradeReading } from "../../ports.ts";
 
@@ -99,18 +98,18 @@ describe("/health", () => {
 
     it("says moomoo's grade, that it is real-time, and when it was read, in the display zone", async () => {
       expect(await graded({ read: { usOption: "LV1", realtime: true, at: NOW }, failure: null })).toEqual({
-        us_option: "LV1", realtime: true, read_at: displayTime(NOW, "Asia/Singapore"), reason: null,
+        us_option: "LV1", realtime: true, read_at: "2026-10-02 13:26:06+08:00", reason: null,
       });
     });
 
     it("says a grade that is not real-time, and never by how much", async () => {
       expect(await graded({ read: { usOption: "BMP", realtime: false, at: NOW }, failure: null }))
-        .toEqual({ us_option: "BMP", realtime: false, read_at: displayTime(NOW, "Asia/Singapore"), reason: null });
+        .toEqual({ us_option: "BMP", realtime: false, read_at: "2026-10-02 13:26:06+08:00", reason: null });
     });
 
     it("says nothing either way for moomoo's Unknow, beside its name", async () => {
       expect(await graded({ read: { usOption: "N/A", realtime: null, at: NOW }, failure: null }))
-        .toEqual({ us_option: "N/A", realtime: null, read_at: displayTime(NOW, "Asia/Singapore"), reason: null });
+        .toEqual({ us_option: "N/A", realtime: null, read_at: "2026-10-02 13:26:06+08:00", reason: null });
     });
 
     it("says it has not been read yet", async () => {
@@ -129,7 +128,7 @@ describe("/health", () => {
 
     it("keeps an earlier grade through a failed read, its time saying how old it is", async () => {
       expect(await graded({ read: { usOption: "LV1", realtime: true, at: EARLIER }, failure: "busy" }))
-        .toEqual({ us_option: "LV1", realtime: true, read_at: displayTime(EARLIER, "Asia/Singapore"), reason: null });
+        .toEqual({ us_option: "LV1", realtime: true, read_at: "2026-10-02 12:26:06+08:00", reason: null });
     });
 
     it("says a Provider that reports no account grade does not", async () => {

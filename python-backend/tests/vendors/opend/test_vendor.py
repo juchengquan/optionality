@@ -1,6 +1,7 @@
 """moomoo as a vendor: the library's OpenD client, asked from a worker thread inside two deadlines.
 
-backend/src/vendors/opend/vendor.ts has no test of its own, and the client it wraps is the library's.
+backend/src/vendors/opend/vendor.ts's own test holds only that it hands on its client's quote grade,
+which `TestTheQuoteGrade` holds here; the client it wraps is the library's.
 What its callers' tests rely on is held here: `vendors/index.test.ts`'s "builds moomoo without
 reaching for a socket" (opening is inert), and what the sweep, `/quotes` and the creation probes
 read from a Provider — a batch with moomoo's unknown codes contained, a failure as a raise with
@@ -321,6 +322,17 @@ class TestTheQuoteGrade:
         await until(lambda: client.quote_grade().read is not None)
         await quiet()
         assert len(ctx.user_info_asked) == 1
+
+    async def test_does_not_read_again_after_a_read_that_failed_however_many_fetches_succeed(self):
+        # once per episode: a GetUserInfo OpenD refuses is said, and asked again only after a fetch
+        # fails (an owner's decision pending in #465 may change this — not here)
+        ctx = Context(grade=(-1, "user info unavailable"))
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx))
+        for _ in range(5):
+            await client.fetch_quotes([A])
+            await quiet()
+        assert len(ctx.user_info_asked) == 1
+        assert client.quote_grade().failure == "user info unavailable"
 
     async def test_says_whether_a_grade_is_real_time(self):
         ctx = Context(grade=(0, {"us_option_qot_right": "BMP"}))

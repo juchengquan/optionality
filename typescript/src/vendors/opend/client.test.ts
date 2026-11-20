@@ -483,6 +483,61 @@ describe("the account's quote grade (#464)", () => {
     expect(shared.userInfo).toEqual([]);
   });
 
+  it("does not read again after a read that failed, however many fetches succeed", async () => {
+    // once per episode: a GetUserInfo OpenD refuses is said, and asked again only when the
+    // connection is (an owner's decision pending in #465 may change this — not here)
+    const { client, shared } = harness({
+      userInfo: () => Promise.reject({ retType: -1, retMsg: "user info unavailable", errCode: 0 }),
+    });
+    for (let i = 0; i < 5; i++) {
+      await client.batch([CODE]);
+      await landed();
+    }
+    expect(shared.userInfo).toHaveLength(1);
+    expect(client.quoteGrade().failure).toBe("user info unavailable");
+  });
+
+  it("reads again after the SDK logs in again by itself, with no fetch failing between", async () => {
+    // moomoo-api reconnects on its own when the socket closes (`base.js`' onclose), and calls
+    // `onlogin` again: OpenD restarted between two sweeps is a new login, and a new episode
+    const fakes: FakeMoomoo[] = [];
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 50,
+      create: () => { const fake = new FakeMoomoo({}, shared); fakes.push(fake); return fake; },
+    });
+    await client.batch([CODE]);
+    await landed();
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(1);
+    fakes[0]!.onlogin?.(true, "Succeed");   // the library's own reconnect, logged in again
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(2);
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(2);
+    // and a re-login that FAILED is no episode: nothing answered on it
+    fakes[0]!.onlogin?.(false, "refused");
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(2);
+  });
+
+  it("never makes a fetch wait for the read", async () => {
+    // a deadline long enough that a fetch which waited on a hanging read would visibly wait
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 2000,
+      create: () => new FakeMoomoo({ userInfo: () => new Promise(() => { /* never */ }) }, shared),
+    });
+    const started = Date.now();
+    await client.batch([CODE]);
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(shared.userInfo).toHaveLength(1);
+  });
+
   it("names a grade as the SDK does, and says whether it is real-time", async () => {
     const answers = [
       { retType: 0, s2c: { usOptionQotRight: 1 } },
