@@ -38,13 +38,22 @@ evaluable.
   sweep and poll. The SDK's own callback thread is not a daemon, so a process asked to stop while a
   connect is retrying waits for OpenD, or for launchd to kill it.
 - **The quote grade's episode** (#464). The TypeScript reads the account's grade once per LOGIN, on
-  the websocket it holds, and every failed fetch hangs that up. Connecting per fetch, this writes the
-  same rule on the fetches: a read after the first that succeeds, and after the first that succeeds
-  following one that failed — kept between fetches, never one per sweep or poll. The read is an ask
-  of its own, on its own connection and its own thread (`moomoo-grade`): the SDK blocks, and a
-  GetUserInfo that hangs on the fetches' one thread would hold every fetch behind it past its login
-  deadline, which is the one thing a grade must never do. A read happens once per episode, so the
-  extra connection is one per outage, not one per sweep.
+  the websocket it holds: after its first fetch, after every failed fetch (each hangs up), and after
+  the npm library logs in again BY ITSELF — which it does when the socket drops, so OpenD restarting
+  between two fetches is a new login there with no fetch having failed. Connecting per fetch, this
+  has no login that outlives a fetch and cannot see such a restart: a read after the first fetch
+  that succeeds, and after the first that succeeds following one that failed — kept between
+  fetches, never one per sweep or poll. So an OpenD restarted between two fetches is re-read by the
+  TypeScript and not by this, until a fetch fails. The read is an ask of its own, on its own
+  connection and its own thread (`moomoo-grade`): the SDK blocks, and a GetUserInfo that hangs on the
+  fetches' one thread would hold every fetch behind it past its login deadline, which is the one
+  thing a grade must never do. A read happens once per episode, so the extra connection is one per
+  outage, not one per sweep.
+- **No read overwrites a newer one**, which the TypeScript must number its reads to prevent (#465):
+  a read sent there before the socket drops is never answered and ends only at its deadline, after
+  the next read may have answered. Here every read runs on the one `moomoo-grade` thread, so a later
+  read cannot even start until the earlier one's ask has returned — and the earlier one settles the
+  moment it does, if its deadline has not already settled it. `close` cancels the read in flight.
 """
 
 import asyncio

@@ -5,6 +5,8 @@
  *  thing the descriptor does not let a caller replace: a test must never reach a real OpenD, which
  *  blocks for ever on a dead port (CLAUDE.md).
  */
+import { createServer } from "node:net";
+
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("moomoo-api", () => ({
@@ -27,9 +29,25 @@ vi.mock("moomoo-api", () => ({
 const { settingsFor } = await import("../../env.ts");
 const { moomooVendor } = await import("./vendor.ts");
 
+/** A port on this machine that nothing listens on: one the system just handed out and took back.
+ *  Never the settings' default, which is the LIVE OpenD's websocket — were the mock above ever to
+ *  stop applying, the real SDK would find nothing here, and the test would fail rather than log in
+ *  to the owner's gateway (#465). */
+async function deadPort(): Promise<number> {
+  const server = createServer();
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as { port: number };
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return port;
+}
+
 describe("moomoo's descriptor", () => {
   it("hands /health the grade its client read after a fetch that worked", async () => {
-    const provider = moomooVendor.open(settingsFor({ provider: "moomoo", moomooWsKey: "k" }))!;
+    const settings = settingsFor({
+      provider: "moomoo", moomooWsKey: "k", opendHost: "127.0.0.1", moomooWsPort: await deadPort(),
+    });
+    expect(settings.moomooWsPort).not.toBe(33333);
+    const provider = moomooVendor.open(settings)!;
     expect(provider.quoteGrade()).toEqual({ read: null, failure: null });
 
     await provider.fetchQuotes(["US.SPXW261218C8100000"]);

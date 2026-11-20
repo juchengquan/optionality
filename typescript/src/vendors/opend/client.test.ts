@@ -484,8 +484,8 @@ describe("the account's quote grade (#464)", () => {
   });
 
   it("does not read again after a read that failed, however many fetches succeed", async () => {
-    // once per episode: a GetUserInfo OpenD refuses is said, and asked again only when the
-    // connection is (an owner's decision pending in #465 may change this — not here)
+    // once per episode: a GetUserInfo OpenD refuses is said, and asked again only once there is a
+    // new login (an owner's decision pending in #465 may change this — not here)
     const { client, shared } = harness({
       userInfo: () => Promise.reject({ retType: -1, retMsg: "user info unavailable", errCode: 0 }),
     });
@@ -523,6 +523,60 @@ describe("the account's quote grade (#464)", () => {
     await client.batch([CODE]);
     await landed();
     expect(shared.userInfo).toHaveLength(2);
+  });
+
+  it("lets no read but the latest one settle the grade", async () => {
+    // A read sent just before the socket drops never settles on its own — the library's reconnect
+    // clears its pool and rejects nothing — so it ends at its deadline, which can come after the
+    // NEXT episode's read has answered. That late timeout must not stand over the newer grade.
+    const answers: (() => Promise<unknown>)[] = [
+      () => new Promise(() => { /* the socket dropped under it */ }),
+      () => Promise.resolve({ retType: 0, s2c: { usOptionQotRight: 2 } }),
+    ];
+    const fakes: FakeMoomoo[] = [];
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 50,
+      create: () => {
+        const fake = new FakeMoomoo({ userInfo: () => answers.shift()!() }, shared);
+        fakes.push(fake);
+        return fake;
+      },
+    });
+    await client.batch([CODE]);
+    fakes[0]!.onlogin?.(true, "Succeed");   // the library logged in again by itself
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(2);
+    expect(client.quoteGrade().read?.usOption).toBe("LV1");
+    // past the first read's deadline
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(client.quoteGrade()).toMatchObject({ read: { usOption: "LV1" }, failure: null });
+  });
+
+  it("lets a late answer to an older read not stand over the newer grade either", async () => {
+    let answerFirst: (value: unknown) => void = () => undefined;
+    const answers: (() => Promise<unknown>)[] = [
+      () => new Promise((resolve) => { answerFirst = resolve; }),
+      () => Promise.resolve({ retType: 0, s2c: { usOptionQotRight: 2 } }),
+    ];
+    const fakes: FakeMoomoo[] = [];
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 1000,
+      create: () => {
+        const fake = new FakeMoomoo({ userInfo: () => answers.shift()!() }, shared);
+        fakes.push(fake);
+        return fake;
+      },
+    });
+    await client.batch([CODE]);
+    fakes[0]!.onlogin?.(true, "Succeed");
+    await client.batch([CODE]);
+    await landed();
+    answerFirst({ retType: 0, s2c: { usOptionQotRight: 1 } });   // BMP, from the episode before
+    await landed();
+    expect(client.quoteGrade().read?.usOption).toBe("LV1");
   });
 
   it("never makes a fetch wait for the read", async () => {

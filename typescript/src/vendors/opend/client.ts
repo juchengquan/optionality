@@ -104,6 +104,8 @@ export class OpendClient {
    *  library logs in again by itself. So it is once per login, never once per sweep or poll. */
   private grade: GradeReading = { read: null, failure: null };
   private gradeDue = true;
+  /** The number of the latest read sent: only that one may settle the grade (#465). */
+  private gradeReads = 0;
 
   /** Written out rather than a `constructor(private readonly deps: ...)` parameter property.
    *  Node runs this file by ERASING types, and a parameter property is syntax that has to EMIT code —
@@ -250,6 +252,11 @@ export class OpendClient {
    *  grade an earlier read found, and the next episode tries again. */
   private readGrade(client: MoomooClient): void {
     this.gradeDue = false;
+    // A read sent just before the socket drops never settles on its own — the library's reconnect
+    // clears its pool and rejects nothing — so it ends at its deadline, which can come after the
+    // next episode's read has answered. Only the latest read sent may say anything.
+    const read = ++this.gradeReads;
+    const latest = () => read === this.gradeReads;
     const now = this.config.now ?? (() => new Date());
     let ask: Promise<unknown>;
     try {
@@ -259,10 +266,12 @@ export class OpendClient {
     }
     withTimeout(ask, this.config.requestTimeoutMs ?? 10_000, GET_USER_INFO.name).then(
       (response) => {
+        if (!latest()) return;
         const usOption = gradeName((response as UserInfoResponse).s2c?.usOptionQotRight);
         this.grade = { read: { usOption, realtime: isRealtime(usOption), at: now() }, failure: null };
       },
       (err: unknown) => {
+        if (!latest()) return;
         this.grade = { read: this.grade.read, failure: describe(err) };
       },
     );
