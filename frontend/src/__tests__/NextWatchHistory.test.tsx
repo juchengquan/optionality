@@ -258,6 +258,12 @@ describe("a holding's burndown with the days it was watched before entry", () =>
 });
 
 describe("a watched spread's payoff at its last close", () => {
+  // the close below is Fri 2026-11-13, and the page writes a close inside the week by its weekday
+  // alone ("Fri 16:14 ET") and an older one with its date: read against the real clock, these two
+  // tests passed only until 2026-11-19. Pinned to the Monday after, only the Date faked.
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-16T15:00:00Z") }); });
+  afterEach(() => { vi.useRealTimers(); });
+
   function props(over: Partial<BookProps> = {}): BookProps {
     return {
       quotes: QUOTES, monitors: MONITORS, holdings: HOLDINGS, holdingsError: null, holdingsAt: null,
