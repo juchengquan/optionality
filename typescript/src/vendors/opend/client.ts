@@ -17,8 +17,9 @@
 // backend reaches this file through the library's exports (ADR 0021), so its program never lists
 // the `.d.ts` beside it, and `import("moomoo-api")` below was an untyped module there.
 /// <reference path="./moomoo-api.d.ts" />
-import type { MoomooClient, Security, Snapshot } from "./types.ts";
+import type { MoomooClient, Security, Snapshot, UserInfoResponse } from "./types.ts";
 import { toRecords } from "./snapshot.ts";
+import { gradeName, isRealtime, USER_INFO_QOT_RIGHT } from "./fields.ts";
 import type { QuoteBatch, QuoteFetcher } from "../../quotes.ts";
 
 /** Market 11 is the US. See snapshot.ts — the service deals in no other. */
@@ -38,6 +39,23 @@ export interface OpendConfig {
   requestTimeoutMs?: number;
   /** supplied by a test; the real one is the npm package's default export */
   create?: () => MoomooClient;
+  /** when a grade was read; supplied by a test, the real clock otherwise */
+  now?: () => Date;
+}
+
+/** GetUserInfo, as the package's command table (`mmCmdID`) names it. Written out rather than read
+ *  from the table so that nothing which merely builds a client loads the package; `sdk.test.ts`
+ *  holds it to the table. */
+export const GET_USER_INFO = { cmd: 1005, name: "GetUserInfo" } as const;
+
+/** The account's grade for US options, as this client last read it (#464). */
+export interface GradeReading {
+  /** moomoo's grade as the SDK names it, whether that means real-time, and when it was read; null
+   *  while no read has answered */
+  read: { usOption: string; realtime: boolean | null; at: Date } | null;
+  /** OpenD's words for why the latest read failed; null when it answered, or none has been made.
+   *  A failure leaves `read` as it was. */
+  failure: string | null;
 }
 
 /** Stop waiting, which is NOT the same as cancelling: the request may still be in flight on a
@@ -81,6 +99,11 @@ export class OpendClient {
    */
   private instance: MoomooClient | null = null;
   private connecting: Promise<MoomooClient> | null = null;
+  /** The quote grade (#464), and whether the next successful fetch must read it: true until the
+   *  first one has, and again after every failed fetch — each of which hangs up, so it is once per
+   *  login, never once per sweep or poll. */
+  private grade: GradeReading = { read: null, failure: null };
+  private gradeDue = true;
 
   /** Written out rather than a `constructor(private readonly deps: ...)` parameter property.
    *  Node runs this file by ERASING types, and a parameter property is syntax that has to EMIT code —
@@ -189,6 +212,54 @@ export class OpendClient {
    *  failures in its own terms (ADR 0015, #168).
    */
   async batch(codes: string[]): Promise<QuoteBatch> {
+    let answer: QuoteBatch;
+    try {
+      answer = await this.contained(codes);
+    } catch (err) {
+      this.gradeDue = true;
+      throw err;
+    }
+    // a connection that answered: the first of its episode reads the grade. Not awaited — the
+    // fetch is the answer the caller asked for, and the grade must never delay or fail it
+    if (this.gradeDue && this.client) this.readGrade(this.client);
+    return answer;
+  }
+
+  /** The account's grade for US options as last read, and why the latest read failed if it did.
+   *  Asks nothing: `/health` reads it and must never cause a read (#464). */
+  quoteGrade(): GradeReading {
+    return this.grade;
+  }
+
+  /** GetUserInfo (1005), asked for the quote rights alone, on the connection that just answered.
+   *
+   *  NOT market data — it prices nothing — so it is not the bounded call the invariant counts, but
+   *  it is bounded all the same, by the snapshot's own request deadline. Unlike a snapshot's, a
+   *  read that times out or fails does NOT hang up: another fetch may be on the socket, and a grade
+   *  that did not come is no reason to fail it. The failure is kept for `/health`, beside whatever
+   *  grade an earlier read found, and the next episode tries again. */
+  private readGrade(client: MoomooClient): void {
+    this.gradeDue = false;
+    const now = this.config.now ?? (() => new Date());
+    let ask: Promise<unknown>;
+    try {
+      ask = client._sendCmd(GET_USER_INFO.cmd, { c2s: { flag: USER_INFO_QOT_RIGHT } }, GET_USER_INFO.name);
+    } catch (err) {
+      ask = Promise.reject(err);
+    }
+    withTimeout(ask, this.config.requestTimeoutMs ?? 10_000, GET_USER_INFO.name).then(
+      (response) => {
+        const usOption = gradeName((response as UserInfoResponse).s2c?.usOptionQotRight);
+        this.grade = { read: { usOption, realtime: isRealtime(usOption), at: now() }, failure: null };
+      },
+      (err: unknown) => {
+        this.grade = { read: this.grade.read, failure: describe(err) };
+      },
+    );
+  }
+
+  /** The batch, with containment; `batch` is this and the grade. */
+  private async contained(codes: string[]): Promise<QuoteBatch> {
     let remaining = [...codes];
     const unknown: string[] = [];
     while (remaining.length > 0) {

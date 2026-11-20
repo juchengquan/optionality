@@ -29,6 +29,8 @@ export const moomooVendor: ProviderVendor = {
       fetchQuotes: client.asFetcher(),
       // the WEBSOCKET port, which is the one this client speaks and not the TCP one the Python used
       reachable: () => probeOpend(settings.opendHost, settings.moomooWsPort),
+      // the account's grade for US options, as the client last read it — once per login (#464)
+      quoteGrade: () => client.quoteGrade(),
       close: () => client.close(),
     };
   },

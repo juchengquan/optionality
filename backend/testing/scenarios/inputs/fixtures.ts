@@ -6,8 +6,9 @@
  *  says, and a second backend never needs it to run one.
  */
 import { buildSpxCode } from "optionality/domain/contract";
+import { opendFields } from "optionality/vendors/fields";
 import type {
-  EarlierSweep, HttpRequest, Provider, Row, Tables, Update, Vendor, World,
+  EarlierSweep, HttpRequest, Provider, QuoteGrade, Row, Tables, Update, Vendor, World,
 } from "../format.ts";
 
 /** Monday 9 November 2026, 10:00 in New York: a trading morning, so the market day and the UTC
@@ -51,8 +52,17 @@ export const vendor = (over: Partial<Vendor> = {}): Vendor => ({
   quotes: {}, unknown: [], rejects: {}, down: null, ...over,
 });
 
+/** A quote grade nobody has read yet: a service that has just started (#464). */
+export const UNREAD: QuoteGrade = { us_option: null, realtime: null, read_at: null, failure: null };
+
+/** moomoo's grade, read at this instant, meaning what the library says it means — so no world
+ *  states a grade and a reading of it that disagree. */
+export const graded = (usOption: string, readAt: string, failure: string | null = null): QuoteGrade => ({
+  us_option: usOption, realtime: opendFields.isRealtime(usOption), read_at: readAt, failure,
+});
+
 export const provider = (over: Partial<Provider> = {}): Provider => ({
-  name: "moomoo", reachable: true, ...vendor(), ...over,
+  name: "moomoo", reachable: true, quote_grade: UNREAD, ...vendor(), ...over,
 });
 
 const EMPTY: Tables = {

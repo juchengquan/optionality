@@ -3,6 +3,7 @@
     with OpenD() as od:                   # one connection for the whole block, closed even on error
         records, unknown = od.quotes([code, ...])
         problem = od.verify([code])
+        grade = od.us_option_grade()      # the account's grade for US options: "LV1", ...
 
     records, unknown = quotes([code])     # one-shot: opens, asks, closes
 
@@ -62,6 +63,37 @@ RECORD_FIELDS: tuple[str, ...] = (
 
 #: where the SDK's column name is not the record's; every other field is read under its own name
 _SDK_NAMES = {"option_strike_time": "strike_time"}
+
+
+#: GetUserInfo's flag for the quote rights alone (`UserInfoField.QOTRIGHT`, #464): what is asked of the
+#: account, and nothing else of it. The TypeScript's `USER_INFO_QOT_RIGHT`, recorded in
+#: `testdata/vendors/opend-fields.json`.
+USER_INFO_QOT_RIGHT = 4
+
+#: moomoo's quote grades (`Qot_Common.QotRight`), by the number OpenD sends, under the SDK's names for
+#: them. The TypeScript reads the number off the websocket and translates it with this table; this
+#: package reads the SDK's name, and `tests/test_opend.py` holds the SDK's table to this one.
+QOT_RIGHTS: dict[int, str] = {0: "N/A", 1: "BMP", 2: "LV1", 3: "LV2", 4: "SF", 5: "NO", 6: "LV3"}
+
+
+def grade_name(right: Any) -> str:
+    """A grade OpenD sent, as the SDK names it (`QotRight.to_string2`): "N/A", moomoo's Unknow, for
+    anything that is not one of the listed numbers, an absent field included. Port of `gradeName`."""
+    # a bool is an int in Python and not a number in JavaScript, where the TypeScript's test is `typeof`
+    if isinstance(right, int) and not isinstance(right, bool) and right in QOT_RIGHTS:
+        return QOT_RIGHTS[right]
+    return "N/A"
+
+
+def is_realtime(grade: str) -> bool | None:
+    """Whether a grade means the option prices are real-time (#464): Level 1, 2 or 3, or SF, are; BMP
+    and NO are not; "N/A", or a name moomoo has not used, says nothing either way. A level, never a
+    delay — moomoo states no minutes. Port of `isRealtime`."""
+    if grade in ("LV1", "LV2", "LV3", "SF"):
+        return True
+    if grade in ("BMP", "NO"):
+        return False
+    return None
 
 
 def _absent(value: Any) -> bool:
@@ -149,6 +181,19 @@ class OpenD:
     def verify(self, codes: list[str]) -> str | None:
         """Why these contracts cannot be trusted to exist, or None."""
         return verify_contracts(codes, self.quotes)
+
+    def us_option_grade(self) -> str:
+        """The account's quote grade for US options, as the SDK names it (`LV1`, `BMP`, `N/A`, ...;
+        `QOT_RIGHTS`), from OpenD's GetUserInfo asked for the quote rights alone. Raises with moomoo's
+        own words on a refusal.
+
+        `get_user_info` is what the SDK calls an internal reserved function; only `us_option_qot_right`
+        is read from it. Not market data: it prices nothing, and `is_realtime` says what it means.
+        """
+        ret, data = self._ctx.get_user_info(info_field=[USER_INFO_QOT_RIGHT])
+        if ret != 0:
+            raise RuntimeError(str(data))
+        return str(data["us_option_qot_right"])
 
 
 def quotes(codes: list[str], host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> Batch:

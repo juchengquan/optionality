@@ -1,0 +1,92 @@
+{
+  "name": "GET /health keeps the grade an earlier read found when the latest one failed",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "quote_grade": {
+        "us_option": "LV1",
+        "realtime": true,
+        "read_at": "2026-11-09T14:00:00.000Z",
+        "failure": "OpenD GetUserInfo timed out after 10000ms"
+      },
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/health",
+    "headers": {},
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "db": true,
+        "provider": {
+          "name": "moomoo",
+          "ok": true,
+          "quote_grade": {
+            "us_option": "LV1",
+            "realtime": true,
+            "read_at": "2026-11-09 22:00:00+08:00",
+            "reason": null
+          }
+        },
+        "golden_cases": "775e4de0b7b1",
+        "monitor": {
+          "last_sweep_at": null,
+          "last_sweep_ok": true,
+          "consecutive_failures": 0,
+          "alarms": {
+            "label": "starting",
+            "bad": false
+          },
+          "fetched_at": null
+        },
+        "settings": {
+          "manage_by_dte": 21,
+          "expired_retention_days": 7,
+          "display_tz": "Asia/Singapore",
+          "sweep_seconds": 15,
+          "sweep_source": "env",
+          "sweep_default_seconds": 15,
+          "sweep_presets": [
+            5,
+            10,
+            15,
+            30,
+            60
+          ],
+          "sweep_refused": null
+        }
+      }
+    },
+    "rows": {},
+    "calls": {}
+  }
+}

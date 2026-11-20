@@ -66,6 +66,18 @@ describe("choosing the Provider", () => {
     expect(typeof provider.fetchQuotes).toBe("function");
   });
 
+  it("hands moomoo's quote grade to /health, unread until a fetch has worked (#464)", () => {
+    // asking for it asks OpenD nothing: the client reads it after a fetch, once per connection
+    const provider = quietly(() =>
+      makeProvider(settingsFor({ provider: "moomoo", moomooWsKey: "k" })));
+    expect(provider.quoteGrade()).toEqual({ read: null, failure: null });
+  });
+
+  it("says IB Gateway reports no account grade, because it grades each request instead (#464)", () => {
+    const provider = makeProvider(settingsFor({ provider: "ibkr", ibkrHost: "127.0.0.1" }));
+    expect(provider.quoteGrade()).toBeNull();
+  });
+
   it("refuses a name it does not know, naming the ones it does", () => {
     // fatal on purpose, as a mistyped MONITOR_INTERVAL_SECONDS is: a service that starts with no
     // Provider has no market data, no alarms, and a dashboard full of dashes
@@ -145,6 +157,7 @@ describe("opening what this build carries", () => {
         return { records: [{ code: String(this.asked) }], unknown: [] };
       }
       async reachable() { return true; }
+      quoteGrade() { return null; }
       close() { /* nothing */ }
     }
     const vendor = {
@@ -175,7 +188,7 @@ describe("opening what this build carries", () => {
           asked.push(codes);
           return Promise.resolve({ records: [], unknown: [] });
         },
-        reachable: () => Promise.resolve(true),
+        reachable: () => Promise.resolve(true), quoteGrade: () => null,
         close: () => { /* nothing */ },
       }),
     };
@@ -195,7 +208,7 @@ describe("opening what this build carries", () => {
         return {
           name: "counted",
           fetchQuotes: () => Promise.resolve({ records: [], unknown: [] }),
-          reachable: () => Promise.resolve(true),
+          reachable: () => Promise.resolve(true), quoteGrade: () => null,
           close: () => { /* nothing */ },
         };
       },
@@ -214,7 +227,7 @@ describe("opening what this build carries", () => {
       open: () => ({
         name,
         fetchQuotes: () => Promise.resolve({ records: [], unknown: [] }),
-        reachable: () => Promise.resolve(true),
+        reachable: () => Promise.resolve(true), quoteGrade: () => null,
         close: () => closed.push(name),
       }),
     });
@@ -233,7 +246,7 @@ describe("opening what this build carries", () => {
       open: () => ({
         name,
         fetchQuotes: () => Promise.resolve({ records: [], unknown: [] }),
-        reachable: () => Promise.resolve(true),
+        reachable: () => Promise.resolve(true), quoteGrade: () => null,
         close: () => {
           if (bad) throw new Error(`${name} refused to close`);
           closed.push(name);

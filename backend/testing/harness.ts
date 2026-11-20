@@ -24,6 +24,7 @@ import { mcpServer } from "../src/entrypoints/mcp/index.ts";
 import { createDatabase } from "../src/db/open.ts";
 import { type Settings, settingsFor } from "../src/env.ts";
 import { type NotifySender, delivery } from "../src/notify.ts";
+import type { QuoteGradeReading } from "../src/ports.ts";
 import type { Deps } from "../src/entrypoints/http/index.ts";
 import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "optionality/quotes";
 
@@ -136,6 +137,9 @@ export interface HarnessOptions {
   referenceSources?: Deps["sources"];
   /** Telegram's send, for the MCP door's notices (ADR 0028); by default it records into `sent`. */
   send?: NotifySender;
+  /** What the Provider last read of the account's quote grade (#464): unread by default, as a
+   *  service that has just started is; null for a Provider that reports none. */
+  quoteGrade?: QuoteGradeReading | null;
 }
 
 export function harness(options: HarnessOptions = {}): Harness {
@@ -156,6 +160,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     name: options.providerName ?? "moomoo",
     fetchQuotes: options.fetchQuotes ? fakeFetcher(options.fetchQuotes) : echoFetcher,
     reachable: () => Promise.resolve(options.opend ?? false),
+    quoteGrade: () => (options.quoteGrade === undefined ? { read: null, failure: null } : options.quoteGrade),
     close: () => { /* nothing to hang up */ },
   };
   const deps: Deps = {

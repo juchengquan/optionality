@@ -12,6 +12,12 @@
     "provider": {
       "name": "moomoo",
       "reachable": true,
+      "quote_grade": {
+        "us_option": null,
+        "realtime": null,
+        "read_at": null,
+        "failure": null
+      },
       "down": null,
       "rejects": {},
       "unknown": [],
@@ -269,7 +275,7 @@
             {
               "name": "health",
               "title": "The service's health",
-              "description": "The service's own account of itself: GET /health, asking the Provider nothing once a sweep has. `db` (the database answers), `provider` (`name` of the market-data Provider, `ok` — whether its last call answered), `golden_cases` (the fingerprint of the domain logic this build runs), `monitor` (the alarm sweep: `last_sweep_at`, `last_sweep_ok`, `consecutive_failures`, `alarms` — a `label` and whether it is `bad` — and `fetched_at`, its last batch), `settings` (`manage_by_dte`, `expired_retention_days`, `display_tz` — the zone every time here is in — and the sweep interval in force: `sweep_seconds`, `sweep_source` settings|env, `sweep_default_seconds`, `sweep_presets`, `sweep_refused`).",
+              "description": "The service's own account of itself: GET /health, asking the Provider nothing once a sweep has. `db` (the database answers), `provider` (`name` of the market-data Provider, `ok` — whether its last call answered, and `quote_grade` — whether option prices are real-time: `us_option`, moomoo's grade for the account's US options (N/A, BMP, LV1, LV2, LV3, SF or NO), `realtime` — true for LV1, LV2, LV3 or SF, false for BMP or NO, null for N/A or unread; option prices are real-time only while it is true, and no delay in minutes is ever stated — `read_at`, when the grade was read, and `reason`, null when it was and otherwise why not), `golden_cases` (the fingerprint of the domain logic this build runs), `monitor` (the alarm sweep: `last_sweep_at`, `last_sweep_ok`, `consecutive_failures`, `alarms` — a `label` and whether it is `bad` — and `fetched_at`, its last batch), `settings` (`manage_by_dte`, `expired_retention_days`, `display_tz` — the zone every time here is in — and the sweep interval in force: `sweep_seconds`, `sweep_source` settings|env, `sweep_default_seconds`, `sweep_presets`, `sweep_refused`).",
               "inputSchema": {
                 "type": "object",
                 "properties": {},

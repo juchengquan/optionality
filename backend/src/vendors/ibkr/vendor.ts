@@ -44,6 +44,9 @@ export const ibkrVendor: ProviderVendor = {
       name: client.name,
       fetchQuotes: (codes) => client.fetchQuotes(codes),
       reachable: () => client.reachable(),
+      // IB Gateway grades each REQUEST, which a Reference row carries as `delayed`; it states no
+      // grade for the account, and passing a request's through as one is out of scope (#464)
+      quoteGrade: () => null,
       close: () => client.close(),
     };
   },

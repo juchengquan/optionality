@@ -16,13 +16,15 @@ a dead port for ever and a missing fake looks like a hung suite (CLAUDE.md).
 """
 
 import asyncio
+import contextlib
 import threading
+from datetime import UTC, datetime
 
 import pytest
 from optionality.opend import DEFAULT_PORT
 
 from optionality_backend.env import settings_for
-from optionality_backend.ports import ProviderClient
+from optionality_backend.ports import GradeRead, ProviderClient, QuoteGradeReading
 from optionality_backend.vendors import ProviderVendor
 from optionality_backend.vendors.opend.vendor import MoomooClient, moomoo_vendor
 
@@ -43,11 +45,28 @@ class Frame:
 class Context:
     """A fake `OpenQuoteContext`: what it was asked, on which thread, and whether it was closed."""
 
-    def __init__(self, *, refuse: str | None = None, unknown: str | None = None, hold: threading.Event | None = None):
+    def __init__(
+        self,
+        *,
+        refuse: str | None = None,
+        unknown: str | None = None,
+        hold: threading.Event | None = None,
+        grade: tuple[int, object] = (0, {"us_option_qot_right": "LV1"}),
+        grade_hold: threading.Event | None = None,
+    ):
         self.refuse, self.unknown, self.hold = refuse, unknown, hold
+        #: what `get_user_info` answers (#464): the SDK's `(ret, data)`, data moomoo's words on a refusal
+        self.grade, self.grade_hold = grade, grade_hold
         self.asked: list[list[str]] = []
         self.threads: list[str] = []
+        self.user_info_asked: list[list[int]] = []
         self.closed = threading.Event()
+
+    def get_user_info(self, info_field=()):
+        self.user_info_asked.append(list(info_field))
+        if self.grade_hold is not None:
+            self.grade_hold.wait(5)
+        return self.grade
 
     def get_market_snapshot(self, codes: list[str]):
         self.threads.append(threading.current_thread().name)
@@ -221,6 +240,158 @@ class TestOneThread:
         client.close()
         # "hang up, so the next call reconnects"
         assert (await client.fetch_quotes([B])).records[0]["code"] == B
+
+
+async def until(done, seconds: float = 2) -> None:
+    """Wait for a grade read, which runs on a thread of its own after the fetch has returned."""
+    for _ in range(int(seconds / 0.01)):
+        if done():
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError("it never happened")
+
+
+async def quiet() -> None:
+    """Long enough for a read that WAS started to have been asked: asserting that none was needs it."""
+    await asyncio.sleep(0.05)
+
+
+T1 = datetime(2026, 11, 20, 9, 41, 34, tzinfo=UTC)
+T2 = datetime(2026, 11, 20, 10, 0, tzinfo=UTC)
+
+
+class TestTheQuoteGrade:
+    """The account's grade for US options (#464): read once per connection episode and kept.
+
+    The TypeScript holds its websocket, so its episode is a login. This connects per fetch, so the
+    episode is the same rule written on the fetches themselves: a read after the first one that
+    succeeds, and after the first that succeeds following one that failed — never one per sweep or
+    page poll. The read is an ask of its own, on a thread of its own, so a GetUserInfo that hangs
+    holds no fetch behind it: the SDK blocks, and the fetches have one thread between them.
+    """
+
+    async def test_is_unread_until_a_fetch_has_succeeded_and_a_failed_one_reads_nothing(self):
+        ctx = Context(refuse="US stock indices are not supported")
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx))
+        assert client.quote_grade() == QuoteGradeReading(read=None, failure=None)
+        with pytest.raises(RuntimeError):
+            await client.fetch_quotes(["US..SPX"])
+        await quiet()
+        assert ctx.user_info_asked == []
+        assert client.quote_grade() == QuoteGradeReading(read=None, failure=None)
+
+    async def test_asks_for_the_quote_rights_alone_after_the_first_fetch_that_succeeds(self):
+        ctx = Context()
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx), now=lambda: T1)
+        await client.fetch_quotes([A])
+        await until(lambda: client.quote_grade().read is not None)
+        assert ctx.user_info_asked == [[4]]
+        assert client.quote_grade() == QuoteGradeReading(
+            read=GradeRead(us_option="LV1", realtime=True, at=T1), failure=None
+        )
+
+    async def test_reads_once_per_episode_none_after_later_successes_one_after_a_failures_end(self):
+        ctx = Context()
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx))
+
+        async def fetch() -> None:
+            with contextlib.suppress(RuntimeError):
+                await client.fetch_quotes([A])
+            await quiet()
+
+        await fetch()
+        await until(lambda: len(ctx.user_info_asked) == 1)
+        await fetch()
+        await fetch()
+        assert len(ctx.user_info_asked) == 1
+        ctx.refuse = "Client connection failed!"
+        await fetch()
+        await fetch()
+        assert len(ctx.user_info_asked) == 1
+        ctx.refuse = None
+        await fetch()
+        await until(lambda: len(ctx.user_info_asked) == 2)
+        await fetch()
+        assert len(ctx.user_info_asked) == 2
+
+    async def test_reads_once_when_fetches_succeed_together(self):
+        ctx = Context()
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx))
+        await asyncio.gather(*(client.fetch_quotes([A]) for _ in range(3)))
+        await until(lambda: client.quote_grade().read is not None)
+        await quiet()
+        assert len(ctx.user_info_asked) == 1
+
+    async def test_says_whether_a_grade_is_real_time(self):
+        ctx = Context(grade=(0, {"us_option_qot_right": "BMP"}))
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx), now=lambda: T1)
+        await client.fetch_quotes([A])
+        await until(lambda: client.quote_grade().read is not None)
+        assert client.quote_grade().read == GradeRead(us_option="BMP", realtime=False, at=T1)
+
+    async def test_a_refused_read_fails_no_fetch_and_says_opends_words_where_none_was_read(self):
+        ctx = Context(grade=(-1, "user info unavailable"))
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx))
+        assert (await client.fetch_quotes([A])).unknown == []
+        await until(lambda: client.quote_grade().failure is not None)
+        assert client.quote_grade() == QuoteGradeReading(read=None, failure="user info unavailable")
+
+    async def test_a_refused_read_leaves_the_last_grade_its_time_saying_how_old_it_is(self):
+        ctx = Context()
+        clock = [T1]
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx), now=lambda: clock[0])
+        await client.fetch_quotes([A])
+        await until(lambda: client.quote_grade().read is not None)
+        ctx.refuse = "Client connection failed!"
+        with pytest.raises(RuntimeError):
+            await client.fetch_quotes([A])
+        ctx.refuse, ctx.grade, clock[0] = None, (-1, "busy"), T2
+        await client.fetch_quotes([A])
+        await until(lambda: client.quote_grade().failure is not None)
+        assert client.quote_grade() == QuoteGradeReading(
+            read=GradeRead(us_option="LV1", realtime=True, at=T1), failure="busy"
+        )
+
+    async def test_a_read_that_never_answers_holds_no_fetch_and_gives_up_at_its_deadline(self):
+        # the same deadline as the snapshot's request; and its own thread, so the fetches behind it
+        # are answered while it hangs
+        hold = threading.Event()
+        ctx = Context(grade_hold=hold)
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx), request_timeout_ms=50)
+        try:
+            await client.fetch_quotes([A])
+            await until(lambda: len(ctx.user_info_asked) == 1)
+            for _ in range(3):
+                assert (await client.fetch_quotes([B])).records[0]["code"] == B
+            await until(lambda: client.quote_grade().failure is not None)
+            assert client.quote_grade() == QuoteGradeReading(
+                read=None, failure="OpenD GetUserInfo timed out after 50ms"
+            )
+        finally:
+            hold.set()
+
+    async def test_a_read_whose_connection_is_refused_fails_no_fetch(self):
+        # its own ask, so its own connection: one that cannot be made is the read's failure alone
+        good, made = Context(), []
+
+        def connect(host: str, port: int) -> Context:
+            made.append(host)
+            if len(made) == 2:
+                raise ConnectionRefusedError("connect ECONNREFUSED 127.0.0.1:11111")
+            return good
+
+        client = MoomooClient("127.0.0.1", connect=connect)
+        await client.fetch_quotes([A])
+        await until(lambda: client.quote_grade().failure is not None)
+        assert client.quote_grade().failure == "connect ECONNREFUSED 127.0.0.1:11111"
+        assert (await client.fetch_quotes([B])).records[0]["code"] == B
+
+    async def test_reads_nothing_for_an_empty_batch(self):
+        ctx = Context()
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx))
+        await client.fetch_quotes([])
+        await quiet()
+        assert ctx.user_info_asked == []
 
 
 class TestReachable:

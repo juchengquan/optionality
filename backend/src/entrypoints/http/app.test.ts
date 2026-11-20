@@ -8,7 +8,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GOLDEN_CASES } from "optionality/golden";
-import { type Harness, body, harness } from "../../../testing/harness.ts";
+import { displayTime } from "optionality/domain/timefmt";
+import { type Harness, NOW, body, harness } from "../../../testing/harness.ts";
+import type { QuoteGradeReading } from "../../ports.ts";
 
 let h: Harness;
 const start = (...args: Parameters<typeof harness>) => (h = harness(...args));
@@ -22,7 +24,7 @@ describe("/health", () => {
     expect(data.db).toBe(true);
     // the Provider names itself: the dashboard said "OpenD" whatever was actually behind the
     // port, and a second Provider would have made that a lie on screen (#169)
-    expect(data.provider).toEqual({ name: "moomoo", ok: false }); // nothing listens on the test port
+    expect(data.provider).toMatchObject({ name: "moomoo", ok: false }); // nothing listens on the test port
   });
 
   it("reports the name of whichever Provider answered, not the one it was written against", async () => {
@@ -87,6 +89,54 @@ describe("/health", () => {
     expect(data.monitor).toEqual({
       last_sweep_at: null, last_sweep_ok: true, consecutive_failures: 0,
       alarms: { label: "watching", bad: false }, fetched_at: null,
+    });
+  });
+
+  describe("the Provider's quote grade (#464): whether its option prices are real-time", () => {
+    const EARLIER = new Date(NOW.getTime() - 3_600_000);
+    const graded = async (quoteGrade: QuoteGradeReading | null) =>
+      (await body(await start({ quoteGrade }).call("/health", { anonymous: true }))).provider.quote_grade;
+
+    it("says moomoo's grade, that it is real-time, and when it was read, in the display zone", async () => {
+      expect(await graded({ read: { usOption: "LV1", realtime: true, at: NOW }, failure: null })).toEqual({
+        us_option: "LV1", realtime: true, read_at: displayTime(NOW, "Asia/Singapore"), reason: null,
+      });
+    });
+
+    it("says a grade that is not real-time, and never by how much", async () => {
+      expect(await graded({ read: { usOption: "BMP", realtime: false, at: NOW }, failure: null }))
+        .toEqual({ us_option: "BMP", realtime: false, read_at: displayTime(NOW, "Asia/Singapore"), reason: null });
+    });
+
+    it("says nothing either way for moomoo's Unknow, beside its name", async () => {
+      expect(await graded({ read: { usOption: "N/A", realtime: null, at: NOW }, failure: null }))
+        .toEqual({ us_option: "N/A", realtime: null, read_at: displayTime(NOW, "Asia/Singapore"), reason: null });
+    });
+
+    it("says it has not been read yet", async () => {
+      expect(await graded({ read: null, failure: null })).toEqual({
+        us_option: null, realtime: null, read_at: null,
+        reason: "not read yet since the service started",
+      });
+    });
+
+    it("says why, in OpenD's words, when the read failed and none was read before", async () => {
+      expect(await graded({ read: null, failure: "OpenD GetUserInfo timed out after 10000ms" })).toEqual({
+        us_option: null, realtime: null, read_at: null,
+        reason: "the read failed: OpenD GetUserInfo timed out after 10000ms",
+      });
+    });
+
+    it("keeps an earlier grade through a failed read, its time saying how old it is", async () => {
+      expect(await graded({ read: { usOption: "LV1", realtime: true, at: EARLIER }, failure: "busy" }))
+        .toEqual({ us_option: "LV1", realtime: true, read_at: displayTime(EARLIER, "Asia/Singapore"), reason: null });
+    });
+
+    it("says a Provider that reports no account grade does not", async () => {
+      // IB Gateway grades each request, which is not this
+      expect(await graded(null)).toEqual({
+        us_option: null, realtime: null, read_at: null, reason: "this Provider reports no account grade",
+      });
     });
   });
 

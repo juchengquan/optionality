@@ -32,6 +32,7 @@ from optionality.quotes import QuoteFetcher
 
 from optionality_backend.db.migrate import DIRECTORY
 from optionality_backend.db.open import create_database
+from optionality_backend.ports import GradeRead, QuoteGradeReading
 
 from .compare import same
 
@@ -251,11 +252,25 @@ class Outage:
 
 @dataclass
 class Provider:
-    """The Provider's port, and what its own probe answers (`/health` asks before any batch has)."""
+    """The Provider's port, what its own probe answers (`/health` asks before any batch has), and what
+    it last read of the account's quote grade (#464) — None for a Provider that reports none."""
 
     name: str
     fetch_quotes: QuoteFetcher
     reachable: Callable[[], bool]
+    quote_grade: QuoteGradeReading | None
+
+
+def reading(grade: dict[str, Any] | None) -> QuoteGradeReading | None:
+    """The world's quote grade as the Provider's client hands it over, as `world.ts`'s `reading`."""
+    if grade is None:
+        return None
+    read = (
+        None
+        if grade["us_option"] is None or grade["read_at"] is None
+        else GradeRead(us_option=grade["us_option"], realtime=grade["realtime"], at=instant(grade["read_at"]))
+    )
+    return QuoteGradeReading(read=read, failure=grade["failure"])
 
 
 @dataclass
@@ -306,6 +321,7 @@ def open_world(world: dict[str, Any]) -> OpenWorld:
         name=p["name"],
         fetch_quotes=fake_vendor(p["name"], p, calls, lambda: outage.down),
         reachable=lambda: p["reachable"],
+        quote_grade=reading(p["quote_grade"]),
     )
     sources: dict[str, QuoteFetcher] = {provider.name: provider.fetch_quotes}
     for name, table in world["sources"].items():

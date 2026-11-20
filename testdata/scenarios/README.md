@@ -26,7 +26,8 @@ Every scenario starts from one, written out in full:
 - `clock` — the instant of the event, ISO 8601 UTC. The service's clock reads exactly this.
 - `settings` — `.env` lines, as strings. Every setting not named here takes the service's default.
 - `provider` — the vendor the alarms read from: its `name`, whether its own port probe says it is
-  `reachable` (asked by `/health` only before any batch has been), and a table of what it answers.
+  `reachable` (asked by `/health` only before any batch has been), what it last read of the
+  account's quote grade (`quote_grade`, below), and a table of what it answers.
 - `sources` — vendors a Reference may name besides the Provider, each a table of the same shape.
   The Provider is a source under its own name as well. A source not listed does not exist in this
   build.
@@ -46,6 +47,17 @@ Rows hold what SQLite holds — booleans as `0`/`1`, instants as UTC text
 `positions.legs`, the `legs_*` maps of `position_samples` and `watch_samples`) are written as the
 JSON they contain, and compared as values. Their stored bytes differ between languages by design
 (`8050` against `8050.0`) and nothing reads them but a JSON parser.
+
+### The quote grade
+
+`provider.quote_grade` is what the Provider's client holds of the account's grade for US options
+(#464) — the READING, not an answer to GetUserInfo, because the client reads that once per
+connection episode and no single event shows an episode: `{us_option, realtime, read_at, failure}`.
+`us_option` is moomoo's grade as the Python SDK names it (`LV1`, `BMP`, `N/A`, ...) and `realtime`
+what it means, both null while no read has answered; `read_at` is when it was read, ISO 8601 UTC,
+null with them; `failure` is the latest read's error, or null — it leaves a grade read before it in
+place. `null` instead of the object is a Provider that reports no account grade at all. Hand it to
+the backend's Provider as it stands; asking for it asks the world nothing.
 
 ### A vendor's table
 

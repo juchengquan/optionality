@@ -16,22 +16,35 @@ ibkr client in this build", and naming it as the Provider is fatal at boot.
 **Where the Python differs, and why.** The client is the library's `optionality.ibkr.IbkrClient`, on
 `ib_async` rather than a port of the TypeScript's hand-written one (ADR 0021, Decision 7), and held
 to the same recorded gateway conversations. It is asyncio already, so unlike moomoo and Yahoo it
-needs no worker thread: it runs on the loop with the routes, the sweep and the bot.
+needs no worker thread: it runs on the loop with the routes, the sweep and the bot. And the descriptor
+hands back the client itself, where the TypeScript's hands back an object of closures — a Python bound
+method keeps its receiver — so the one thing a Provider owes that the library's client does not have,
+`quote_grade`, is added by a subclass here rather than a closure.
 """
 
 from optionality.ibkr import IbkrClient
 
 from ...env import Settings
+from ...ports import QuoteGradeReading
 from .. import ProviderVendor
 
 
-def _open(settings: Settings) -> IbkrClient | None:
+class IbkrProvider(IbkrClient):
+    """The library's client as a Provider."""
+
+    def quote_grade(self) -> QuoteGradeReading | None:
+        """None: IB Gateway grades each REQUEST, which a Reference row carries as `delayed`; it states no
+        grade for the account, and passing a request's through as one is out of scope (#464)."""
+        return None
+
+
+def _open(settings: Settings) -> IbkrProvider | None:
     if not settings.ibkr_host:
         return None
     # Held for the life of the process, not opened per ask: a handshake and a session start on every
     # dashboard refresh is 5,760 of them a day to read two numbers, which is the waste the OpenD
     # client already rejected for websockets.
-    return IbkrClient(settings.ibkr_host, port=settings.ibkr_port, client_id=settings.ibkr_client_id)
+    return IbkrProvider(settings.ibkr_host, port=settings.ibkr_port, client_id=settings.ibkr_client_id)
 
 
 #: Why `IBKR_HOST`: the gateway runs wherever the owner logs in, and there is no default worth
