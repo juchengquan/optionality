@@ -21,4 +21,3 @@
 .nx-expiry-words { min-width: 0; }
 .nx-expiry-piece { white-space: nowrap; }
 .nx-expiry-piece .nx-chip { letter-spacing: normal; vertical-align: 0.05em; }
-.nx-expiry-body[hidden] { display: none; }

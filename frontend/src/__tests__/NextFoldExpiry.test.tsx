@@ -233,4 +233,11 @@ describe("the cookie", () => {
     writeFolded(new Set(["spreads:20261218", "contracts:20261204"]));
     expect(cookie()).toBe("contracts:20261204.spreads:20261218");
   });
+
+  it("reads and writes only a section and an eight-digit date, whatever was typed into it", () => {
+    document.cookie = "ui_folded=%E0%A4%A.spreads:20261204.bogus.contracts:2026-12-31.Spreads:20261218.contracts:20261231x;path=/";
+    expect([...readFolded()]).toEqual(["spreads:20261204"]);
+    writeFolded(new Set(["spreads:20261204", "spreads:2026-12-18", "watchlist:20261218", "a;b"]));
+    expect(cookie()).toBe("spreads:20261204");
+  });
 });
