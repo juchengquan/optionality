@@ -347,7 +347,8 @@ export function Next() {
   // one set of props for either arrangement's book: each draws `placeBook` of these (placement.ts)
   const bookProps: BookProps = {
     quotes, monitors: book.monitors, holdings, holdingsKept,
-    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed, session, phase, privacy, entryStyle, writes,
+    holdingsError: book.holdingsError, holdingsAt: book.holdingsAt, holdingsServed: book.holdingsServed,
+    quotesRead: book.quotesRead, session, phase, privacy, entryStyle, writes,
     journal: (
       <JournalFold open={journalOpen} onToggle={toggleJournal}
                    ready={journal.trades !== null || journal.error !== null}>
@@ -678,6 +679,9 @@ function useBook(session: boolean, edge: number, regular: boolean) {
   // so it answers while /quotes cannot
   const [closes, setCloses] = useState<Closes>([]);
   const [quotesFailed, setQuotesFailed] = useState(false);
+  // whether the LAST read of /quotes answered: false before the first answers and while it fails,
+  // when the book drawn is missing the watchlist's groups (`folds.ts` drops none of their folds)
+  const [quotesRead, setQuotesRead] = useState(false);
   // the regular session's, where every value is live: outside it — the Curb and GTH included, where
   // a row with no quote says its last close (#416) — the closes are read with every poll of the line
   const regularNow = useRef(regular);
@@ -699,6 +703,7 @@ function useBook(session: boolean, edge: number, regular: boolean) {
     lineLanded.current = mine;
     if (q.status === "fulfilled") setQuotes(q.value);
     setQuotesFailed(q.status === "rejected");
+    setQuotesRead(q.status === "fulfilled");
     // the closes at every hour the value cell says them: out of the session, and while /quotes fails
     if (!regularNow.current || q.status === "rejected") void loadCloses();
     if (m.status === "fulfilled") setMonitors(m.value);
@@ -879,7 +884,7 @@ function useBook(session: boolean, edge: number, regular: boolean) {
   return {
     quotes, monitors, health, references, holdings, holdingsError, holdingsAt, holdingsServed, error, errorRaw, polledAt,
     holdingsKept: holdings === null && holdingsError !== null ? lastValued : null,
-    closes, quotesFailed,
+    closes, quotesFailed, quotesRead,
     refresh, setRefresh, refreshing, refreshNow, act, loadHoldings, loadReferences,
     referencesPending: referencesPending > 0, reload, chooseSweep: chooseSweepInterval,
   };

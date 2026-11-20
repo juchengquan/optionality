@@ -18,6 +18,10 @@ export interface BookProps {
    *  nobody can vouch for, as the old page did (#301) */
   holdings: Holding[] | null;
   holdingsError: string | null;
+  /** whether the last read of `/quotes` answered: until it has, and while it fails, the book drawn
+   *  is missing the watchlist's groups, and the folds (`folds.ts`) drop none of theirs. Absent, the
+   *  quotes given are taken as read */
+  quotesRead?: boolean;
   /** the last valuation that succeeded, while `holdings` is null because one failed since: only the
    *  holding already open in the inspector or the sheet is drawn from it, said to be stale, so a
    *  failed poll costs no half-typed form (`kept.ts`). The book itself never draws it */

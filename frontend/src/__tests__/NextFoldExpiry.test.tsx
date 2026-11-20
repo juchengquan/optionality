@@ -12,20 +12,22 @@
  *  The geometry — a folded heading inside the screen at iPhone width — is the browser suite's
  *  (`__browser__/NextFoldExpiry*.test.tsx`).
  */
-import { cleanup, fireEvent, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Holding } from "../shared/api";
+import type { Entry, Holding } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
+import { Next } from "../Next";
 import { PhoneBook } from "../phone/PhoneBook";
 import { reveal } from "../NeedsLine";
 import { readFolded, writeFolded } from "../shared/prefs";
-import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
+import { call, entry, HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
 afterEach(() => {
   cleanup();
-  document.cookie = "ui_folded=;path=/;max-age=0";
+  vi.useRealTimers();
+  for (const n of ["ui_folded", "ui_arrangement"]) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
 function props(over: Partial<BookProps> = {}): BookProps {
@@ -40,6 +42,15 @@ const AT_STOP: Holding[] = HOLDINGS.map((h) => h.id !== "h-puts" ? h : {
   ...h, schedule: { dte_at_open: 45, on_pace: 1.23, pace_gap: 0.47, target: 1, stop: 4, target_dte: 11,
     manage_by_dte: 21, reached: "stop", manage_by_due: false },
 } as Holding);
+
+/** Two rules drawn UNDER the held call spread, not on its row: one ringing, one at fault. Each is a
+ *  row of its own on the desk, a line on the card on the phone, and counted on a folded heading. */
+const under = (id: string, over: Partial<Entry>): Entry => entry(id, {
+  code: `1218_C7300 ${id}`, strike_date: "2026-12-18", legs: call(7300, 7350), field: "option_delta",
+  threshold: 0.3, watched: 0.33, distance: -0.03, held: true, scope: "all",
+  positions: [{ id: "h-calls", name: "1218_C7300" }], combo_greeks: { option_delta: 0.33 }, ...over,
+} as Partial<Entry> & { strike_date: string });
+const UNDER = [under("r-under-ringing", { triggered: true }), under("r-under-fault", { error: "no figure" })];
 
 const ARRANGEMENTS = [
   ["desk", (p: BookProps) => render(<DeskBook {...p} />), ".nxd-row[data-ref]"],
@@ -104,6 +115,19 @@ for (const [arrangement, draw, rows] of ARRANGEMENTS) {
       expect(head("contracts", "2026-12-31").textContent).toBe("20261231 · 38 DTE · 1 row");
     });
 
+    it("counts the rules drawn under a holding: their rows and their chips", () => {
+      draw(props({ quotes: [...QUOTES, ...UNDER], holdings: AT_STOP }));
+      // both under the call spread on the desk's rows, and on its card on the phone
+      const drawnUnder = arrangement === "desk"
+        ? UNDER.map((e) => document.querySelector(`.nxd-row[data-ref="${e.id}"]`)!.hasAttribute("data-nested"))
+        : UNDER.map((e) => document.querySelector(`article[data-ref="h-calls"] [data-ref="${e.id}"]`) !== null);
+      expect(drawnUnder).toEqual([true, true]);
+      fireEvent.click(head("spreads", "2026-12-18"));
+      // the call spread, its two rules, the put spread, the watched spread; its own rule and the
+      // one under it ringing, the other under it at fault, the put spread at its stop
+      expect(head("spreads", "2026-12-18").textContent).toBe("20261218 · 38 DTE · 5 rows · 1 fault · 1 at stop · 2 ringing");
+    });
+
     it("counts each kind, and says a count of more than one in the plural", () => {
       const twice = QUOTES.map((q) => q.id === "w-dec31" ? { ...q, triggered: true } : q);
       const ic = AT_STOP.map((h) => h.id === "h-ic" ? { ...h, schedule: { ...AT_STOP[0]!.schedule!, reached: "stop" } } as Holding : h);
@@ -155,6 +179,17 @@ for (const [arrangement, draw, rows] of ARRANGEMENTS) {
       expect([...readFolded()].sort()).toEqual(["contracts:20261231", "spreads:20261204"]);
     });
 
+    it("folds or opens what THIS tab shows, whatever another tab did to the same group", () => {
+      draw(props());
+      fireEvent.click(head("spreads", "2026-12-04"));
+      // another tab opened 12-04 again and folded Contracts' 12-31, after this one drew it folded
+      document.cookie = "ui_folded=contracts:20261231;path=/";
+      fireEvent.click(head("spreads", "2026-12-04"));
+      // the press here opens what is folded here, and keeps the other tab's fold
+      expect(head("spreads", "2026-12-04").getAttribute("aria-expanded")).toBe("true");
+      expect([...readFolded()]).toEqual(["contracts:20261231"]);
+    });
+
     it("drops an expiry no longer in the book from the cookie when it is next written", () => {
       document.cookie = "ui_folded=spreads:20250117.contracts:20261231;path=/";
       draw(props());
@@ -171,6 +206,15 @@ for (const [arrangement, draw, rows] of ARRANGEMENTS) {
       expect(document.querySelector('[data-section="spreads"] [data-expiry="2026-12-31"]')).toBeNull();
       fireEvent.click(head("spreads", "2026-12-04"));
       expect([...readFolded()].sort()).toEqual(["contracts:20261218", "spreads:20261204", "spreads:20261231"]);
+    });
+
+    it("drops nothing while the watchlist has not been read: the book drawn then is not the whole book", () => {
+      // /quotes failed or has not answered: the holdings are drawn, no watched group is
+      document.cookie = "ui_folded=contracts:20261231.spreads:20261204;path=/";
+      draw(props({ quotes: [], quotesRead: false }));
+      expect(document.querySelector('[data-section="contracts"]')).toBeNull();
+      fireEvent.click(head("spreads", "2026-12-18"));
+      expect([...readFolded()].sort()).toEqual(["contracts:20261231", "spreads:20261204", "spreads:20261218"]);
     });
 
     it("reads a hand-edited cookie tolerantly: nonsense is ignored, a stray % does not blank the page", () => {
@@ -200,14 +244,14 @@ describe("the same words on the desk and the phone", () => {
   it("for every group, folded", () => {
     document.cookie = "ui_folded=spreads:20261204.spreads:20261218.spreads:20261231.contracts:20261218.contracts:20261231;path=/";
     const said = () => [...document.querySelectorAll("[data-section] [data-expiry] h3 button")].map((b) => b.textContent);
-    render(<DeskBook {...props({ holdings: AT_STOP })} />);
+    render(<DeskBook {...props({ quotes: [...QUOTES, ...UNDER], holdings: AT_STOP })} />);
     const desk = said();
     cleanup();
-    render(<PhoneBook {...props({ holdings: AT_STOP })} />);
+    render(<PhoneBook {...props({ quotes: [...QUOTES, ...UNDER], holdings: AT_STOP })} />);
     expect(said()).toEqual(desk);
     expect(desk).toEqual([
       "20261204 · 38 DTE · 1 row · 1 entry signal",
-      "20261218 · 38 DTE · 3 rows · 1 at stop · 1 ringing",
+      "20261218 · 38 DTE · 5 rows · 1 fault · 1 at stop · 2 ringing",
       "20261231 · 38 DTE · 2 rows",
       "20261218 · 38 DTE · 1 row",
       "20261231 · 38 DTE · 1 row",
@@ -240,4 +284,35 @@ describe("the cookie", () => {
     writeFolded(new Set(["spreads:20261204", "spreads:2026-12-18", "watchlist:20261218", "a;b"]));
     expect(cookie()).toBe("spreads:20261204");
   });
+});
+
+/** The page, through a Provider outage out of the session (review of #467): the holdings are valued
+ *  from their closes and drawn, `/quotes` fails, and no watched group is drawn — so a press must not
+ *  take the folds of the groups only the watchlist makes out of the cookie. */
+describe("on the page, while /quotes fails", () => {
+  for (const arrangement of ["desk", "phone"] as const) {
+    it(`keeps the watchlist's folds at a press, on the ${arrangement}`, async () => {
+      // a Saturday: out of the session
+      vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-21T15:00:00Z") });
+      document.cookie = `ui_arrangement=${arrangement};path=/`;
+      document.cookie = "ui_folded=contracts:20261231.spreads:20261204;path=/";
+      const health = { db: true, provider: { name: "moomoo", ok: false },
+        monitor: { last_sweep_at: null, alarms: { label: "active", bad: false }, fetched_at: null },
+        settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" } };
+      window.fetch = ((url: string) => {
+        const path = String(url).replace(/^.*\/api/, "");
+        if (path === "/quotes") {
+          return Promise.resolve({ ok: false, status: 502, json: () => Promise.resolve({ detail: "OpenD login timed out" }) });
+        }
+        const body = path === "/monitors" ? MONITORS : path === "/health" ? health : path === "/positions/values" ? HOLDINGS : [];
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+      }) as unknown as typeof fetch;
+      render(<Next />);
+      await waitFor(() => expect(document.querySelector('[data-ref="h-ic"]')).not.toBeNull());
+      expect(document.querySelector<HTMLElement>(".nx")!.dataset.arrangement).toBe(arrangement);
+      expect(document.querySelector('[data-section="contracts"]')).toBeNull();
+      fireEvent.click(head("spreads", "2026-12-18"));
+      expect([...readFolded()].sort()).toEqual(["contracts:20261231", "spreads:20261204", "spreads:20261218"]);
+    });
+  }
 });

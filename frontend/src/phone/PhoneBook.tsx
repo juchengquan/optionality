@@ -24,13 +24,13 @@ import { bookSpxReasons } from "../strip";
  *  was opened, and closes itself if what it shows is gone.
  */
 export function PhoneBook({
-  quotes, monitors, holdings, holdingsKept, holdingsError, holdingsAt, holdingsServed, session, phase, privacy,
+  quotes, monitors, holdings, holdingsKept, holdingsError, holdingsAt, holdingsServed, quotesRead = true, session, phase, privacy,
   entryStyle, writes,
   journal,
 }: BookProps) {
   const placed = useMemo(() => placeBook(quotes, holdings, monitors), [quotes, holdings, monitors]);
   // which expiry groups the viewer folded (the owner, 2026-11-21), the desk's cookie
-  const folds = useFolds(placed, holdings !== null);
+  const folds = useFolds(placed, holdings !== null && quotesRead);
   const [openId, setOpenId] = useState<string | null>(null);
   const close = useCallback(() => setOpenId(null), []);
   const live = openId === null ? null : find(placed, openId);

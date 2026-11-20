@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { Next } from "../Next";
 import { overflowsSideways, settle } from "./nextBook";
+import { hitBox } from "./targets";
 import { placed, serveOneBook } from "../testing/oneBookServe";
 
 afterEach(() => {
@@ -33,6 +34,20 @@ describe("under the iPhone profile", () => {
     await userEvent.click(b);
     expect(b.getAttribute("aria-expanded")).toBe("true");
     expect(cardsOf(b).every((c) => c.getBoundingClientRect().height > 0)).toBe(true);
+  });
+
+  // the page's rule (next.css, the owner 2026-11-16): a phone's button is DRAWN about 32px high and
+  // reaches its 44pt through an invisible area above and below it — so the target is measured where
+  // a finger lands (`targets.ts`), never off the button's box (review of #467)
+  it("gives every heading, open and folded, a 44pt target of its own", async () => {
+    serveOneBook();
+    render(<Next />);
+    await settle();
+    await settle();
+    const short = () => heads().map((b) => [b.textContent!, hitBox(b)] as const).filter(([, h]) => h.height < 44 || h.width < 44);
+    expect(short()).toEqual([]);
+    for (const b of heads()) await userEvent.click(b);
+    expect(short()).toEqual([]);
   });
 
   it("draws every folded heading inside the screen", async () => {

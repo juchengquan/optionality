@@ -131,7 +131,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
   }, [current, close]);
 
   // a folded group's rows are not on screen (the owner, 2026-11-21): j and k walk past them
-  const folds = useFolds(placed, holdings !== null);
+  const folds = useFolds(placed, holdings !== null && props.quotesRead !== false);
   const ids = useMemo(() => {
     const away = new Set(placed.sections.flatMap((s) => s.expiries.filter((g) => folds.folded(s.kind, g.expiry)))
       .flatMap(groupRows).map(rowId));
