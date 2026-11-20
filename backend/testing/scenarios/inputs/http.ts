@@ -411,8 +411,9 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/health", null, { anonymous: true }),
   },
   {
-    // the grade an earlier read found is kept through a read that failed; its time says how old
-    name: "GET /health keeps the grade an earlier read found when the latest one failed",
+    // the grade an earlier read found is kept through a read that failed, with its own time, and
+    // the reason says the latest read failed (the owner's decision of 2026-11-21)
+    name: "GET /health keeps the grade an earlier read found, and says the latest read failed",
     world: world({ provider: { quote_grade: graded("LV1", at(-3600), GRADE_TIMED_OUT) } }),
     request: request("GET", "/health", null, { anonymous: true }),
   },

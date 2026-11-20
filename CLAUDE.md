@@ -706,9 +706,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   (`GET /monitors/{id}/samples`, #402), nor each rule's last close (`GET /monitors/closes`, #402): a
   database read the page makes out of the session and whenever `/quotes` fails, with a door scenario
   run with the Provider down. Nor is moomoo's GetUserInfo (#464): the account's quote grade, which
-  prices nothing, read once per OpenD connection episode after a fetch that worked — never per sweep or
-  poll, never by `/health` — under the snapshot's own deadline, and failing nothing when it fails;
-  `/health`'s `provider.quote_grade` serves what was last read. `/references` makes one bounded call per
+  prices nothing, read once per OpenD connection episode after a fetch that worked, and a failed read
+  again at most once every 30 minutes (`GRADE_RETRY_MS`) — never per sweep or poll, never by `/health`
+  — under the snapshot's own deadline, and failing nothing when it fails; only the latest read sent
+  settles it. `/health`'s `provider.quote_grade` serves what was last read, and beside a grade kept
+  through a failed read, a `reason` saying so. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
   By New York's session (09:30–16:15, weekdays; `frontend/src/session.ts`) and by nothing

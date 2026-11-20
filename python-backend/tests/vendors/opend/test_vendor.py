@@ -19,7 +19,7 @@ a dead port for ever and a missing fake looks like a hung suite (CLAUDE.md).
 import asyncio
 import contextlib
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from optionality.opend import DEFAULT_PORT
@@ -27,7 +27,7 @@ from optionality.opend import DEFAULT_PORT
 from optionality_backend.env import settings_for
 from optionality_backend.ports import GradeRead, ProviderClient, QuoteGradeReading
 from optionality_backend.vendors import ProviderVendor
-from optionality_backend.vendors.opend.vendor import MoomooClient, moomoo_vendor
+from optionality_backend.vendors.opend.vendor import GRADE_RETRY_MS, MoomooClient, moomoo_vendor
 
 A, B = "US.SPXW261120P6500000", "US.SPXW261120C7100000"
 
@@ -195,6 +195,8 @@ class TestTheDeadlines:
     def test_are_the_typescripts(self):
         client = MoomooClient("127.0.0.1")
         assert (client.login_timeout_ms, client.request_timeout_ms) == (8000, 10_000)
+        # and a failed grade read's wait before it is asked again (#464)
+        assert GRADE_RETRY_MS == 1_800_000
 
 
 class TestOneThread:
@@ -323,9 +325,9 @@ class TestTheQuoteGrade:
         await quiet()
         assert len(ctx.user_info_asked) == 1
 
-    async def test_does_not_read_again_after_a_read_that_failed_however_many_fetches_succeed(self):
-        # once per episode: a GetUserInfo OpenD refuses is said, and asked again only after a fetch
-        # fails (an owner's decision pending in #465 may change this — not here)
+    async def test_does_not_read_again_after_a_read_that_failed_however_many_fetches_succeed_inside_30_minutes(self):
+        # never per sweep: a GetUserInfo OpenD refuses is said, and asked again no sooner than
+        # GRADE_RETRY_MS later (the owner, 2026-11-21) or after a fetch fails
         ctx = Context(grade=(-1, "user info unavailable"))
         client = MoomooClient("127.0.0.1", connect=connecting(ctx))
         for _ in range(5):
@@ -333,6 +335,84 @@ class TestTheQuoteGrade:
             await quiet()
         assert len(ctx.user_info_asked) == 1
         assert client.quote_grade().failure == "user info unavailable"
+
+    async def test_retries_a_failed_read_at_most_once_every_30_minutes_on_a_fetch_that_works_until_one_answers(self):
+        # the owner's decision of 2026-11-21, `opend/client.ts`'s GRADE_RETRY_MS; the clock is driven
+        assert GRADE_RETRY_MS == 30 * 60 * 1000
+        ctx = Context(grade=(-1, "busy"))
+        clock = [T1]
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx), now=lambda: clock[0])
+
+        async def fetch_at(minutes: float) -> None:
+            clock[0] = T1 + timedelta(minutes=minutes)
+            await client.fetch_quotes([A])
+            await quiet()
+
+        await fetch_at(0)
+        assert len(ctx.user_info_asked) == 1
+        assert client.quote_grade() == QuoteGradeReading(read=None, failure="busy")
+        for at in (1, 10, 29, 29.99):
+            await fetch_at(at)
+        assert len(ctx.user_info_asked) == 1
+        ctx.grade = (-1, "still busy")
+        await fetch_at(30)
+        assert len(ctx.user_info_asked) == 2
+        assert client.quote_grade().failure == "still busy"
+        # thirty minutes from the RETRY, not from the first failure
+        await fetch_at(31)
+        await fetch_at(59)
+        assert len(ctx.user_info_asked) == 2
+        ctx.grade = (0, {"us_option_qot_right": "LV1"})
+        await fetch_at(60)
+        assert len(ctx.user_info_asked) == 3
+        assert client.quote_grade() == QuoteGradeReading(
+            read=GradeRead(us_option="LV1", realtime=True, at=T1 + timedelta(minutes=60)), failure=None
+        )
+        # answered: no more retries, however long
+        await fetch_at(90)
+        await fetch_at(600)
+        assert len(ctx.user_info_asked) == 3
+
+    async def test_lets_no_read_but_the_latest_settle_an_older_answer_late(self):
+        # A newer read queued behind a stuck one on the one `moomoo-grade` thread fails at its LOGIN
+        # deadline without reaching OpenD; the stuck one then answers. It is the older episode's, and
+        # must not stand over the newer read's failure (#465, review round 3).
+        hold = threading.Event()
+        ctx = Context(grade=(0, {"us_option_qot_right": "BMP"}), grade_hold=hold)
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx), login_timeout_ms=200, request_timeout_ms=2000)
+        try:
+            await client.fetch_quotes([A])
+            await until(lambda: len(ctx.user_info_asked) == 1)
+            ctx.refuse = "Client connection failed!"
+            with pytest.raises(RuntimeError):
+                await client.fetch_quotes([A])
+            ctx.refuse = None
+            await client.fetch_quotes([A])
+            await until(lambda: client.quote_grade().failure is not None)
+            assert client.quote_grade() == QuoteGradeReading(read=None, failure="OpenD login timed out after 200ms")
+        finally:
+            hold.set()
+        await quiet()
+        assert client.quote_grade() == QuoteGradeReading(read=None, failure="OpenD login timed out after 200ms")
+
+    async def test_lets_no_read_but_the_latest_settle_an_older_timeout_late(self):
+        hold = threading.Event()
+        ctx = Context(grade_hold=hold)
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx), login_timeout_ms=200, request_timeout_ms=600)
+        try:
+            await client.fetch_quotes([A])
+            await until(lambda: len(ctx.user_info_asked) == 1)
+            ctx.refuse = "Client connection failed!"
+            with pytest.raises(RuntimeError):
+                await client.fetch_quotes([A])
+            ctx.refuse = None
+            await client.fetch_quotes([A])
+            await until(lambda: client.quote_grade().failure is not None)
+            # past the stuck read's own deadline
+            await asyncio.sleep(0.7)
+            assert client.quote_grade() == QuoteGradeReading(read=None, failure="OpenD login timed out after 200ms")
+        finally:
+            hold.set()
 
     async def test_says_whether_a_grade_is_real_time(self):
         ctx = Context(grade=(0, {"us_option_qot_right": "BMP"}))

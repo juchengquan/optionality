@@ -45,7 +45,8 @@ export interface VendorClient {
 
 /** What a Provider last read of the account's quote grade for US options (#464): whether the option
  *  prices it serves are real-time. moomoo grades the ACCOUNT, by level, and never a quote; its
- *  client reads it once per connection episode and keeps it, so asking for this asks OpenD nothing —
+ *  client reads it once per connection episode (and a failed read again at most every 30 minutes)
+ *  and keeps it, so asking for this asks OpenD nothing —
  *  `/health` reads it, and must never cause a read. */
 export interface QuoteGradeReading {
   /** moomoo's grade as the Python SDK names it (`LV1`, `BMP`, `N/A`, ...), whether that means

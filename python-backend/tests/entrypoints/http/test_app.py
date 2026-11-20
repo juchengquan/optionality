@@ -125,9 +125,15 @@ GRADES = {
             "reason": "the read failed: OpenD GetUserInfo timed out after 10000ms",
         },
     ),
-    "a failed read keeps the earlier grade, its time saying how old it is": (
+    # the owner's decision of 2026-11-21: the kept grade, its own time, and why it is not newer
+    "a failed read keeps the earlier grade, and says the latest read failed": (
         QuoteGradeReading(read=GradeRead(us_option="LV1", realtime=True, at=EARLIER), failure="busy"),
-        {"us_option": "LV1", "realtime": True, "read_at": "2026-10-02 12:26:06+08:00", "reason": None},
+        {
+            "us_option": "LV1",
+            "realtime": True,
+            "read_at": "2026-10-02 12:26:06+08:00",
+            "reason": "the latest read failed: busy; the grade served is the one read at 2026-10-02 12:26:06+08:00",
+        },
     ),
     # IB Gateway grades each request, which is not this
     "a Provider that reports no account grade says so": (

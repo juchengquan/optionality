@@ -1,5 +1,5 @@
 {
-  "name": "GET /health keeps the grade an earlier read found when the latest one failed",
+  "name": "GET /health keeps the grade an earlier read found, and says the latest read failed",
   "world": {
     "clock": "2026-11-09T15:00:00.000Z",
     "settings": {
@@ -54,7 +54,7 @@
             "us_option": "LV1",
             "realtime": true,
             "read_at": "2026-11-09 22:00:00+08:00",
-            "reason": null
+            "reason": "the latest read failed: OpenD GetUserInfo timed out after 10000ms; the grade served is the one read at 2026-11-09 22:00:00+08:00"
           }
         },
         "golden_cases": "775e4de0b7b1",

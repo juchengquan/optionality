@@ -126,9 +126,12 @@ describe("/health", () => {
       });
     });
 
-    it("keeps an earlier grade through a failed read, its time saying how old it is", async () => {
-      expect(await graded({ read: { usOption: "LV1", realtime: true, at: EARLIER }, failure: "busy" }))
-        .toEqual({ us_option: "LV1", realtime: true, read_at: "2026-10-02 12:26:06+08:00", reason: null });
+    it("keeps an earlier grade through a failed read, and says the latest read failed", async () => {
+      // the owner's decision of 2026-11-21: the kept grade, its own time, and why it is not newer
+      expect(await graded({ read: { usOption: "LV1", realtime: true, at: EARLIER }, failure: "busy" })).toEqual({
+        us_option: "LV1", realtime: true, read_at: "2026-10-02 12:26:06+08:00",
+        reason: "the latest read failed: busy; the grade served is the one read at 2026-10-02 12:26:06+08:00",
+      });
     });
 
     it("says a Provider that reports no account grade does not", async () => {

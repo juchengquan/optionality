@@ -47,19 +47,20 @@ evaluable.
   TypeScript and not by this, until a fetch fails. The read is an ask of its own, on its own
   connection and its own thread (`moomoo-grade`): the SDK blocks, and a GetUserInfo that hangs on the
   fetches' one thread would hold every fetch behind it past its login deadline, which is the one
-  thing a grade must never do. A read happens once per episode, so the extra connection is one per
-  outage, not one per sweep.
-- **No read overwrites a newer one**, which the TypeScript must number its reads to prevent (#465):
-  a read sent there before the socket drops is never answered and ends only at its deadline, after
-  the next read may have answered. Here every read runs on the one `moomoo-grade` thread, so a later
-  read cannot even start until the earlier one's ask has returned — and the earlier one settles the
-  moment it does, if its deadline has not already settled it. `close` cancels the read in flight.
+  thing a grade must never do. A read happens once per episode, and a failed one is asked again at
+  most once every `GRADE_RETRY_MS` (30 minutes), so the extra connection is one per outage or half
+  hour, never one per sweep.
+- **Only the latest read settles the grade**, numbered as the TypeScript numbers its reads (#465).
+  The TypeScript's late read is one sent before its socket dropped, never answered, ending at its
+  deadline. Here reads queue on the one `moomoo-grade` thread, and a newer read queued behind a stuck
+  one can fail at its LOGIN deadline without ever reaching OpenD; the stuck one then answers or times
+  out after it, and would stand over the newer read's failure. `close` cancels the read in flight.
 """
 
 import asyncio
 import contextlib
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from optionality.opend import DEFAULT_PORT, OpenD, is_realtime
@@ -78,6 +79,10 @@ LOGIN_TIMEOUT_MS = 8000
 REQUEST_TIMEOUT_MS = 10_000
 #: `probe.ts`'s default
 PROBE_TIMEOUT_MS = 1000
+#: `opend/client.ts`'s `GRADE_RETRY_MS`: how long a failed grade read waits before it is asked again, on
+#: the next fetch that works (the owner's decision of 2026-11-21) — at most once every 30 minutes while
+#: the last read failed, never per sweep, and not at all once one answers
+GRADE_RETRY_MS = 30 * 60 * 1000
 
 
 async def probe_opend(host: str, port: int, timeout_ms: int = PROBE_TIMEOUT_MS) -> bool:
@@ -135,8 +140,12 @@ class MoomooClient:
         #: whether the next fetch that succeeds must read the grade: until the first has, and again
         #: after every one that fails
         self._grade_due = True
-        #: the read in flight, held so the loop does not drop it, and cancelled by `close`
+        #: the latest read sent, held so the loop does not drop it, and cancelled by `close`
         self._reading: asyncio.Task[None] | None = None
+        #: the number of the latest read sent: only that one may settle the grade (#465)
+        self._grade_reads = 0
+        #: when the latest read was sent: a failed one is asked again GRADE_RETRY_MS after it
+        self._grade_sent_at: datetime | None = None
 
     async def _ask[T](self, worker: Worker, question: Callable[[OpenD], T], prefix: str, asking: str) -> T:
         """`question` on a connection of its own, on `worker`, inside `opend/client.ts`'s two deadlines:
@@ -186,30 +195,46 @@ class MoomooClient:
         except BaseException:
             self._grade_due = True
             raise
-        # the first of an episode reads the grade. Not awaited: the batch is the answer the caller
-        # asked for, and the grade must never delay or fail it
-        if self._grade_due:
+        # the first of an episode reads the grade, and so does the first GRADE_RETRY_MS after a read
+        # that failed. Not awaited: the batch is the answer the caller asked for, and the grade must
+        # never delay or fail it
+        if self._grade_due or self._grade_retry_due():
             self._grade_due = False
-            self._reading = asyncio.get_running_loop().create_task(self._read_grade())
+            self._grade_reads += 1
+            self._grade_sent_at = self._now()
+            self._reading = asyncio.get_running_loop().create_task(self._read_grade(self._grade_reads))
         return batch
+
+    def _grade_retry_due(self) -> bool:
+        """Whether the last read failed, has settled, and was sent at least GRADE_RETRY_MS ago."""
+        settled = self._reading is None or self._reading.done()
+        return (
+            settled
+            and self._grade.failure is not None
+            and self._grade_sent_at is not None
+            and self._now() - self._grade_sent_at >= timedelta(milliseconds=GRADE_RETRY_MS)
+        )
 
     def quote_grade(self) -> QuoteGradeReading:
         """The account's grade for US options as last read, and why the latest read failed if it did.
         Asks nothing: `/health` reads it and must never cause a read (#464)."""
         return self._grade
 
-    async def _read_grade(self) -> None:
+    async def _read_grade(self, read: int) -> None:
         """GetUserInfo, asked for the quote rights alone, kept for `/health`. NOT market data — it prices
         nothing — but bounded all the same, by the snapshot's own deadlines. A failure is kept beside
-        whatever grade an earlier read found, and the next episode tries again."""
+        whatever grade an earlier read found, and asked again GRADE_RETRY_MS later or in the next
+        episode. Only the latest read sent may settle the grade: `read` is its number."""
         try:
             us_option = await self._ask(self._grade_worker, OpenD.us_option_grade, "", "GetUserInfo")
         except Exception as err:  # noqa: BLE001 — a grade that did not come fails nothing; it is said
-            self._grade = QuoteGradeReading(read=self._grade.read, failure=str(err))
+            if read == self._grade_reads:
+                self._grade = QuoteGradeReading(read=self._grade.read, failure=str(err))
             return
-        self._grade = QuoteGradeReading(
-            read=GradeRead(us_option=us_option, realtime=is_realtime(us_option), at=self._now()), failure=None
-        )
+        if read == self._grade_reads:
+            self._grade = QuoteGradeReading(
+                read=GradeRead(us_option=us_option, realtime=is_realtime(us_option), at=self._now()), failure=None
+            )
 
     async def reachable(self) -> bool:
         # the API port, which is the one this client speaks — not the websocket one the TypeScript's

@@ -31,9 +31,11 @@ const QuoteGrade = z.object({
   us_option: z.string().nullable(),
   /** LV1, LV2, LV3 and SF are; BMP and NO are not; null for N/A (moomoo's Unknow) or unread */
   realtime: z.boolean().nullable(),
-  /** when it was read, in the display zone; an earlier read's after one that failed */
+  /** when it was read, in the display zone; an earlier read's after one that failed, which
+   *  `reason` then says */
   read_at: z.string().nullable(),
-  /** null when a grade has been read; otherwise why there is none, in one sentence */
+  /** null when a grade has been read and the latest read answered; otherwise why there is none,
+   *  or why the grade served is not newer, in one sentence */
   reason: z.string().nullable(),
 });
 
@@ -43,11 +45,15 @@ const NOT_READ = "not read yet since the service started";
 const REPORTS_NONE = "this Provider reports no account grade";
 
 /** A Provider's reading, as `/health` serves it. A read that failed leaves an earlier grade in
- *  place, and that grade is served as read — its `read_at` says how old it is (#464). */
+ *  place, and that grade is served with its own time and, in `reason`, why it is not newer: the
+ *  latest read failed, in OpenD's words (the owner's decision of 2026-11-21). */
 function servedGrade(reading: QuoteGradeReading | null, tz: string): z.infer<typeof QuoteGrade> {
   if (reading?.read) {
     const { usOption, realtime, at } = reading.read;
-    return { us_option: usOption, realtime, read_at: displayTime(at, tz), reason: null };
+    const readAt = displayTime(at, tz)!;
+    const reason = reading.failure === null ? null
+      : `the latest read failed: ${reading.failure}; the grade served is the one read at ${readAt}`;
+    return { us_option: usOption, realtime, read_at: readAt, reason };
   }
   const reason = reading === null ? REPORTS_NONE
     : reading.failure !== null ? `the read failed: ${reading.failure}`

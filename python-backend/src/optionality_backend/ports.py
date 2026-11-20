@@ -111,7 +111,7 @@ class GradeRead:
 class QuoteGradeReading:
     """What a Provider last read of the account's quote grade for US options (#464): whether the option
     prices it serves are real-time. moomoo grades the ACCOUNT, by level, and never a quote; its client
-    reads it once per connection episode and keeps it, so asking for this asks OpenD nothing — `/health`
+    reads it once per connection episode (and a failed read again at most every 30 minutes) and keeps it, so asking for this asks OpenD nothing — `/health`
     reads it, and must never cause a read."""
 
     #: the last grade read, or None while no read has answered

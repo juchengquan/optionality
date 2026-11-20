@@ -52,9 +52,11 @@ class QuoteGradeOut(BaseModel):
     us_option: str | None
     #: LV1, LV2, LV3 and SF are; BMP and NO are not; None for N/A (moomoo's Unknow) or unread
     realtime: bool | None
-    #: when it was read, in the display zone; an earlier read's after one that failed
+    #: when it was read, in the display zone; an earlier read's after one that failed, which `reason` then
+    #: says
     read_at: str | None
-    #: None when a grade has been read; otherwise why there is none, in one sentence
+    #: None when a grade has been read and the latest read answered; otherwise why there is none, or why
+    #: the grade served is not newer, in one sentence
     reason: str | None
 
 
@@ -74,15 +76,17 @@ REPORTS_NONE = "this Provider reports no account grade"
 
 def served_grade(reading: QuoteGradeReading | None, tz: str) -> dict[str, Any]:
     """A Provider's reading, as `/health` serves it. A read that failed leaves an earlier grade in place,
-    and that grade is served as read — its `read_at` says how old it is (#464)."""
+    and that grade is served with its own time and, in `reason`, why it is not newer: the latest read
+    failed, in OpenD's words (the owner's decision of 2026-11-21)."""
     if reading is not None and reading.read is not None:
         read = reading.read
-        return {
-            "us_option": read.us_option,
-            "realtime": read.realtime,
-            "read_at": display_time(read.at, tz),
-            "reason": None,
-        }
+        read_at = display_time(read.at, tz)
+        kept = (
+            None
+            if reading.failure is None
+            else f"the latest read failed: {reading.failure}; the grade served is the one read at {read_at}"
+        )
+        return {"us_option": read.us_option, "realtime": read.realtime, "read_at": read_at, "reason": kept}
     if reading is None:
         reason = REPORTS_NONE
     elif reading.failure is not None:

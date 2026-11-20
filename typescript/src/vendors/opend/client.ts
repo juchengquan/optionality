@@ -48,6 +48,11 @@ export interface OpendConfig {
  *  holds it to the table. */
 export const GET_USER_INFO = { cmd: 1005, name: "GetUserInfo" } as const;
 
+/** How long a failed grade read waits before it is asked again, on the next fetch that works (the
+ *  owner's decision of 2026-11-21): at most once every 30 minutes while the last read failed, never
+ *  per sweep, and not at all once one answers. A new login reads again whatever this says. */
+export const GRADE_RETRY_MS = 30 * 60 * 1000;
+
 /** The account's grade for US options, as this client last read it (#464). */
 export interface GradeReading {
   /** moomoo's grade as the SDK names it, whether that means real-time, and when it was read; null
@@ -106,6 +111,10 @@ export class OpendClient {
   private gradeDue = true;
   /** The number of the latest read sent: only that one may settle the grade (#465). */
   private gradeReads = 0;
+  /** When the latest read was sent, and whether it has settled: a failed one is asked again
+   *  `GRADE_RETRY_MS` after it was sent, never while it is still out. */
+  private gradeSentAt = 0;
+  private gradeSettled = true;
 
   /** Written out rather than a `constructor(private readonly deps: ...)` parameter property.
    *  Node runs this file by ERASING types, and a parameter property is syntax that has to EMIT code —
@@ -231,10 +240,23 @@ export class OpendClient {
       this.gradeDue = true;
       throw err;
     }
-    // a connection that answered: the first of its episode reads the grade. Not awaited — the
-    // fetch is the answer the caller asked for, and the grade must never delay or fail it
-    if (this.gradeDue && this.client) this.readGrade(this.client);
+    // a connection that answered: the first of its episode reads the grade, and so does the first
+    // GRADE_RETRY_MS after a read that failed. Not awaited — the fetch is the answer the caller
+    // asked for, and the grade must never delay or fail it
+    if (codes.length > 0 && this.client && (this.gradeDue || this.gradeRetryDue())) {
+      this.readGrade(this.client);
+    }
     return answer;
+  }
+
+  /** Whether the last read failed, has settled, and was sent at least GRADE_RETRY_MS ago. */
+  private gradeRetryDue(): boolean {
+    return this.gradeSettled && this.grade.failure !== null
+      && this.clock().getTime() - this.gradeSentAt >= GRADE_RETRY_MS;
+  }
+
+  private clock(): Date {
+    return this.config.now?.() ?? new Date();
   }
 
   /** The account's grade for US options as last read, and why the latest read failed if it did.
@@ -249,7 +271,7 @@ export class OpendClient {
    *  it is bounded all the same, by the snapshot's own request deadline. Unlike a snapshot's, a
    *  read that times out or fails does NOT hang up: another fetch may be on the socket, and a grade
    *  that did not come is no reason to fail it. The failure is kept for `/health`, beside whatever
-   *  grade an earlier read found, and the next episode tries again. */
+   *  grade an earlier read found, and asked again GRADE_RETRY_MS later or in the next episode. */
   private readGrade(client: MoomooClient): void {
     this.gradeDue = false;
     // A read sent just before the socket drops never settles on its own — the library's reconnect
@@ -257,7 +279,8 @@ export class OpendClient {
     // next episode's read has answered. Only the latest read sent may say anything.
     const read = ++this.gradeReads;
     const latest = () => read === this.gradeReads;
-    const now = this.config.now ?? (() => new Date());
+    this.gradeSentAt = this.clock().getTime();
+    this.gradeSettled = false;
     let ask: Promise<unknown>;
     try {
       ask = client._sendCmd(GET_USER_INFO.cmd, { c2s: { flag: USER_INFO_QOT_RIGHT } }, GET_USER_INFO.name);
@@ -267,11 +290,13 @@ export class OpendClient {
     withTimeout(ask, this.config.requestTimeoutMs ?? 10_000, GET_USER_INFO.name).then(
       (response) => {
         if (!latest()) return;
+        this.gradeSettled = true;
         const usOption = gradeName((response as UserInfoResponse).s2c?.usOptionQotRight);
-        this.grade = { read: { usOption, realtime: isRealtime(usOption), at: now() }, failure: null };
+        this.grade = { read: { usOption, realtime: isRealtime(usOption), at: this.clock() }, failure: null };
       },
       (err: unknown) => {
         if (!latest()) return;
+        this.gradeSettled = true;
         this.grade = { read: this.grade.read, failure: describe(err) };
       },
     );

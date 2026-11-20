@@ -7,7 +7,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { OpendClient } from "./client.ts";
+import { GRADE_RETRY_MS, OpendClient } from "./client.ts";
 import type { MoomooClient, SnapshotResponse } from "./types.ts";
 
 interface Script {
@@ -483,9 +483,9 @@ describe("the account's quote grade (#464)", () => {
     expect(shared.userInfo).toEqual([]);
   });
 
-  it("does not read again after a read that failed, however many fetches succeed", async () => {
-    // once per episode: a GetUserInfo OpenD refuses is said, and asked again only once there is a
-    // new login (an owner's decision pending in #465 may change this — not here)
+  it("does not read again after a read that failed, however many fetches succeed inside 30 minutes", async () => {
+    // never per sweep: a GetUserInfo OpenD refuses is said, and asked again no sooner than
+    // GRADE_RETRY_MS later (the owner, 2026-11-21) or once there is a new login
     const { client, shared } = harness({
       userInfo: () => Promise.reject({ retType: -1, retMsg: "user info unavailable", errCode: 0 }),
     });
@@ -495,6 +495,58 @@ describe("the account's quote grade (#464)", () => {
     }
     expect(shared.userInfo).toHaveLength(1);
     expect(client.quoteGrade().failure).toBe("user info unavailable");
+  });
+
+  it("retries a failed read at most once every 30 minutes, on a fetch that works, until one answers", async () => {
+    // the owner's decision of 2026-11-21: while the last read failed, the next successful fetch at
+    // least GRADE_RETRY_MS after it asks again — and once a read answers, the episode rule resumes
+    expect(GRADE_RETRY_MS).toBe(30 * 60 * 1000);
+    const T0 = new Date("2026-11-20T09:00:00Z").getTime();
+    let clock = T0;
+    const answers = [
+      () => Promise.reject({ retType: -1, retMsg: "busy", errCode: 0 }),
+      () => Promise.reject({ retType: -1, retMsg: "still busy", errCode: 0 }),
+      () => Promise.resolve({ retType: 0, s2c: { usOptionQotRight: 2 } }),
+    ];
+    const { client, shared } = harness({ userInfo: () => answers.shift()!() }, () => new Date(clock));
+    const fetchAt = async (ms: number) => { clock = T0 + ms; await client.batch([CODE]); await landed(); };
+    const MIN = 60_000;
+
+    await fetchAt(0);
+    expect(shared.userInfo).toHaveLength(1);
+    expect(client.quoteGrade()).toEqual({ read: null, failure: "busy" });
+    for (const at of [1, 10, 29, 29.99]) await fetchAt(at * MIN);
+    expect(shared.userInfo).toHaveLength(1);
+    await fetchAt(30 * MIN);
+    expect(shared.userInfo).toHaveLength(2);
+    expect(client.quoteGrade().failure).toBe("still busy");
+    // thirty minutes from the RETRY, not from the first failure
+    await fetchAt(31 * MIN);
+    await fetchAt(59 * MIN);
+    expect(shared.userInfo).toHaveLength(2);
+    await fetchAt(60 * MIN);
+    expect(shared.userInfo).toHaveLength(3);
+    expect(client.quoteGrade()).toEqual({
+      read: { usOption: "LV1", realtime: true, at: new Date(T0 + 60 * MIN) }, failure: null,
+    });
+    // answered: no more retries, however long
+    await fetchAt(90 * MIN);
+    await fetchAt(600 * MIN);
+    expect(shared.userInfo).toHaveLength(3);
+  });
+
+  it("retries only on a fetch that works", async () => {
+    const T0 = new Date("2026-11-20T09:00:00Z").getTime();
+    let clock = T0;
+    const { client, shared } = harness({
+      userInfo: () => Promise.reject({ retType: -1, retMsg: "busy", errCode: 0 }),
+    }, () => new Date(clock));
+    await client.batch([CODE]);
+    await landed();
+    clock = T0 + GRADE_RETRY_MS;
+    await client.batch([]);   // an empty batch asks OpenD nothing, so nothing has worked
+    await landed();
+    expect(shared.userInfo).toHaveLength(1);
   });
 
   it("reads again after the SDK logs in again by itself, with no fetch failing between", async () => {
