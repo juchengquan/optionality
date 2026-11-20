@@ -1,11 +1,11 @@
 /** What the browser remembers for this viewer, and nothing else.
  *
- *  Seven preferences: how often the screen polls, which columns the desk's book hides, which way is
- *  up, how a fired entry rule looks, privacy, the arrangement and the desk's price map. The old
- *  page at `/opt` had five more — the signal and its band (the near-firing highlight), the
- *  grouping and the single-leg table's columns — and they went with it (#301, ADR 0023); their
- *  cookies are simply never read again. The ones kept keep their names, so a choice made on either
- *  page before the swap is still the choice after it.
+ *  Eight preferences: how often the screen polls, which columns the desk's book hides, which way is
+ *  up, how a fired entry rule looks, privacy, the arrangement, the desk's price map and which of the
+ *  book's expiry groups are folded. The old page at `/opt` had five more — the signal and its band
+ *  (the near-firing highlight), the grouping and the single-leg table's columns — and they went
+ *  with it (#301, ADR 0023); their cookies are simply never read again. The ones kept keep their
+ *  names, so a choice made on either page before the swap is still the choice after it.
  *
  *  Cookies by decision, not localStorage: CLAUDE.md draws the line at behaviour versus preference —
  *  behaviour knobs live in `.env`, viewer preferences live in the browser, and there is no DB
@@ -124,4 +124,19 @@ export function readPriceMap(): boolean {
 
 export function writePriceMap(open: boolean): void {
   writeCookie("ui_price_map", open ? "open" : "shut");
+}
+
+/** The book's expiry groups the viewer folded (the owner, 2026-11-21): each as its section and its
+ *  expiry as the page writes a date, `spreads:20261218`, so one expiry folded under Spreads stays
+ *  open under Contracts. The cookie stores what is FOLDED, so every group starts open — a new
+ *  expiry included — and "." separates, as the column cookie's does. A hand-edited entry that is not
+ *  a section and an eight-digit date is dropped here, and so from the cookie at its next write. */
+const FOLDED = /^(spreads|contracts):\d{8}$/;
+
+export function readFolded(): Set<string> {
+  return new Set(readCookie("ui_folded").split(".").filter((k) => FOLDED.test(k)));
+}
+
+export function writeFolded(folded: Set<string>): void {
+  writeCookie("ui_folded", [...folded].filter((k) => FOLDED.test(k)).sort().join("."));
 }

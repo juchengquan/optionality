@@ -10,7 +10,7 @@ import { ATTENTION_WORDS, type attentionOf } from "./desk/columns";
 export function AttentionChip({ kind, words }: {
   kind: NonNullable<ReturnType<typeof attentionOf>>; words?: string | null;
 }) {
-  if (kind === "fault" || kind === "entry" || kind === "alarm") return <Chip state={kind} />;
+  if (kind === "fault" || kind === "entry" || kind === "alarm") return <Chip state={kind} words={words ?? undefined} />;
   return (
     <span className="nx-chip" data-kind={kind}>
       <Glyph kind={kind} />{words ?? ATTENTION_WORDS[kind]}

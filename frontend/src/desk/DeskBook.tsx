@@ -24,7 +24,7 @@ import { alsoWords, NOTHING, placeBook, type BookModel, type Elsewhere, type Exp
 import { MonitorControls } from "../MonitorEdit";
 import { ruleOfEntry, ruleOfMonitor } from "../edit";
 import {
-  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, distanceShort, HELD, heldSpread, ownAttentionOf, RETIRED_KEYS, rowId, rowLegs,
+  ATTENTION_WORDS, attentionOf, chipWords, COLUMNS, distanceShort, groupRows, HELD, heldSpread, ownAttentionOf, RETIRED_KEYS, rowId, rowLegs,
   rowName, rowState, rowStrip, ruleOfRow, subRules, tableRows,
   type DeskColumn, type DeskRow,
 } from "./columns";
@@ -32,6 +32,8 @@ import { SpxNote, StrikeStrip } from "../StrikeStrip";
 import { bookSpxReasons, joinStrips, stripOfHolding } from "../strip";
 import { inFold, NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
 import { useDeskFit } from "./useDeskFit";
+import { ExpiryHeading } from "../ExpiryHeading";
+import { useFolds, type SectionKind } from "../folds";
 import { PriceMapPanel } from "./PriceMapPanel";
 import { priceMapOf, spxOfBook } from "../pricemap";
 import "./desk.css";
@@ -128,7 +130,13 @@ export function DeskBook({ selection, ...props }: BookProps & {
     return () => document.removeEventListener("keydown", onKey);
   }, [current, close]);
 
-  const ids = useMemo(() => rows.map(rowId), [rows]);
+  // a folded group's rows are not on screen (the owner, 2026-11-21): j and k walk past them
+  const folds = useFolds(placed, holdings !== null);
+  const ids = useMemo(() => {
+    const away = new Set(placed.sections.flatMap((s) => s.expiries.filter((g) => folds.folded(s.kind, g.expiry)))
+      .flatMap(groupRows).map(rowId));
+    return rows.map(rowId).filter((id) => !away.has(id));
+  }, [rows, placed, folds.folded]);
   useDeskKeys({ ids, selection: sel, setSelection: setSel, desk: root });
 
   // the palette's landing (#299): the row brought into view, then the inspector's heading focused,
@@ -190,7 +198,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
           ))}
         </div>
 
-        <OneBook {...props} placed={placed} ctx={ctx} picker={
+        <OneBook {...props} placed={placed} ctx={ctx} folds={folds} picker={
           // on the first section's line, at its end: over the header it sat on top of a label
           <>
             <button type="button" className="nxd-maptoggle" aria-expanded={mapOpen}
@@ -247,8 +255,8 @@ const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
  *  held rows first. What the book says before its rows — the session line, SPX's reason, a
  *  valuation's failure or that it is under way, and that there is nothing at all — is said once,
  *  above them. */
-function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, picker }: BookProps & {
-  placed: BookModel; ctx: Ctx; picker: React.ReactNode;
+function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, folds, picker }: BookProps & {
+  placed: BookModel; ctx: Ctx; folds: ReturnType<typeof useFolds>; picker: React.ReactNode;
 }) {
   const empty = placed.book.length === 0 && placed.unplaced.length === 0 && placed.quarantined.length === 0;
   return (
@@ -273,7 +281,8 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
       {placed.sections.map((s) => (
         <section key={s.kind} className="nxd-part" data-section={s.kind} aria-labelledby={`nxd-part-${s.kind}`}>
           <h2 id={`nxd-part-${s.kind}`} className="nxd-part-head">{s.title}</h2>
-          {s.expiries.map((g) => <Expiry key={g.expiry} g={g} ctx={ctx} />)}
+          {s.expiries.map((g) => <Expiry key={g.expiry} g={g} ctx={ctx} kind={s.kind}
+                                         folded={folds.folded(s.kind, g.expiry)} onToggle={folds.toggle} />)}
         </section>
       ))}
       {placed.unplaced.length > 0 ? (
@@ -307,12 +316,16 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
 }
 
 /** One expiry of a section: its heading, its held rows (a condor's two spreads bracketed), then its
- *  watched spreads or its lone contracts, whichever section it is in. */
-function Expiry({ g, ctx }: { g: ExpiryBook; ctx: Ctx }) {
+ *  watched spreads or its lone contracts, whichever section it is in. The heading folds the rows
+ *  (the owner, 2026-11-21), which stay mounted, hidden. */
+function Expiry({ g, ctx, kind, folded, onToggle }: {
+  g: ExpiryBook; ctx: Ctx; kind: SectionKind; folded: boolean; onToggle: (kind: SectionKind, expiry: string) => void;
+}) {
+  const body = useId();
   return (
-    <div className="nxd-expiry" data-expiry={g.expiry}>
-      <h3 className="nxd-group">{`${writtenDate(g.expiry)} · ${g.dte} DTE`}</h3>
-      <ul>
+    <div className="nxd-expiry" data-expiry={g.expiry} data-folded={folded ? "" : undefined}>
+      <ExpiryHeading g={g} folded={folded} controls={body} onToggle={() => onToggle(kind, g.expiry)} className="nxd-group" />
+      <ul id={body} className="nx-expiry-body" hidden={folded}>
         {g.held.map((bracket) => (
           <li key={bracket.map((p) => p.holding.id).join("+")}
               data-bracket={bracket.length === 2 ? "condor" : undefined}>

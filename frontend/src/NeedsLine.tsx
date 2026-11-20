@@ -75,10 +75,16 @@ export function NeedsLine({ items, arrangement, entryStyle, onReveal = reveal }:
 }
 
 /** Bring the row a banner is about into view, and mark it for a moment. Every rule and every
- *  holding on the page carries its `data-ref`, nested ones included. */
+ *  holding on the page carries its `data-ref`, nested ones included. A row in an expiry group the
+ *  viewer folded (2026-11-21) is led to by its group's heading, which says what in it needs them:
+ *  the fold is theirs, and nothing reopens it but a press. */
 export function reveal(ref: string): void {
   // matched on the dataset rather than through a selector, so an id needs no escaping
-  const row = [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((el) => el.dataset.ref === ref);
+  const found = [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((el) => el.dataset.ref === ref);
+  const folded = found?.closest<HTMLElement>(".nx-expiry-body[hidden]");
+  const row = folded
+    ? [...document.querySelectorAll<HTMLElement>("[aria-controls]")].find((b) => b.getAttribute("aria-controls") === folded.id)
+    : found;
   if (!row) return;
   // optional: jsdom has no scrolling, and marking the row matters more than moving to it
   row.scrollIntoView?.({ block: "center", behavior: "smooth" });

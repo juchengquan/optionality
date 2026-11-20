@@ -57,11 +57,15 @@ const CHIP = {
 /** A filled chip with a glyph (ADR 0023): attention is told apart from the "down" colour by its
  *  shape and lightness as well as its hue, so it reads the same whichever way up the viewer has
  *  set the colours, and to somebody who cannot tell the hues apart at all. */
-export function Chip({ state }: { state: keyof typeof CHIP }) {
-  const { Icon, words } = CHIP[state];
+export function Chip({ state, words }: {
+  state: keyof typeof CHIP;
+  /** in place of the state's own word: a folded expiry's count of them, "2 entry signals" */
+  words?: string;
+}) {
+  const { Icon, words: own } = CHIP[state];
   return (
     <span className="nx-chip" data-attention={state}>
-      <Icon aria-hidden="true" />{words}
+      <Icon aria-hidden="true" />{words ?? own}
     </span>
   );
 }

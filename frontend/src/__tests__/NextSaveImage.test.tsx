@@ -229,6 +229,7 @@ describe("one view from either arrangement, as a picture and as text", () => {
     vi.useRealTimers();
     Reflect.deleteProperty(navigator, "clipboard");
     document.cookie = "ui_arrangement=;path=/;max-age=0";
+    document.cookie = "ui_folded=;path=/;max-age=0";
   });
 
   it("is the same plain table from the desk and from the phone", async () => {
@@ -253,6 +254,29 @@ describe("one view from either arrangement, as a picture and as text", () => {
       expect(written[0]).toMatch(/^# optionality\n/);
       const shot = await picture();
       expect(signless(readMarkdown(written[0]!))).toEqual(signless(readPicture(shot)));
+    });
+  }
+
+  // the owner, 2026-11-21: a fold is how the screen is read, never what the view says
+  for (const arrangement of ["desk", "phone"] as const) {
+    it(`draws and copies every row from the ${arrangement}, whatever is folded on screen`, async () => {
+      const written: string[] = [];
+      clipboard({ writeText: (t: string) => { written.push(t); return Promise.resolve(); } });
+      await open(arrangement);
+      fireEvent.click(screen.getByRole("button", { name: "copy as text" }));
+      await waitFor(() => expect(written).toHaveLength(1));
+      const before = await picture();
+      // every expiry group folded, by the page's own headings
+      const heads = [...document.querySelectorAll<HTMLButtonElement>("[data-section] [data-expiry] h3 button")];
+      expect(heads.length, "a book with no group folds nothing").toBeGreaterThan(2);
+      for (const b of heads) fireEvent.click(b);
+      expect(heads.every((b) => b.getAttribute("aria-expanded") === "false")).toBe(true);
+      fireEvent.click(screen.getByRole("button", { name: "copy as text" }));
+      await waitFor(() => expect(written).toHaveLength(2));
+      const after = await picture();
+      expect(written[1]).toBe(written[0]);
+      expect(after.outerHTML).toBe(before.outerHTML);
+      expect(readMarkdown(written[1]!).sections.flatMap((x) => x.rows).length, "an empty view proves nothing").toBeGreaterThan(5);
     });
   }
 
