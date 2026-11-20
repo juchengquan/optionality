@@ -357,7 +357,8 @@ class TestTheQuoteGrade:
         # are answered while it hangs
         hold = threading.Event()
         ctx = Context(grade_hold=hold)
-        client = MoomooClient("127.0.0.1", connect=connecting(ctx), request_timeout_ms=50)
+        # a login deadline short enough that a fetch queued behind the stuck read would fail at it
+        client = MoomooClient("127.0.0.1", connect=connecting(ctx), login_timeout_ms=200, request_timeout_ms=50)
         try:
             await client.fetch_quotes([A])
             await until(lambda: len(ctx.user_info_asked) == 1)
