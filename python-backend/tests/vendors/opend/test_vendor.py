@@ -373,6 +373,37 @@ class TestTheQuoteGrade:
         await fetch_at(600)
         assert len(ctx.user_info_asked) == 3
 
+    async def test_never_retries_while_a_read_is_still_out_however_long_it_has_been(self):
+        # a read fails, is retried 30 minutes on — and that retry hangs, under a deadline longer than
+        # GRADE_RETRY_MS. Another 30 minutes on, the retry is still out: no second one
+        hold = threading.Event()
+        ctx = Context(grade=(-1, "busy"))
+        clock = [T1]
+        client = MoomooClient(
+            "127.0.0.1", connect=connecting(ctx), now=lambda: clock[0], request_timeout_ms=2 * GRADE_RETRY_MS
+        )
+
+        async def fetch_at(minutes: float) -> None:
+            clock[0] = T1 + timedelta(minutes=minutes)
+            await client.fetch_quotes([A])
+            await quiet()
+
+        try:
+            await fetch_at(0)
+            assert client.quote_grade().failure == "busy"
+            ctx.grade_hold = hold
+            await fetch_at(30)
+            assert len(ctx.user_info_asked) == 2
+            await fetch_at(61)
+            # a read asked for now would queue behind the stuck one on the `moomoo-grade` thread, so
+            # let the stuck one go and count what reaches OpenD after it
+            hold.set()
+            await asyncio.sleep(0.3)
+            assert len(ctx.user_info_asked) == 2
+        finally:
+            hold.set()
+            client.close()
+
     async def test_lets_no_read_but_the_latest_settle_an_older_answer_late(self):
         # A newer read queued behind a stuck one on the one `moomoo-grade` thread fails at its LOGIN
         # deadline without reaching OpenD; the stuck one then answers. It is the older episode's, and

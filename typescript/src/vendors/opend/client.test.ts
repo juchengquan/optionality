@@ -535,6 +535,28 @@ describe("the account's quote grade (#464)", () => {
     expect(shared.userInfo).toHaveLength(3);
   });
 
+  it("never retries while a read is still out, however long it has been", async () => {
+    // a read is sent, fails, is retried 30 minutes on — and that retry hangs, under a deadline
+    // longer than GRADE_RETRY_MS. Another 30 minutes on, the retry is still out: no second one
+    const T0 = new Date("2026-11-20T09:00:00Z").getTime();
+    let clock = T0;
+    const answers = [
+      () => Promise.reject({ retType: -1, retMsg: "busy", errCode: 0 }),
+      () => new Promise(() => { /* still out */ }),
+    ];
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 2 * GRADE_RETRY_MS,
+      create: () => new FakeMoomoo({ userInfo: () => answers.shift()!() }, shared), now: () => new Date(clock),
+    });
+    const fetchAt = async (ms: number) => { clock = T0 + ms; await client.batch([CODE]); await landed(); };
+    await fetchAt(0);
+    await fetchAt(GRADE_RETRY_MS);
+    expect(shared.userInfo).toHaveLength(2);
+    await fetchAt(2 * GRADE_RETRY_MS + 60_000);
+    expect(shared.userInfo).toHaveLength(2);
+  });
+
   it("retries only on a fetch that works", async () => {
     const T0 = new Date("2026-11-20T09:00:00Z").getTime();
     let clock = T0;
