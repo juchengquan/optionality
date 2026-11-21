@@ -5,9 +5,9 @@
  *  used to point at a `diff-opend` target as the live check; it went with the Python it compared
  *  against (#145), and nothing in `make check` has reached a gateway since.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { OpendClient } from "./client.ts";
+import { GRADE_RETRY_MS, OpendClient } from "./client.ts";
 import type { MoomooClient, SnapshotResponse } from "./types.ts";
 
 interface Script {
@@ -21,6 +21,8 @@ interface Script {
   /** accepts the request and never answers it, as a logged-in OpenD that has gone quiet does */
   respondSilent?: boolean;
   respond?: (codes: string[]) => SnapshotResponse | Promise<SnapshotResponse>;
+  /** what GetUserInfo (1005) answers — the SDK's `_sendCmd` promise. Absent: Level 1 (#464) */
+  userInfo?: () => Promise<unknown>;
 }
 
 class FakeMoomoo implements MoomooClient {
@@ -68,6 +70,12 @@ class FakeMoomoo implements MoomooClient {
     return respond(codes);
   }
 
+  /** The SDK's own command path, which the client sends GetUserInfo through (#464). */
+  _sendCmd(cmd: number, req: unknown, name: string): Promise<unknown> {
+    this.shared.userInfo.push({ cmd, req, name });
+    return this.script.userInfo?.() ?? Promise.resolve({ retType: 0, s2c: { usOptionQotRight: 2 } });
+  }
+
   /** As the real one: it unregisters a push callback and does NOT close the socket. */
   stop(): void {
     this.stopped += 1;
@@ -83,13 +91,17 @@ interface Shared {
   creates: number;
   /** how many times the inner socket was actually hung up */
   hangups: number;
+  /** every GetUserInfo sent (#464) */
+  userInfo: { cmd: number; req: unknown; name: string }[];
 }
 
-function harness(script: Script = {}) {
-  const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
+const newShared = (): Shared => ({ starts: 0, stops: 0, asked: [], creates: 0, hangups: 0, userInfo: [] });
+
+function harness(script: Script = {}, now?: () => Date) {
+  const shared = newShared();
   const client = new OpendClient({
     host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 50,
-    create: () => new FakeMoomoo(script, shared),
+    create: () => new FakeMoomoo(script, shared), now,
   });
   return { client, shared };
 }
@@ -134,7 +146,7 @@ describe("connecting", () => {
 
   it("tries again on the next call after a failure", async () => {
     let refuse = true;
-    const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
+    const shared = newShared();
     const client = new OpendClient({
       host: "h", port: 1, key: "k", loginTimeoutMs: 50,
       create: () => new FakeMoomoo({ get loginOk() { return !refuse; } }, shared),
@@ -220,7 +232,7 @@ describe("failing", () => {
     // a socket that has quietly died must produce a failed sweep and a visible last_sweep_ok: false,
     // not a silent stream of empty batches
     let fail = true;
-    const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
+    const shared = newShared();
     const client = new OpendClient({
       host: "h", port: 1, key: "k", loginTimeoutMs: 50,
       create: () => new FakeMoomoo({
@@ -250,7 +262,7 @@ describe("failing", () => {
     // the timed-out request may still be in flight on a socket we have stopped listening to; the
     // next caller must not inherit it
     let silent = true;
-    const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
+    const shared = newShared();
     const client = new OpendClient({
       host: "h", port: 1, key: "k", loginTimeoutMs: 50, requestTimeoutMs: 50,
       create: () => new FakeMoomoo({ get respondSilent() { return silent; } }, shared),
@@ -275,7 +287,7 @@ describe("failing", () => {
     // The library closes the previous socket itself when start() is called again on the SAME
     // object (main.js: start -> websock.close()). Making a new object instead is what leaks.
     let fail = true;
-    const shared: Shared = { starts: 0, stops: 0, asked: [], creates: 0, hangups: 0 };
+    const shared = newShared();
     const client = new OpendClient({
       host: "h", port: 1, key: "k", loginTimeoutMs: 50, requestTimeoutMs: 50,
       create: () => new FakeMoomoo({
@@ -400,5 +412,342 @@ describe("containment: the vendor's error prose is the vendor's own business", (
     const batch = await client.asFetcher()([POISON, GOOD]);
     expect(batch.unknown).toEqual([POISON]);
     expect(batch.records.map((r) => r.code)).toEqual([GOOD]);
+  });
+});
+
+describe("the account's quote grade (#464)", () => {
+  /** GetUserInfo is answered on the same socket, after the fetch it follows has returned: it is
+   *  never awaited by one, so a test lets it land before looking. */
+  const landed = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const T1 = new Date("2026-11-20T09:41:34Z");
+  const T2 = new Date("2026-11-20T10:00:00Z");
+  const CODE = "US.SPXW261218C8100000";
+
+  it("is unread until a fetch has succeeded, and a failed one reads nothing", async () => {
+    const { client, shared } = harness({ respond: () => { throw new Error("socket closed"); } });
+    expect(client.quoteGrade()).toEqual({ read: null, failure: null });
+    await expect(client.batch([CODE])).rejects.toThrow();
+    await landed();
+    expect(shared.userInfo).toEqual([]);
+    expect(client.quoteGrade()).toEqual({ read: null, failure: null });
+  });
+
+  it("asks GetUserInfo for the quote rights alone, after the first fetch that succeeds", async () => {
+    const { client, shared } = harness({}, () => T1);
+    await client.batch([CODE]);
+    await landed();
+    // the command and the message are the SDK's own names for 1005; flag 4 is QotRight
+    expect(shared.userInfo).toEqual([{ cmd: 1005, name: "GetUserInfo", req: { c2s: { flag: 4 } } }]);
+    expect(client.quoteGrade()).toEqual({
+      read: { usOption: "LV1", realtime: true, at: T1 }, failure: null,
+    });
+  });
+
+  it("reads once per connection episode: none after later successes, one after a failure's end", async () => {
+    // never per sweep and never per page poll — once per login, which every failure ends
+    let fail = false;
+    const { client, shared } = harness({
+      respond: (codes) => {
+        if (fail) throw new Error("socket closed");
+        return { retType: 0, s2c: { snapshotList: codes.map((code) => ({ basic: { security: { market: 11, code } } })) } };
+      },
+    });
+    const fetch = async () => { await client.batch([CODE]).catch(() => undefined); await landed(); };
+    await fetch();
+    expect(shared.userInfo).toHaveLength(1);
+    await fetch();
+    await fetch();
+    expect(shared.userInfo).toHaveLength(1);
+    fail = true;
+    await fetch();
+    await fetch();
+    expect(shared.userInfo).toHaveLength(1);
+    fail = false;
+    await fetch();
+    expect(shared.userInfo).toHaveLength(2);
+    await fetch();
+    expect(shared.userInfo).toHaveLength(2);
+  });
+
+  it("reads once when two fetches succeed together", async () => {
+    const { client, shared } = harness();
+    await Promise.all([client.batch([CODE]), client.batch([CODE])]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(1);
+  });
+
+  it("reads nothing for an empty batch, which asks OpenD nothing", async () => {
+    const { client, shared } = harness();
+    await client.batch([]);
+    await landed();
+    expect(shared.userInfo).toEqual([]);
+  });
+
+  it("does not read again after a read that failed, however many fetches succeed inside 30 minutes", async () => {
+    // never per sweep: a GetUserInfo OpenD refuses is said, and asked again no sooner than
+    // GRADE_RETRY_MS later (the owner, 2026-11-21) or once there is a new login
+    const { client, shared } = harness({
+      userInfo: () => Promise.reject({ retType: -1, retMsg: "user info unavailable", errCode: 0 }),
+    });
+    for (let i = 0; i < 5; i++) {
+      await client.batch([CODE]);
+      await landed();
+    }
+    expect(shared.userInfo).toHaveLength(1);
+    expect(client.quoteGrade().failure).toBe("user info unavailable");
+  });
+
+  it("retries a failed read at most once every 30 minutes, on a fetch that works, until one answers", async () => {
+    // the owner's decision of 2026-11-21: while the last read failed, the next successful fetch at
+    // least GRADE_RETRY_MS after it asks again — and once a read answers, the episode rule resumes
+    expect(GRADE_RETRY_MS).toBe(30 * 60 * 1000);
+    const T0 = new Date("2026-11-20T09:00:00Z").getTime();
+    let clock = T0;
+    const answers = [
+      () => Promise.reject({ retType: -1, retMsg: "busy", errCode: 0 }),
+      () => Promise.reject({ retType: -1, retMsg: "still busy", errCode: 0 }),
+      () => Promise.resolve({ retType: 0, s2c: { usOptionQotRight: 2 } }),
+    ];
+    const { client, shared } = harness({ userInfo: () => answers.shift()!() }, () => new Date(clock));
+    const fetchAt = async (ms: number) => { clock = T0 + ms; await client.batch([CODE]); await landed(); };
+    const MIN = 60_000;
+
+    await fetchAt(0);
+    expect(shared.userInfo).toHaveLength(1);
+    expect(client.quoteGrade()).toEqual({ read: null, failure: "busy" });
+    for (const at of [1, 10, 29, 29.99]) await fetchAt(at * MIN);
+    expect(shared.userInfo).toHaveLength(1);
+    await fetchAt(30 * MIN);
+    expect(shared.userInfo).toHaveLength(2);
+    expect(client.quoteGrade().failure).toBe("still busy");
+    // thirty minutes from the RETRY, not from the first failure
+    await fetchAt(31 * MIN);
+    await fetchAt(59 * MIN);
+    expect(shared.userInfo).toHaveLength(2);
+    await fetchAt(60 * MIN);
+    expect(shared.userInfo).toHaveLength(3);
+    expect(client.quoteGrade()).toEqual({
+      read: { usOption: "LV1", realtime: true, at: new Date(T0 + 60 * MIN) }, failure: null,
+    });
+    // answered: no more retries, however long
+    await fetchAt(90 * MIN);
+    await fetchAt(600 * MIN);
+    expect(shared.userInfo).toHaveLength(3);
+  });
+
+  it("never retries while a read is still out, however long it has been", async () => {
+    // a read is sent, fails, is retried 30 minutes on — and that retry hangs, under a deadline
+    // longer than GRADE_RETRY_MS. Another 30 minutes on, the retry is still out: no second one
+    const T0 = new Date("2026-11-20T09:00:00Z").getTime();
+    let clock = T0;
+    const answers = [
+      () => Promise.reject({ retType: -1, retMsg: "busy", errCode: 0 }),
+      () => new Promise(() => { /* still out */ }),
+    ];
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 2 * GRADE_RETRY_MS,
+      create: () => new FakeMoomoo({ userInfo: () => answers.shift()!() }, shared), now: () => new Date(clock),
+    });
+    const fetchAt = async (ms: number) => { clock = T0 + ms; await client.batch([CODE]); await landed(); };
+    await fetchAt(0);
+    await fetchAt(GRADE_RETRY_MS);
+    expect(shared.userInfo).toHaveLength(2);
+    await fetchAt(2 * GRADE_RETRY_MS + 60_000);
+    expect(shared.userInfo).toHaveLength(2);
+  });
+
+  it("retries only on a fetch that works", async () => {
+    const T0 = new Date("2026-11-20T09:00:00Z").getTime();
+    let clock = T0;
+    const { client, shared } = harness({
+      userInfo: () => Promise.reject({ retType: -1, retMsg: "busy", errCode: 0 }),
+    }, () => new Date(clock));
+    await client.batch([CODE]);
+    await landed();
+    clock = T0 + GRADE_RETRY_MS;
+    await client.batch([]);   // an empty batch asks OpenD nothing, so nothing has worked
+    await landed();
+    expect(shared.userInfo).toHaveLength(1);
+  });
+
+  it("reads again after the SDK logs in again by itself, with no fetch failing between", async () => {
+    // moomoo-api reconnects on its own when the socket closes (`base.js`' onclose), and calls
+    // `onlogin` again: OpenD restarted between two sweeps is a new login, and a new episode
+    const fakes: FakeMoomoo[] = [];
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 50,
+      create: () => { const fake = new FakeMoomoo({}, shared); fakes.push(fake); return fake; },
+    });
+    await client.batch([CODE]);
+    await landed();
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(1);
+    fakes[0]!.onlogin?.(true, "Succeed");   // the library's own reconnect, logged in again
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(2);
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(2);
+    // and a re-login that FAILED is no episode: nothing answered on it
+    fakes[0]!.onlogin?.(false, "refused");
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(2);
+  });
+
+  it("lets no read but the latest one settle the grade", async () => {
+    // A read sent just before the socket drops never settles on its own — the library's reconnect
+    // clears its pool and rejects nothing — so it ends at its deadline, which can come after the
+    // NEXT episode's read has answered. That late timeout must not stand over the newer grade.
+    const answers: (() => Promise<unknown>)[] = [
+      () => new Promise(() => { /* the socket dropped under it */ }),
+      () => Promise.resolve({ retType: 0, s2c: { usOptionQotRight: 2 } }),
+    ];
+    const fakes: FakeMoomoo[] = [];
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 50,
+      create: () => {
+        const fake = new FakeMoomoo({ userInfo: () => answers.shift()!() }, shared);
+        fakes.push(fake);
+        return fake;
+      },
+    });
+    await client.batch([CODE]);
+    fakes[0]!.onlogin?.(true, "Succeed");   // the library logged in again by itself
+    await client.batch([CODE]);
+    await landed();
+    expect(shared.userInfo).toHaveLength(2);
+    expect(client.quoteGrade().read?.usOption).toBe("LV1");
+    // past the first read's deadline
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(client.quoteGrade()).toMatchObject({ read: { usOption: "LV1" }, failure: null });
+  });
+
+  it("lets a late answer to an older read not stand over the newer grade either", async () => {
+    let answerFirst: (value: unknown) => void = () => undefined;
+    const answers: (() => Promise<unknown>)[] = [
+      () => new Promise((resolve) => { answerFirst = resolve; }),
+      () => Promise.resolve({ retType: 0, s2c: { usOptionQotRight: 2 } }),
+    ];
+    const fakes: FakeMoomoo[] = [];
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 1000,
+      create: () => {
+        const fake = new FakeMoomoo({ userInfo: () => answers.shift()!() }, shared);
+        fakes.push(fake);
+        return fake;
+      },
+    });
+    await client.batch([CODE]);
+    fakes[0]!.onlogin?.(true, "Succeed");
+    await client.batch([CODE]);
+    await landed();
+    answerFirst({ retType: 0, s2c: { usOptionQotRight: 1 } });   // BMP, from the episode before
+    await landed();
+    expect(client.quoteGrade().read?.usOption).toBe("LV1");
+  });
+
+  it("never makes a fetch wait for the read", async () => {
+    // a deadline long enough that a fetch which waited on a hanging read would visibly wait
+    const shared = newShared();
+    const client = new OpendClient({
+      host: "127.0.0.1", port: 33333, key: "abc", loginTimeoutMs: 50, requestTimeoutMs: 2000,
+      create: () => new FakeMoomoo({ userInfo: () => new Promise(() => { /* never */ }) }, shared),
+    });
+    const started = Date.now();
+    await client.batch([CODE]);
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(shared.userInfo).toHaveLength(1);
+  });
+
+  it("names a grade as the SDK does, and says whether it is real-time", async () => {
+    const answers = [
+      { retType: 0, s2c: { usOptionQotRight: 1 } },
+      { retType: 0, s2c: {} },  // a field OpenD left out is moomoo's Unknow
+    ];
+    let fail = false;
+    const { client } = harness({
+      respond: (codes) => {
+        if (fail) throw new Error("socket closed");
+        return { retType: 0, s2c: { snapshotList: codes.map((code) => ({ basic: { security: { market: 11, code } } })) } };
+      },
+      userInfo: () => Promise.resolve(answers.shift()),
+    }, () => T1);
+    await client.batch([CODE]);
+    await landed();
+    expect(client.quoteGrade().read).toEqual({ usOption: "BMP", realtime: false, at: T1 });
+    fail = true;
+    await client.batch([CODE]).catch(() => undefined);
+    fail = false;
+    await client.batch([CODE]);
+    await landed();
+    expect(client.quoteGrade().read).toEqual({ usOption: "N/A", realtime: null, at: T1 });
+  });
+
+  it("a refused read fails no fetch, and says OpenD's words where no grade was read", async () => {
+    // the SDK rejects with the decoded `{retType, retMsg, errCode}`, as it does for a snapshot
+    const { client } = harness({
+      userInfo: () => Promise.reject({ retType: -1, retMsg: "user info unavailable", errCode: 0 }),
+    });
+    await expect(client.batch([CODE])).resolves.toMatchObject({ unknown: [] });
+    await landed();
+    expect(client.quoteGrade()).toEqual({ read: null, failure: "user info unavailable" });
+  });
+
+  it("a refused read leaves the last grade where it was, its time saying how old it is", async () => {
+    let fail = false;
+    let refuse = false;
+    let clock = T1;
+    const { client } = harness({
+      respond: (codes) => {
+        if (fail) throw new Error("socket closed");
+        return { retType: 0, s2c: { snapshotList: codes.map((code) => ({ basic: { security: { market: 11, code } } })) } };
+      },
+      userInfo: () => (refuse
+        ? Promise.reject({ retType: -1, retMsg: "busy", errCode: 0 })
+        : Promise.resolve({ retType: 0, s2c: { usOptionQotRight: 2 } })),
+    }, () => clock);
+    await client.batch([CODE]);
+    await landed();
+    fail = true;
+    await client.batch([CODE]).catch(() => undefined);
+    fail = false;
+    refuse = true;
+    clock = T2;
+    await client.batch([CODE]);
+    await landed();
+    expect(client.quoteGrade()).toEqual({
+      read: { usOption: "LV1", realtime: true, at: T1 }, failure: "busy",
+    });
+  });
+
+  it("a read that never answers fails no fetch, holds no connection hostage, and gives up at its deadline", async () => {
+    // the same deadline as the snapshot's request. Stop waiting is not cancelling, but unlike a
+    // snapshot's the connection is NOT hung up for it: another fetch may be using the socket, and a
+    // grade that did not come is no reason to fail that one
+    const { client, shared } = harness({ userInfo: () => new Promise(() => { /* never */ }) });
+    await expect(client.batch([CODE])).resolves.toMatchObject({ unknown: [] });
+    await expect(client.batch([CODE])).resolves.toMatchObject({ unknown: [] });
+    await vi.waitFor(() => {
+      expect(client.quoteGrade().failure).toBe("OpenD GetUserInfo timed out after 50ms");
+    });
+    expect(client.quoteGrade().read).toBeNull();
+    expect(shared.hangups).toBe(0);
+    expect(shared.starts).toBe(1);
+    expect(shared.userInfo).toHaveLength(1);
+  });
+
+  it("a read that throws before it is even sent fails no fetch", async () => {
+    // an SDK that no longer has `_sendCmd` must cost the grade and nothing else
+    const { client } = harness({ userInfo: () => { throw new TypeError("_sendCmd is not a function"); } });
+    await expect(client.batch([CODE])).resolves.toMatchObject({ unknown: [] });
+    await landed();
+    expect(client.quoteGrade()).toEqual({ read: null, failure: "_sendCmd is not a function" });
   });
 });

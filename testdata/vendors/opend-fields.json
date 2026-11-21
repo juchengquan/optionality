@@ -1,6 +1,15 @@
 {
   "module": "opend-fields",
   "constants": {
+    "QOT_RIGHTS": {
+      "0": "N/A",
+      "1": "BMP",
+      "2": "LV1",
+      "3": "LV2",
+      "4": "SF",
+      "5": "NO",
+      "6": "LV3"
+    },
     "RECORD_FIELDS": [
       "code",
       "name",
@@ -39,7 +48,145 @@
       "option_expiry_date_distance",
       "option_area_type",
       "mid_price"
-    ]
+    ],
+    "USER_INFO_QOT_RIGHT": 4
   },
-  "cases": []
+  "cases": [
+    {
+      "fn": "gradeName",
+      "name": "2 is Level 1, as this account's options were graded on 2026-11-20",
+      "args": [
+        2
+      ],
+      "expect": "LV1"
+    },
+    {
+      "fn": "gradeName",
+      "name": "0 is moomoo's Unknow, which the SDK writes N/A",
+      "args": [
+        0
+      ],
+      "expect": "N/A"
+    },
+    {
+      "fn": "gradeName",
+      "name": "1 is BMP",
+      "args": [
+        1
+      ],
+      "expect": "BMP"
+    },
+    {
+      "fn": "gradeName",
+      "name": "3 is Level 2",
+      "args": [
+        3
+      ],
+      "expect": "LV2"
+    },
+    {
+      "fn": "gradeName",
+      "name": "4 is SF",
+      "args": [
+        4
+      ],
+      "expect": "SF"
+    },
+    {
+      "fn": "gradeName",
+      "name": "5 is no rights at all",
+      "args": [
+        5
+      ],
+      "expect": "NO"
+    },
+    {
+      "fn": "gradeName",
+      "name": "6 is Level 3",
+      "args": [
+        6
+      ],
+      "expect": "LV3"
+    },
+    {
+      "fn": "gradeName",
+      "name": "a number moomoo has not used is N/A, as the SDK has it",
+      "args": [
+        7
+      ],
+      "expect": "N/A"
+    },
+    {
+      "fn": "gradeName",
+      "name": "and so is no number at all — a field OpenD left out",
+      "args": [
+        null
+      ],
+      "expect": "N/A"
+    },
+    {
+      "fn": "isRealtime",
+      "name": "Level 1 is real-time",
+      "args": [
+        "LV1"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isRealtime",
+      "name": "Level 2 is real-time",
+      "args": [
+        "LV2"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isRealtime",
+      "name": "Level 3 is real-time",
+      "args": [
+        "LV3"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isRealtime",
+      "name": "SF is real-time",
+      "args": [
+        "SF"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isRealtime",
+      "name": "BMP is not real-time",
+      "args": [
+        "BMP"
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isRealtime",
+      "name": "NO is not real-time",
+      "args": [
+        "NO"
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isRealtime",
+      "name": "N/A says nothing either way",
+      "args": [
+        "N/A"
+      ],
+      "expect": null
+    },
+    {
+      "fn": "isRealtime",
+      "name": "nor does a name moomoo has not used",
+      "args": [
+        "LV9"
+      ],
+      "expect": null
+    }
+  ]
 }

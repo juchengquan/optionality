@@ -93,10 +93,17 @@ def test_verify_notices_a_contract_moomoo_quietly_left_out():
 
 
 class FakeContext:
-    def __init__(self, ret=0, rows=None, error=None):
+    def __init__(self, ret=0, rows=None, error=None, grade=None):
         self.ret, self.rows, self.error = ret, rows or [], error
+        #: what `get_user_info` answers: the SDK's `(ret, data)`, data a dict, or moomoo's words
+        self.grade = grade
         self.closed = False
         self.asked = []
+        self.user_info_asked = []
+
+    def get_user_info(self, info_field=()):
+        self.user_info_asked.append(list(info_field))
+        return self.grade
 
     def get_market_snapshot(self, codes):
         self.asked.append(list(codes))
@@ -218,3 +225,59 @@ def test_without_the_extra_says_how_to_get_it(monkeypatch):
     monkeypatch.setattr(opend, "_sdk_connect", None)
     with pytest.raises(ImportError, match=r"optionality\[opend\]"), opend.OpenD():
         pass
+
+
+# --- the quote grade (#464) ------------------------------------------------------------------------
+
+#: gradeName -> grade_name: snake_case is the only translation, and the corpus names the TypeScript's
+PORTED = {"gradeName": "grade_name", "isRealtime": "is_realtime"}
+
+
+def _recorded() -> list[dict]:
+    cases = json.loads(CORPUS.read_text())["cases"]
+    # there IS something to compare: an empty corpus would pass every assertion over it
+    assert len(cases) >= 15, f"only {len(cases)} cases in {CORPUS}"
+    return cases
+
+
+@pytest.mark.parametrize("case", _recorded(), ids=lambda c: f"{c['fn']}: {c['name']}")
+def test_the_grade_reproduces_the_typescript(case):
+    assert getattr(opend, PORTED[case["fn"]])(*case["args"]) == case["expect"]
+
+
+def test_the_corpus_covers_every_grade_function_this_module_ports():
+    # both directions: a function here the corpus does not name is unheld, and one the corpus names
+    # that is missing here is a port with a hole
+    assert {c["fn"] for c in _recorded()} == set(PORTED)
+    for name in PORTED.values():
+        assert callable(getattr(opend, name, None)), name
+
+
+def test_the_grade_names_are_the_sdks_own():
+    # the TypeScript reads OpenD's NUMBER and this reads the SDK's NAME for it; the corpus's table is
+    # the TypeScript's translation, and the SDK's must be the same one, or the backends name a grade
+    # differently. Read from the installed SDK rather than copied, so an SDK that renames one fails
+    constant = pytest.importorskip("moomoo.common.constant")
+    sdk = constant.QotRight().number_dic
+    recorded = {int(k): v for k, v in json.loads(CORPUS.read_text())["constants"]["QOT_RIGHTS"].items()}
+    assert sdk == recorded == opend.QOT_RIGHTS
+    # and its answer for a number it does not list, and for none, is the corpus's
+    assert constant.QotRight.to_string2(7) == opend.grade_name(7) == "N/A"
+    assert constant.QotRight.to_string2("N/A") == opend.grade_name(None) == "N/A"
+
+
+def test_asks_for_the_quote_rights_alone():
+    # flag 4, `UserInfoField.QOTRIGHT`, and the SDK's own number for it
+    constant = pytest.importorskip("moomoo.common.constant")
+    recorded = json.loads(CORPUS.read_text())["constants"]["USER_INFO_QOT_RIGHT"]
+    assert opend.USER_INFO_QOT_RIGHT == recorded == constant.UserInfoField.QOTRIGHT
+    ctx = FakeContext(grade=(0, {"us_option_qot_right": "LV1", "us_qot_right": "LV3"}))
+    with opend.OpenD(connect=connect(ctx)) as od:
+        assert od.us_option_grade() == "LV1"
+    assert ctx.user_info_asked == [[opend.USER_INFO_QOT_RIGHT]]
+
+
+def test_a_refused_grade_raises_with_moomoo_s_words():
+    ctx = FakeContext(grade=(-1, "Not logged in"))
+    with opend.OpenD(connect=connect(ctx)) as od, pytest.raises(RuntimeError, match="^Not logged in$"):
+        od.us_option_grade()

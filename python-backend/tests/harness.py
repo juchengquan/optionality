@@ -45,7 +45,7 @@ from optionality_backend.entrypoints.http import Deps, Surfaces, create_app
 from optionality_backend.entrypoints.mcp import McpOptions, mcp_server
 from optionality_backend.env import Settings, settings_for
 from optionality_backend.notify import NotifySender, delivery
-from optionality_backend.ports import AlarmState, QuoteFetcher
+from optionality_backend.ports import AlarmState, QuoteFetcher, QuoteGradeReading
 
 TOKEN = "tok"
 
@@ -144,14 +144,24 @@ def poisonable(fragment: str) -> QuoteFetcher:
     return fetch_quotes
 
 
+#: a quote grade nobody has read yet (#464): what a Provider reports when the service has just started
+UNREAD = QuoteGradeReading(read=None, failure=None)
+
+
 @dataclass
 class HarnessProvider:
     name: str
     fetch_quotes: QuoteFetcher
     answers: bool
+    #: what the Provider last read of the account's quote grade (#464): unread, as a service that has
+    #: just started; None for a Provider that reports none
+    grade: QuoteGradeReading | None = UNREAD
 
     async def reachable(self) -> bool:
         return self.answers
+
+    def quote_grade(self) -> QuoteGradeReading | None:
+        return self.grade
 
     def close(self) -> None:
         """Nothing to hang up."""
@@ -206,6 +216,7 @@ def harness(
     fetch_quotes: FakeProvider | None = None,
     reference_sources: dict[str, QuoteFetcher] | None = None,
     send: NotifySender | None = None,
+    quote_grade: QuoteGradeReading | None = UNREAD,
 ) -> Harness:
     folder = Path(tempfile.mkdtemp(prefix="optionality-http-"))
     db = create_database(folder / "test.db")
@@ -221,7 +232,10 @@ def harness(
     )
     sweeper = FakeSweeper()
     provider = HarnessProvider(
-        name=provider_name, fetch_quotes=fake_fetcher(fetch_quotes) if fetch_quotes else echo_fetcher, answers=opend
+        name=provider_name,
+        fetch_quotes=fake_fetcher(fetch_quotes) if fetch_quotes else echo_fetcher,
+        answers=opend,
+        grade=quote_grade,
     )
     clock = {"now": NOW}
     deps = Deps(

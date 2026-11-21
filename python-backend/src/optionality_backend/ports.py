@@ -96,6 +96,30 @@ class VendorClient(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class GradeRead:
+    """A grade a Provider read: moomoo's own name for it as the SDK gives it (`LV1`, `BMP`, `N/A`, ...),
+    whether that means real-time (the library's `is_realtime`; None for Unknow), and when it was read.
+    An anonymous object type in the TypeScript (`QuoteGradeReading["read"]`), named here."""
+
+    us_option: str
+    realtime: bool | None
+    at: datetime
+
+
+@dataclass(frozen=True)
+class QuoteGradeReading:
+    """What a Provider last read of the account's quote grade for US options (#464): whether the option
+    prices it serves are real-time. moomoo grades the ACCOUNT, by level, and never a quote; its client
+    reads it once per connection episode (and a failed read again at most every 30 minutes) and keeps
+    it, so asking for this asks OpenD nothing — `/health` reads it, and must never cause a read."""
+
+    #: the last grade read, or None while no read has answered
+    read: GradeRead | None
+    #: OpenD's words for why the latest read failed, or None. A failure leaves `read` as it was.
+    failure: str | None
+
+
 @runtime_checkable
 class ProviderClient(VendorClient, Protocol):
     """The Provider: the one vendor the alarms read from, chosen before boot (ADR 0015).
@@ -112,6 +136,11 @@ class ProviderClient(VendorClient, Protocol):
         Consulted only while nothing has been fetched yet: an answered request outranks a probe, and a
         socket that accepts is not a gateway that answers (ADR 0010, and 2026-10-16, when OpenD held
         the port open and timed out every login)."""
+        ...
+
+    def quote_grade(self) -> QuoteGradeReading | None:
+        """The account's quote grade as last read, or None for a Provider that reports none — IB Gateway
+        grades each request rather than the account, and that is not this (#464)."""
         ...
 
 

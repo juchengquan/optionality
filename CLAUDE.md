@@ -298,9 +298,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   importable, so the service cannot trade by absence rather than by discipline; `yahoo/` wraps
   `yahoo-finance2`. Each vendor's pure `fields.ts` is re-exported by `vendors/fields.ts`, a door
   of its own so `testdata/vendors/` can record one truth for two languages: it imports nothing but
-  the vendors' `fields.ts` modules (`opend/fields.ts` is only a list, `RECORD_FIELDS`: what
+  the vendors' `fields.ts` modules (`opend/fields.ts` is a list, `RECORD_FIELDS`: what
   `snapshot.ts`'s record carries, since the Python reads the SDK's frame rather than the protobuf
-  and can be held only to the record's keys), because a door that reached a client would typecheck the moomoo
+  and can be held only to the record's keys — and, since #464, the quote grade's mapping:
+  `QOT_RIGHTS`, `gradeName`, `isRealtime` and `USER_INFO_QOT_RIGHT`, GetUserInfo's flag), because a door that reached a client would typecheck the moomoo
   SDK's declarations into the case generator, which calls neither. `ibkr/fake.ts` is the fake
   gateway (`make ibkr-fake-gateway`), replaying `ibkr/recordings.ts`'s files, and `ibkr/replay.ts`
   turns each into its expected batch for `make cases` — a door that takes no host and no port.
@@ -527,6 +528,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   unknown — inside the provider, where `opend/client.ts` has it (ADR 0015, #168), not above the port;
   its record keeps only `RECORD_FIELDS`, held to `testdata/vendors/opend-fields.json` (the SDK's
   frame has 143 columns, and `/quotes` served them all until a side-by-side run on 2026-11-17);
+  `OpenD.us_option_grade()` reads the account's US option grade from the SDK's `get_user_info`
+  (#464), and `grade_name` and `is_realtime`, ports of `opend/fields.ts`, are held to the same file;
   `quotes.py` is the port's contract plus the one fetch-and-catch that cannot be pure, and `api.py`
   loads Positions, Monitors and References from the live service (`OPTIONALITY_API` for its
   URL) — `positions()` only what is still HELD, `closed_positions()` the closed ones as
@@ -702,7 +705,12 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   polled, with a door scenario run with the Provider down; nor a watched rule's
   (`GET /monitors/{id}/samples`, #402), nor each rule's last close (`GET /monitors/closes`, #402): a
   database read the page makes out of the session and whenever `/quotes` fails, with a door scenario
-  run with the Provider down. `/references` makes one bounded call per
+  run with the Provider down. Nor is moomoo's GetUserInfo (#464): the account's quote grade, which
+  prices nothing, read once per OpenD connection episode after a fetch that worked, and a failed read
+  again at most once every 30 minutes (`GRADE_RETRY_MS`) — never per sweep or poll, never by `/health`
+  — under the snapshot's own deadline, and failing nothing when it fails; only the latest read sent
+  settles it. `/health`'s `provider.quote_grade` serves what was last read, and beside a grade kept
+  through a failed read, a `reason` saying so. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
   By New York's session (09:30–16:15, weekdays; `frontend/src/session.ts`) and by nothing

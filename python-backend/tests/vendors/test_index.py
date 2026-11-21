@@ -24,7 +24,7 @@ from optionality.ibkr import IbkrClient
 from optionality.quote import Batch
 
 from optionality_backend.env import settings_for
-from optionality_backend.ports import ProviderClient, VendorClient
+from optionality_backend.ports import ProviderClient, QuoteGradeReading, VendorClient
 from optionality_backend.vendors import (
     PROVIDERS,
     VENDORS,
@@ -87,6 +87,16 @@ class TestChoosingTheProvider:
         provider = make_provider(settings_for(provider="moomoo", moomoo_ws_key="k"))
         assert provider.name == "moomoo"
         assert callable(provider.fetch_quotes)
+
+    def test_hands_moomoos_quote_grade_to_health_unread_until_a_fetch_has_worked(self):
+        # asking for it asks OpenD nothing: the client reads it after a fetch, once per episode (#464)
+        provider = make_provider(settings_for(provider="moomoo", moomoo_ws_key="k"))
+        assert provider.quote_grade() == QuoteGradeReading(read=None, failure=None)
+
+    def test_says_ib_gateway_reports_no_account_grade_because_it_grades_each_request_instead(self):
+        provider = make_provider(settings_for(provider="ibkr", ibkr_host="127.0.0.1"))
+        assert provider.quote_grade() is None
+        provider.close()
 
     def test_refuses_a_name_it_does_not_know_naming_the_ones_it_does(self):
         # fatal on purpose, as a mistyped MONITOR_INTERVAL_SECONDS is: a service that starts with no
@@ -163,6 +173,9 @@ class TestOpeningWhatThisBuildCarries:
 
             async def reachable(self) -> bool:
                 return True
+
+            def quote_grade(self) -> None:
+                return None
 
             def close(self) -> None:
                 pass

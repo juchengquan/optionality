@@ -18,6 +18,12 @@
     "provider": {
       "name": "moomoo",
       "reachable": true,
+      "quote_grade": {
+        "us_option": null,
+        "realtime": null,
+        "read_at": null,
+        "failure": null
+      },
       "down": null,
       "rejects": {},
       "unknown": [],

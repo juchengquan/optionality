@@ -17,8 +17,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { createDatabase } from "../../src/db/open.ts";
 import { type Settings, settingsFromEnv } from "../../src/env.ts";
 import type { QuoteFetcher } from "optionality/quotes";
+import type { QuoteGradeReading } from "../../src/ports.ts";
 import {
-  type Calls, type Diff, JSON_COLUMNS, type Row, TABLES, type TableName, type Tables,
+  type Calls, type Diff, JSON_COLUMNS, type QuoteGrade, type Row, TABLES, type TableName, type Tables,
   type Vendor, type World, columnsOf, primaryKeys,
 } from "./format.ts";
 
@@ -33,7 +34,10 @@ export interface OpenWorld {
   clock: { now: Date };
   newId(): string;
   /** the Provider's port, and what it answers to a probe */
-  provider: { name: string; fetchQuotes: QuoteFetcher; reachable(): Promise<boolean> };
+  provider: {
+    name: string; fetchQuotes: QuoteFetcher; reachable(): Promise<boolean>;
+    quoteGrade(): QuoteGradeReading | null;
+  };
   /** every vendor by name, the Provider among them under its own, as `openVendors` assembles */
   sources: Record<string, QuoteFetcher>;
   /** whether the Provider is failing right now, and with what: an earlier sweep may say so */
@@ -43,6 +47,14 @@ export interface OpenWorld {
   sent: string[];
   calls: Calls;
   close(): void;
+}
+
+/** The world's quote grade as the Provider's client hands it over; null for one that reports none. */
+function reading(grade: QuoteGrade | null): QuoteGradeReading | null {
+  if (grade === null) return null;
+  const read = grade.us_option === null || grade.read_at === null ? null
+    : { usOption: grade.us_option, realtime: grade.realtime, at: new Date(grade.read_at) };
+  return { read, failure: grade.failure };
 }
 
 /** A vendor that answers from its table, recording every call. See `Vendor` for the rules. */
@@ -142,6 +154,7 @@ export function openWorld(world: World): OpenWorld {
     name: world.provider.name,
     fetchQuotes: fakeVendor(world.provider.name, world.provider, calls, () => outage.down),
     reachable: () => Promise.resolve(world.provider.reachable),
+    quoteGrade: () => reading(world.provider.quote_grade),
   };
   const sources: Record<string, QuoteFetcher> = { [provider.name]: provider.fetchQuotes };
   for (const [name, table] of Object.entries(world.sources)) {

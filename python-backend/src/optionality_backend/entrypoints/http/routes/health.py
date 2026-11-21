@@ -31,6 +31,7 @@ from optionality.timefmt import display_time
 from pydantic import BaseModel, ConfigDict
 
 from ....db.queries import database_responds
+from ....ports import QuoteGradeReading
 from ....sweep_interval import sweep_interval
 from ..deps import Deps
 from .settings import SweepSettings, sweep_settings
@@ -39,11 +40,60 @@ from .settings import SweepSettings, sweep_settings
 _AS_ZOD = ConfigDict(strict=True, allow_inf_nan=False)
 
 
+class QuoteGradeOut(BaseModel):
+    """Whether the option prices are real-time (#464): the account's grade for US options, which moomoo
+    states by LEVEL and never as a delay, so "not real-time" is all that can be said — by how many
+    minutes, never. Every key in every state, so a reader need not tell absent from null."""
+
+    model_config = _AS_ZOD
+
+    #: moomoo's own grade, as the Python SDK names it: N/A, BMP, LV1, LV2, LV3, SF or NO; None when none
+    #: has been read
+    us_option: str | None
+    #: LV1, LV2, LV3 and SF are; BMP and NO are not; None for N/A (moomoo's Unknow) or unread
+    realtime: bool | None
+    #: when it was read, in the display zone; an earlier read's after one that failed, which `reason` then
+    #: says
+    read_at: str | None
+    #: None when a grade has been read and the latest read answered; otherwise why there is none, or why
+    #: the grade served is not newer, in one sentence
+    reason: str | None
+
+
 class ProviderOut(BaseModel):
     model_config = _AS_ZOD
 
     name: str
     ok: bool
+    quote_grade: QuoteGradeOut
+
+
+#: The words for why there is no grade. Kept here, with the route, because they are `/health`'s: the
+#: Provider says only what it read and what went wrong.
+NOT_READ = "not read yet since the service started"
+REPORTS_NONE = "this Provider reports no account grade"
+
+
+def served_grade(reading: QuoteGradeReading | None, tz: str) -> dict[str, Any]:
+    """A Provider's reading, as `/health` serves it. A read that failed leaves an earlier grade in place,
+    and that grade is served with its own time and, in `reason`, why it is not newer: the latest read
+    failed, in OpenD's words (the owner's decision of 2026-11-21)."""
+    if reading is not None and reading.read is not None:
+        read = reading.read
+        read_at = display_time(read.at, tz)
+        kept = (
+            None
+            if reading.failure is None
+            else f"the latest read failed: {reading.failure}; the grade served is the one read at {read_at}"
+        )
+        return {"us_option": read.us_option, "realtime": read.realtime, "read_at": read_at, "reason": kept}
+    if reading is None:
+        reason = REPORTS_NONE
+    elif reading.failure is not None:
+        reason = f"the read failed: {reading.failure}"
+    else:
+        reason = NOT_READ
+    return {"us_option": None, "realtime": None, "read_at": None, "reason": reason}
 
 
 class AlarmsOut(BaseModel):
@@ -114,7 +164,13 @@ def health_routes(deps: Deps) -> APIRouter:
         return {
             "db": ok,
             "golden_cases": optionality.GOLDEN_CASES,
-            "provider": {"name": deps.provider.name, "ok": answering},
+            "provider": {
+                "name": deps.provider.name,
+                "ok": answering,
+                # what the Provider last read, never a read of its own: it is read once per connection
+                # episode, after a fetch that worked (#464)
+                "quote_grade": served_grade(deps.provider.quote_grade(), tz),
+            },
             "monitor": {
                 "last_sweep_at": display_time(sweeper.last_sweep_at(), tz),
                 "last_sweep_ok": sweeper.last_sweep_ok(),

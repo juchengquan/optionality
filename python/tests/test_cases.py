@@ -184,9 +184,18 @@ UNCASED = {
         ],
         "its own tests: it mirrors no domain function",
     ),
-    # held to testdata/vendors/ instead: the Yahoo port and IB Gateway's field readers
+    # held to testdata/vendors/ instead: the Yahoo port, IB Gateway's field readers and moomoo's grade
     **dict.fromkeys(
-        ["yahoo.to_record", "yahoo.quotes", "ibkr.grade", "ibkr.greek_fields", "ibkr.with_mid", "ibkr.has_figures"],
+        [
+            "yahoo.to_record",
+            "yahoo.quotes",
+            "ibkr.grade",
+            "ibkr.greek_fields",
+            "ibkr.with_mid",
+            "ibkr.has_figures",
+            "opend.grade_name",
+            "opend.is_realtime",
+        ],
         "testdata/vendors/",
     ),
     # held by the recorded IB Gateway conversations and their own tests

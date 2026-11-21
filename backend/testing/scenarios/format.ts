@@ -47,11 +47,27 @@ export interface Vendor {
   down: string | null;
 }
 
+/** What the Provider last read of the account's quote grade for US options (#464), as its client
+ *  keeps it — the reading, not a GetUserInfo answer: the client reads that once per connection
+ *  episode, which no single door event shows, and its own suites hold that rule. */
+export interface QuoteGrade {
+  /** moomoo's grade as the Python SDK names it; null while none has been read */
+  us_option: string | null;
+  /** what the grade means — the library's `isRealtime` of `us_option` — or null */
+  realtime: boolean | null;
+  /** when it was read, ISO 8601 in UTC; null with `us_option` */
+  read_at: string | null;
+  /** OpenD's words for why the latest read failed, or null; it leaves a grade read before it */
+  failure: string | null;
+}
+
 /** The Provider: the one vendor the alarms read from. `reachable` is what its own port probe
- *  says, which `/health` consults only while no batch has been asked for. */
+ *  says, which `/health` consults only while no batch has been asked for. `quote_grade` is what it
+ *  last read of the account's grade, or null for a Provider that reports none. */
 export interface Provider extends Vendor {
   name: string;
   reachable: boolean;
+  quote_grade: QuoteGrade | null;
 }
 
 /** A sweep that happened BEFORE the event, there to give the engine its memory — the run of

@@ -67,6 +67,9 @@ def test_a_difference_says_where_it_is():
 
 # -- a small world ----------------------------------------------------------------------------------
 
+#: a quote grade nobody has read yet (#464), as `fixtures.ts`'s `UNREAD`
+UNREAD = {"us_option": None, "realtime": None, "read_at": None, "failure": None}
+
 
 def vendor(**table):
     return {"down": None, "rejects": {}, "unknown": [], "quotes": {}, **table}
@@ -76,7 +79,7 @@ def world(**overrides):
     base = {
         "clock": "2026-11-09T15:00:00.000Z",
         "settings": {"API_TOKEN": "tok"},
-        "provider": {"name": "moomoo", "reachable": True, **vendor()},
+        "provider": {"name": "moomoo", "reachable": True, "quote_grade": UNREAD, **vendor()},
         "sources": {},
         "telegram": "up",
         "sweeps": [],
@@ -163,6 +166,7 @@ def test_a_vendor_answers_from_its_table_and_records_every_call():
             provider={
                 "name": "moomoo",
                 "reachable": True,
+                "quote_grade": UNREAD,
                 **vendor(quotes={"A": {"mid_price": 1.5}}, unknown=["B"], rejects={"US..SPX": "not supported"}),
             },
             sources={"yahoo": vendor(down="yahoo is down")},
@@ -416,6 +420,7 @@ def test_the_seam_runs_a_tick_of_the_real_engine_on_the_world():
             provider={
                 "name": "moomoo",
                 "reachable": True,
+                "quote_grade": UNREAD,
                 **vendor(quotes={"US.SPXW261218C7300000": {"mid_price": 2}}),
             },
             tables=held(POSITION),

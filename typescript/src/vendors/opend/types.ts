@@ -93,5 +93,20 @@ export interface MoomooClient {
   GetSecuritySnapshot(req: {
     c2s: { securityList: Security[] };
   }): Promise<SnapshotResponse>;
+  /** The SDK's own command path: encode `req` as `<name>.Request`, send it as command `cmd`, and
+   *  decode the answer as `<name>.Response` — resolving it when its retType is 0 and REJECTING with it
+   *  otherwise, as `GetSecuritySnapshot` does. Every named method of the package is this with its own
+   *  command; GetUserInfo (1005) is in its command table and has no method, so the client sends it
+   *  here (#464). Underscored in the package, and declared on purpose rather than reached for. */
+  _sendCmd(cmd: number, req: unknown, name: string): Promise<unknown>;
   stop(): void;
+}
+
+/** GetUserInfo's answer, as far as it is read: the account's grade for US options, a number of
+ *  `Qot_Common.QotRight` (`fields.ts`'s `QOT_RIGHTS`). Every other right the account has — US stocks,
+ *  futures, the other markets — and everything about the user is left unread (#464). */
+export interface UserInfoResponse {
+  retType: number;
+  retMsg?: string;
+  s2c?: { usOptionQotRight?: number };
 }

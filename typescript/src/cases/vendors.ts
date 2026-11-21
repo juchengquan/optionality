@@ -124,7 +124,30 @@ export const VENDOR_INPUTS: Record<
     { fn: "hasFigures", name: "true for one figure, however little",
       args: [{ code: "SPX", prev_close_price: 7353.73 }] },
   ],
-  // a list and no function: the record's fields, which the Python's SDK-frame reader is held to
-  // (`vendors/opend/fields.ts` says why it cannot be logic)
-  "opend-fields": [],
+  // the record's fields are a list, which the Python's SDK-frame reader is held to
+  // (`vendors/opend/fields.ts` says why it cannot be logic); the quote grade is logic (#464)
+  "opend-fields": [
+    // what this account's OpenD answered on 2026-11-20, over the websocket and over the SDK's TCP
+    // alike: usOptionQotRight 2, which the Python SDK calls LV1
+    { fn: "gradeName", name: "2 is Level 1, as this account's options were graded on 2026-11-20", args: [2] },
+    { fn: "gradeName", name: "0 is moomoo's Unknow, which the SDK writes N/A", args: [0] },
+    { fn: "gradeName", name: "1 is BMP", args: [1] },
+    { fn: "gradeName", name: "3 is Level 2", args: [3] },
+    { fn: "gradeName", name: "4 is SF", args: [4] },
+    { fn: "gradeName", name: "5 is no rights at all", args: [5] },
+    // 6 after NO, not after LV2: the enum grew Level 3 last
+    { fn: "gradeName", name: "6 is Level 3", args: [6] },
+    { fn: "gradeName", name: "a number moomoo has not used is N/A, as the SDK has it", args: [7] },
+    { fn: "gradeName", name: "and so is no number at all — a field OpenD left out", args: [null] },
+    { fn: "isRealtime", name: "Level 1 is real-time", args: ["LV1"] },
+    { fn: "isRealtime", name: "Level 2 is real-time", args: ["LV2"] },
+    { fn: "isRealtime", name: "Level 3 is real-time", args: ["LV3"] },
+    { fn: "isRealtime", name: "SF is real-time", args: ["SF"] },
+    // a grade that is not real-time says nothing of HOW late: moomoo states no minutes
+    { fn: "isRealtime", name: "BMP is not real-time", args: ["BMP"] },
+    { fn: "isRealtime", name: "NO is not real-time", args: ["NO"] },
+    // null, not false: false is a claim about the account, and Unknow is moomoo making none
+    { fn: "isRealtime", name: "N/A says nothing either way", args: ["N/A"] },
+    { fn: "isRealtime", name: "nor does a name moomoo has not used", args: ["LV9"] },
+  ],
 };

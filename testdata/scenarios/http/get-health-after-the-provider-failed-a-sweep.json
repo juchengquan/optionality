@@ -12,6 +12,12 @@
     "provider": {
       "name": "moomoo",
       "reachable": true,
+      "quote_grade": {
+        "us_option": null,
+        "realtime": null,
+        "read_at": null,
+        "failure": null
+      },
       "down": null,
       "rejects": {},
       "unknown": [],
@@ -87,7 +93,13 @@
         "db": true,
         "provider": {
           "name": "moomoo",
-          "ok": false
+          "ok": false,
+          "quote_grade": {
+            "us_option": null,
+            "realtime": null,
+            "read_at": null,
+            "reason": "not read yet since the service started"
+          }
         },
         "golden_cases": "775e4de0b7b1",
         "monitor": {

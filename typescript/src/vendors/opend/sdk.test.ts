@@ -13,10 +13,10 @@
  */
 import { createRequire } from "node:module";
 
-import mmWebsocket from "moomoo-api";
+import mmWebsocket, { mmCmdID } from "moomoo-api";
 import { describe, expect, it } from "vitest";
 
-import { OpendClient } from "./client.ts";
+import { GET_USER_INFO, OpendClient } from "./client.ts";
 import type { MoomooClient } from "./types.ts";
 
 /** The SDK's own schema root: the same module its `main.js` imports. */
@@ -24,6 +24,12 @@ const proto = createRequire(import.meta.url)("moomoo-api/proto.js");
 
 /** Qot_GetSecuritySnapshot, as the SDK's command table numbers it. */
 const SNAPSHOT_CMD = 3203;
+
+/** Each command the client sends, by number, and the schema the SDK encodes it with. */
+const MESSAGES: Record<number, string> = {
+  [SNAPSHOT_CMD]: "Qot_GetSecuritySnapshot",
+  [GET_USER_INFO.cmd]: GET_USER_INFO.name,
+};
 
 interface PbType {
   fieldsArray: { name: string; type: string; required: boolean; resolve(): void; resolvedType: unknown }[];
@@ -60,10 +66,12 @@ function stubSocket(answer: (cmd: number, request: Record<string, unknown>) => R
   const asked: { cmd: number; request: Record<string, unknown> }[] = [];
   const socket = {
     sendBuff(cmd: number, bytes: Uint8Array) {
-      const Request = proto.lookupType("Qot_GetSecuritySnapshot.Request") as PbType;
+      const message = MESSAGES[cmd];
+      if (!message) return Promise.reject(new Error(`the stub speaks no command ${cmd}`));
+      const Request = proto.lookupType(`${message}.Request`) as PbType;
       const request = Request.toObject(Request.decode(bytes), { defaults: false });
       asked.push({ cmd, request });
-      const Response = proto.lookupType("Qot_GetSecuritySnapshot.Response") as PbType;
+      const Response = proto.lookupType(`${message}.Response`) as PbType;
       const reply = answer(cmd, request);
       return Promise.resolve({ buff: Response.encode(Response.create(reply)).finish() });
     },
@@ -109,7 +117,7 @@ describe("the moomoo SDK, encoding and decoding through protobufjs", () => {
 
     const { records, unknown } = await client.batch([CODE]);
 
-    expect(asked).toEqual([{
+    expect(asked.filter((a) => a.cmd === SNAPSHOT_CMD)).toEqual([{
       cmd: SNAPSHOT_CMD,
       request: { c2s: { securityList: [{ market: 11, code: "SPXW261218C8100000" }] } },
     }]);
@@ -127,5 +135,40 @@ describe("the moomoo SDK, encoding and decoding through protobufjs", () => {
 
     // the SDK rejects with the decoded `{retType, retMsg}`; the client names the culprit unknown
     await expect(client.batch([CODE])).resolves.toEqual({ records: [], unknown: [CODE] });
+  });
+});
+
+describe("GetUserInfo through the SDK's own command path (#464)", () => {
+  it("is the command the package's table names", () => {
+    // written out in the client so that building one loads nothing; held here to the table
+    expect(mmCmdID.GetUserInfo).toMatchObject(GET_USER_INFO);
+  });
+
+  it("sends flag 4 as GetUserInfo.Request and reads usOptionQotRight back", async () => {
+    const { socket, asked } = stubSocket((cmd) => (cmd === GET_USER_INFO.cmd
+      ? { retType: 0, s2c: { usOptionQotRight: 2, usQotRight: 6 } }
+      : { retType: 0, s2c: { snapshotList: [] } }));
+    const at = new Date("2026-11-20T09:41:34Z");
+    const client = new OpendClient({ host: "stub", port: 0, key: "k", create: sdkOn(socket), now: () => at });
+
+    await client.batch([CODE]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(asked.filter((a) => a.cmd === GET_USER_INFO.cmd)).toEqual([
+      { cmd: 1005, request: { c2s: { flag: 4 } } },
+    ]);
+    expect(client.quoteGrade()).toEqual({ read: { usOption: "LV1", realtime: true, at }, failure: null });
+  });
+
+  it("decodes a refusal into moomoo's own words", async () => {
+    const { socket } = stubSocket((cmd) => (cmd === GET_USER_INFO.cmd
+      ? { retType: -1, retMsg: "user info unavailable" }
+      : { retType: 0, s2c: { snapshotList: [] } }));
+    const client = new OpendClient({ host: "stub", port: 0, key: "k", create: sdkOn(socket) });
+
+    await client.batch([CODE]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(client.quoteGrade()).toEqual({ read: null, failure: "user info unavailable" });
   });
 });

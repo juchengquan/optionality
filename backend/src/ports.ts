@@ -43,11 +43,26 @@ export interface VendorClient {
   close(): void;
 }
 
+/** What a Provider last read of the account's quote grade for US options (#464): whether the option
+ *  prices it serves are real-time. moomoo grades the ACCOUNT, by level, and never a quote; its
+ *  client reads it once per connection episode (and a failed read again at most every 30 minutes)
+ *  and keeps it, so asking for this asks OpenD nothing —
+ *  `/health` reads it, and must never cause a read. */
+export interface QuoteGradeReading {
+  /** moomoo's grade as the Python SDK names it (`LV1`, `BMP`, `N/A`, ...), whether that means
+   *  real-time (the library's `isRealtime`; null for Unknow), and when it was read. Null while no
+   *  read has answered. */
+  read: { usOption: string; realtime: boolean | null; at: Date } | null;
+  /** OpenD's words for why the latest read failed, or null. A failure leaves `read` as it was. */
+  failure: string | null;
+}
+
 /** The Provider: the one vendor the alarms read from, chosen before boot (ADR 0015).
  *
- *  `vendors.ts` builds whichever one `.env` names. `name` and `reachable` exist for `/health`,
- *  which until ADR 0015 reported `opend: true` — the vendor's name on the API contract, and a
- *  sentence on the dashboard that would have been a lie the moment anything else was behind it.
+ *  `vendors.ts` builds whichever one `.env` names. `name`, `reachable` and `quoteGrade` exist for
+ *  `/health`, which until ADR 0015 reported `opend: true` — the vendor's name on the API contract,
+ *  and a sentence on the dashboard that would have been a lie the moment anything else was behind
+ *  it.
  */
 export interface ProviderClient extends VendorClient {
   /** Whether the gateway is there AT ALL, in whatever terms this Provider has — a TCP connect for
@@ -57,6 +72,9 @@ export interface ProviderClient extends VendorClient {
    *  a socket that accepts is not a gateway that answers (ADR 0010, and 2026-10-16, when OpenD
    *  held the port open and timed out every login). */
   reachable(): Promise<boolean>;
+  /** The account's quote grade as last read, or null for a Provider that reports none — IB Gateway
+   *  grades each request rather than the account, and that is not this (#464). */
+  quoteGrade(): QuoteGradeReading | null;
 }
 
 /** A GET of the app's own (ADR 0026): the path, and the caller's Authorization header, passed on so

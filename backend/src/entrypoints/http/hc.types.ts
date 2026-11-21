@@ -151,6 +151,11 @@ export type HcChecks = [
   Checked<Exactly<E["health"]["db"], boolean>>,
   Checked<Exactly<E["health"]["provider"]["name"], string>>,
   Checked<Exactly<E["health"]["provider"]["ok"], boolean>>,
+  // whether the option prices are real-time (#464): every key in every state, null where unknown
+  Checked<Exactly<E["health"]["provider"]["quote_grade"]["us_option"], string | null>>,
+  Checked<Exactly<E["health"]["provider"]["quote_grade"]["realtime"], boolean | null>>,
+  Checked<Exactly<E["health"]["provider"]["quote_grade"]["read_at"], string | null>>,
+  Checked<Exactly<E["health"]["provider"]["quote_grade"]["reason"], string | null>>,
   Checked<Exactly<E["health"]["monitor"]["alarms"]["label"], string>>,
   Checked<Exactly<E["health"]["monitor"]["alarms"]["bad"], boolean>>,
   Checked<Exactly<E["health"]["settings"]["sweep_seconds"], number>>,

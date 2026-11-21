@@ -167,7 +167,11 @@ describe("IB Gateway as the Provider", () => {
       if (health.monitor?.last_sweep_at) break;
       await new Promise((r) => setTimeout(r, 100));
     }
-    expect(health.provider, up.log()).toEqual({ name: "ibkr", ok: true });
+    expect(health.provider, up.log()).toEqual({
+      name: "ibkr", ok: true,
+      // IB Gateway grades each request, never the account (#464)
+      quote_grade: { us_option: null, realtime: null, read_at: null, reason: "this Provider reports no account grade" },
+    });
     expect(health.monitor.last_sweep_ok, up.log()).toBe(true);
 
     const resp = await fetch(`${base}/quotes`);

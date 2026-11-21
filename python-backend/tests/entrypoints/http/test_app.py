@@ -12,14 +12,17 @@ import asyncio
 import logging
 import re
 import socket
+from datetime import timedelta
 
 import httpx2
 import optionality
+import pytest
 import uvicorn
 from fastapi.openapi.utils import get_openapi
-from harness import TOKEN, json_body
+from harness import NOW, TOKEN, json_body
 
 from optionality_backend.db.queries import insert_position
+from optionality_backend.ports import GradeRead, QuoteGradeReading
 
 LOG = "optionality_backend.entrypoints.http.app"
 
@@ -94,6 +97,52 @@ def holding(id_, name, strike_date="2026-12-18"):
     }
 
 
+EARLIER = NOW - timedelta(hours=1)
+#: the Provider's quote grade (#464), and what `/health` says of it: whether its prices are real-time
+GRADES = {
+    "real-time, read, in the display zone": (
+        QuoteGradeReading(read=GradeRead(us_option="LV1", realtime=True, at=NOW), failure=None),
+        {"us_option": "LV1", "realtime": True, "read_at": "2026-10-02 13:26:06+08:00", "reason": None},
+    ),
+    "not real-time, and never by how much": (
+        QuoteGradeReading(read=GradeRead(us_option="BMP", realtime=False, at=NOW), failure=None),
+        {"us_option": "BMP", "realtime": False, "read_at": "2026-10-02 13:26:06+08:00", "reason": None},
+    ),
+    "moomoo's Unknow says nothing either way, beside its name": (
+        QuoteGradeReading(read=GradeRead(us_option="N/A", realtime=None, at=NOW), failure=None),
+        {"us_option": "N/A", "realtime": None, "read_at": "2026-10-02 13:26:06+08:00", "reason": None},
+    ),
+    "not read yet": (
+        QuoteGradeReading(read=None, failure=None),
+        {"us_option": None, "realtime": None, "read_at": None, "reason": "not read yet since the service started"},
+    ),
+    "a failed read with none before says why, in OpenD's words": (
+        QuoteGradeReading(read=None, failure="OpenD GetUserInfo timed out after 10000ms"),
+        {
+            "us_option": None,
+            "realtime": None,
+            "read_at": None,
+            "reason": "the read failed: OpenD GetUserInfo timed out after 10000ms",
+        },
+    ),
+    # the owner's decision of 2026-11-21: the kept grade, its own time, and why it is not newer
+    "a failed read keeps the earlier grade, and says the latest read failed": (
+        QuoteGradeReading(read=GradeRead(us_option="LV1", realtime=True, at=EARLIER), failure="busy"),
+        {
+            "us_option": "LV1",
+            "realtime": True,
+            "read_at": "2026-10-02 12:26:06+08:00",
+            "reason": "the latest read failed: busy; the grade served is the one read at 2026-10-02 12:26:06+08:00",
+        },
+    ),
+    # IB Gateway grades each request, which is not this
+    "a Provider that reports no account grade says so": (
+        None,
+        {"us_option": None, "realtime": None, "read_at": None, "reason": "this Provider reports no account grade"},
+    ),
+}
+
+
 class TestHealth:
     async def test_is_open_and_reports_status_rather_than_raising(self, start):
         resp = await start().call("/health", anonymous=True)
@@ -102,7 +151,8 @@ class TestHealth:
         assert data["db"] is True
         # the Provider names itself: the dashboard said "OpenD" whatever was actually behind the port,
         # and a second Provider would have made that a lie on screen (#169)
-        assert data["provider"] == {"name": "moomoo", "ok": False}  # nothing listens on the test port
+        # nothing listens on the test port
+        assert {k: data["provider"][k] for k in ("name", "ok")} == {"name": "moomoo", "ok": False}
 
     async def test_reports_the_name_of_whichever_provider_answered_not_the_one_it_was_written_against(self, start):
         # the route must read the Provider's own name: hard-coding "moomoo" here would pass every other
@@ -171,6 +221,12 @@ class TestHealth:
             "alarms": {"label": "watching", "bad": False},
             "fetched_at": None,
         }
+
+    @pytest.mark.parametrize("grade", GRADES, ids=list(GRADES))
+    async def test_says_the_providers_quote_grade(self, start, grade):
+        reading, served = GRADES[grade]
+        data = (await start(quote_grade=reading).call("/health", anonymous=True)).json()
+        assert data["provider"]["quote_grade"] == served
 
     async def test_says_so_when_the_database_has_gone_instead_of_failing_the_request(self, start):
         h = start()

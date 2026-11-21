@@ -12,6 +12,12 @@
     "provider": {
       "name": "moomoo",
       "reachable": true,
+      "quote_grade": {
+        "us_option": null,
+        "realtime": null,
+        "read_at": null,
+        "failure": null
+      },
       "down": null,
       "rejects": {},
       "unknown": [],
@@ -88,11 +94,47 @@
                               },
                               "ok": {
                                 "type": "boolean"
+                              },
+                              "quote_grade": {
+                                "type": "object",
+                                "properties": {
+                                  "us_option": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "realtime": {
+                                    "type": [
+                                      "boolean",
+                                      "null"
+                                    ]
+                                  },
+                                  "read_at": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "reason": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "us_option",
+                                  "realtime",
+                                  "read_at",
+                                  "reason"
+                                ]
                               }
                             },
                             "required": [
                               "name",
-                              "ok"
+                              "ok",
+                              "quote_grade"
                             ]
                           },
                           "golden_cases": {

@@ -9,8 +9,8 @@ import { buildSpxCode } from "optionality/domain/contract";
 
 import type { EarlierRequest, HttpRequest, World } from "../format.ts";
 import {
-  BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, PREMIUM_BOOK, at, chosenInterval, combo, except,
-  link, monitor,
+  BOOK, C7300, C7350, C7500, P6350, P6400, EXPIRY, PREMIUM_BOOK, UNREAD, at, chosenInterval, combo,
+  except, graded, link, monitor,
   position, quote,
   reference, request, sample, watchDay, world,
 } from "./fixtures.ts";
@@ -24,6 +24,8 @@ export interface HttpInput {
 }
 
 const DOWN = "connect ECONNREFUSED 127.0.0.1:33333";
+/** A GetUserInfo that never answered, in the client's words (#464). */
+const GRADE_TIMED_OUT = "OpenD GetUserInfo timed out after 10000ms";
 
 /** The book as it stands: the condor held, its short call watched on delta, its call spread
  *  watched as a combo, both rules linked to the holding. */
@@ -377,6 +379,49 @@ export const HTTP: readonly HttpInput[] = [
       sweeps: [{ at: at(-10), down: DOWN }],
     }),
     request: request("GET", "/health"),
+  },
+
+  // whether the option prices are real-time (#464): moomoo's grade for US options, as its client
+  // last read it. "has not swept yet" above is the grade not read yet, as a service just started
+  {
+    name: "GET /health says the option prices are real-time when moomoo grades them Level 1",
+    world: world({ provider: { quote_grade: graded("LV1", at(-600)) } }),
+    request: request("GET", "/health", null, { anonymous: true }),
+  },
+  {
+    // a grade that is not real-time, and no figure for how late: moomoo states none
+    name: "GET /health says a BMP grade is not real-time",
+    world: world({ provider: { quote_grade: graded("BMP", at(-600)) } }),
+    request: request("GET", "/health", null, { anonymous: true }),
+  },
+  {
+    name: "GET /health says an account with no US option rights is not real-time",
+    world: world({ provider: { quote_grade: graded("NO", at(-600)) } }),
+    request: request("GET", "/health", null, { anonymous: true }),
+  },
+  {
+    // moomoo's Unknow: its name is served, and real-time is neither yes nor no
+    name: "GET /health says nothing either way for a grade moomoo calls unknown",
+    world: world({ provider: { quote_grade: graded("N/A", at(-600)) } }),
+    request: request("GET", "/health", null, { anonymous: true }),
+  },
+  {
+    name: "GET /health says why the grade could not be read when none was before",
+    world: world({ provider: { quote_grade: { ...UNREAD, failure: GRADE_TIMED_OUT } } }),
+    request: request("GET", "/health", null, { anonymous: true }),
+  },
+  {
+    // the grade an earlier read found is kept through a read that failed, with its own time, and
+    // the reason says the latest read failed (the owner's decision of 2026-11-21)
+    name: "GET /health keeps the grade an earlier read found, and says the latest read failed",
+    world: world({ provider: { quote_grade: graded("LV1", at(-3600), GRADE_TIMED_OUT) } }),
+    request: request("GET", "/health", null, { anonymous: true }),
+  },
+  {
+    // IB Gateway grades each request, not the account
+    name: "GET /health says a Provider other than moomoo reports no account grade",
+    world: world({ provider: { name: "ibkr", quote_grade: null } }),
+    request: request("GET", "/health", null, { anonymous: true }),
   },
 
   {

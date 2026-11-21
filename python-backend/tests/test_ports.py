@@ -56,6 +56,9 @@ class OpenD(Yahoo):
     async def reachable(self) -> bool:
         return True
 
+    def quote_grade(self) -> None:
+        return None
+
 
 #: what /health reads of the engine, and all it may: no route can start a sweep through this
 SIX = ["last_sweep_at", "last_sweep_ok", "consecutive_failures", "alarm_state", "last_fetch_at", "last_fetch_ok"]
@@ -79,6 +82,16 @@ def test_the_alarm_state_is_a_label_and_whether_it_is_bad():
 def test_a_reference_only_vendor_owes_no_reachable():
     assert isinstance(Yahoo(), VendorClient)
     assert not isinstance(Yahoo(), ProviderClient)
+
+
+def test_a_provider_owes_its_quote_grade_even_when_it_reports_none():
+    # what `/health` reads of it (#464): None is a Provider that grades no account, not a missing member
+    class Ungraded(Yahoo):
+        async def reachable(self) -> bool:
+            return True
+
+    assert not isinstance(Ungraded(), ProviderClient)
+    assert OpenD().quote_grade() is None
 
 
 async def test_the_provider_is_a_vendor_that_can_also_be_probed():

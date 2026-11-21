@@ -53,7 +53,7 @@ function written(world: World): World {
   return {
     clock: world.clock,
     settings: sortedKeys(world.settings),
-    provider: { name: p.name, reachable: p.reachable, ...vendorTable(p) },
+    provider: { name: p.name, reachable: p.reachable, quote_grade: p.quote_grade, ...vendorTable(p) },
     sources: Object.fromEntries(
       Object.keys(world.sources).sort().map((name) => [name, vendorTable(world.sources[name]!)]),
     ),

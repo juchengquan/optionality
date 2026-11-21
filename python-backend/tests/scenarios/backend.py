@@ -52,7 +52,7 @@ from optionality_backend.entrypoints.http import Deps, Surfaces, create_app
 from optionality_backend.entrypoints.mcp import McpOptions, mcp_server
 from optionality_backend.env import settings_from_env
 from optionality_backend.notify import delivery
-from optionality_backend.ports import QuoteFetcher
+from optionality_backend.ports import QuoteFetcher, QuoteGradeReading
 
 from .world import OpenWorld
 
@@ -116,9 +116,14 @@ class _Provider:
     fetch_quotes: QuoteFetcher
     #: the world's own probe, asked each time: `/health` reads it only before any batch has been
     answers: Callable[[], bool]
+    #: what the world says the Provider last read of the account's quote grade (#464)
+    grade: QuoteGradeReading | None
 
     async def reachable(self) -> bool:
         return bool(self.answers())
+
+    def quote_grade(self) -> QuoteGradeReading | None:
+        return self.grade
 
     def close(self) -> None:
         """Nothing to hang up."""
@@ -133,6 +138,7 @@ class _Backend:
             # the SAME fetcher the sources hold under its name, as `openVendors` opens a vendor once
             fetch_quotes=fetchers[world.provider.name],
             answers=world.provider.reachable,
+            grade=world.provider.quote_grade,
         )
         settings = settings_from_env(world.env)
         self._sweeper = MonitorSweeper(

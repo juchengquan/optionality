@@ -37,17 +37,37 @@ evaluable.
   at its own deadline and is dropped from the queue — so an outage costs one thread, never one per
   sweep and poll. The SDK's own callback thread is not a daemon, so a process asked to stop while a
   connect is retrying waits for OpenD, or for launchd to kill it.
+- **The quote grade's episode** (#464). The TypeScript reads the account's grade once per LOGIN, on
+  the websocket it holds: after its first fetch, after every failed fetch (each hangs up), and after
+  the npm library logs in again BY ITSELF — which it does when the socket drops, so OpenD restarting
+  between two fetches is a new login there with no fetch having failed. Connecting per fetch, this
+  has no login that outlives a fetch and cannot see such a restart: a read after the first fetch
+  that succeeds, and after the first that succeeds following one that failed — kept between
+  fetches, never one per sweep or poll. So an OpenD restarted between two fetches is re-read by the
+  TypeScript and not by this, until a fetch fails. The read is an ask of its own, on its own
+  connection and its own thread (`moomoo-grade`): the SDK blocks, and a GetUserInfo that hangs on the
+  fetches' one thread would hold every fetch behind it past its login deadline, which is the one
+  thing a grade must never do. A read happens once per episode, and a failed one is asked again at
+  most once every `GRADE_RETRY_MS` (30 minutes), so the extra connection is one per outage or half
+  hour, never one per sweep.
+- **Only the latest read settles the grade**, numbered as the TypeScript numbers its reads (#465).
+  The TypeScript's late read is one sent before its socket dropped, never answered, ending at its
+  deadline. Here reads queue on the one `moomoo-grade` thread, and a newer read queued behind a stuck
+  one can fail at its LOGIN deadline without ever reaching OpenD; the stuck one then answers or times
+  out after it, and would stand over the newer read's failure. `close` cancels the read in flight.
 """
 
 import asyncio
 import contextlib
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from optionality.opend import DEFAULT_PORT, OpenD
+from optionality.opend import DEFAULT_PORT, OpenD, is_realtime
 from optionality.quote import Batch
 
 from ...env import Settings
+from ...ports import GradeRead, QuoteGradeReading
 from .. import ProviderVendor, Worker
 
 #: `opend/client.ts`'s `loginTimeoutMs` default: bounds the connect and its handshake
@@ -59,6 +79,10 @@ LOGIN_TIMEOUT_MS = 8000
 REQUEST_TIMEOUT_MS = 10_000
 #: `probe.ts`'s default
 PROBE_TIMEOUT_MS = 1000
+#: `opend/client.ts`'s `GRADE_RETRY_MS`: how long a failed grade read waits before it is asked again, on
+#: the next fetch that works (the owner's decision of 2026-11-21) — at most once every 30 minutes while
+#: the last read failed, never per sweep, and not at all once one answers
+GRADE_RETRY_MS = 30 * 60 * 1000
 
 
 async def probe_opend(host: str, port: int, timeout_ms: int = PROBE_TIMEOUT_MS) -> bool:
@@ -85,10 +109,11 @@ def _settle(future: asyncio.Future[None]) -> None:
 
 
 class MoomooClient:
-    """moomoo, opened: one bounded batched snapshot call, through the library's OpenD client.
+    """moomoo, opened: one bounded batched snapshot call, through the library's OpenD client — and the
+    account's quote grade for US options, read once per connection episode (#464).
 
     `connect` is the library's own seam, `OpenD(connect=...)`: a test passes a fake context, and None
-    is the SDK. Constructing opens nothing and starts no thread.
+    is the SDK. `now` says when a grade was read. Constructing opens nothing and starts no thread.
     """
 
     name = "moomoo"
@@ -101,12 +126,61 @@ class MoomooClient:
         connect: Callable[[str, int], Any] | None = None,
         login_timeout_ms: int = LOGIN_TIMEOUT_MS,
         request_timeout_ms: int = REQUEST_TIMEOUT_MS,
+        now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self.host, self.port = host, port
         self.login_timeout_ms = login_timeout_ms
         self.request_timeout_ms = request_timeout_ms
         self._connect = connect
+        self._now = now
         self._worker = Worker("moomoo")
+        #: the quote grade's own thread, so a GetUserInfo that hangs holds no fetch behind it (#464)
+        self._grade_worker = Worker("moomoo-grade")
+        self._grade = QuoteGradeReading(read=None, failure=None)
+        #: whether the next fetch that succeeds must read the grade: until the first has, and again
+        #: after every one that fails
+        self._grade_due = True
+        #: the latest read sent, held so the loop does not drop it, and cancelled by `close`
+        self._reading: asyncio.Task[None] | None = None
+        #: the number of the latest read sent: only that one may settle the grade (#465)
+        self._grade_reads = 0
+        #: when the latest read was sent: a failed one is asked again GRADE_RETRY_MS after it
+        self._grade_sent_at: datetime | None = None
+
+    async def _ask[T](self, worker: Worker, question: Callable[[OpenD], T], prefix: str, asking: str) -> T:
+        """`question` on a connection of its own, on `worker`, inside `opend/client.ts`'s two deadlines:
+        the login's, then the request's. A deadline or a connect that failed raises with `prefix` before
+        its words; whatever `question` raises is raised as it is."""
+        loop = asyncio.get_running_loop()
+        logged_in: asyncio.Future[None] = loop.create_future()
+
+        def ask() -> T:
+            # the whole exchange on the worker: the SDK's context is made, used and closed on one
+            # thread, whether or not anyone is still waiting for the answer
+            with OpenD(self.host, self.port, connect=self._connect) as od:
+                loop.call_soon_threadsafe(_settle, logged_in)
+                return question(od)
+
+        answer = worker.submit(ask)
+        try:
+            await asyncio.wait(
+                {answer, logged_in}, timeout=self.login_timeout_ms / 1000, return_when=asyncio.FIRST_COMPLETED
+            )
+            if not logged_in.done():
+                if not answer.done():
+                    raise RuntimeError(f"{prefix}OpenD login timed out after {self.login_timeout_ms}ms")
+                # it ended before it had a connection: the connect itself failed
+                failure = answer.exception()
+                if failure is not None:
+                    raise RuntimeError(f"{prefix}{failure}") from failure
+            await asyncio.wait({answer}, timeout=self.request_timeout_ms / 1000)
+            if not answer.done():
+                raise RuntimeError(f"{prefix}OpenD {asking} timed out after {self.request_timeout_ms}ms")
+            return answer.result()
+        finally:
+            # still queued: dropped. Already running: it finishes on the thread and closes there.
+            answer.cancel()
+            logged_in.cancel()
 
     async def fetch_quotes(self, codes: list[str]) -> Batch:
         """Every quote moomoo has for these codes, and the codes it refused as unknown — the single
@@ -114,38 +188,53 @@ class MoomooClient:
         other failure raises, and an outage is never presented as a watchlist of unknown contracts."""
         if not codes:
             return Batch(records=[], unknown=[])
-        loop = asyncio.get_running_loop()
-        logged_in: asyncio.Future[None] = loop.create_future()
         asked = list(codes)
-
-        def ask() -> Batch:
-            # the whole exchange on the worker: the SDK's context is made, used and closed on one
-            # thread, whether or not anyone is still waiting for the answer
-            with OpenD(self.host, self.port, connect=self._connect) as od:
-                loop.call_soon_threadsafe(_settle, logged_in)
-                return od.quotes(asked)
-
-        answer = self._worker.submit(ask)
         try:
-            await asyncio.wait(
-                {answer, logged_in}, timeout=self.login_timeout_ms / 1000, return_when=asyncio.FIRST_COMPLETED
-            )
-            if not logged_in.done():
-                if not answer.done():
-                    raise RuntimeError(f"snapshot API failed: OpenD login timed out after {self.login_timeout_ms}ms")
-                # it ended before it had a connection: the connect itself failed
-                failure = answer.exception()
-                if failure is not None:
-                    raise RuntimeError(f"snapshot API failed: {failure}") from failure
-            await asyncio.wait({answer}, timeout=self.request_timeout_ms / 1000)
-            if not answer.done():
-                raise RuntimeError(f"snapshot API failed: OpenD request timed out after {self.request_timeout_ms}ms")
             # the library's own refusal already reads "snapshot API failed: <moomoo's words>"
-            return answer.result()
-        finally:
-            # still queued: dropped. Already running: it finishes on the thread and closes there.
-            answer.cancel()
-            logged_in.cancel()
+            batch = await self._ask(self._worker, lambda od: od.quotes(asked), "snapshot API failed: ", "request")
+        except BaseException:
+            self._grade_due = True
+            raise
+        # the first of an episode reads the grade, and so does the first GRADE_RETRY_MS after a read
+        # that failed. Not awaited: the batch is the answer the caller asked for, and the grade must
+        # never delay or fail it
+        if self._grade_due or self._grade_retry_due():
+            self._grade_due = False
+            self._grade_reads += 1
+            self._grade_sent_at = self._now()
+            self._reading = asyncio.get_running_loop().create_task(self._read_grade(self._grade_reads))
+        return batch
+
+    def _grade_retry_due(self) -> bool:
+        """Whether the last read failed, has settled, and was sent at least GRADE_RETRY_MS ago."""
+        settled = self._reading is None or self._reading.done()
+        return (
+            settled
+            and self._grade.failure is not None
+            and self._grade_sent_at is not None
+            and self._now() - self._grade_sent_at >= timedelta(milliseconds=GRADE_RETRY_MS)
+        )
+
+    def quote_grade(self) -> QuoteGradeReading:
+        """The account's grade for US options as last read, and why the latest read failed if it did.
+        Asks nothing: `/health` reads it and must never cause a read (#464)."""
+        return self._grade
+
+    async def _read_grade(self, read: int) -> None:
+        """GetUserInfo, asked for the quote rights alone, kept for `/health`. NOT market data — it prices
+        nothing — but bounded all the same, by the snapshot's own deadlines. A failure is kept beside
+        whatever grade an earlier read found, and asked again GRADE_RETRY_MS later or in the next
+        episode. Only the latest read sent may settle the grade: `read` is its number."""
+        try:
+            us_option = await self._ask(self._grade_worker, OpenD.us_option_grade, "", "GetUserInfo")
+        except Exception as err:  # noqa: BLE001 — a grade that did not come fails nothing; it is said
+            if read == self._grade_reads:
+                self._grade = QuoteGradeReading(read=self._grade.read, failure=str(err))
+            return
+        if read == self._grade_reads:
+            self._grade = QuoteGradeReading(
+                read=GradeRead(us_option=us_option, realtime=is_realtime(us_option), at=self._now()), failure=None
+            )
 
     async def reachable(self) -> bool:
         # the API port, which is the one this client speaks — not the websocket one the TypeScript's
@@ -153,8 +242,11 @@ class MoomooClient:
 
     def close(self) -> None:
         """Hang up, so the next call reconnects. Nothing is held between fetches, so this drops what
-        is still queued for the worker."""
+        is still queued for the workers, and stops waiting for a grade."""
         self._worker.close()
+        self._grade_worker.close()
+        if self._reading is not None:
+            self._reading.cancel()
 
 
 def _open(settings: Settings) -> MoomooClient:
