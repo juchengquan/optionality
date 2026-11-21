@@ -30,7 +30,7 @@ import {
 } from "./columns";
 import { SpxNote, StrikeStrip } from "../StrikeStrip";
 import { bookSpxReasons, joinStrips, stripOfHolding } from "../strip";
-import { inFold, NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
+import { holdOnDesk, inFold, NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
 import { useDeskFit } from "./useDeskFit";
 import { ExpiryHeading } from "../ExpiryHeading";
 import { useFolds, type SectionKind } from "../folds";
@@ -131,27 +131,36 @@ export function DeskBook({ selection, ...props }: BookProps & {
     return () => document.removeEventListener("keydown", onKey);
   }, [current, close]);
 
-  // a folded group's rows are not on screen (the owner, 2026-11-21): j and k walk past them
+  // which expiry groups the viewer folded (the owner, 2026-11-21)
   const folds = useFolds(placed, holdings !== null && props.quotesRead !== false);
-  // Folding the group that holds the selected row (the owner, 2026-11-21) closes its inspector and
-  // clears the selection — the cursor too, so j and k start again as with nothing selected — and
-  // hands the keyboard's focus to the heading pressed, rather than leaving it on the page's body
-  // where the inspector took it. Any other fold leaves both alone, and opening selects nothing.
+  // the rows the folds hide now: not on screen, so j and k walk past them
+  const away = useMemo(() => new Set(placed.sections
+    .flatMap((s) => s.expiries.filter((g) => folds.folded(s.kind, g.expiry)))
+    .flatMap(groupRows).map(rowId)), [placed, folds.folded]);
+  const awayNow = useRef(away);
+  awayNow.current = away;
+  const ids = useMemo(() => rows.map(rowId).filter((id) => !away.has(id)), [rows, away]);
+  // ONE rule, whatever hid the row (the owner, 2026-11-21; #468): when the folds change and the
+  // selected row — or the cursor alone — is in a folded group, the inspector closes and the
+  // selection clears, so j and k start again as with nothing selected. This tab's press does it,
+  // and so do another tab's folds, which a press here takes from the cookie as it stands. A form
+  // open on the desk holds it (`holdOnDesk`), as it holds j, k and the palette: the group folds,
+  // and the inspector, the selection and the draft stay. Opening a group hides nothing, so it
+  // clears nothing. Only this tab's own press moves the focus — to the heading pressed, rather
+  // than leaving it on the page's body where the inspector took it.
+  const pressed = useRef<HTMLButtonElement | null>(null);
   const foldGroup = useCallback((kind: SectionKind, expiry: string, button: HTMLButtonElement) => {
-    const g = placed.sections.find((s) => s.kind === kind)?.expiries.find((x) => x.expiry === expiry);
-    const id = selNow.current.id;
-    const holdsSelected = !folds.folded(kind, expiry) && g !== undefined && id !== null
-      && groupRows(g).some((r) => rowId(r) === id);
+    pressed.current = button;
     folds.toggle(kind, expiry);
-    if (!holdsSelected) return;
+  }, [folds]);
+  useEffect(() => {
+    const button = pressed.current;
+    pressed.current = null;
+    const id = selNow.current.id;
+    if (id === null || !awayNow.current.has(id) || holdOnDesk(root.current) !== null) return;
     setSel(NOTHING_SELECTED);
-    button.focus();
-  }, [placed, folds, setSel]);
-  const ids = useMemo(() => {
-    const away = new Set(placed.sections.flatMap((s) => s.expiries.filter((g) => folds.folded(s.kind, g.expiry)))
-      .flatMap(groupRows).map(rowId));
-    return rows.map(rowId).filter((id) => !away.has(id));
-  }, [rows, placed, folds.folded]);
+    button?.focus();
+  }, [folds.folded, setSel]);
   useDeskKeys({ ids, selection: sel, setSelection: setSel, desk: root });
 
   // the palette's landing (#299): the row brought into view, then the inspector's heading focused,

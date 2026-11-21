@@ -14,7 +14,7 @@
  *  The geometry — a folded heading inside the screen at iPhone width — is the browser suite's
  *  (`__browser__/NextFoldExpiry*.test.tsx`).
  */
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -335,6 +335,69 @@ describe("on the desk, folding the selected row's group", () => {
     fireEvent.click(head("spreads", "2026-12-04"));
     expect(document.querySelector(".nxd-row[data-cursor]")).toBeNull();
     expect(document.activeElement).toBe(head("spreads", "2026-12-04"));
+  });
+
+  const writes = { edited: () => {}, closed: () => {}, deleted: () => {} };
+  /** The selected holding's close form opened in the inspector, an Exit typed into it: a draft. */
+  const draft = (exit: string) => {
+    fireEvent.click(within(inspector()!).getByRole("button", { name: "close…" }));
+    const box = within(inspector()!).getByLabelText("exit, per contract") as HTMLInputElement;
+    fireEvent.change(box, { target: { value: exit } });
+    return () => within(inspector()!).getByLabelText<HTMLInputElement>("exit, per contract").value;
+  };
+
+  // the owner, 2026-11-21 (#468, decision 1): a form open in the inspector holds it, as it holds j,
+  // k and the palette
+  it("folds the group but keeps the inspector, the selection and the draft while a form is open", () => {
+    render(<DeskBook {...props({ writes })} />);
+    select("h-calls");
+    const typed = draft("1.55");
+    fireEvent.click(head("spreads", "2026-12-18"));
+    expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("false");
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
+    expect(deskRow("h-calls").hasAttribute("data-selected")).toBe(true);
+    expect(typed()).toBe("1.55");
+  });
+
+  // #468, decision 2: one rule, whatever hid the row — here another tab's fold, taken from the
+  // cookie at this tab's press on another heading
+  it("clears when another tab's fold hides the selected row, the focus on the heading pressed here", () => {
+    render(<DeskBook {...props()} />);
+    select("h-calls");
+    document.cookie = "ui_folded=spreads:20261218;path=/";
+    const b = head("contracts", "2026-12-31");
+    fireEvent.click(b);
+    expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("false");
+    expect(inspector()).toBeNull();
+    expect(document.querySelector(".nxd-row[data-selected], .nxd-row[data-cursor]")).toBeNull();
+    expect(document.activeElement).toBe(b);
+  });
+
+  it("keeps a held inspector when another tab's fold hides its row", () => {
+    render(<DeskBook {...props({ writes })} />);
+    select("h-calls");
+    const typed = draft("1.55");
+    document.cookie = "ui_folded=spreads:20261218;path=/";
+    fireEvent.click(head("contracts", "2026-12-31"));
+    expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("false");
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
+    expect(typed()).toBe("1.55");
+  });
+
+  // review of #468, finding 3: OPENING the group the selected row is in clears nothing — the state
+  // a held fold leaves behind
+  it("clears nothing when the selected row's folded group is opened", () => {
+    render(<DeskBook {...props({ writes })} />);
+    select("h-calls");
+    draft("1.55");
+    fireEvent.click(head("spreads", "2026-12-18"));
+    // the form shut, nothing holds the inspector now; its row is still folded away
+    fireEvent.click(within(inspector()!).getByRole("button", { name: "close…" }));
+    expect(inspector()!.querySelector("form")).toBeNull();
+    fireEvent.click(head("spreads", "2026-12-18"));
+    expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("true");
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
+    expect(deskRow("h-calls").hasAttribute("data-selected")).toBe(true);
   });
 
   it("leaves the selection and the inspector alone when another group is folded, and opening selects nothing", () => {
