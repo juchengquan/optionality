@@ -439,6 +439,19 @@ describe("on the desk, folding the selected row's group", () => {
     expect(document.activeElement?.closest(".nx-expiry-toggle")).toBeNull();
   });
 
+  // round 2: never because the selection itself changed — the palette and the price map select a
+  // hidden row before they open its group. Here a selection moved within a held, folded group, by
+  // the inspector's own link to the condor's other spread: it stays, the group folded
+  it("does not run the rule because the selection changed, even onto a row folded away", () => {
+    render(<DeskBook {...props({ writes })} />);
+    select("h-calls");
+    draft("1.55");
+    fireEvent.click(head("spreads", "2026-12-18"));
+    fireEvent.click(within(inspector()!).getByRole("button", { name: "condor with 1218_P6400 →" }));
+    expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("false");
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_P6400");
+  });
+
   // round 2 finding 2: the rule's first run, as the desk is drawn — the page's selection on a row of
   // a group already folded (on the phone, or in another tab). Nothing was pressed: no focus moves
   it("clears, as the desk is drawn, a selection the page kept on a row of a folded group", () => {
