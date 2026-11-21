@@ -144,12 +144,14 @@ export function DeskBook({ selection, ...props }: BookProps & {
   // alone — in a folded group closes the inspector and clears the selection, so j and k start again
   // as with nothing selected, unless a form open on the desk holds it (`holdOnDesk`), as it holds
   // j, k and the palette: then the group folds, and the inspector, the selection and the draft stay.
-  // It is checked at exactly four moments, and never because the selection itself changed — the
+  // It is checked at exactly three moments, and never because the selection itself changed — the
   // palette and the price map select a hidden row BEFORE they open its group (`unfold.ts`):
   // - the folds change: this tab's press, and another tab's folds a press here takes from the
   //   cookie as it stands; and its first run, as the desk is drawn on folds the page already had;
-  // - the hold ends: the form that held the inspector is shut;
-  // - the selected row comes back into the book, as after a failed valuation recovers.
+  // - a hold that put the check off ends: the form that held the inspector is shut;
+  // - the SAME selected row goes from shown to hidden with the folds unchanged: a holding kept
+  //   through a failed valuation, or a rule drawn apart then, drawn back into a folded group as
+  //   the valuation recovers.
   // Only this tab's own press moves the focus — to the heading pressed, rather than leaving it on
   // the page's body where the inspector took it. Opening a group hides nothing, so clears nothing.
   const pressed = useRef<HTMLButtonElement | null>(null);
@@ -182,14 +184,15 @@ export function DeskBook({ selection, ...props }: BookProps & {
     watch.observe(desk, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-poll"] });
     return () => watch.disconnect();
   }, [hideSelected]);
-  // the same selected id, out of the book on the last render and back in it on this one
-  const inBook = liveRow !== null;
-  const seen = useRef({ id: sel.id, inBook });
+  // the same selected id, shown on the last render and hidden on this one; a NEW id is never
+  // checked here, or the palette's landing would be undone before it opens the group
+  const hiddenNow = sel.id !== null && away.has(sel.id);
+  const seen = useRef({ id: sel.id, hidden: hiddenNow });
   useEffect(() => {
     const was = seen.current;
-    seen.current = { id: sel.id, inBook };
-    if (was.id === sel.id && !was.inBook && inBook) hideSelected(null);
-  }, [sel.id, inBook, hideSelected]);
+    seen.current = { id: sel.id, hidden: hiddenNow };
+    if (was.id === sel.id && !was.hidden && hiddenNow) hideSelected(null);
+  }, [sel.id, hiddenNow, hideSelected]);
   useDeskKeys({ ids, selection: sel, setSelection: setSel, desk: root });
 
   // the palette's landing (#299): the row brought into view, then the inspector's heading focused,

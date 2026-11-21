@@ -14,7 +14,7 @@
  *  The geometry — a folded heading inside the screen at iPhone width — is the browser suite's
  *  (`__browser__/NextFoldExpiry*.test.tsx`).
  */
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -439,17 +439,57 @@ describe("on the desk, folding the selected row's group", () => {
     expect(document.activeElement?.closest(".nx-expiry-toggle")).toBeNull();
   });
 
-  // round 2: never because the selection itself changed — the palette and the price map select a
-  // hidden row before they open its group. Here a selection moved within a held, folded group, by
-  // the inspector's own link to the condor's other spread: it stays, the group folded
-  it("does not run the rule because the selection changed, even onto a row folded away", () => {
+  // round 3 B, confirmed by the owner: within a held, folded group the inspector's link to the
+  // condor's other spread lands on it — hidden too — and the hold ends as the inspector changes
+  // subject, so the rule then clears it, moving no focus to a heading
+  it("lands the condor link on the other hidden spread, then clears it once the hold ends", async () => {
     render(<DeskBook {...props({ writes })} />);
     select("h-calls");
     draft("1.55");
     fireEvent.click(head("spreads", "2026-12-18"));
     fireEvent.click(within(inspector()!).getByRole("button", { name: "condor with 1218_P6400 →" }));
-    expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("false");
     expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_P6400");
+    await waitFor(() => expect(inspector()).toBeNull());
+    expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector(".nxd-row[data-selected], .nxd-row[data-cursor]")).toBeNull();
+    expect(document.activeElement?.closest(".nx-expiry-toggle")).toBeNull();
+  });
+
+  // round 3: never because the selection itself changed. The palette selects a row in a folded group
+  // BEFORE it opens the group (`unfold.ts`) — so a selection the page sets on a hidden row is the
+  // page's own, and stays, after the desk has drawn it and whatever it watches has settled
+  it("leaves a selection the page sets on a row folded away, as the palette's landing does", async () => {
+    let set!: (s: DeskSelection) => void;
+    function Page() {
+      const [sel, setSel] = useState<DeskSelection>(NOTHING_SELECTED);
+      set = setSel;
+      return <DeskBook {...props()} selection={[sel, setSel]} />;
+    }
+    render(<Page />);
+    fireEvent.click(head("spreads", "2026-12-18"));
+    act(() => set({ id: "h-calls", open: true }));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
+    expect(deskRow("h-calls").hasAttribute("data-selected")).toBe(true);
+    expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  // round 3 A: a rule on a holding, drawn apart while the valuation has failed and selected there,
+  // moves under its holding into a folded group as the valuation recovers — the same selected row,
+  // shown and then hidden
+  it("clears when the selected rule moves into a folded group as a failed valuation recovers", () => {
+    const quotes = [...QUOTES, ...UNDER];
+    const failed = { quotes, holdings: null, holdingsKept: HOLDINGS, holdingsError: "the valuation failed" };
+    const { rerender } = render(<DeskBook {...props(failed)} />);
+    // drawn on its own while the holdings are not valued, in no folded group
+    expect(deskRow("r-under-ringing").closest('[data-testid="unplaced"]')).not.toBeNull();
+    select("r-under-ringing");
+    fireEvent.click(head("spreads", "2026-12-18"));
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300 r-under-ringing");
+    rerender(<DeskBook {...props({ quotes })} />);
+    expect(deskRow("r-under-ringing").closest("[hidden]")).not.toBeNull();
+    expect(inspector()).toBeNull();
+    expect(document.querySelector(".nxd-row[data-selected], .nxd-row[data-cursor]")).toBeNull();
   });
 
   // round 2 finding 2: the rule's first run, as the desk is drawn — the page's selection on a row of
