@@ -7,8 +7,9 @@
  *    the group's rows, which stay mounted and hidden while folded); it is a `<button>`, so Enter and
  *    Space press it.
  *  - **Folded, it keeps its date and DTE** and adds the group's row count and a chip per kind of
- *    attention in it, counted — "20261218 · 28 DTE · 4 rows · 4 entry signals" — in the chips' own
- *    words and colours (`foldedSummary`). Open, it says the date and DTE alone, as it always did.
+ *    attention in it, counted — "20261218 · 28 DTE · 4 rows · 4 entry signals", or "3 cards" on the
+ *    phone — in the chips' own words and colours (`foldedSummary`). Open, it says the date and DTE
+ *    alone, as it always did.
  */
 import { Fragment } from "react";
 import { ChevronRight } from "lucide-react";
@@ -20,7 +21,7 @@ import { writtenDate } from "./shared/times";
 
 import "./fold.css";
 
-export function ExpiryHeading({ g, folded, controls, onToggle, className, dteClassName }: {
+export function ExpiryHeading({ g, folded, controls, onToggle, className, dteClassName, counts }: {
   g: ExpiryBook;
   folded: boolean;
   /** the id of the group's rows */
@@ -29,8 +30,10 @@ export function ExpiryHeading({ g, folded, controls, onToggle, className, dteCla
   className: string;
   /** the DTE's own weight, where the arrangement draws it apart from the date */
   dteClassName?: string;
+  /** what the arrangement draws, which a folded heading counts: the desk's rows, the phone's cards */
+  counts: "rows" | "cards";
 }) {
-  const summary = folded ? foldedSummary(g) : null;
+  const summary = folded ? foldedSummary(g, counts) : null;
   return (
     <h3 className={className}>
       <button type="button" className="nx-expiry-toggle" aria-expanded={!folded} aria-controls={controls}

@@ -2,8 +2,10 @@
  *
  *  1. Each expiry's heading inside Spreads and Contracts is a button that folds that group's rows;
  *     the sections themselves do not fold.
- *  2. A folded heading keeps its date and DTE and adds the group's row count and what in it needs
- *     the owner, in the chips' own words and colours. A group never reopens by itself when it rings.
+ *  2. A folded heading keeps its date and DTE and adds what the arrangement draws of the group,
+ *     counted — the desk's rows, the phone's cards — and what in it needs the owner, in the chips'
+ *     own words and colours. A group never reopens by itself when it rings; a jump to one of its
+ *     rows — a banner's tap, the palette, the price map — opens it, as a press on its heading.
  *  3. Remembered per browser in a cookie, keyed by section AND expiry, storing what is FOLDED: every
  *     group starts open; a write is made to the cookie as it stands now; a hand-edited cookie is read
  *     tolerantly; an expiry no longer in the book drops out of it when next written.
@@ -12,7 +14,8 @@
  *  The geometry — a folded heading inside the screen at iPhone width — is the browser suite's
  *  (`__browser__/NextFoldExpiry*.test.tsx`).
  */
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Holding } from "../shared/api";
@@ -23,11 +26,16 @@ import { PhoneBook } from "../phone/PhoneBook";
 import { reveal } from "../NeedsLine";
 import { readFolded, writeFolded } from "../shared/prefs";
 import { call, entry, HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
+import { holdingService } from "../testing/holdingService";
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
-  for (const n of ["ui_folded", "ui_arrangement"]) document.cookie = `${n}=;path=/;max-age=0`;
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  // jsdom has none: `scrolls()` gives it one for a test, taken away again here
+  delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  for (const n of ["ui_folded", "ui_arrangement", "ui_price_map"]) document.cookie = `${n}=;path=/;max-age=0`;
 });
 
 function props(over: Partial<BookProps> = {}): BookProps {
@@ -62,9 +70,21 @@ const head = (section: string, expiry: string) =>
   document.querySelector<HTMLButtonElement>(`[data-section="${section}"] [data-expiry="${expiry}"] h3 button`)!;
 /** What a heading's button folds. */
 const body = (button: HTMLElement) => document.getElementById(button.getAttribute("aria-controls")!)!;
+/** Every `scrollIntoView` from here on, and whether what was scrolled to was folded away then: jsdom
+ *  scrolls nothing, so the call is what is seen. */
+function scrolls(): { el: Element; hidden: boolean }[] {
+  const seen: { el: Element; hidden: boolean }[] = [];
+  Element.prototype.scrollIntoView = function (this: Element) {
+    seen.push({ el: this, hidden: this.closest("[hidden]") !== null });
+  };
+  return seen;
+}
 const cookie = () => document.cookie.split("; ").find((c) => c.startsWith("ui_folded="))?.slice("ui_folded=".length) ?? null;
 
 for (const [arrangement, draw, rows] of ARRANGEMENTS) {
+  /** "3 rows" on the desk, "3 cards" on the phone: each arrangement counts what it draws (the
+   *  owner, 2026-11-21) */
+  const n = (count: number) => `${count} ${arrangement === "desk" ? "row" : "card"}${count === 1 ? "" : "s"}`;
   describe(`on the ${arrangement}`, () => {
     it("draws every group open at first, each heading a button that controls its rows, and writes nothing", () => {
       draw(props());
@@ -102,20 +122,20 @@ for (const [arrangement, draw, rows] of ARRANGEMENTS) {
     it("says, folded, its rows and what needs you in it, in the chips' own words and colours", () => {
       draw(props({ holdings: AT_STOP }));
       fireEvent.click(head("spreads", "2026-12-04"));
-      expect(head("spreads", "2026-12-04").textContent).toBe("20261204 · 38 DTE · 1 row · 1 entry signal");
+      expect(head("spreads", "2026-12-04").textContent).toBe(`20261204 · 38 DTE · ${n(1)} · 1 entry signal`);
       fireEvent.click(head("spreads", "2026-12-18"));
       // the put spread at its stop, the call spread's own rule ringing: by the needs-you line's order
       const b = head("spreads", "2026-12-18");
-      expect(b.textContent).toBe("20261218 · 38 DTE · 3 rows · 1 at stop · 1 ringing");
+      expect(b.textContent).toBe(`20261218 · 38 DTE · ${n(3)} · 1 at stop · 1 ringing`);
       const chips = [...b.querySelectorAll<HTMLElement>(".nx-chip")];
       expect(chips.map((c) => c.dataset.kind ?? c.dataset.attention)).toEqual(["stop", "alarm"]);
       for (const c of chips) expect(c.querySelector("svg"), "each carries its kind's glyph").toBeTruthy();
       // a quiet group says its count alone
       fireEvent.click(head("contracts", "2026-12-31"));
-      expect(head("contracts", "2026-12-31").textContent).toBe("20261231 · 38 DTE · 1 row");
+      expect(head("contracts", "2026-12-31").textContent).toBe(`20261231 · 38 DTE · ${n(1)}`);
     });
 
-    it("counts the rules drawn under a holding: their rows and their chips", () => {
+    it("counts the rules drawn under a holding: their chips, and on the desk their rows", () => {
       draw(props({ quotes: [...QUOTES, ...UNDER], holdings: AT_STOP }));
       // both under the call spread on the desk's rows, and on its card on the phone
       const drawnUnder = arrangement === "desk"
@@ -123,9 +143,11 @@ for (const [arrangement, draw, rows] of ARRANGEMENTS) {
         : UNDER.map((e) => document.querySelector(`article[data-ref="h-calls"] [data-ref="${e.id}"]`) !== null);
       expect(drawnUnder).toEqual([true, true]);
       fireEvent.click(head("spreads", "2026-12-18"));
-      // the call spread, its two rules, the put spread, the watched spread; its own rule and the
-      // one under it ringing, the other under it at fault, the put spread at its stop
-      expect(head("spreads", "2026-12-18").textContent).toBe("20261218 · 38 DTE · 5 rows · 1 fault · 1 at stop · 2 ringing");
+      // the desk's rows: the call spread, its two rules, the put spread, the watched spread; the
+      // phone's cards: the two spreads held and the one watched, the rules inside the first. Its own
+      // rule and the one under it ringing, the other under it at fault, the put spread at its stop
+      expect(head("spreads", "2026-12-18").textContent)
+        .toBe(`20261218 · 38 DTE · ${arrangement === "desk" ? "5 rows" : "3 cards"} · 1 fault · 1 at stop · 2 ringing`);
     });
 
     it("counts each kind, and says a count of more than one in the plural", () => {
@@ -134,12 +156,12 @@ for (const [arrangement, draw, rows] of ARRANGEMENTS) {
       draw(props({ quotes: twice.map((q) => q.id === "r-ic" ? { ...q, error: "no figure" } : q), holdings: ic }));
       fireEvent.click(head("spreads", "2026-12-31"));
       // the 4-leg condor at its stop with its own rule at fault; the watched call spread an entry signal
-      expect(head("spreads", "2026-12-31").textContent).toBe("20261231 · 38 DTE · 2 rows · 1 fault · 1 at stop · 1 entry signal");
+      expect(head("spreads", "2026-12-31").textContent).toBe(`20261231 · 38 DTE · ${n(2)} · 1 fault · 1 at stop · 1 entry signal`);
       cleanup();
       const two = [...QUOTES, { ...QUOTES.find((q) => q.id === "w-dec04")!, id: "w-dec04b", code: "1204_P6800" }];
       draw(props({ quotes: two }));
       fireEvent.click(head("spreads", "2026-12-04"));
-      expect(head("spreads", "2026-12-04").textContent).toBe("20261204 · 38 DTE · 2 rows · 2 entry signals");
+      expect(head("spreads", "2026-12-04").textContent).toBe(`20261204 · 38 DTE · ${n(2)} · 2 entry signals`);
     });
 
     it("stays folded when a rule in it fires, and says so on its heading", () => {
@@ -150,7 +172,7 @@ for (const [arrangement, draw, rows] of ARRANGEMENTS) {
       const b = head("contracts", "2026-12-31");
       expect(b.getAttribute("aria-expanded")).toBe("false");
       expect(body(b).hidden).toBe(true);
-      expect(b.textContent).toBe("20261231 · 38 DTE · 1 row · 1 entry signal");
+      expect(b.textContent).toBe(`20261231 · 38 DTE · ${n(1)} · 1 entry signal`);
     });
 
     it("keeps an expiry folded under Spreads open under Contracts: the cookie keys the section too", () => {
@@ -229,32 +251,50 @@ for (const [arrangement, draw, rows] of ARRANGEMENTS) {
       expect(cookie()).toBe("contracts:20261218.spreads:20261204");
     });
 
-    it("leads a needs-you banner about a folded row to its group's heading, and leaves it folded", () => {
+    it("opens a folded group at a needs-you banner's tap, then brings its row into view and marks it", async () => {
+      const scrolled = scrolls();
       draw(props());
       fireEvent.click(head("spreads", "2026-12-04"));
+      document.cookie = "ui_folded=spreads:20261204.contracts:20261231;path=/";
       reveal("w-dec04");
+      const row = [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((r) => r.dataset.ref === "w-dec04")!;
+      await waitFor(() => expect(row.hasAttribute("data-revealed")).toBe(true));
       const b = head("spreads", "2026-12-04");
-      expect(b.hasAttribute("data-revealed")).toBe(true);
-      expect(b.getAttribute("aria-expanded")).toBe("false");
+      expect(b.getAttribute("aria-expanded")).toBe("true");
+      expect(body(b).hidden).toBe(false);
+      // written as a press on its heading would write it, the other folds kept
+      expect([...readFolded()]).toEqual(["contracts:20261231"]);
+      // brought into view once it was there to be seen
+      expect(scrolled.filter((s) => s.el === row)).toEqual([{ el: row, hidden: false }]);
+      expect(b.hasAttribute("data-revealed")).toBe(false);
     });
   });
 }
 
-describe("the same words on the desk and the phone", () => {
-  it("for every group, folded", () => {
+describe("the desk's rows and the phone's cards", () => {
+  it("for every group, folded: the same chips, each its own count", () => {
     document.cookie = "ui_folded=spreads:20261204.spreads:20261218.spreads:20261231.contracts:20261218.contracts:20261231;path=/";
     const said = () => [...document.querySelectorAll("[data-section] [data-expiry] h3 button")].map((b) => b.textContent);
     render(<DeskBook {...props({ quotes: [...QUOTES, ...UNDER], holdings: AT_STOP })} />);
     const desk = said();
     cleanup();
     render(<PhoneBook {...props({ quotes: [...QUOTES, ...UNDER], holdings: AT_STOP })} />);
-    expect(said()).toEqual(desk);
+    const phone = said();
     expect(desk).toEqual([
       "20261204 · 38 DTE · 1 row · 1 entry signal",
       "20261218 · 38 DTE · 5 rows · 1 fault · 1 at stop · 2 ringing",
       "20261231 · 38 DTE · 2 rows",
       "20261218 · 38 DTE · 1 row",
       "20261231 · 38 DTE · 1 row",
+    ]);
+    // each arrangement counts what it draws (the owner, 2026-11-21): the phone, its cards — a held
+    // spread's rules are lines inside its card. What needs you is said the same on both
+    expect(phone).toEqual([
+      "20261204 · 38 DTE · 1 card · 1 entry signal",
+      "20261218 · 38 DTE · 3 cards · 1 fault · 1 at stop · 2 ringing",
+      "20261231 · 38 DTE · 2 cards",
+      "20261218 · 38 DTE · 1 card",
+      "20261231 · 38 DTE · 1 card",
     ]);
   });
 });
@@ -315,4 +355,47 @@ describe("on the page, while /quotes fails", () => {
       expect([...readFolded()].sort()).toEqual(["contracts:20261231", "spreads:20261204", "spreads:20261218"]);
     });
   }
+});
+
+/** The desk's other two jumps to a row (the owner, 2026-11-21): the palette and the price map open
+ *  a folded group as a banner does — written as a press on its heading — select the row and bring
+ *  it into view once it is drawn. */
+describe("on the desk, a jump to a row in a folded group", () => {
+  const deskRow = (id: string) => document.querySelector<HTMLElement>(`.nxd-row[data-ref="${id}"]`)!;
+
+  it("from the palette opens the group, selects the row and brings it into view", async () => {
+    vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-12T17:00:00Z") });
+    document.cookie = "ui_arrangement=desk;path=/";
+    vi.stubGlobal("fetch", holdingService().fetch);
+    const user = userEvent.setup();
+    render(<Next />);
+    await waitFor(() => expect(document.querySelector('[data-ref="h-ic"]')).not.toBeNull());
+    fireEvent.click(head("spreads", "2026-12-31"));
+    expect(head("spreads", "2026-12-31").getAttribute("aria-expanded")).toBe("false");
+    const scrolled = scrolls();
+    await user.keyboard("{Control>}k{/Control}");
+    await user.type(screen.getByRole("combobox"), "1231_C7600");
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(deskRow("w-dec31").hasAttribute("data-selected")).toBe(true));
+    expect(head("spreads", "2026-12-31").getAttribute("aria-expanded")).toBe("true");
+    expect(readFolded().has("spreads:20261231")).toBe(false);
+    await waitFor(() => expect(scrolled.filter((s) => s.el === deskRow("w-dec31"))).toContainEqual({ el: deskRow("w-dec31"), hidden: false }));
+    expect(scrolled.filter((s) => s.el === deskRow("w-dec31") && s.hidden)).toEqual([]);
+  });
+
+  it("from the price map opens the group, selects the row and brings it into view", async () => {
+    render(<DeskBook {...props()} />);
+    fireEvent.click(head("spreads", "2026-12-31"));
+    document.cookie = "ui_folded=spreads:20261231.contracts:20261218;path=/";
+    const scrolled = scrolls();
+    fireEvent.click(screen.getByRole("button", { name: "price map" }));
+    const map = screen.getByRole("region", { name: "price map" });
+    fireEvent.click(map.querySelector<SVGGElement>('[data-spread="w-dec31"]')!);
+    expect(deskRow("w-dec31").hasAttribute("data-selected")).toBe(true);
+    expect(head("spreads", "2026-12-31").getAttribute("aria-expanded")).toBe("true");
+    expect([...readFolded()]).toEqual(["contracts:20261218"]);
+    await waitFor(() => expect(scrolled.filter((s) => s.el === deskRow("w-dec31"))).toContainEqual({ el: deskRow("w-dec31"), hidden: false }));
+    expect(scrolled.filter((s) => s.el === deskRow("w-dec31") && s.hidden)).toEqual([]);
+    document.cookie = "ui_price_map=;path=/;max-age=0";
+  });
 });

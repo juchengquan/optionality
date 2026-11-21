@@ -8,7 +8,6 @@
 }
 .nx-expiry-toggle:hover { background: color-mix(in oklch, var(--foreground) 5%, transparent); }
 .nx-expiry-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.nx-expiry-toggle[data-revealed] { outline: 2px solid var(--entry); outline-offset: 2px; }
 /* on the first line of a heading that wraps, not halfway down it */
 .nx-expiry-mark {
   flex: none; align-self: flex-start; margin-top: calc((1lh - 1em) / 2); width: 1em; height: 1em;

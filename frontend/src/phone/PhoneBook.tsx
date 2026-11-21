@@ -145,7 +145,7 @@ function Expiry({ g, kind, folded, onToggle, children }: {
   return (
     <section className="nxp-expiry" data-expiry={g.expiry} data-folded={folded ? "" : undefined}>
       <ExpiryHeading g={g} folded={folded} controls={body} onToggle={() => onToggle(kind, g.expiry)}
-                     className="nxp-expiry-head" dteClassName="nxp-meta" />
+                     className="nxp-expiry-head" dteClassName="nxp-meta" counts="cards" />
       <ul id={body} className="nxp-cards nx-expiry-body" hidden={folded}>{children}</ul>
     </section>
   );

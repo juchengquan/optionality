@@ -15,7 +15,9 @@
  *    may have opened the very group this one still shows folded, and a flip of the cookie would then
  *    leave it folded here.
  *  - **A folded group never reopens by itself**, not when a rule in it rings: its heading says how
- *    many rows it holds and what in it needs the owner, in the chips' own words (`foldedSummary`).
+ *    many rows (on the phone, cards) it holds and what in it needs the owner, in the chips' own words
+ *    (`foldedSummary`). Only a jump to one of its rows opens it — a banner's tap, the palette, the
+ *    price map — written as a press on its heading (`unfold.ts`).
  *  - **The saved picture and "Copy as text" draw every row**: they are built from the book, never
  *    from the screen (`snapshot/plain.ts`), so nothing here reaches them.
  */
@@ -61,17 +63,21 @@ const PLURAL: Partial<Record<NeedKind, string>> = { fault: "faults", entry: "ent
 
 const counted = (kind: NeedKind, count: number) => `${count} ${count === 1 ? ATTENTION_WORDS[kind] : PLURAL[kind] ?? ATTENTION_WORDS[kind]}`;
 
-/** What a folded group's heading adds to its date and DTE: its rows, as the desk's table draws them
- *  (each holding, each rule under one, each watched spread or contract — one count on both
- *  arrangements), and every chip those rows carry, counted by kind in the needs-you line's order. */
-export function foldedSummary(g: ExpiryBook): { rows: string; needs: FoldedNeed[] } {
+/** What a folded group's heading adds to its date and DTE: what the arrangement draws of it, counted
+ *  (the owner, 2026-11-21) — the desk's rows (each holding, each rule under one, each watched spread
+ *  or contract) or the phone's cards (each holding and each watched spread or contract, a holding's
+ *  rules lines inside its card) — and every chip those rows carry, the same on both, counted by kind
+ *  in the needs-you line's order. */
+export function foldedSummary(g: ExpiryBook, counts: "rows" | "cards"): { rows: string; needs: FoldedNeed[] } {
   const rows = groupRows(g);
   const kinds: NeedKind[] = rows.flatMap((r) => [attentionOf(r), ownAttentionOf(r)])
     .filter((k): k is NeedKind => k !== null);
   const needs = ORDER.map((kind) => ({ kind, count: kinds.filter((k) => k === kind).length }))
     .filter((n) => n.count > 0)
     .map((n) => ({ ...n, words: counted(n.kind, n.count) }));
-  return { rows: `${rows.length} ${rows.length === 1 ? "row" : "rows"}`, needs };
+  const n = counts === "rows" ? rows.length : g.held.flat().length + g.spreads.length + g.contracts.length;
+  const unit = counts === "rows" ? "row" : "card";
+  return { rows: `${n} ${unit}${n === 1 ? "" : "s"}`, needs };
 }
 
 /** Which groups are folded, and a press. `complete`: the holdings are valued AND the watchlist was

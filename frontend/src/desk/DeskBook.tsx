@@ -34,6 +34,7 @@ import { inFold, NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection }
 import { useDeskFit } from "./useDeskFit";
 import { ExpiryHeading } from "../ExpiryHeading";
 import { useFolds, type SectionKind } from "../folds";
+import { unfolding } from "../unfold";
 import { PriceMapPanel } from "./PriceMapPanel";
 import { priceMapOf, spxOfBook } from "../pricemap";
 import "./desk.css";
@@ -144,7 +145,9 @@ export function DeskBook({ selection, ...props }: BookProps & {
   const request = sel.request;
   useEffect(() => {
     if (!request) return;
-    rowElement(root.current, sel.id)?.scrollIntoView?.({ block: "nearest" });
+    // a row in a folded group: the group opened first, as a press on its heading (`unfold.ts`)
+    const landed = rowElement(root.current, sel.id);
+    unfolding(landed, () => landed?.scrollIntoView?.({ block: "nearest" }));
     const inspector = root.current?.querySelector<HTMLElement>(".nxd-inspector");
     if (!inspector) return;
     const button = request.then === "edit"
@@ -177,7 +180,8 @@ export function DeskBook({ selection, ...props }: BookProps & {
   /** A spread picked on the map is the row picked in the table: selected, and brought into view. */
   const pickOnMap = useCallback((id: string) => {
     setSelected(id);
-    rowElement(root.current, id)?.scrollIntoView?.({ block: "nearest" });
+    const picked = rowElement(root.current, id);
+    unfolding(picked, () => picked?.scrollIntoView?.({ block: "nearest" }));
   }, [setSelected]);
 
   const inspectorId = useId();
@@ -324,7 +328,8 @@ function Expiry({ g, ctx, kind, folded, onToggle }: {
   const body = useId();
   return (
     <div className="nxd-expiry" data-expiry={g.expiry} data-folded={folded ? "" : undefined}>
-      <ExpiryHeading g={g} folded={folded} controls={body} onToggle={() => onToggle(kind, g.expiry)} className="nxd-group" />
+      <ExpiryHeading g={g} folded={folded} controls={body} onToggle={() => onToggle(kind, g.expiry)} className="nxd-group"
+                     counts="rows" />
       <ul id={body} className="nx-expiry-body" hidden={folded}>
         {g.held.map((bracket) => (
           <li key={bracket.map((p) => p.holding.id).join("+")}

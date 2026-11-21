@@ -2,7 +2,7 @@
  *  a tap on a heading folds its cards and the next opens them, and every folded heading — the
  *  widest says a row count and several chips — stays inside the screen, wrapping rather than
  *  pushing the page sideways. The behaviour is `__tests__/NextFoldExpiry.test.tsx`'s. */
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -10,6 +10,7 @@ import { Next } from "../Next";
 import { overflowsSideways, settle } from "./nextBook";
 import { hitBox } from "./targets";
 import { placed, serveOneBook } from "../testing/oneBookServe";
+import { HOLDINGS, MONITORS, QUOTES } from "../testing/ownerBook";
 
 afterEach(() => {
   cleanup();
@@ -74,5 +75,41 @@ describe("under the iPhone profile", () => {
         expect(chip.scrollWidth, chip.textContent!).toBeLessThanOrEqual(chip.clientWidth + 0.5);
       }
     }
+  });
+
+  // the owner, 2026-11-21: a banner about a row in a folded group opens the group, then brings the
+  // row into view and marks it, as it does for a row in an open group
+  it("opens a folded group at a banner's tap, the row brought into view and marked", async () => {
+    const health = { db: true, provider: { name: "moomoo", ok: true },
+      monitor: { last_sweep_at: "2026-11-10 23:14:05+08:00", alarms: { label: "active", bad: false },
+        fetched_at: "2026-11-10 23:14:05+08:00" },
+      settings: { sweep_seconds: 15, expired_retention_days: 7, manage_by_dte: 21, display_tz: "Asia/Singapore" } };
+    // the lone contract on the last expiry, fired: its card starts out of view
+    const quotes = QUOTES.map((q) => (q.id === "w-lone" ? { ...q, triggered: true } : q));
+    window.fetch = ((url: string) => {
+      const path = String(url).replace(/^.*\/api/, "");
+      const body = path === "/quotes" ? quotes : path === "/monitors" ? MONITORS
+        : path === "/health" ? health : path === "/positions/values" ? HOLDINGS : [];
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) });
+    }) as unknown as typeof fetch;
+    document.cookie = "ui_folded=contracts:20261231;path=/";
+    render(<Next />);
+    await settle();
+    window.scrollTo(0, 0);
+    const b = document.querySelector<HTMLButtonElement>('[data-section="contracts"] [data-expiry="2026-12-31"] h3 button')!;
+    expect(b.getAttribute("aria-expanded")).toBe("false");
+    const card = document.querySelector<HTMLElement>('article[data-ref="w-lone"]')!;
+    expect(card.getBoundingClientRect().height, "folded away to begin with").toBe(0);
+    const banners = screen.getByRole("status", { name: "needs you" });
+    await userEvent.click(within(banners).getByRole("button", { name: /20261231 C8000 entry signal/ }));
+    await new Promise((r) => setTimeout(r, 900));
+    expect(b.getAttribute("aria-expanded")).toBe("true");
+    expect(document.cookie).not.toMatch(/ui_folded=[^;]*contracts:20261231/);
+    const r = card.getBoundingClientRect();
+    expect(card.hasAttribute("data-revealed")).toBe(true);
+    // in view, below the header held at the top
+    const top = document.querySelector<HTMLElement>(".nx-head")!.getBoundingClientRect().bottom;
+    expect(r.height).toBeGreaterThan(0);
+    expect(r.top >= top - 0.5 && r.bottom <= window.innerHeight + 0.5, `${r.top}–${r.bottom} not in ${top}–${window.innerHeight}`).toBe(true);
   });
 });
