@@ -16,11 +16,13 @@
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Entry, Holding } from "../shared/api";
 import type { BookProps } from "../Book";
 import { DeskBook } from "../desk/DeskBook";
+import { NOTHING_SELECTED, type DeskSelection } from "../desk/keys";
 import { Next } from "../Next";
 import { PhoneBook } from "../phone/PhoneBook";
 import { reveal } from "../NeedsLine";
@@ -384,20 +386,74 @@ describe("on the desk, folding the selected row's group", () => {
     expect(typed()).toBe("1.55");
   });
 
-  // review of #468, finding 3: OPENING the group the selected row is in clears nothing — the state
-  // a held fold leaves behind
-  it("clears nothing when the selected row's folded group is opened", () => {
+  // review of #468, round 1 finding 3: OPENING the group the selected row is in clears nothing. While
+  // a form holds the row hidden, and on the palette's and the price map's landing (below), which
+  // select a hidden row before they open its group
+  it("clears nothing when the selected row's folded group is opened, the form still open", async () => {
     render(<DeskBook {...props({ writes })} />);
     select("h-calls");
     draft("1.55");
     fireEvent.click(head("spreads", "2026-12-18"));
-    // the form shut, nothing holds the inspector now; its row is still folded away
-    fireEvent.click(within(inspector()!).getByRole("button", { name: "close…" }));
-    expect(inspector()!.querySelector("form")).toBeNull();
     fireEvent.click(head("spreads", "2026-12-18"));
     expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("true");
+    // and the form shut now, with its row drawn, clears nothing either
+    fireEvent.click(within(inspector()!).getByRole("button", { name: "close…" }));
+    await new Promise((r) => setTimeout(r, 20));
     expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
     expect(deskRow("h-calls").hasAttribute("data-selected")).toBe(true);
+  });
+
+  // review of #468, round 2 finding 3: the rule as the hold ends — the form shut while its row is
+  // folded away. No heading was pressed, so the focus is not moved to one
+  it("clears when a form that held a folded row's inspector is shut, moving no focus to a heading", async () => {
+    render(<DeskBook {...props({ writes })} />);
+    select("h-calls");
+    draft("1.55");
+    fireEvent.click(head("spreads", "2026-12-18"));
+    expect(inspector()).not.toBeNull();
+    const shut = within(inspector()!).getByRole("button", { name: "close…" });
+    shut.focus();
+    fireEvent.click(shut);
+    await waitFor(() => expect(inspector()).toBeNull());
+    expect(document.querySelector(".nxd-row[data-selected], .nxd-row[data-cursor]")).toBeNull();
+    expect(document.activeElement?.closest("h3")).toBeNull();
+  });
+
+  // round 2 finding 1: the rule as the selected row comes back into the book — a holding kept in the
+  // inspector through a failed valuation, its group folded meanwhile, the valuation recovered
+  it("clears when the selected row comes back into the book inside a folded group", () => {
+    const failed = { holdings: null, holdingsKept: HOLDINGS, holdingsError: "the valuation failed" };
+    const { rerender } = render(<DeskBook {...props()} />);
+    select("h-calls");
+    rerender(<DeskBook {...props(failed)} />);
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
+    fireEvent.click(head("spreads", "2026-12-18"));
+    // not drawn while the valuation has failed: nothing it holds is hidden yet
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
+    const pressed = document.activeElement;
+    rerender(<DeskBook {...props()} />);
+    expect(head("spreads", "2026-12-18").getAttribute("aria-expanded")).toBe("false");
+    expect(inspector()).toBeNull();
+    expect(document.querySelector(".nxd-row[data-selected], .nxd-row[data-cursor]")).toBeNull();
+    expect(pressed).not.toBeNull();
+    expect(document.activeElement?.closest(".nx-expiry-toggle")).toBeNull();
+  });
+
+  // round 2 finding 2: the rule's first run, as the desk is drawn — the page's selection on a row of
+  // a group already folded (on the phone, or in another tab). Nothing was pressed: no focus moves
+  it("clears, as the desk is drawn, a selection the page kept on a row of a folded group", () => {
+    document.cookie = "ui_folded=spreads:20261218;path=/";
+    let now: DeskSelection = { id: "h-calls", open: true };
+    function Page() {
+      const [sel, setSel] = useState<DeskSelection>(now);
+      now = sel;
+      return <DeskBook {...props()} selection={[sel, setSel]} />;
+    }
+    const before = document.activeElement;
+    render(<Page />);
+    expect(inspector()).toBeNull();
+    expect(now).toEqual(NOTHING_SELECTED);
+    expect(document.activeElement).toBe(before);
   });
 
   it("leaves the selection and the inspector alone when another group is folded, and opening selects nothing", () => {

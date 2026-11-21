@@ -140,27 +140,56 @@ export function DeskBook({ selection, ...props }: BookProps & {
   const awayNow = useRef(away);
   awayNow.current = away;
   const ids = useMemo(() => rows.map(rowId).filter((id) => !away.has(id)), [rows, away]);
-  // ONE rule, whatever hid the row (the owner, 2026-11-21; #468): when the folds change and the
-  // selected row — or the cursor alone — is in a folded group, the inspector closes and the
-  // selection clears, so j and k start again as with nothing selected. This tab's press does it,
-  // and so do another tab's folds, which a press here takes from the cookie as it stands. A form
-  // open on the desk holds it (`holdOnDesk`), as it holds j, k and the palette: the group folds,
-  // and the inspector, the selection and the draft stay. Opening a group hides nothing, so it
-  // clears nothing. Only this tab's own press moves the focus — to the heading pressed, rather
-  // than leaving it on the page's body where the inspector took it.
+  // ONE rule, whatever hid the row (the owner, 2026-11-21; #468): the selected row — or the cursor
+  // alone — in a folded group closes the inspector and clears the selection, so j and k start again
+  // as with nothing selected, unless a form open on the desk holds it (`holdOnDesk`), as it holds
+  // j, k and the palette: then the group folds, and the inspector, the selection and the draft stay.
+  // It is checked at exactly four moments, and never because the selection itself changed — the
+  // palette and the price map select a hidden row BEFORE they open its group (`unfold.ts`):
+  // - the folds change: this tab's press, and another tab's folds a press here takes from the
+  //   cookie as it stands; and its first run, as the desk is drawn on folds the page already had;
+  // - the hold ends: the form that held the inspector is shut;
+  // - the selected row comes back into the book, as after a failed valuation recovers.
+  // Only this tab's own press moves the focus — to the heading pressed, rather than leaving it on
+  // the page's body where the inspector took it. Opening a group hides nothing, so clears nothing.
   const pressed = useRef<HTMLButtonElement | null>(null);
   const foldGroup = useCallback((kind: SectionKind, expiry: string, button: HTMLButtonElement) => {
     pressed.current = button;
     folds.toggle(kind, expiry);
   }, [folds]);
+  // a check a form held off, to run again once nothing holds the desk
+  const heldOff = useRef(false);
+  const hideSelected = useCallback((button: HTMLButtonElement | null) => {
+    heldOff.current = false;
+    const id = selNow.current.id;
+    if (id === null || !awayNow.current.has(id)) return;
+    if (holdOnDesk(root.current) !== null) { heldOff.current = true; return; }
+    setSel(NOTHING_SELECTED);
+    button?.focus();
+  }, [setSel]);
   useEffect(() => {
     const button = pressed.current;
     pressed.current = null;
-    const id = selNow.current.id;
-    if (id === null || !awayNow.current.has(id) || holdOnDesk(root.current) !== null) return;
-    setSel(NOTHING_SELECTED);
-    button?.focus();
-  }, [folds.folded, setSel]);
+    hideSelected(button);
+  }, [folds.folded, hideSelected]);
+  // the hold ends inside the inspector, which the desk does not draw again for: watched on the page
+  useEffect(() => {
+    const desk = root.current;
+    if (!desk) return;
+    const watch = new MutationObserver(() => {
+      if (heldOff.current && holdOnDesk(desk) === null) hideSelected(null);
+    });
+    watch.observe(desk, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-poll"] });
+    return () => watch.disconnect();
+  }, [hideSelected]);
+  // the same selected id, out of the book on the last render and back in it on this one
+  const inBook = liveRow !== null;
+  const seen = useRef({ id: sel.id, inBook });
+  useEffect(() => {
+    const was = seen.current;
+    seen.current = { id: sel.id, inBook };
+    if (was.id === sel.id && !was.inBook && inBook) hideSelected(null);
+  }, [sel.id, inBook, hideSelected]);
   useDeskKeys({ ids, selection: sel, setSelection: setSel, desk: root });
 
   // the palette's landing (#299): the row brought into view, then the inspector's heading focused,
