@@ -30,7 +30,7 @@ import {
 } from "./columns";
 import { SpxNote, StrikeStrip } from "../StrikeStrip";
 import { bookSpxReasons, joinStrips, stripOfHolding } from "../strip";
-import { inFold, NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
+import { holdOnDesk, inFold, NOTHING_SELECTED, rowElement, useDeskKeys, type DeskSelection } from "./keys";
 import { useDeskFit } from "./useDeskFit";
 import { ExpiryHeading } from "../ExpiryHeading";
 import { useFolds, type SectionKind } from "../folds";
@@ -131,13 +131,68 @@ export function DeskBook({ selection, ...props }: BookProps & {
     return () => document.removeEventListener("keydown", onKey);
   }, [current, close]);
 
-  // a folded group's rows are not on screen (the owner, 2026-11-21): j and k walk past them
+  // which expiry groups the viewer folded (the owner, 2026-11-21)
   const folds = useFolds(placed, holdings !== null && props.quotesRead !== false);
-  const ids = useMemo(() => {
-    const away = new Set(placed.sections.flatMap((s) => s.expiries.filter((g) => folds.folded(s.kind, g.expiry)))
-      .flatMap(groupRows).map(rowId));
-    return rows.map(rowId).filter((id) => !away.has(id));
-  }, [rows, placed, folds.folded]);
+  // the rows the folds hide now: not on screen, so j and k walk past them
+  const away = useMemo(() => new Set(placed.sections
+    .flatMap((s) => s.expiries.filter((g) => folds.folded(s.kind, g.expiry)))
+    .flatMap(groupRows).map(rowId)), [placed, folds.folded]);
+  const awayNow = useRef(away);
+  awayNow.current = away;
+  const ids = useMemo(() => rows.map(rowId).filter((id) => !away.has(id)), [rows, away]);
+  // ONE rule, whatever hid the row (the owner, 2026-11-21; #468): the selected row — or the cursor
+  // alone — in a folded group closes the inspector and clears the selection, so j and k start again
+  // as with nothing selected, unless a form open on the desk holds it (`holdOnDesk`), as it holds
+  // j, k and the palette: then the group folds, and the inspector, the selection and the draft stay.
+  // It is checked at exactly three moments, and never because the selection itself changed — the
+  // palette and the price map select a hidden row BEFORE they open its group (`unfold.ts`):
+  // - the folds change: this tab's press, and another tab's folds a press here takes from the
+  //   cookie as it stands; and its first run, as the desk is drawn on folds the page already had;
+  // - a hold that put the check off ends: the form that held the inspector is shut;
+  // - the SAME selected row goes from shown to hidden with the folds unchanged: a holding kept
+  //   through a failed valuation, or a rule drawn apart then, drawn back into a folded group as
+  //   the valuation recovers.
+  // Only this tab's own press moves the focus — to the heading pressed, rather than leaving it on
+  // the page's body where the inspector took it. Opening a group hides nothing, so clears nothing.
+  const pressed = useRef<HTMLButtonElement | null>(null);
+  const foldGroup = useCallback((kind: SectionKind, expiry: string, button: HTMLButtonElement) => {
+    pressed.current = button;
+    folds.toggle(kind, expiry);
+  }, [folds]);
+  // a check a form held off, to run again once nothing holds the desk
+  const heldOff = useRef(false);
+  const hideSelected = useCallback((button: HTMLButtonElement | null) => {
+    heldOff.current = false;
+    const id = selNow.current.id;
+    if (id === null || !awayNow.current.has(id)) return;
+    if (holdOnDesk(root.current) !== null) { heldOff.current = true; return; }
+    setSel(NOTHING_SELECTED);
+    button?.focus();
+  }, [setSel]);
+  useEffect(() => {
+    const button = pressed.current;
+    pressed.current = null;
+    hideSelected(button);
+  }, [folds.folded, hideSelected]);
+  // the hold ends inside the inspector, which the desk does not draw again for: watched on the page
+  useEffect(() => {
+    const desk = root.current;
+    if (!desk) return;
+    const watch = new MutationObserver(() => {
+      if (heldOff.current && holdOnDesk(desk) === null) hideSelected(null);
+    });
+    watch.observe(desk, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-poll"] });
+    return () => watch.disconnect();
+  }, [hideSelected]);
+  // the same selected id, shown on the last render and hidden on this one; a NEW id is never
+  // checked here, or the palette's landing would be undone before it opens the group
+  const hiddenNow = sel.id !== null && away.has(sel.id);
+  const seen = useRef({ id: sel.id, hidden: hiddenNow });
+  useEffect(() => {
+    const was = seen.current;
+    seen.current = { id: sel.id, hidden: hiddenNow };
+    if (was.id === sel.id && !was.hidden && hiddenNow) hideSelected(null);
+  }, [sel.id, hiddenNow, hideSelected]);
   useDeskKeys({ ids, selection: sel, setSelection: setSel, desk: root });
 
   // the palette's landing (#299): the row brought into view, then the inspector's heading focused,
@@ -202,7 +257,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
           ))}
         </div>
 
-        <OneBook {...props} placed={placed} ctx={ctx} folds={folds} picker={
+        <OneBook {...props} placed={placed} ctx={ctx} folds={folds} foldGroup={foldGroup} picker={
           // on the first section's line, at its end: over the header it sat on top of a label
           <>
             <button type="button" className="nxd-maptoggle" aria-expanded={mapOpen}
@@ -259,8 +314,9 @@ const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
  *  held rows first. What the book says before its rows — the session line, SPX's reason, a
  *  valuation's failure or that it is under way, and that there is nothing at all — is said once,
  *  above them. */
-function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, folds, picker }: BookProps & {
+function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, folds, foldGroup, picker }: BookProps & {
   placed: BookModel; ctx: Ctx; folds: ReturnType<typeof useFolds>; picker: React.ReactNode;
+  foldGroup: (kind: SectionKind, expiry: string, button: HTMLButtonElement) => void;
 }) {
   const empty = placed.book.length === 0 && placed.unplaced.length === 0 && placed.quarantined.length === 0;
   return (
@@ -286,7 +342,7 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
         <section key={s.kind} className="nxd-part" data-section={s.kind} aria-labelledby={`nxd-part-${s.kind}`}>
           <h2 id={`nxd-part-${s.kind}`} className="nxd-part-head">{s.title}</h2>
           {s.expiries.map((g) => <Expiry key={g.expiry} g={g} ctx={ctx} kind={s.kind}
-                                         folded={folds.folded(s.kind, g.expiry)} onToggle={folds.toggle} />)}
+                                         folded={folds.folded(s.kind, g.expiry)} onToggle={foldGroup} />)}
         </section>
       ))}
       {placed.unplaced.length > 0 ? (
@@ -323,12 +379,13 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
  *  watched spreads or its lone contracts, whichever section it is in. The heading folds the rows
  *  (the owner, 2026-11-21), which stay mounted, hidden. */
 function Expiry({ g, ctx, kind, folded, onToggle }: {
-  g: ExpiryBook; ctx: Ctx; kind: SectionKind; folded: boolean; onToggle: (kind: SectionKind, expiry: string) => void;
+  g: ExpiryBook; ctx: Ctx; kind: SectionKind; folded: boolean;
+  onToggle: (kind: SectionKind, expiry: string, button: HTMLButtonElement) => void;
 }) {
   const body = useId();
   return (
     <div className="nxd-expiry" data-expiry={g.expiry} data-folded={folded ? "" : undefined}>
-      <ExpiryHeading g={g} folded={folded} controls={body} onToggle={() => onToggle(kind, g.expiry)} className="nxd-group"
+      <ExpiryHeading g={g} folded={folded} controls={body} onToggle={(button) => onToggle(kind, g.expiry, button)} className="nxd-group"
                      counts="rows" />
       <ul id={body} className="nx-expiry-body" hidden={folded}>
         {g.held.map((bracket) => (

@@ -26,7 +26,8 @@ export function ExpiryHeading({ g, folded, controls, onToggle, className, dteCla
   folded: boolean;
   /** the id of the group's rows */
   controls: string;
-  onToggle: () => void;
+  /** given the heading's button, which the desk hands the focus back to (DeskBook's `foldGroup`) */
+  onToggle: (button: HTMLButtonElement) => void;
   className: string;
   /** the DTE's own weight, where the arrangement draws it apart from the date */
   dteClassName?: string;
@@ -37,7 +38,7 @@ export function ExpiryHeading({ g, folded, controls, onToggle, className, dteCla
   return (
     <h3 className={className}>
       <button type="button" className="nx-expiry-toggle" aria-expanded={!folded} aria-controls={controls}
-              onClick={onToggle}>
+              onClick={(e) => onToggle(e.currentTarget)}>
         <ChevronRight aria-hidden="true" className="nx-expiry-mark" />
         <span className="nx-expiry-words">
           {/* each piece whole with the dot before it, the spaces between them where a narrow
