@@ -62,4 +62,37 @@ describe("on the desk", () => {
       }
     });
   }
+
+  // the owner, 2026-11-21: folding the group that holds the open row closes its inspector, and the
+  // keyboard's focus goes to the heading pressed — never left on the page's body
+  it("closes the inspector when the selected row's group is folded, the focus on its heading", async () => {
+    await page.viewport(1280, 900);
+    serveOneBook();
+    render(<Next />);
+    await settle();
+    await userEvent.click(document.querySelector<HTMLElement>('.nxd-row[data-ref="h-calls"] .nxd-name')!);
+    await settle();
+    const inspector = () => document.querySelector(".nxd-inspector");
+    expect(inspector()).not.toBeNull();
+    // the inspector takes the focus when it opens: the press comes from the keyboard, back on the heading
+    expect(inspector()!.contains(document.activeElement)).toBe(true);
+    const b = head("spreads", "2026-12-18");
+    b.focus();
+    await userEvent.keyboard("{Enter}");
+    await settle();
+    expect(b.getAttribute("aria-expanded")).toBe("false");
+    expect(inspector()).toBeNull();
+    expect(document.querySelector(".nxd-row[data-selected], .nxd-row[data-cursor]")).toBeNull();
+    expect(document.activeElement).toBe(b);
+    // and by the pointer, from the inspector reopened on another group's row: the focus there, not on BODY
+    await userEvent.click(b);
+    await userEvent.click(document.querySelector<HTMLElement>('.nxd-row[data-ref="w-dec31"] .nxd-name')!);
+    await settle();
+    expect(inspector()).not.toBeNull();
+    const other = head("spreads", "2026-12-31");
+    await userEvent.click(other);
+    await settle();
+    expect(inspector()).toBeNull();
+    expect(document.activeElement).toBe(other);
+  });
 });

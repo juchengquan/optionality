@@ -133,6 +133,20 @@ export function DeskBook({ selection, ...props }: BookProps & {
 
   // a folded group's rows are not on screen (the owner, 2026-11-21): j and k walk past them
   const folds = useFolds(placed, holdings !== null && props.quotesRead !== false);
+  // Folding the group that holds the selected row (the owner, 2026-11-21) closes its inspector and
+  // clears the selection — the cursor too, so j and k start again as with nothing selected — and
+  // hands the keyboard's focus to the heading pressed, rather than leaving it on the page's body
+  // where the inspector took it. Any other fold leaves both alone, and opening selects nothing.
+  const foldGroup = useCallback((kind: SectionKind, expiry: string, button: HTMLButtonElement) => {
+    const g = placed.sections.find((s) => s.kind === kind)?.expiries.find((x) => x.expiry === expiry);
+    const id = selNow.current.id;
+    const holdsSelected = !folds.folded(kind, expiry) && g !== undefined && id !== null
+      && groupRows(g).some((r) => rowId(r) === id);
+    folds.toggle(kind, expiry);
+    if (!holdsSelected) return;
+    setSel(NOTHING_SELECTED);
+    button.focus();
+  }, [placed, folds, setSel]);
   const ids = useMemo(() => {
     const away = new Set(placed.sections.flatMap((s) => s.expiries.filter((g) => folds.folded(s.kind, g.expiry)))
       .flatMap(groupRows).map(rowId));
@@ -202,7 +216,7 @@ export function DeskBook({ selection, ...props }: BookProps & {
           ))}
         </div>
 
-        <OneBook {...props} placed={placed} ctx={ctx} folds={folds} picker={
+        <OneBook {...props} placed={placed} ctx={ctx} folds={folds} foldGroup={foldGroup} picker={
           // on the first section's line, at its end: over the header it sat on top of a label
           <>
             <button type="button" className="nxd-maptoggle" aria-expanded={mapOpen}
@@ -259,8 +273,9 @@ const ALARM_COLUMN = COLUMNS.find((c) => c.key === "alarm")!;
  *  held rows first. What the book says before its rows — the session line, SPX's reason, a
  *  valuation's failure or that it is under way, and that there is nothing at all — is said once,
  *  above them. */
-function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, folds, picker }: BookProps & {
+function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdingsServed, session, phase, ctx, folds, foldGroup, picker }: BookProps & {
   placed: BookModel; ctx: Ctx; folds: ReturnType<typeof useFolds>; picker: React.ReactNode;
+  foldGroup: (kind: SectionKind, expiry: string, button: HTMLButtonElement) => void;
 }) {
   const empty = placed.book.length === 0 && placed.unplaced.length === 0 && placed.quarantined.length === 0;
   return (
@@ -286,7 +301,7 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
         <section key={s.kind} className="nxd-part" data-section={s.kind} aria-labelledby={`nxd-part-${s.kind}`}>
           <h2 id={`nxd-part-${s.kind}`} className="nxd-part-head">{s.title}</h2>
           {s.expiries.map((g) => <Expiry key={g.expiry} g={g} ctx={ctx} kind={s.kind}
-                                         folded={folds.folded(s.kind, g.expiry)} onToggle={folds.toggle} />)}
+                                         folded={folds.folded(s.kind, g.expiry)} onToggle={foldGroup} />)}
         </section>
       ))}
       {placed.unplaced.length > 0 ? (
@@ -323,12 +338,13 @@ function OneBook({ placed, quotes, holdings, holdingsError, holdingsAt, holdings
  *  watched spreads or its lone contracts, whichever section it is in. The heading folds the rows
  *  (the owner, 2026-11-21), which stay mounted, hidden. */
 function Expiry({ g, ctx, kind, folded, onToggle }: {
-  g: ExpiryBook; ctx: Ctx; kind: SectionKind; folded: boolean; onToggle: (kind: SectionKind, expiry: string) => void;
+  g: ExpiryBook; ctx: Ctx; kind: SectionKind; folded: boolean;
+  onToggle: (kind: SectionKind, expiry: string, button: HTMLButtonElement) => void;
 }) {
   const body = useId();
   return (
     <div className="nxd-expiry" data-expiry={g.expiry} data-folded={folded ? "" : undefined}>
-      <ExpiryHeading g={g} folded={folded} controls={body} onToggle={() => onToggle(kind, g.expiry)} className="nxd-group"
+      <ExpiryHeading g={g} folded={folded} controls={body} onToggle={(button) => onToggle(kind, g.expiry, button)} className="nxd-group"
                      counts="rows" />
       <ul id={body} className="nx-expiry-body" hidden={folded}>
         {g.held.map((bracket) => (

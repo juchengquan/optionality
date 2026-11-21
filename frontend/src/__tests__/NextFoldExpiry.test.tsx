@@ -299,6 +299,59 @@ describe("the desk's rows and the phone's cards", () => {
   });
 });
 
+/** The owner, 2026-11-21: on the desk, folding the group that holds the selected row closes its
+ *  inspector and clears the selection — as if nothing had been selected — and the keyboard's focus
+ *  goes to the heading just pressed. Folding any other group leaves both alone; opening one selects
+ *  nothing. */
+describe("on the desk, folding the selected row's group", () => {
+  const inspector = () => screen.queryByRole("complementary", { name: /^inspector:/ });
+  const deskRow = (id: string) => document.querySelector<HTMLElement>(`.nxd-row[data-ref="${id}"]`)!;
+  const select = (id: string) => fireEvent.click(deskRow(id).querySelector<HTMLElement>(".nxd-name")!);
+
+  it("closes the inspector, clears the selection and puts the focus on the heading pressed", () => {
+    render(<DeskBook {...props()} />);
+    select("h-calls");
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
+    const b = head("spreads", "2026-12-18");
+    fireEvent.click(b);
+    expect(inspector()).toBeNull();
+    expect(document.querySelector(".nxd-row[data-selected], .nxd-row[data-cursor]")).toBeNull();
+    expect(document.activeElement).toBe(b);
+    // j and k as with nothing selected: from the top of what is drawn
+    fireEvent.keyDown(document.body, { key: "j" });
+    expect(document.querySelector<HTMLElement>(".nxd-row[data-cursor]")!.dataset.ref).toBe("w-dec04");
+  });
+
+  it("does the same for a rule drawn under a holding, and for a row the inspector is shut on", () => {
+    render(<DeskBook {...props({ quotes: [...QUOTES, ...UNDER] })} />);
+    select("r-under-ringing");
+    fireEvent.click(head("spreads", "2026-12-18"));
+    expect(inspector()).toBeNull();
+    expect(document.querySelector(".nxd-row[data-selected], .nxd-row[data-cursor]")).toBeNull();
+    fireEvent.click(head("spreads", "2026-12-18"));
+    // the cursor alone, the inspector shut on it (j moved it there)
+    fireEvent.keyDown(document.body, { key: "j" });
+    expect(document.querySelector<HTMLElement>(".nxd-row[data-cursor]")!.dataset.ref).toBe("w-dec04");
+    fireEvent.click(head("spreads", "2026-12-04"));
+    expect(document.querySelector(".nxd-row[data-cursor]")).toBeNull();
+    expect(document.activeElement).toBe(head("spreads", "2026-12-04"));
+  });
+
+  it("leaves the selection and the inspector alone when another group is folded, and opening selects nothing", () => {
+    render(<DeskBook {...props()} />);
+    select("h-calls");
+    fireEvent.click(head("spreads", "2026-12-04"));
+    fireEvent.click(head("contracts", "2026-12-18"));
+    expect(inspector()?.getAttribute("aria-label")).toBe("inspector: 1218_C7300");
+    expect(deskRow("h-calls").hasAttribute("data-selected")).toBe(true);
+    fireEvent.click(head("spreads", "2026-12-18"));
+    expect(inspector()).toBeNull();
+    fireEvent.click(head("spreads", "2026-12-18"));
+    expect(inspector()).toBeNull();
+    expect(document.querySelector(".nxd-row[data-selected], .nxd-row[data-cursor]")).toBeNull();
+  });
+});
+
 describe("on the desk, j and k", () => {
   it("walk past a folded group's rows", () => {
     render(<DeskBook {...props()} />);
