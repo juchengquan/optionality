@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 
 import "./phone.css";
 import type { BookProps } from "../Book";
 import { Money } from "../Book";
 import { ClosedLine } from "../ClosedLine";
-import { NOTHING, placeBook, type BookModel, type PlacedHolding } from "../placement";
+import { NOTHING, placeBook, type BookModel, type ExpiryBook, type PlacedHolding } from "../placement";
 import { keptHolding } from "../kept";
 import { HoldingCard, OffList, RuleCard } from "./Cards";
 import { DetailSheet, type Subject } from "./Detail";
-import { expiryWords } from "./figures";
+import { ExpiryHeading } from "../ExpiryHeading";
+import { useFolds, type SectionKind } from "../folds";
 import { ErrorWords } from "../shared/ErrorWords";
 import { SpxNote } from "../StrikeStrip";
 import { bookSpxReasons } from "../strip";
@@ -23,11 +24,13 @@ import { bookSpxReasons } from "../strip";
  *  was opened, and closes itself if what it shows is gone.
  */
 export function PhoneBook({
-  quotes, monitors, holdings, holdingsKept, holdingsError, holdingsAt, holdingsServed, session, phase, privacy,
+  quotes, monitors, holdings, holdingsKept, holdingsError, holdingsAt, holdingsServed, quotesRead = true, session, phase, privacy,
   entryStyle, writes,
   journal,
 }: BookProps) {
-  const placed = placeBook(quotes, holdings, monitors);
+  const placed = useMemo(() => placeBook(quotes, holdings, monitors), [quotes, holdings, monitors]);
+  // which expiry groups the viewer folded (the owner, 2026-11-21), the desk's cookie
+  const folds = useFolds(placed, holdings !== null && quotesRead);
   const [openId, setOpenId] = useState<string | null>(null);
   const close = useCallback(() => setOpenId(null), []);
   const live = openId === null ? null : find(placed, openId);
@@ -87,31 +90,28 @@ export function PhoneBook({
           <section key={s.kind} className="nxp-part" data-section={s.kind} aria-labelledby={`nxp-part-${s.kind}`}>
             <h2 id={`nxp-part-${s.kind}`}>{s.title}</h2>
             {s.expiries.map((g) => (
-              <section key={g.expiry} className="nxp-expiry" data-expiry={g.expiry}>
-                <ExpiryHead expiry={g.expiry} dte={g.dte} />
-                <ul className="nxp-cards">
-                  {g.held.map((row) => (
-                    <li key={row.map((p) => p.holding.id).join("+")}>
-                      {row.length === 2 ? (
-                        <Condor row={row} privacy={privacy}>
-                          {row.map((p) => (
-                            <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
-                                         privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} spxSaid={spxSaid} />
-                          ))}
-                        </Condor>
-                      ) : row.map((p) => (
-                        <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
-                                     privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} spxSaid={spxSaid} />
-                      ))}
-                    </li>
-                  ))}
-                  {[...g.spreads, ...g.contracts].map(({ entry, overlap }) => (
-                    <li key={entry.id}>
-                      <RuleCard entry={entry} overlap={overlap} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
-                    </li>
-                  ))}
-                </ul>
-              </section>
+              <Expiry key={g.expiry} g={g} kind={s.kind} folded={folds.folded(s.kind, g.expiry)} onToggle={folds.toggle}>
+                {g.held.map((row) => (
+                  <li key={row.map((p) => p.holding.id).join("+")}>
+                    {row.length === 2 ? (
+                      <Condor row={row} privacy={privacy}>
+                        {row.map((p) => (
+                          <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
+                                       privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} spxSaid={spxSaid} />
+                        ))}
+                      </Condor>
+                    ) : row.map((p) => (
+                      <HoldingCard key={p.holding.id} placed={p} quotes={quotes} monitors={monitors}
+                                   privacy={privacy} session={session} onOpen={() => setOpenId(p.holding.id)} spxSaid={spxSaid} />
+                    ))}
+                  </li>
+                ))}
+                {[...g.spreads, ...g.contracts].map(({ entry, overlap }) => (
+                  <li key={entry.id}>
+                    <RuleCard entry={entry} overlap={overlap} onOpen={() => setOpenId(entry.id)} spxSaid={spxSaid} />
+                  </li>
+                ))}
+              </Expiry>
             ))}
           </section>
         ))}
@@ -134,13 +134,20 @@ export function PhoneBook({
   );
 }
 
-/** "20261231 · 45 DTE": an expiry's heading, as the desk's group heading writes it (2026-11-17) —
- *  one text, the DTE in the meta weight. */
-function ExpiryHead({ expiry, dte }: { expiry: string; dte: number }) {
+/** One expiry of a section: its heading — "20261231 · 45 DTE", as the desk's group heading writes it
+ *  (2026-11-17), the DTE in the meta weight — and its cards, which the heading folds (the owner,
+ *  2026-11-21); folded, they stay mounted, hidden. */
+function Expiry({ g, kind, folded, onToggle, children }: {
+  g: ExpiryBook; kind: SectionKind; folded: boolean; onToggle: (kind: SectionKind, expiry: string) => void;
+  children: React.ReactNode;
+}) {
+  const body = useId();
   return (
-    <h3 className="nxp-expiry-head">
-      <span>{`${expiryWords(expiry)} `}<span className="nxp-meta">{`· ${dte} DTE`}</span></span>
-    </h3>
+    <section className="nxp-expiry" data-expiry={g.expiry} data-folded={folded ? "" : undefined}>
+      <ExpiryHeading g={g} folded={folded} controls={body} onToggle={() => onToggle(kind, g.expiry)}
+                     className="nxp-expiry-head" dteClassName="nxp-meta" counts="cards" />
+      <ul id={body} className="nxp-cards nx-expiry-body" hidden={folded}>{children}</ul>
+    </section>
   );
 }
 

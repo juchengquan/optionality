@@ -16,7 +16,7 @@
 import type { Entry, Holding, Monitor } from "../shared/api";
 import { DASH, heldLeg, legText, shortFirst, signedLeg, type WrittenLeg } from "../shared/format";
 import { delta, money, percent, points } from "../shared/numbers";
-import { drawnUnder, ownRule, type BookModel, type PlacedHolding } from "../placement";
+import { drawnUnder, ownRule, type BookModel, type ExpiryBook, type PlacedHolding } from "../placement";
 import {
   entryName, isEntrySignal, monitorName, QUARANTINED, sentence, shapeOf, shortDistance, shortRule, shortSentence, storedRuleWords,
 } from "../needs";
@@ -122,18 +122,23 @@ const quarantineShort = (m: Monitor) => `${shortRule(shapeOf(m))} — ${quaranti
  *  rules on held contracts no drawn holding owns, and the quarantined. The fitting measures exactly
  *  these, j and k walk them, the palette finds them, and the inspector finds its row among them. */
 export function tableRows(placed: BookModel): DeskRow[] {
-  const out: DeskRow[] = [];
-  for (const g of placed.book) {
-    for (const p of g.held.flat()) {
-      out.push({ kind: "holding", holding: p.holding, rules: p.rules, legRules: p.legRules });
-      for (const entry of subRules(p)) out.push({ kind: "rule", entry, nested: true });
-    }
-    for (const i of [...g.spreads, ...g.contracts]) {
-      out.push({ kind: "rule", entry: i.entry, nested: false, overlap: i.overlap });
-    }
-  }
+  const out: DeskRow[] = placed.book.flatMap(groupRows);
   for (const entry of placed.unplaced) out.push({ kind: "rule", entry, nested: false });
   for (const monitor of placed.quarantined) out.push({ kind: "quarantined", monitor });
+  return out;
+}
+
+/** One expiry group's rows, as the table draws them: each held spread, the rules under it, then the
+ *  watched spreads or contracts. What a folded group's heading counts (`folds.ts`). */
+export function groupRows(g: ExpiryBook): DeskRow[] {
+  const out: DeskRow[] = [];
+  for (const p of g.held.flat()) {
+    out.push({ kind: "holding", holding: p.holding, rules: p.rules, legRules: p.legRules });
+    for (const entry of subRules(p)) out.push({ kind: "rule", entry, nested: true });
+  }
+  for (const i of [...g.spreads, ...g.contracts]) {
+    out.push({ kind: "rule", entry: i.entry, nested: false, overlap: i.overlap });
+  }
   return out;
 }
 

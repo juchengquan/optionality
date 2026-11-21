@@ -18,6 +18,10 @@ export interface BookProps {
    *  nobody can vouch for, as the old page did (#301) */
   holdings: Holding[] | null;
   holdingsError: string | null;
+  /** whether the last read of `/quotes` answered: until it has, and while it fails, the book drawn
+   *  is missing the watchlist's groups, and the folds (`folds.ts`) drop none of theirs. Absent, the
+   *  quotes given are taken as read */
+  quotesRead?: boolean;
   /** the last valuation that succeeded, while `holdings` is null because one failed since: only the
    *  holding already open in the inspector or the sheet is drawn from it, said to be stale, so a
    *  failed poll costs no half-typed form (`kept.ts`). The book itself never draws it */
@@ -57,11 +61,15 @@ const CHIP = {
 /** A filled chip with a glyph (ADR 0023): attention is told apart from the "down" colour by its
  *  shape and lightness as well as its hue, so it reads the same whichever way up the viewer has
  *  set the colours, and to somebody who cannot tell the hues apart at all. */
-export function Chip({ state }: { state: keyof typeof CHIP }) {
-  const { Icon, words } = CHIP[state];
+export function Chip({ state, words }: {
+  state: keyof typeof CHIP;
+  /** in place of the state's own word: a folded expiry's count of them, "2 entry signals" */
+  words?: string;
+}) {
+  const { Icon, words: own } = CHIP[state];
   return (
     <span className="nx-chip" data-attention={state}>
-      <Icon aria-hidden="true" />{words}
+      <Icon aria-hidden="true" />{words ?? own}
     </span>
   );
 }

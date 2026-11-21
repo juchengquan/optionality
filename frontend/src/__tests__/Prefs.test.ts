@@ -11,11 +11,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import {
   readArrangement, readEntryStyle, readHidden, readPriceMap, readPrivacy, readRefresh, readUp,
-  writeArrangement, writeEntryStyle, writeHidden, writePriceMap, writePrivacy, writeRefresh, writeUp,
+  writeArrangement, writeEntryStyle, writeFolded, writeHidden, writePriceMap, writePrivacy, writeRefresh, writeUp,
 } from "../shared/prefs";
 
 const NAMES = [
-  "ui_cols_combo", "ui_refresh", "ui_up", "ui_entry", "ui_privacy", "ui_arrangement", "ui_price_map",
+  "ui_cols_combo", "ui_refresh", "ui_up", "ui_entry", "ui_privacy", "ui_arrangement", "ui_price_map", "ui_folded",
 ];
 const clear = () => { for (const n of NAMES) document.cookie = `${n}=;path=/`; };
 afterEach(clear);
@@ -59,6 +59,7 @@ describe("every preference is written to outlive the tab", () => {
     ["privacy", () => writePrivacy(true)],
     ["the arrangement", () => writeArrangement("phone")],
     ["the price map", () => writePriceMap(true)],
+    ["the folded expiry groups", () => writeFolded(new Set(["spreads:20261218"]))],
   ];
 
   for (const [what, write] of writes) {

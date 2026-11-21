@@ -3,6 +3,7 @@ import { BellRing, Clock, OctagonAlert, OctagonX, Sparkles, Target } from "lucid
 import type { EntryStyle } from "./shared/prefs";
 import type { Arrangement } from "./arrangement";
 import { toneOf, type Need, type NeedKind } from "./needs";
+import { unfolding } from "./unfold";
 
 /** How many the desk's line names before it counts the rest: a bad day must not become a
  *  paragraph, and a count without names makes you hunt (decided for the old page's top line, #301). */
@@ -75,11 +76,17 @@ export function NeedsLine({ items, arrangement, entryStyle, onReveal = reveal }:
 }
 
 /** Bring the row a banner is about into view, and mark it for a moment. Every rule and every
- *  holding on the page carries its `data-ref`, nested ones included. */
+ *  holding on the page carries its `data-ref`, nested ones included. A row in an expiry group the
+ *  viewer folded is brought out of it: the group opened as a press on its heading opens it, then
+ *  the row brought into view and marked as any other (the owner, 2026-11-21; `unfold.ts`). */
 export function reveal(ref: string): void {
   // matched on the dataset rather than through a selector, so an id needs no escaping
   const row = [...document.querySelectorAll<HTMLElement>("[data-ref]")].find((el) => el.dataset.ref === ref);
   if (!row) return;
+  unfolding(row, () => mark(row));
+}
+
+function mark(row: HTMLElement): void {
   // optional: jsdom has no scrolling, and marking the row matters more than moving to it
   row.scrollIntoView?.({ block: "center", behavior: "smooth" });
   row.dataset.revealed = "";

@@ -232,3 +232,5 @@
    they are not read as current */
 .nxd-stale { margin: 0 0 0.5rem; color: var(--foreground); font-weight: 600; }
 .nxd-inspector[data-stale] .nxd-kv, .nxd-inspector[data-stale] .nx-chip { opacity: 0.55; }
+/* a folded expiry's chips (the owner, 2026-11-21), a size down as the rows' are */
+.nxd-group .nx-chip { font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; font-size: 0.6875rem; }

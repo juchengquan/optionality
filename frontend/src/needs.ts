@@ -29,7 +29,7 @@ export interface Need {
 
 /** Faults lead because they qualify everything after them; then what is bad about something held;
  *  then the good news, an entry signal before a Target because it is the one that will not wait. */
-const ORDER: NeedKind[] = ["fault", "stop", "alarm", "entry", "target", "manage"];
+export const ORDER: readonly NeedKind[] = ["fault", "stop", "alarm", "entry", "target", "manage"];
 
 /** The three quarantines (CONTEXT.md: Quarantine), each said as the fact about the data it is, in
  *  the page's one set of words for why a rule is off (`shared/groups.ts`, part I). The other
