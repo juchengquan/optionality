@@ -63,9 +63,12 @@ IBKR_ACCOUNT to one of …") or where the one named is not on the login. A refus
 (`IbkrAccountRefused`), a fact about the configuration rather than the gateway's health, and it
 sends nothing.
 
-**Masked**: the account id leaves the client only as its last three characters behind `•` for
-every other character, in the answer, every error and every log line, and `paper` says whether it is
-a paper account (an id that starts `DU`).
+**Masked**: the account id leaves the client only masked — its leading letters and its last three
+characters kept, every character between replaced by `•` (`U1234567` is `U••••567`, `DU1234567`
+is `DU••••567`; the owner's decision on #469: the letters say what kind of account, the last three
+which one) — in the answer, every error and every log line. An id that is letters through and
+through keeps only its last three, so the prefix rule can never show an id whole. `paper` says
+whether it is a paper account (an id that starts `DU`).
 
 **The answer**: the masked account, `paper`, the base currency (the one NetLiquidation is sent in);
 `updated_at`, ACCT_UPDATE_TIME as sent — a time of day with no date; the totals NetLiquidation,
@@ -77,7 +80,8 @@ directions by the vendor corpus.
 
 **Nothing stored**: no table, no column, no sample. The read answers and is gone.
 
-**Recordings constructed, never captured into the repository.** The conversations committed in
+**Recordings constructed, never captured into the repository**, and `parseConversation` refuses a
+conversation that reads the account and says it was recorded. The conversations committed in
 `testdata/vendors/ibkr-gateway/` are built in ibapi's layout with invented symbols, quantities,
 prices, totals and placeholder accounts, each saying so in its `provenance`. A capture from the live
 gateway, run by the orchestrating session with the owner's go-ahead on a client id that is not the

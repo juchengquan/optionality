@@ -245,6 +245,12 @@ export function parseConversation(name: string, value: unknown): Conversation {
     })
     : fail("exchanges must be a list");
 
+  // ADR 0030: the owner's account is never committed, so nothing that reads one can be a capture
+  if (p.kind !== "constructed"
+    && (reads !== undefined || exchanges.some((e) => e.request === "reqAccountUpdates"))) {
+    fail("reads the account, so it must be constructed: no capture of an account is committed");
+  }
+
   return {
     conversation: name,
     summary: text(c.summary, "summary"),

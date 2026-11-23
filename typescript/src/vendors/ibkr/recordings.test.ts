@@ -125,6 +125,29 @@ describe("provenance, which is the point of the files", () => {
     }
   });
 
+  it("holds every conversation that touches the account to CONSTRUCTED (ADR 0030)", () => {
+    // the repository is public: a capture of the owner's account is read on the owner's machine
+    // and deleted, never committed, so a file that reads the account and says it was recorded is
+    // either mislabelled or the thing ADR 0030 forbids
+    const touches = conversationNames().map(loadConversation).filter((c) =>
+      c.accountReads !== undefined || c.exchanges.some((e) => e.request === "reqAccountUpdates"));
+    expect(touches.length).toBeGreaterThanOrEqual(4);
+    for (const c of touches) expect(c.provenance.kind, c.conversation).toBe("constructed");
+  });
+
+  it("refuses an account conversation that says it was recorded", () => {
+    const text = readFileSync(join(RECORDINGS, "account-paper.json"), "utf8");
+    const recorded = { kind: "recorded", at: "2026-11-23T13:00:00Z", how: "a capture",
+      gateway: "IB Gateway 10.52", protocol: 157 };
+    const withReads = { ...JSON.parse(text) as object, provenance: recorded };
+    expect(() => parseConversation("account-paper", withReads))
+      .toThrow(/reads the account, so it must be constructed/);
+    // an account exchange alone is enough: the quote asks around it change nothing
+    const exchangeOnly = { ...withReads, accountReads: undefined, ask: ["US.SPXW261218C8100000"] };
+    expect(() => parseConversation("account-paper", exchangeOnly))
+      .toThrow(/reads the account, so it must be constructed/);
+  });
+
   it("refuses a file that does not say which it is", () => {
     const text = readFileSync(join(RECORDINGS, "normal-with-greeks.json"), "utf8");
     const unlabelled = JSON.parse(text) as { provenance: Record<string, unknown> };

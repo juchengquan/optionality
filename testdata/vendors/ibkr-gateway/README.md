@@ -44,11 +44,13 @@ client read, which is why `ib_async` could not decode it.
 | `session-never-starts` | constructed | the greeting, then nothing |
 | `account-stocks-and-options` | constructed | a live account's totals and four holdings — two stocks, one in EUR, two options, one short with realised P&L — then the download end |
 | `account-paper` | constructed | a paper account (`DU`): totals and one short option, then the download end |
-| `account-several` | constructed | two managed accounts: a read naming neither refused, one naming the second answered, one naming an account not on the login refused |
+| `account-several` | constructed | two managed accounts, each with its own subscription: a read naming neither refused, one naming the second answered, one naming an account not on the login refused |
 | `account-never-ends` | constructed | account values and a holding, and no download end |
 
 The four account conversations are CONSTRUCTED, and every one always will be: the repository is
-public, and nothing of the owner's account is committed (ADR 0030). They are laid out field for
+public, and nothing of the owner's account is committed (ADR 0030). `recordings.ts` refuses a
+conversation with `accountReads` or a `reqAccountUpdates` exchange whose provenance says
+`recorded`. They are laid out field for
 field as `ibapi` 9.81 encodes reqAccountUpdates and reads its five answers at protocol 157, with
 invented symbols, contract ids, quantities, prices, totals and clock times, and placeholder
 accounts. A capture from the live gateway, run with the owner's go-ahead on a client id that is not
@@ -215,11 +217,11 @@ MESSAGES as well as the same answer, an unsubscribe after a deadline included:
 ```jsonc
   "accountReads": [
     { "wanted": null,
-      "expect": { "account": "•••••000", "paper": false, "base_currency": "USD", "updated_at": "14:32",
+      "expect": { "account": "U••••000", "paper": false, "base_currency": "USD", "updated_at": "14:32",
                   "totals": { … }, "holdings": [ … ] },
       "sent": [["6", "2", "1", "U0000000"], ["6", "2", "0", "U0000000"]] },
     { "wanted": "DU0000001",
-      "expect": { "$refused": "IBKR_ACCOUNT (••••••001) names no account on this login, which has …" },
+      "expect": { "$refused": "IBKR_ACCOUNT (DU••••001) names no account on this login, which has …" },
       "sent": [] }
   ]
 ```

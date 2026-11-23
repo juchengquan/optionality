@@ -295,27 +295,51 @@
     },
     {
       "fn": "maskAccount",
-      "name": "every character but the last three replaced",
+      "name": "the prefix and the last three kept, the digits between masked",
       "args": [
         "U0000001"
       ],
-      "expect": "•••••001"
+      "expect": "U••••001"
     },
     {
       "fn": "maskAccount",
-      "name": "a paper id, its prefix masked too",
+      "name": "a paper id keeps its DU",
       "args": [
         "DU0000000"
       ],
-      "expect": "••••••000"
+      "expect": "DU••••000"
     },
     {
       "fn": "maskAccount",
-      "name": "nothing more of an id of three characters",
+      "name": "a digit after the prefix's last letter is masked like the rest",
       "args": [
-        "U01"
+        "DU00A0001"
       ],
-      "expect": "U01"
+      "expect": "DU••••001"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "nothing more of an id with three characters after its letters",
+      "args": [
+        "U001"
+      ],
+      "expect": "U001"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "an id of letters alone keeps only its last three",
+      "args": [
+        "ABCDEFG"
+      ],
+      "expect": "••••EFG"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "an empty id is empty",
+      "args": [
+        ""
+      ],
+      "expect": ""
     },
     {
       "fn": "isPaper",
@@ -379,7 +403,7 @@
         null
       ],
       "expect": {
-        "refused": "several accounts on this login; set IBKR_ACCOUNT to one of •••••000, •••••001"
+        "refused": "several accounts on this login; set IBKR_ACCOUNT to one of U••••000, U••••001"
       }
     },
     {
@@ -393,7 +417,7 @@
         "DU0000001"
       ],
       "expect": {
-        "refused": "IBKR_ACCOUNT (••••••001) names no account on this login, which has •••••000, •••••001"
+        "refused": "IBKR_ACCOUNT (DU••••001) names no account on this login, which has U••••000, U••••001"
       }
     },
     {
@@ -406,7 +430,7 @@
         "U0000001"
       ],
       "expect": {
-        "refused": "IBKR_ACCOUNT (•••••001) names no account on this login, which has •••••000"
+        "refused": "IBKR_ACCOUNT (U••••001) names no account on this login, which has U••••000"
       }
     },
     {
@@ -736,7 +760,7 @@
         "14:32"
       ],
       "expect": {
-        "account": "•••••000",
+        "account": "U••••000",
         "paper": false,
         "base_currency": "USD",
         "updated_at": "14:32",
@@ -775,7 +799,7 @@
         "09:05"
       ],
       "expect": {
-        "account": "••••••000",
+        "account": "DU••••000",
         "paper": true,
         "base_currency": "USD",
         "updated_at": "09:05",
@@ -798,7 +822,7 @@
         null
       ],
       "expect": {
-        "account": "•••••001",
+        "account": "U••••001",
         "paper": false,
         "base_currency": null,
         "updated_at": null,

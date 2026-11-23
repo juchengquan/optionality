@@ -1,6 +1,6 @@
 {
   "conversation": "account-several",
-  "summary": "A login managing two accounts: a read naming neither is refused, one naming the second answers its totals, and one naming an account not on the login is refused.",
+  "summary": "A login managing two accounts, each with its own subscription: a read naming neither is refused, one naming the second answers its totals, and one naming an account not on the login is refused.",
   "provenance": {
     "kind": "constructed",
     "why": "Nothing of the owner's account may be committed (the repository is public), so no account conversation is ever captured into it (ADR 0030).",
@@ -24,6 +24,35 @@
     ]
   },
   "exchanges": [
+    {
+      "request": "reqAccountUpdates",
+      "account": "U0000000",
+      "sent": ["6", "2", "1", "U0000000"],
+      "replies": [
+        ["6", "2", "AccountCode", "U0000000", "", "U0000000"],
+        ["6", "2", "AccountReady", "true", "", "U0000000"],
+        ["6", "2", "AccountType", "INDIVIDUAL", "", "U0000000"],
+        ["6", "2", "Currency", "BASE", "BASE", "U0000000"],
+        ["6", "2", "Currency", "USD", "USD", "U0000000"],
+        ["6", "2", "ExchangeRate", "1.00", "BASE", "U0000000"],
+        ["6", "2", "ExchangeRate", "1.00", "USD", "U0000000"],
+        ["6", "2", "CashBalance", "61230.55", "BASE", "U0000000"],
+        ["6", "2", "CashBalance", "61230.55", "USD", "U0000000"],
+        ["6", "2", "NetLiquidation", "184523.17", "USD", "U0000000"],
+        ["6", "2", "NetLiquidationByCurrency", "184523.17", "BASE", "U0000000"],
+        ["6", "2", "NetLiquidationByCurrency", "184523.17", "USD", "U0000000"],
+        ["6", "2", "TotalCashValue", "61230.55", "USD", "U0000000"],
+        ["6", "2", "UnrealizedPnL", "1735.30", "BASE", "U0000000"],
+        ["6", "2", "UnrealizedPnL", "1735.30", "USD", "U0000000"],
+        ["6", "2", "RealizedPnL", "-412.80", "BASE", "U0000000"],
+        ["6", "2", "RealizedPnL", "-412.80", "USD", "U0000000"],
+        ["7", "8", "100000101", "ACME", "STK", "", "0.0", "0", "", "NASDAQ", "USD", "ACME", "NMS", "300", "41.27", "12381.0", "38.115", "946.5", "0.0", "U0000000"],
+        ["8", "1", "11:46"],
+        ["54", "1", "U0000000"]
+      ],
+      "atMs": [],
+      "onCancel": []
+    },
     {
       "request": "reqAccountUpdates",
       "account": "U0000001",

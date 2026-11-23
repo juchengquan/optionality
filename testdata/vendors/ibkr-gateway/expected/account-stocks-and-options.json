@@ -17,7 +17,7 @@
     {
       "wanted": null,
       "expect": {
-        "account": "•••••000",
+        "account": "U••••000",
         "paper": false,
         "base_currency": "USD",
         "updated_at": "14:32",

@@ -157,7 +157,8 @@ export function hasFigures(record: Quote): boolean {
  *  The messages hand it their fields as TEXT (`messages.ts`), so the two clients read the same
  *  strings through the same rules: an empty field is no figure, never 0. */
 export interface IbkrAccount {
-  /** the account id, masked: every character but the last three replaced by `•` */
+  /** the account id, masked: its leading letters and its last three characters kept, every
+   *  character between replaced by `•` (`U1234567` is `U••••567`) */
   account: string;
   /** IB's paper accounts, whose ids start `DU` */
   paper: boolean;
@@ -251,11 +252,17 @@ export function managedAccounts(list: string): string[] {
   return list.split(",").map((id) => id.trim()).filter((id) => id.length > 0);
 }
 
-/** An account id as it may leave the client: every character but the last three replaced by `•`,
- *  so the owner can tell two accounts apart and nobody else learns either. */
+/** An account id as it may leave the client: its leading letters, which say what KIND of account
+ *  it is (`U` an individual's, `DU` paper), and its last three characters, which tell two apart,
+ *  with every character between replaced by `•` — `U1234567` is `U••••567`, the owner's decision on
+ *  #469. An id that is letters through and through keeps only its last three: the prefix rule must
+ *  never show an id whole. */
 export function maskAccount(id: string): string {
-  const shown = id.slice(-3);
-  return "•".repeat(id.length - shown.length) + shown;
+  const letters = /^[A-Za-z]*/.exec(id)![0];
+  const prefix = letters.length === id.length ? "" : letters;
+  const rest = id.slice(prefix.length);
+  const shown = rest.slice(-3);
+  return prefix + "•".repeat(rest.length - shown.length) + shown;
 }
 
 /** IB's paper accounts are the ids that start `DU`. */

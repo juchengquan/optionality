@@ -141,14 +141,21 @@ const STOCK_ROW: PortfolioRow = {
 };
 
 describe("the account id, which leaves the client only masked", () => {
-  it("replaces every character but the last three", () => {
-    expect(maskAccount("U1234567")).toBe("•••••567");
-    expect(maskAccount("DU0000000")).toBe("••••••000");
+  it("keeps the leading letters and the last three, every character between masked", () => {
+    // the owner's decision on #469: the prefix says which kind of account, the last three which one
+    expect(maskAccount("U1234567")).toBe("U••••567");
+    expect(maskAccount("DU0000000")).toBe("DU••••000");
+    expect(maskAccount("U12345678")).toBe("U•••••678");
+    expect(maskAccount("F1234A567")).toBe("F•••••567");
   });
 
-  it("shows nothing more of an id three characters long or shorter", () => {
-    expect(maskAccount("U12")).toBe("U12");
+  it("shows nothing more of an id with three characters or fewer after its letters", () => {
+    expect(maskAccount("U123")).toBe("U123");
     expect(maskAccount("")).toBe("");
+  });
+
+  it("never shows an id that is ALL letters whole: only its last three", () => {
+    expect(maskAccount("ABCDEFG")).toBe("••••EFG");
   });
 
   it("calls an account paper where IB does: an id that starts DU", () => {
@@ -176,14 +183,14 @@ describe("which account is read", () => {
 
   it("is refused, never guessed, where several are managed and none is named", () => {
     expect(chooseAccount(["U0000000", "U0000001"], null)).toEqual({
-      refused: "several accounts on this login; set IBKR_ACCOUNT to one of •••••000, •••••001",
+      refused: "several accounts on this login; set IBKR_ACCOUNT to one of U••••000, U••••001",
     });
   });
 
   it("is refused where the one named is not on the login, that one masked too", () => {
     const got = chooseAccount(["U0000000"], "U7654321");
     expect(got).toEqual({
-      refused: "IBKR_ACCOUNT (•••••321) names no account on this login, which has •••••000",
+      refused: "IBKR_ACCOUNT (U••••321) names no account on this login, which has U••••000",
     });
     expect(JSON.stringify(got)).not.toContain("7654321");
   });
@@ -249,7 +256,7 @@ describe("the account's answer", () => {
       row("AccountCode", "U0000000", ""),
     ], [], "14:32");
     expect(got).toEqual({
-      account: "•••••000", paper: false, base_currency: "USD", updated_at: "14:32",
+      account: "U••••000", paper: false, base_currency: "USD", updated_at: "14:32",
       totals: {
         net_liquidation: 184523.17, total_cash: 61230.55, unrealized_pnl: 2875.4,
         realized_pnl: -412.8,

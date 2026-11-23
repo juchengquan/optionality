@@ -242,7 +242,8 @@ class IbkrAccountRefused(Exception):
 class IbkrAccount(TypedDict):
     """What the account read answers, read once and never stored, the id only ever MASKED."""
 
-    #: the account id, masked: every character but the last three replaced by `•`
+    #: the account id, masked: its leading letters and last three characters kept, every character
+    #: between replaced by `•` (`U1234567` is `U••••567`)
     account: str
     #: IB's paper accounts, whose ids start `DU`
     paper: bool
@@ -266,6 +267,9 @@ ACCOUNT_TOTALS: dict[str, str] = {
 
 #: the tag ACCT_VALUE gives a figure summed over every currency and expressed in the base one
 BASE = "BASE"
+
+#: the letters an account id's prefix is made of: ASCII only, as `fields.ts`' `/^[A-Za-z]*/`
+_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
 
 class AccountValueRow(TypedDict):
@@ -301,10 +305,16 @@ def managed_accounts(accounts: str) -> list[str]:
 
 
 def mask_account(account_id: str) -> str:
-    """An account id as it may leave the client: every character but the last three replaced by
-    `•`, so the owner can tell two accounts apart and nobody else learns either."""
-    shown = account_id[-3:]
-    return "•" * (len(account_id) - len(shown)) + shown
+    """An account id as it may leave the client: every character after its leading letters but the
+    last three replaced by `•`, so the owner can tell two accounts apart and nobody else learns either
+    — the leading letters kept, which say what KIND of account it is (`fields.ts`' `maskAccount`, the owner's
+    decision on #469): `U1234567` is `U••••567`. An id that is letters through and through keeps only
+    its last three: the prefix rule must never show an id whole."""
+    letters = len(account_id) - len(account_id.lstrip(_LETTERS))
+    prefix = "" if letters == len(account_id) else account_id[:letters]
+    rest = account_id[len(prefix) :]
+    shown = rest[-3:]
+    return prefix + "•" * (len(rest) - len(shown)) + shown
 
 
 def is_paper(account_id: str) -> bool:

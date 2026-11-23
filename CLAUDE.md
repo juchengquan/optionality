@@ -183,8 +183,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   or constructed (why, and from what). They are inputs; `make cases` never writes them, and
   `recordings.test.ts` refuses one that says neither, or that carries an account number other than
   the placeholders (`PLACEHOLDER_ACCOUNTS`), in any message that names one. The account
-  conversations (ADR 0030) are CONSTRUCTED and only ever will be — the repository is public; a
-  capture of the live account stays on the owner's machine and is deleted once read — and replay
+  conversations (ADR 0030) are CONSTRUCTED and only ever will be (a recorded one is refused) —
+  the repository is public; a capture of the live account stays on the owner's machine and is
+  deleted once read — and replay
   `accountReads` beside the asks. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
   replayed through the fake by `ibkr/replay.ts`, every reply at once. `make check-cases` and
   `cases/gateway.test.ts` fail when one is stale, missing, or has no recording; outside the
@@ -304,8 +305,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   subscribe, collects ACCT_VALUE (6), PORTFOLIO_VALUE (7), ACCT_UPDATE_TIME (8) until
   ACCT_DOWNLOAD_END (54), and unsubscribes — at a deadline too — the account chosen from
   MANAGED_ACCTS (15, with the handshake), a second caller joining a read that runs, one account of
-  several only by name (`IbkrAccountRefused` otherwise), the id leaving the client only masked
-  (`•••••567`), nothing stored, never asked by the sweep; the answer's mapping is `fields.ts`',
+  several only by name (`IbkrAccountRefused` otherwise), the id leaving the client only masked,
+  its letter prefix and last three kept (`U••••567`), nothing stored, never asked by the sweep;
+  a read of another account waits for the running one; the answer's mapping is `fields.ts`',
   cased; `yahoo/` wraps
   `yahoo-finance2`. Each vendor's pure `fields.ts` is re-exported by `vendors/fields.ts`, a door
   of its own so `testdata/vendors/` can record one truth for two languages: it imports nothing but

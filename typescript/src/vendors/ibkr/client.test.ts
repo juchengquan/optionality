@@ -518,7 +518,7 @@ describe("the account read (ADR 0030)", () => {
     const c = await connected({ conversation: "account-stocks-and-options" });
     const got = await c.account();
     expect(got).toMatchObject({
-      account: "•••••000", paper: false, base_currency: "USD", updated_at: "14:32",
+      account: "U••••000", paper: false, base_currency: "USD", updated_at: "14:32",
       // UnrealizedPnL from its BASE row, which counts the EUR stock's; the USD row does not
       totals: {
         net_liquidation: 184523.17, total_cash: 61230.55, unrealized_pnl: 2071.4,
@@ -542,7 +542,7 @@ describe("the account read (ADR 0030)", () => {
 
   it("calls a DU account paper", async () => {
     const c = await connected({ conversation: "account-paper" });
-    expect(await c.account()).toMatchObject({ account: "••••••000", paper: true });
+    expect(await c.account()).toMatchObject({ account: "DU••••000", paper: true });
   });
 
   it("fails at the deadline when the download never ends, and unsubscribes anyway", async () => {
@@ -563,6 +563,18 @@ describe("the account read (ADR 0030)", () => {
     expect(subscriptions(gateway!)).toEqual([["1", "U0000000"], ["0", "U0000000"]]);
   });
 
+  it("holds a read of ANOTHER account until the running one has unsubscribed", async () => {
+    // IB allows one account subscription per client at a time: a second subscribe while the first
+    // runs would take its place, and the first read would never hear its download end
+    const c = await connected({ conversation: "account-several" });
+    const [first, second] = await Promise.all([c.account("U0000000"), c.account("U0000001")]);
+    expect([first.account, second.account]).toEqual(["U••••000", "U••••001"]);
+    await unsubscribed(gateway!);
+    expect(subscriptions(gateway!)).toEqual([
+      ["1", "U0000000"], ["0", "U0000000"], ["1", "U0000001"], ["0", "U0000001"],
+    ]);
+  });
+
   it("subscribes afresh for a read that comes after one has finished", async () => {
     const c = await connected({ conversation: "account-paper" });
     await c.account();
@@ -578,21 +590,21 @@ describe("the account read (ADR 0030)", () => {
     const err = await c.account().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(IbkrAccountRefused);
     expect((err as Error).message)
-      .toBe("several accounts on this login; set IBKR_ACCOUNT to one of •••••000, •••••001");
+      .toBe("several accounts on this login; set IBKR_ACCOUNT to one of U••••000, U••••001");
     expect(subscriptions(gateway!)).toEqual([]);
   });
 
   it("reads the one named, of several", async () => {
     const c = await connected({ conversation: "account-several" });
     expect(await c.account("U0000001")).toMatchObject({
-      account: "•••••001", totals: { net_liquidation: 25010 }, holdings: [],
+      account: "U••••001", totals: { net_liquidation: 25010 }, holdings: [],
     });
   });
 
   it("refuses a named account not on the login, naming it masked", async () => {
     const c = await connected({ conversation: "account-several" });
     await expect(c.account("DU0000001")).rejects.toThrow(new IbkrAccountRefused(
-      "IBKR_ACCOUNT (••••••001) names no account on this login, which has •••••000, •••••001"));
+      "IBKR_ACCOUNT (DU••••001) names no account on this login, which has U••••000, U••••001"));
   });
 
   it("ignores what the gateway says about another account while it reads one", async () => {

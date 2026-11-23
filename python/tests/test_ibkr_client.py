@@ -891,7 +891,7 @@ def test_the_account_read_answers_totals_and_holdings_with_the_account_masked() 
 
     got = against("account-stocks-and-options", read)
     assert (got["account"], got["paper"], got["base_currency"], got["updated_at"]) == (
-        "•••••000",
+        "U••••000",
         False,
         "USD",
         "14:32",
@@ -946,6 +946,21 @@ def test_two_callers_of_the_account_read_send_one_subscribe() -> None:
     assert against("account-stocks-and-options", read) == (True, [["1", "U0000000"], ["0", "U0000000"]])
 
 
+def test_a_read_of_another_account_waits_until_the_running_one_has_unsubscribed() -> None:
+    """IB allows one account subscription per client at a time: a second subscribe while the first
+    runs would take its place, and the first read would never hear its download end."""
+
+    async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
+        first, second = await asyncio.gather(client.account("U0000000"), client.account("U0000001"))
+        await unsubscribed(gateway)
+        return [first["account"], second["account"]], subscriptions(gateway)
+
+    assert against("account-several", read) == (
+        ["U••••000", "U••••001"],
+        [["1", "U0000000"], ["0", "U0000000"], ["1", "U0000001"], ["0", "U0000001"]],
+    )
+
+
 def test_a_read_after_one_has_finished_subscribes_afresh() -> None:
     async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
         await client.account()
@@ -963,7 +978,7 @@ def test_several_accounts_with_none_named_are_refused_masked_and_nothing_is_subs
         return str(raised.value), subscriptions(gateway)
 
     assert against("account-several", read) == (
-        "several accounts on this login; set IBKR_ACCOUNT to one of •••••000, •••••001",
+        "several accounts on this login; set IBKR_ACCOUNT to one of U••••000, U••••001",
         [],
     )
 
@@ -976,9 +991,9 @@ def test_the_account_named_of_several_is_read_and_one_not_on_the_login_refused()
         return named["account"], named["totals"]["net_liquidation"], str(raised.value)
 
     assert against("account-several", read) == (
-        "•••••001",
+        "U••••001",
         25010,
-        "IBKR_ACCOUNT (••••••001) names no account on this login, which has •••••000, •••••001",
+        "IBKR_ACCOUNT (DU••••001) names no account on this login, which has U••••000, U••••001",
     )
 
 
