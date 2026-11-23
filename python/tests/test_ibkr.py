@@ -29,6 +29,13 @@ PORTED = {
     "greekFields": "greek_fields",
     "withMid": "with_mid",
     "hasFigures": "has_figures",
+    "managedAccounts": "managed_accounts",
+    "maskAccount": "mask_account",
+    "isPaper": "is_paper",
+    "chooseAccount": "choose_account",
+    "perShareCost": "per_share_cost",
+    "holdingFrom": "holding_from",
+    "accountAnswer": "account_answer",
 }
 
 

@@ -72,7 +72,7 @@ import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypedDict, cast
 
 from optionality.contract import parse_spx_code
 from optionality.quote import Batch, Quote, mid_price
@@ -245,6 +245,155 @@ class IbkrAccount(TypedDict):
     updated_at: str | None
     totals: IbkrTotals
     holdings: list[IbkrHolding]
+
+
+#: ACCT_VALUE's keys the answer's totals are read from, and the name each takes (`fields.ts`).
+#: Nothing else the gateway sends about the account is read: an AccountCode carries the id in full.
+ACCOUNT_TOTALS: dict[str, str] = {
+    "NetLiquidation": "net_liquidation",
+    "TotalCashValue": "total_cash",
+    "UnrealizedPnL": "unrealized_pnl",
+    "RealizedPnL": "realized_pnl",
+}
+
+#: the tag ACCT_VALUE gives a figure summed over every currency and expressed in the base one
+BASE = "BASE"
+
+
+class AccountValueRow(TypedDict):
+    """One ACCT_VALUE, its fields as the wire carried them."""
+
+    key: str
+    value: str
+    currency: str
+
+
+class PortfolioRow(TypedDict):
+    """One PORTFOLIO_VALUE's fields as the wire carried them, the account aside."""
+
+    sec_type: str
+    symbol: str
+    expiry: str
+    strike: str
+    right: str
+    multiplier: str
+    currency: str
+    position: str
+    market_price: str
+    market_value: str
+    average_cost: str
+    unrealized_pnl: str
+    realized_pnl: str
+
+
+def managed_accounts(accounts: str) -> list[str]:
+    """The accounts MANAGED_ACCTS names: one field, the ids separated by commas, the empty ones (a
+    trailing comma) dropped."""
+    return [a.strip() for a in accounts.split(",") if a.strip()]
+
+
+def mask_account(account_id: str) -> str:
+    """An account id as it may leave the client: every character but the last three replaced by
+    `•`, so the owner can tell two accounts apart and nobody else learns either."""
+    shown = account_id[-3:]
+    return "•" * (len(account_id) - len(shown)) + shown
+
+
+def is_paper(account_id: str) -> bool:
+    """IB's paper accounts are the ids that start `DU`."""
+    return account_id.startswith("DU")
+
+
+def choose_account(managed: list[str], wanted: str | None) -> dict[str, str]:
+    """Which of the login's accounts to read (`{"account": id}`), or why none (`{"refused": words}`):
+    the one there is; where there are several, the one `wanted` names; never a guess. Every id in a
+    refusal is masked, `wanted`'s too."""
+    named = (wanted or "").strip() or None
+    masked = ", ".join(mask_account(a) for a in managed)
+    if not managed:
+        return {"refused": "IB Gateway named no account on this login"}
+    if named is not None:
+        if named in managed:
+            return {"account": named}
+        return {"refused": f"IBKR_ACCOUNT ({mask_account(named)}) names no account on this login, which has {masked}"}
+    if len(managed) > 1:
+        return {"refused": f"several accounts on this login; set IBKR_ACCOUNT to one of {masked}"}
+    return {"account": managed[0]}
+
+
+def per_share_cost(average_cost: float | None, multiplier: float | None) -> float | None:
+    """The average cost PER SHARE: IB's `averageCost` for anything with a multiplier includes it — an
+    option bought at 2.50 arrives as 250 — while its market price is per share. A multiplier that is
+    absent, zero or not a number divides by nothing."""
+    if average_cost is None:
+        return None
+    return average_cost / multiplier if multiplier is not None and multiplier > 0 else average_cost
+
+
+def _figure_of(text: str) -> float | None:
+    """A figure out of a text field, or None where it carries none (`fields.ts`' `figureOf`)."""
+    if not text.strip():
+        return None
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    return value if math.isfinite(value) else None
+
+
+def _side_of(right: str) -> Literal["C", "P"] | None:
+    r = right.strip().upper()
+    if r in ("C", "CALL"):
+        return "C"
+    if r in ("P", "PUT"):
+        return "P"
+    return None
+
+
+def holding_from(row: PortfolioRow) -> IbkrHolding:
+    """One PORTFOLIO_VALUE row as the answer's holding."""
+    right = _side_of(row["right"])
+    multiplier = _figure_of(row["multiplier"])
+    return {
+        "sec_type": row["sec_type"],
+        "symbol": row["symbol"],
+        "currency": row["currency"],
+        "expiry": None if not row["expiry"].strip() else row["expiry"],
+        # a stock's row carries a strike of 0: no strike, rather than one at zero
+        "strike": None if right is None else _figure_of(row["strike"]),
+        "right": right,
+        "multiplier": multiplier,
+        "position": _figure_of(row["position"]),
+        "market_price": _figure_of(row["market_price"]),
+        "market_value": _figure_of(row["market_value"]),
+        "average_cost": per_share_cost(_figure_of(row["average_cost"]), multiplier),
+        "unrealized_pnl": _figure_of(row["unrealized_pnl"]),
+        "realized_pnl": _figure_of(row["realized_pnl"]),
+    }
+
+
+def account_answer(
+    account_id: str, values: list[AccountValueRow], holdings: list[IbkrHolding], updated_at: str | None
+) -> IbkrAccount:
+    """The account's answer from what its read collected (`fields.ts`' `accountAnswer`): the base
+    currency is the one NetLiquidation is sent in, and a total is read from its `BASE` row where the
+    gateway sends one, and otherwise from its row in the base currency."""
+    net = next((v for v in values if v["key"] == "NetLiquidation" and v["currency"] != BASE), None)
+    base = net["currency"] if net is not None and net["currency"].strip() else None
+    totals: dict[str, float | None] = {}
+    for key, name in ACCOUNT_TOTALS.items():
+        row = next((v for v in values if v["key"] == key and v["currency"] == BASE), None)
+        if row is None and base is not None:
+            row = next((v for v in values if v["key"] == key and v["currency"] == base), None)
+        totals[name] = None if row is None else _figure_of(row["value"])
+    return {
+        "account": mask_account(account_id),
+        "paper": is_paper(account_id),
+        "base_currency": base,
+        "updated_at": updated_at,
+        "totals": cast(IbkrTotals, totals),
+        "holdings": holdings,
+    }
 
 
 # --- the naming: a service code as the contract IB Gateway wants (`contract.ts`) ---------------

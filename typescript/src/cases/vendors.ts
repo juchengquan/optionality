@@ -123,6 +123,85 @@ export const VENDOR_INPUTS: Record<
       args: [{ code: "SPX", delayed: true, last_known: true }] },
     { fn: "hasFigures", name: "true for one figure, however little",
       args: [{ code: "SPX", prev_close_price: 7353.73 }] },
+
+    // --- the account (ADR 0030). Laid out as ibapi 9.81 reads PORTFOLIO_VALUE and ACCT_VALUE at
+    // protocol 157; every symbol, figure and account id is INVENTED, the ids placeholders — the
+    // owner's account is never committed (the repository is public)
+    { fn: "managedAccounts", name: "one account", args: ["U0000000"] },
+    { fn: "managedAccounts", name: "several, comma-separated", args: ["U0000000,U0000001"] },
+    { fn: "managedAccounts", name: "a trailing comma names no account", args: ["DU0000000,"] },
+    { fn: "managedAccounts", name: "an empty field names none", args: [""] },
+    { fn: "maskAccount", name: "every character but the last three replaced", args: ["U0000001"] },
+    { fn: "maskAccount", name: "a paper id, its prefix masked too", args: ["DU0000000"] },
+    { fn: "maskAccount", name: "nothing more of an id of three characters", args: ["U01"] },
+    { fn: "isPaper", name: "an id that starts DU is paper", args: ["DU0000000"] },
+    { fn: "isPaper", name: "a live individual account is not", args: ["U0000000"] },
+    { fn: "isPaper", name: "nor is an advisor's DF", args: ["DF0000000"] },
+    { fn: "chooseAccount", name: "the login's only account, unasked", args: [["U0000000"], null] },
+    { fn: "chooseAccount", name: "the one named, of several",
+      args: [["U0000000", "U0000001"], "U0000001"] },
+    // the owner's decision: with several and none named the read refuses rather than guessing
+    { fn: "chooseAccount", name: "several and none named: refused, the ids masked",
+      args: [["U0000000", "U0000001"], null] },
+    { fn: "chooseAccount", name: "a named account not on the login: refused, it masked too",
+      args: [["U0000000", "U0000001"], "DU0000001"] },
+    { fn: "chooseAccount", name: "named, even with one account, it must be that one",
+      args: [["U0000000"], "U0000001"] },
+    { fn: "chooseAccount", name: "a blank name is none", args: [["U0000000"], " "] },
+    { fn: "chooseAccount", name: "no account named by the gateway", args: [[], null] },
+    // IB's averageCost for an option is per CONTRACT: 2.50 arrives as 250
+    { fn: "perShareCost", name: "an option's average cost per share", args: [250, 100] },
+    { fn: "perShareCost", name: "a stock's, which has no multiplier, as sent", args: [38.115, null] },
+    { fn: "perShareCost", name: "a multiplier of zero divides by nothing", args: [38.115, 0] },
+    { fn: "perShareCost", name: "no cost is no cost", args: [null, 100] },
+    { fn: "holdingFrom", name: "a long call, its cost per share", args: [{
+      sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "45.0", right: "C",
+      multiplier: "100", currency: "USD", position: "4", market_price: "3.85",
+      market_value: "1540.0", average_cost: "262.5", unrealized_pnl: "490.0", realized_pnl: "0.0" }] },
+    { fn: "holdingFrom", name: "a short put with realised P&L, its sign kept", args: [{
+      sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "35.0", right: "P",
+      multiplier: "100", currency: "USD", position: "-6", market_price: "0.92",
+      market_value: "-552.0", average_cost: "141.8", unrealized_pnl: "298.8",
+      realized_pnl: "-412.8" }] },
+    // a stock's row carries right "0" and strike 0.0 (ibapi's decoder reads them as sent)
+    { fn: "holdingFrom", name: "a stock: no strike, no side, no expiry, no multiplier", args: [{
+      sec_type: "STK", symbol: "ACME", expiry: "", strike: "0.0", right: "0", multiplier: "",
+      currency: "USD", position: "300", market_price: "41.27", market_value: "12381.0",
+      average_cost: "38.115", unrealized_pnl: "946.5", realized_pnl: "0.0" }] },
+    { fn: "holdingFrom", name: "a stock in another currency, its figures in that one", args: [{
+      sec_type: "STK", symbol: "INITECH", expiry: "", strike: "0.0", right: "0", multiplier: "",
+      currency: "EUR", position: "50", market_price: "108.4", market_value: "5420.0",
+      average_cost: "102.2", unrealized_pnl: "310.0", realized_pnl: "0.0" }] },
+    { fn: "holdingFrom", name: "a side written out in full", args: [{
+      sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "35", right: "PUT",
+      multiplier: "100", currency: "USD", position: "1", market_price: "0.92",
+      market_value: "92", average_cost: "100", unrealized_pnl: "-8", realized_pnl: "0" }] },
+    { fn: "holdingFrom", name: "an empty figure is none, never 0", args: [{
+      sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "45.0", right: "C",
+      multiplier: "100", currency: "USD", position: "4", market_price: "", market_value: "",
+      average_cost: "", unrealized_pnl: "", realized_pnl: "" }] },
+    { fn: "accountAnswer", name: "the base from NetLiquidation, each total from BASE first", args: [
+      "U0000000",
+      [
+        { key: "AccountCode", value: "U0000000", currency: "" },
+        { key: "NetLiquidation", value: "184523.17", currency: "USD" },
+        { key: "TotalCashValue", value: "61230.55", currency: "USD" },
+        { key: "UnrealizedPnL", value: "2875.40", currency: "BASE" },
+        { key: "UnrealizedPnL", value: "2565.40", currency: "USD" },
+        { key: "UnrealizedPnL", value: "310.00", currency: "EUR" },
+        { key: "RealizedPnL", value: "-412.80", currency: "BASE" },
+        { key: "RealizedPnL", value: "-412.80", currency: "USD" },
+      ],
+      [], "14:32"] },
+    { fn: "accountAnswer", name: "a total with no BASE row is read in the base currency", args: [
+      "DU0000000",
+      [
+        { key: "NetLiquidation", value: "1003250.00", currency: "USD" },
+        { key: "UnrealizedPnL", value: "150.00", currency: "USD" },
+        { key: "RealizedPnL", value: "1.00", currency: "EUR" },
+      ],
+      [], "09:05"] },
+    { fn: "accountAnswer", name: "nothing said is nothing claimed", args: ["U0000001", [], [], null] },
   ],
   // the record's fields are a list, which the Python's SDK-frame reader is held to
   // (`vendors/opend/fields.ts` says why it cannot be logic); the quote grade is logic (#464)

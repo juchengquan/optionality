@@ -202,3 +202,147 @@ export interface IbkrHolding {
   unrealized_pnl: number | null;
   realized_pnl: number | null;
 }
+
+/** ACCT_VALUE's keys the answer's totals are read from, and the name each takes. Nothing else the
+ *  gateway sends about the account is read: an AccountCode carries the id in full, and the rest
+ *  answers questions nobody asked. */
+export const ACCOUNT_TOTALS: Record<string, keyof IbkrTotals> = {
+  NetLiquidation: "net_liquidation", TotalCashValue: "total_cash",
+  UnrealizedPnL: "unrealized_pnl", RealizedPnL: "realized_pnl",
+};
+
+/** The tag ACCT_VALUE gives a figure summed over every currency and expressed in the base one. */
+export const BASE = "BASE";
+
+/** One ACCT_VALUE, its fields as the wire carried them (`messages.ts` reads them). */
+export interface AccountValueRow {
+  key: string;
+  value: string;
+  currency: string;
+}
+
+/** One PORTFOLIO_VALUE's fields as the wire carried them, the account aside. */
+export interface PortfolioRow {
+  sec_type: string;
+  symbol: string;
+  /** lastTradeDateOrContractMonth */
+  expiry: string;
+  strike: string;
+  right: string;
+  multiplier: string;
+  currency: string;
+  position: string;
+  market_price: string;
+  market_value: string;
+  average_cost: string;
+  unrealized_pnl: string;
+  realized_pnl: string;
+}
+
+/** The accounts MANAGED_ACCTS names: one field, the ids separated by commas, the empty ones (a
+ *  trailing comma) dropped. */
+export function managedAccounts(list: string): string[] {
+  return list.split(",").map((id) => id.trim()).filter((id) => id.length > 0);
+}
+
+/** An account id as it may leave the client: every character but the last three replaced by `•`,
+ *  so the owner can tell two accounts apart and nobody else learns either. */
+export function maskAccount(id: string): string {
+  const shown = id.slice(-3);
+  return "•".repeat(id.length - shown.length) + shown;
+}
+
+/** IB's paper accounts are the ids that start `DU`. */
+export function isPaper(id: string): boolean {
+  return id.startsWith("DU");
+}
+
+/** Which of the login's accounts to read, or why none: the one there is; where there are several,
+ *  the one `wanted` names; never a guess. Every id in a refusal is masked, `wanted`'s too. */
+export function chooseAccount(
+  managed: string[], wanted: string | null,
+): { account: string } | { refused: string } {
+  const named = wanted?.trim() || null;
+  const masked = managed.map(maskAccount).join(", ");
+  if (managed.length === 0) return { refused: "IB Gateway named no account on this login" };
+  if (named !== null) {
+    return managed.includes(named) ? { account: named } : {
+      refused: `IBKR_ACCOUNT (${maskAccount(named)}) names no account on this login, which has `
+        + masked,
+    };
+  }
+  if (managed.length > 1) {
+    return { refused: `several accounts on this login; set IBKR_ACCOUNT to one of ${masked}` };
+  }
+  return { account: managed[0]! };
+}
+
+/** The average cost PER SHARE: IB's `averageCost` for anything with a multiplier includes it — an
+ *  option bought at 2.50 arrives as 250 — while its market price is per share, so the two could
+ *  not be compared as sent. A multiplier that is absent, zero or not a number divides by nothing. */
+export function perShareCost(averageCost: number | null, multiplier: number | null): number | null {
+  if (averageCost === null) return null;
+  return multiplier !== null && multiplier > 0 ? averageCost / multiplier : averageCost;
+}
+
+/** A figure out of a text field, or null where it carries none: `messages.ts`' `reading`. An empty
+ *  field is not 0. */
+function figureOf(text: string): number | null {
+  if (text.trim() === "") return null;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** An option's side as IB writes it, "C" or "P" ("CALL" and "PUT" taken too), or null for
+ *  anything that has none — a stock's row carries "0" or nothing there. */
+function sideOf(right: string): "C" | "P" | null {
+  const r = right.trim().toUpperCase();
+  if (r === "C" || r === "CALL") return "C";
+  if (r === "P" || r === "PUT") return "P";
+  return null;
+}
+
+/** One PORTFOLIO_VALUE row as the answer's holding. */
+export function holdingFrom(row: PortfolioRow): IbkrHolding {
+  const right = sideOf(row.right);
+  const multiplier = figureOf(row.multiplier);
+  return {
+    sec_type: row.sec_type, symbol: row.symbol, currency: row.currency,
+    expiry: row.expiry.trim() === "" ? null : row.expiry,
+    // a stock's row carries a strike of 0: no strike, rather than one at zero
+    strike: right === null ? null : figureOf(row.strike),
+    right, multiplier,
+    position: figureOf(row.position),
+    market_price: figureOf(row.market_price),
+    market_value: figureOf(row.market_value),
+    average_cost: perShareCost(figureOf(row.average_cost), multiplier),
+    unrealized_pnl: figureOf(row.unrealized_pnl),
+    realized_pnl: figureOf(row.realized_pnl),
+  };
+}
+
+/** The account's answer from what its read collected: the latest ACCT_VALUE for each key and
+ *  currency, its holdings in the order they first came, and the update time.
+ *
+ *  The base currency is the one NetLiquidation is sent in, which IB always states in the base. A
+ *  total is read from its `BASE` row where the gateway sends one — summed over every currency,
+ *  in the base — and otherwise from its row in the base currency: UnrealizedPnL in a USD row
+ *  alone would leave out a EUR holding's. */
+export function accountAnswer(
+  id: string, values: AccountValueRow[], holdings: IbkrHolding[], updatedAt: string | null,
+): IbkrAccount {
+  const net = values.find((v) => v.key === "NetLiquidation" && v.currency !== BASE);
+  const base = net && net.currency.trim() !== "" ? net.currency : null;
+  const totals: IbkrTotals = {
+    net_liquidation: null, total_cash: null, unrealized_pnl: null, realized_pnl: null,
+  };
+  for (const [key, name] of Object.entries(ACCOUNT_TOTALS)) {
+    const row = values.find((v) => v.key === key && v.currency === BASE)
+      ?? (base === null ? undefined : values.find((v) => v.key === key && v.currency === base));
+    totals[name] = row ? figureOf(row.value) : null;
+  }
+  return {
+    account: maskAccount(id), paper: isPaper(id), base_currency: base, updated_at: updatedAt,
+    totals, holdings,
+  };
+}
