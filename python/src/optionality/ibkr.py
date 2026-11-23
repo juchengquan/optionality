@@ -72,7 +72,7 @@ import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypedDict
 
 from optionality.contract import parse_spx_code
 from optionality.quote import Batch, Quote, mid_price
@@ -184,6 +184,67 @@ def has_figures(record: Quote) -> bool:
     does not exist. Those are different answers and the service keeps them apart.
     """
     return any(key not in _NOT_A_FIGURE and value is not None for key, value in record.items())
+
+
+# --- the account (ADR 0030; `fields.ts`' `IbkrAccount`) -----------------------------------------
+
+
+class IbkrTotals(TypedDict):
+    """The account's totals from ACCT_VALUE, in the base currency; None where the gateway sent none."""
+
+    net_liquidation: float | None
+    total_cash: float | None
+    unrealized_pnl: float | None
+    realized_pnl: float | None
+
+
+class IbkrHolding(TypedDict):
+    """One PORTFOLIO_VALUE row: a position as IBKR marks it, in its own currency."""
+
+    #: IB's security type, `STK`, `OPT`, `FUT`, ... as sent
+    sec_type: str
+    symbol: str
+    currency: str
+    #: lastTradeDateOrContractMonth as sent (`20261218`); None where empty, as for a stock
+    expiry: str | None
+    #: None for anything that is not an option
+    strike: float | None
+    #: "C" or "P"; None for anything that is not an option
+    right: Literal["C", "P"] | None
+    #: None where the gateway sent none, as for a stock
+    multiplier: float | None
+    #: signed: a short position is negative; None only where the field came empty
+    position: float | None
+    #: IBKR's own mark, per share
+    market_price: float | None
+    #: the position's value at that mark, in `currency`
+    market_value: float | None
+    #: PER SHARE: IB's `averageCost` divided by the multiplier, which IB's includes (`per_share_cost`)
+    average_cost: float | None
+    unrealized_pnl: float | None
+    realized_pnl: float | None
+
+
+class IbkrAccountRefused(Exception):
+    """The account read refused to choose: several accounts on the login and none named, a named
+    one not on it, or none named by the gateway at all (`client.ts`' `IbkrAccountRefused`). A fact
+    about the configuration rather than the gateway's health; its message carries the ids MASKED."""
+
+
+class IbkrAccount(TypedDict):
+    """What the account read answers, read once and never stored, the id only ever MASKED."""
+
+    #: the account id, masked: every character but the last three replaced by `•`
+    account: str
+    #: IB's paper accounts, whose ids start `DU`
+    paper: bool
+    #: the base currency the totals are in; None where the gateway did not say
+    base_currency: str | None
+    #: the gateway's ACCT_UPDATE_TIME exactly as sent: a time of day ("13:45") with NO DATE and no
+    #: zone, which is all the message carries; None where none arrived before the end
+    updated_at: str | None
+    totals: IbkrTotals
+    holdings: list[IbkrHolding]
 
 
 # --- the naming: a service code as the contract IB Gateway wants (`contract.ts`) ---------------
@@ -644,6 +705,19 @@ class IbkrClient:
         self._conids.clear()
         if self._client is not None:
             self._drop(self._client)
+
+    async def account(self, wanted: str | None = None) -> IbkrAccount:
+        """The account's totals and holdings, read once (ADR 0030; `client.ts`' `account`):
+        subscribe, collect until the gateway's download end, unsubscribe, answer — over the same
+        connection and client id as the price reads.
+
+        Which account: the login's one managed account; or, where it has several, the one `wanted`
+        names. Refused with `IbkrAccountRefused`, every id MASKED, where several are managed and
+        `wanted` is unset, or where `wanted` names none of them. A gateway that cannot be reached
+        raises as `fetch_quotes` does (ConnectionError), and so does a deadline
+        (`request_timeout_ms`), in its own words, the unsubscribe sent on that path too. A second caller while a read of the same account
+        runs JOINS it: IB allows one account subscription per client at a time."""
+        raise NotImplementedError("IbkrClient.account is not built yet (#469)")
 
     def _drop(self, client: "Client") -> None:
         """Hang up ONE connection, and forget what was asked over it. The client's own connection

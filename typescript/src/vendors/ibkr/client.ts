@@ -60,8 +60,8 @@
  */
 import { contractFor } from "./contract.ts";
 import {
-  GREEK_TICKS, MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS, grade, greekFields, hasFigures,
-  withMid,
+  GREEK_TICKS, type IbkrAccount, MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS, grade, greekFields,
+  hasFigures, withMid,
 } from "./fields.ts";
 import {
   type Incoming, cancelMktData, reqContractDetails,
@@ -71,6 +71,19 @@ import {
 import { TwsSocket, type TwsSocketConfig } from "./socket.ts";
 import type { Quote } from "../../domain/quote.ts";
 import type { QuoteBatch } from "../../quotes.ts";
+
+export type { IbkrAccount, IbkrHolding, IbkrTotals } from "./fields.ts";
+
+/** The account read refused to choose: several accounts on the login and none named, a named one
+ *  not on it, or none named by the gateway at all. A fact about the configuration rather than the
+ *  gateway's health, so a caller can tell it from a read that failed. Its message carries the ids
+ *  MASKED, never in full. */
+export class IbkrAccountRefused extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "IbkrAccountRefused";
+  }
+}
 
 export interface IbkrConfig extends TwsSocketConfig {
   /** Bounds the ASK, where the socket's own timeout bounds the handshake. A logged-in gateway can
@@ -255,6 +268,22 @@ export class IbkrClient {
       );
     }
     return { records, unknown };
+  }
+
+  /** The account's totals and holdings, read once (ADR 0030): subscribe, collect until the
+   *  gateway's download end, unsubscribe, answer. Over the same connection and client id as the
+   *  price reads.
+   *
+   *  Which account: the login's one managed account; or, where it has several, the one `wanted`
+   *  names. Refused with `IbkrAccountRefused`, every id MASKED, where several are managed and
+   *  `wanted` is unset ("several accounts on this login; set IBKR_ACCOUNT …"), or where `wanted`
+   *  names none of them. A gateway that cannot be reached throws as `fetchQuotes` does, and a
+   *  deadline (`requestTimeoutMs`) fails it with its own words, the unsubscribe sent on that path
+   *  too. A second caller while a read of the same account runs JOINS it: IB allows one
+   *  account subscription per client at a time. */
+  async account(wanted?: string): Promise<IbkrAccount> {
+    void wanted;
+    throw new Error("IbkrClient.account is not built yet (#469)");
   }
 
   /** Resolve a code to a conid, once per connection.

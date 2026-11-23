@@ -495,3 +495,10 @@ describe("reachable, for /health", () => {
     expect(await c.reachable()).toBe(false);
   });
 });
+
+describe("the account read (ADR 0030, #469)", () => {
+  it.todo("answers each constructed account recording's totals and holdings");
+  it.todo("sends exactly subscribe, then unsubscribe — including when the deadline fails it");
+  it.todo("joins a read already running, so two callers send one subscribe");
+  it.todo("refuses several accounts with none named, and a named one not on the login, masked");
+});

@@ -145,3 +145,60 @@ export function hasFigures(record: Quote): boolean {
   return Object.keys(record).some((key) => key !== "code" && key !== "name"
     && key !== "delayed" && key !== "last_known" && record[key] !== undefined);
 }
+
+// --- the account (ADR 0030) ---------------------------------------------------------------------
+
+/** What the account read answers: the account's totals and every position in it, as IBKR marks
+ *  them. Read once, never stored, and the account id only ever MASKED (`maskAccount`). */
+export interface IbkrAccount {
+  /** the account id, masked: every character but the last three replaced by `•` */
+  account: string;
+  /** IB's paper accounts, whose ids start `DU` */
+  paper: boolean;
+  /** the account's base currency, which the totals are in; null where the gateway did not say */
+  base_currency: string | null;
+  /** The gateway's ACCT_UPDATE_TIME exactly as it sent it: a time of day ("13:45") with NO DATE
+   *  and no zone, which is all the message carries. Null where none arrived before the end. */
+  updated_at: string | null;
+  totals: IbkrTotals;
+  holdings: IbkrHolding[];
+}
+
+/** The account's totals from ACCT_VALUE, in the base currency; null where the gateway sent none. */
+export interface IbkrTotals {
+  /** NetLiquidation */
+  net_liquidation: number | null;
+  /** TotalCashValue */
+  total_cash: number | null;
+  /** UnrealizedPnL */
+  unrealized_pnl: number | null;
+  /** RealizedPnL */
+  realized_pnl: number | null;
+}
+
+/** One PORTFOLIO_VALUE row: a position as IBKR marks it, in its own currency. */
+export interface IbkrHolding {
+  /** IB's security type: `STK`, `OPT`, `FUT`, … as sent */
+  sec_type: string;
+  symbol: string;
+  currency: string;
+  /** lastTradeDateOrContractMonth as sent (`20261218`); null where empty, as for a stock */
+  expiry: string | null;
+  /** null for anything that is not an option */
+  strike: number | null;
+  /** "C" or "P"; null for anything that is not an option */
+  right: "C" | "P" | null;
+  /** null where the gateway sent none, as for a stock */
+  multiplier: number | null;
+  /** signed: a short position is negative; null only where the field came empty */
+  position: number | null;
+  /** IBKR's own mark, per share */
+  market_price: number | null;
+  /** the position's value at that mark, in `currency` */
+  market_value: number | null;
+  /** PER SHARE: IB's `averageCost` divided by the multiplier, which IB's includes (an option's
+   *  2.50 arrives as 250) — `perShareCost` */
+  average_cost: number | null;
+  unrealized_pnl: number | null;
+  realized_pnl: number | null;
+}
