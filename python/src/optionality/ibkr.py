@@ -5,11 +5,13 @@
     client.close()
 
     records, unknown = quotes([...], port=4002, client_id=9301)   # one-shot, from a script
+    account = await client.account()                  # the account's totals and holdings (ADR 0030)
 
 A PORT of `typescript/src/vendors/ibkr/`, in three parts, and each is held to the TypeScript:
 
 * the MAPPING (`fields.ts`) — tick ids to the service's names, the four data grades as the two
-  facts they are, the 100x on implied volatility. `tests/test_ibkr.py` holds it to
+  facts they are, the 100x on implied volatility; and the account's (ADR 0030): which account,
+  the id masked, a portfolio row as a holding with its cost per share, the totals in the base. `tests/test_ibkr.py` holds it to
   `testdata/vendors/ibkr-fields.json`, what the TypeScript computes for every recorded case.
 * the NAMING (`contract.ts`) — a service code as the contract IB Gateway wants: an option by
   parsing it, an index by the exchange that calculates it. `tests/test_ibkr_client.py` mirrors
@@ -50,7 +52,13 @@ answer; `readonly=True` turns off only the open- and completed-order fetches. Ne
 `readonly` refuses no order. A quote fetch has nothing account-shaped in it (ADR 0019), so this
 connects `ib_async`'s `Client` directly, which performs the handshake and sends nothing else,
 and the Python sends exactly what `messages.ts` sends: startApi, reqMarketDataType,
-reqContractDetails, reqMktData, cancelMktData. `tests/test_ibkr_gateway.py` holds it to that.
+reqContractDetails, reqMktData, cancelMktData — and, only when the account is read (ADR 0030),
+reqAccountUpdates, a subscribe and its unsubscribe. `tests/test_ibkr_gateway.py` holds it to that.
+
+The account's four messages are read field by field too (`_FigureDecoder`), at `ibapi` 9.81's
+positions: `ib_async`'s PORTFOLIO_VALUE reader converts every figure with `float()`, so one empty
+field would drop a whole holding where the TypeScript reads it as no figure. MANAGED_ACCTS, which
+arrives with the handshake, reaches `_Reader.managedAccounts` and is read by `managed_accounts`.
 
 Two differences `ib_async` forces, neither in a recording: it calls a session started once BOTH
 nextValidId and managedAccounts have arrived (the TypeScript, on nextValidId), so a gateway that

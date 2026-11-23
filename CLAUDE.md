@@ -182,13 +182,17 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `provenance` whether it was captured (when, which gateway, how, and every byte altered since)
   or constructed (why, and from what). They are inputs; `make cases` never writes them, and
   `recordings.test.ts` refuses one that says neither, or that carries an account number other than
-  the placeholder. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
+  the placeholders (`PLACEHOLDER_ACCOUNTS`), in any message that names one. The account
+  conversations (ADR 0030) are CONSTRUCTED and only ever will be — the repository is public; a
+  capture of the live account stays on the owner's machine and is deleted once read — and replay
+  `accountReads` beside the asks. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
   replayed through the fake by `ibkr/replay.ts`, every reply at once. `make check-cases` and
   `cases/gateway.test.ts` fail when one is stale, missing, or has no recording; outside the
   fingerprint for the vendor corpus' reason. Its README is written for the Python stub's author,
   and that stub is `python/tests/fake_gateway.py`: `tests/test_ibkr_gateway.py` replays EVERY
   recording through it to the Python client and compares the batch, or the exact words raised, to
-  `expected/` with `test_cases.same`. Parametrized from the directory, so a new recording is
+  `expected/` with `test_cases.same` — and each account read's answer, refusal or words raised, and
+  the account subscriptions it sent, message for message. Parametrized from the directory, so a new recording is
   replayed there too and fails until the Python answers what the TypeScript did.
 - **Door scenarios** (ADR 0021, phase 1c): `testdata/scenarios/{http,bot,sweep}/` — a stated world
   (rows, `.env` lines, what each vendor answers, the clock), ONE request, Telegram update or sweep
@@ -295,7 +299,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   transport), **`vendors/`** (the CLIENTS. `opend/` is the moomoo websocket client; `ibkr/` is IB Gateway's own socket protocol:
   framing, the handshake with its protocol floor of 156, the five messages a read-only quote fetch
   sends, and since ADR 0019 the bounded ask itself — there is no order message and none is
-  importable, so the service cannot trade by absence rather than by discipline; `yahoo/` wraps
+  importable, so the service cannot trade by absence rather than by discipline. Since ADR 0030 it
+  also READS THE ACCOUNT, read-only: `IbkrClient.account(wanted?)` sends reqAccountUpdates (6) to
+  subscribe, collects ACCT_VALUE (6), PORTFOLIO_VALUE (7), ACCT_UPDATE_TIME (8) until
+  ACCT_DOWNLOAD_END (54), and unsubscribes — at a deadline too — the account chosen from
+  MANAGED_ACCTS (15, with the handshake), a second caller joining a read that runs, one account of
+  several only by name (`IbkrAccountRefused` otherwise), the id leaving the client only masked
+  (`•••••567`), nothing stored, never asked by the sweep; the answer's mapping is `fields.ts`',
+  cased; `yahoo/` wraps
   `yahoo-finance2`. Each vendor's pure `fields.ts` is re-exported by `vendors/fields.ts`, a door
   of its own so `testdata/vendors/` can record one truth for two languages: it imports nothing but
   the vendors' `fields.ts` modules (`opend/fields.ts` is a list, `RECORD_FIELDS`: what
@@ -546,7 +557,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   as no figure but still an ANSWER. It connects `ib_async`'s `Client`, never `IB.connectAsync`,
   which asks for the account's positions on every connect whatever its flags say and whose
   `readonly=True` refuses nothing: the Python sends exactly `messages.ts`'s messages, and
-  `tests/test_ibkr_gateway.py` holds it to that as well as to every batch. One module rather than a
+  `tests/test_ibkr_gateway.py` holds it to that as well as to every batch. Its `account()` (ADR
+  0030) reads the account's four messages field by field in the same decoder subclass, since
+  `ib_async`'s PORTFOLIO_VALUE reader drops a whole row over one empty figure, and its mapping
+  (`managed_accounts`, `mask_account`, `is_paper`, `choose_account`, `per_share_cost`,
+  `holding_from`, `account_answer`) is held to `ibkr-fields.json`. One module rather than a
   subpackage, like its two siblings: the TypeScript splits `ibkr/` by layer because it owns the
   wire, which `ib_async` owns here. The stub answers `managedAccounts` because `ib_async` will not
   report a connection until the accounts list is populated — recorded in SHAPE (one

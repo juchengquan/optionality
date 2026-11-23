@@ -1,6 +1,6 @@
 """A stub IB Gateway that replays one recorded conversation to `ib_async` (ADR 0021, Decision 7).
 
-The Python twin of `typescript/src/vendors/ibkr/fake.ts`, and it follows the same five rules,
+The Python twin of `typescript/src/vendors/ibkr/fake.ts`, and it follows the same six rules,
 which `testdata/vendors/ibkr-gateway/README.md` writes down for "a stub in any language". It says
 nothing of its own: every byte it sends is in a recording, captured from the real gateway or
 constructed and labelled so, and the same files are what the TypeScript's stub replays to its own
@@ -12,7 +12,8 @@ entitlements, a dead session or an open market.
 What it adds to the TypeScript's: `received`, every message the client sent after its version
 range. `ib_async` is a general-purpose client that asks for positions, orders and the account when
 it connects through `IB.connectAsync`, and the TypeScript sends none of that; recording what
-arrives is how a test holds the Python to the same five messages rather than trusting it to.
+arrives is how a test holds the Python to the same five messages rather than trusting it to — and
+to reqAccountUpdates, a subscribe and its unsubscribe, only where a conversation reads the account.
 
 Not a test module, so pytest collects nothing here.
 """

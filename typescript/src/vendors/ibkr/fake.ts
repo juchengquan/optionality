@@ -30,7 +30,9 @@
  *  last answers every request after it, counted over the stub's life rather than per connection:
  *  a link that drops between two asks is a change in the gateway, and reconnecting does not undo
  *  it. A cancel gets what the gateway said to that cancel, and reqMarketDataType gets nothing, as
- *  from the real one.
+ *  from the real one. An account subscription (ADR 0030) gets the replies of the exchange holding
+ *  the account it names, and stopping it that exchange's `onCancel`; every account conversation is
+ *  constructed, because nothing of the owner's account is committed.
  *
  *  Every reply goes at once, unless `pace` says otherwise: then each is sent at its recorded
  *  `atMs` times `pace` after the request, and a cancel that comes before the last of them stops

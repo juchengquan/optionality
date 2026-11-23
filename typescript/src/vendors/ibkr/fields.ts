@@ -1,4 +1,5 @@
-/** IB Gateway's ticks, turned into the figures the rest of the service reads (ADR 0019, track C).
+/** IB Gateway's ticks, turned into the figures the rest of the service reads (ADR 0019, track C),
+ *  and since ADR 0030 the account's messages into the account's answer (the end of the file).
  *
  *  Every name on the right of this mapping is the service's own — `mid_price`, `option_delta` —
  *  and every number on the left is IBKR's. That translation is the whole job, and two parts of it
@@ -149,7 +150,12 @@ export function hasFigures(record: Quote): boolean {
 // --- the account (ADR 0030) ---------------------------------------------------------------------
 
 /** What the account read answers: the account's totals and every position in it, as IBKR marks
- *  them. Read once, never stored, and the account id only ever MASKED (`maskAccount`). */
+ *  them. Read once, never stored, and the account id only ever MASKED (`maskAccount`).
+ *
+ *  Everything below is pure and canonical, and held as the tick mapping is: `make cases` records
+ *  it in `testdata/vendors/ibkr-fields.json` and the Python port (`ibkr.py`) is compared to it.
+ *  The messages hand it their fields as TEXT (`messages.ts`), so the two clients read the same
+ *  strings through the same rules: an empty field is no figure, never 0. */
 export interface IbkrAccount {
   /** the account id, masked: every character but the last three replaced by `•` */
   account: string;
