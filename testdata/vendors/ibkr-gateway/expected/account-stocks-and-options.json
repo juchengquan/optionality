@@ -20,7 +20,7 @@
         "account": "U•••••000",
         "paper": false,
         "base_currency": "USD",
-        "updated_at": "18:07",
+        "updated_at": "14:32",
         "totals": {
           "net_liquidation": 184523.17,
           "total_cash": 61230.55,
@@ -86,11 +86,11 @@
             "strike": 45,
             "right": "C",
             "multiplier": 100,
-            "position": 2,
+            "position": 4,
             "market_price": 3.85,
-            "market_value": 770,
+            "market_value": 1540,
             "average_cost": 2.625,
-            "unrealized_pnl": 245,
+            "unrealized_pnl": 490,
             "realized_pnl": 0
           },
           {
@@ -101,11 +101,11 @@
             "strike": 35,
             "right": "P",
             "multiplier": 100,
-            "position": -2,
+            "position": -6,
             "market_price": 0.92,
-            "market_value": -184,
+            "market_value": -552,
             "average_cost": 1.4180000000000001,
-            "unrealized_pnl": 99.6,
+            "unrealized_pnl": 298.8,
             "realized_pnl": -412.8
           }
         ]

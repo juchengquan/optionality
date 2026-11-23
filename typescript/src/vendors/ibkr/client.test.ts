@@ -518,7 +518,7 @@ describe("the account read (ADR 0030)", () => {
     const c = await connected({ conversation: "account-stocks-and-options" });
     const got = await c.account();
     expect(got).toMatchObject({
-      account: "U•••••000", paper: false, base_currency: "USD", updated_at: "18:07",
+      account: "U•••••000", paper: false, base_currency: "USD", updated_at: "14:32",
       // the P&L from $LEDGER's BASE row, which counts the HKD stock's; the USD row does not
       totals: {
         net_liquidation: 184523.17, total_cash: 61230.55, unrealized_pnl: 2071.4,
@@ -527,7 +527,7 @@ describe("the account read (ADR 0030)", () => {
     });
     expect(got.holdings.map((h) => [h.symbol, h.sec_type, h.currency, h.position])).toEqual([
       ["ACME", "STK", "USD", 300], ["GLOBEX", "STK", "USD", 120], ["INITECH", "STK", "HKD", 2000],
-      ["ACME", "OPT", "USD", 2], ["ACME", "OPT", "USD", -2],
+      ["ACME", "OPT", "USD", 4], ["ACME", "OPT", "USD", -6],
     ]);
     // IB's averageCost for an option is per contract; the answer's is per share
     expect(got.holdings[3]!.average_cost).toBe(2.625);

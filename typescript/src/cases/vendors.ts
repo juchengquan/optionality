@@ -131,6 +131,9 @@ export const VENDOR_INPUTS: Record<
     { fn: "managedAccounts", name: "several, comma-separated", args: ["U0000000,U0000001"] },
     { fn: "managedAccounts", name: "a trailing comma names no account", args: ["DU0000000,"] },
     { fn: "managedAccounts", name: "an empty field names none", args: [""] },
+    // JavaScript's trim, not Python's strip (round 4): a BOM is whitespace to it and \x1c is not
+    { fn: "managedAccounts", name: "trimmed as JavaScript trims: a BOM goes, a \\x1c stays",
+      args: ["\uFEFFU0000000,U0000001\u001c"] },
     // the owner's decision on #469: the letters say what kind of account, the last three which
     { fn: "maskAccount", name: "the prefix, five bullets, the last three",
       args: ["U0000001"] },
@@ -194,6 +197,10 @@ export const VENDOR_INPUTS: Record<
       sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "0x1C", right: "C",
       multiplier: "100", currency: "USD", position: "1_00", market_price: " 3.85 ",
       market_value: "Infinity", average_cost: "1e3", unrealized_pnl: "-12.5", realized_pnl: "+5" }] },
+    { fn: "holdingFrom", name: "a side and an expiry trimmed as JavaScript trims", args: [{
+      sec_type: "OPT", symbol: "ACME", expiry: "\u001c", strike: "45", right: "\uFEFFP",
+      multiplier: "100", currency: "USD", position: "1", market_price: "0.92",
+      market_value: "92", average_cost: "100", unrealized_pnl: "-8", realized_pnl: "0" }] },
     { fn: "holdingFrom", name: "an empty figure is none, never 0", args: [{
       sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "45.0", right: "C",
       multiplier: "100", currency: "USD", position: "4", market_price: "", market_value: "",
@@ -220,7 +227,7 @@ export const VENDOR_INPUTS: Record<
       ],
       [], "09:05"] },
     // the live gateway's keys, measured on 2026-11-23: the P&L only under $LEDGER-, in BASE and
-    // each currency; NetLiquidation and TotalCashValue plain in USD beside their -S segment rows;
+    // each currency; NetLiquidation and TotalCashValue plain in the base code, beside -S rows;
     // the exchange rates in $LEDGER-ExchangeRate, base units per unit of each currency
     { fn: "accountAnswer", name: "the live gateway's keys: P&L from $LEDGER's BASE row", args: [
       "U0000000",
@@ -240,7 +247,7 @@ export const VENDOR_INPUTS: Record<
         { key: "$LEDGER-ExchangeRate", value: "0.1284", currency: "HKD" },
         { key: "$LEDGER-ExchangeRate", value: "0.7712", currency: "SGD" },
       ],
-      [], "18:07"] },
+      [], "14:32"] },
     { fn: "accountAnswer", name: "a plain BASE row is preferred to $LEDGER's", args: [
       "U0000000",
       [

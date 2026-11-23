@@ -232,7 +232,7 @@ export const BASE = "BASE";
 export const LEDGER = "$LEDGER-";
 
 /** The ledger key whose rows are IBKR's exchange rates: units of the base per unit of the currency
- *  the row names (an HKD row reads about 0.13 against a USD base). */
+ *  the row names. */
 export const EXCHANGE_RATE = "$LEDGER-ExchangeRate";
 
 /** One ACCT_VALUE, its fields as the wire carried them (`messages.ts` reads them). */

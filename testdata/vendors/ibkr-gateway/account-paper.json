@@ -4,7 +4,7 @@
   "provenance": {
     "kind": "constructed",
     "why": "Nothing of the owner's account may be committed (the repository is public), so no account conversation is ever captured into it (ADR 0030).",
-    "built": "Laid out as ibapi 9.81's decoder at server version 157 (decoder.py processPortfolioValueMsg; updateAccountValue, updateAccountTime, accountDownloadEnd and managedAccounts by their EWrapper signatures) and its reqAccountUpdates encoder, read on 2026-11-23; then checked against a capture of the live gateway on 2026-11-23 (server version 157), whose figures are not in the repository: the handshake's order and notices, the keys and currency tags of the account values (the P&L only under $LEDGER-, NetLiquidation and TotalCashValue plain in USD beside their -S rows), the spellings of a stock's and an option's portfolio row, the update time interleaved with the portfolio, and error 2100 after each unsubscribe.",
+    "built": "Laid out as ibapi 9.81's decoder at server version 157 (decoder.py processPortfolioValueMsg; updateAccountValue, updateAccountTime, accountDownloadEnd and managedAccounts by their EWrapper signatures) and its reqAccountUpdates encoder, read on 2026-11-23; then checked against a capture of the live gateway on 2026-11-23 (server version 157), none of whose values is in the repository: the handshake's order and notices, the keys and currency tags of the account values (the P&L only under $LEDGER-, NetLiquidation and TotalCashValue plain in the base code beside their -S rows), the spellings of a stock's and an option's portfolio row, the update time interleaved with the portfolio, and error 2100 after each unsubscribe.",
     "invented": "Every symbol, contract id, quantity, price, value, total, exchange rate, clock time and account id in this file is invented; the accounts are placeholders."
   },
   "ask": [],
@@ -12,7 +12,7 @@
     {"wanted": null}
   ],
   "handshake": {
-    "greeting": ["157", "20261123 18:06:51 SGT"],
+    "greeting": ["157", "20261109 19:13:53 SGT"],
     "onStartApi": [
       ["15", "1", "DU0000000"],
       ["9", "1", "1"],

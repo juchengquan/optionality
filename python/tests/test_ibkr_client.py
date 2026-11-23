@@ -817,6 +817,32 @@ def test_the_stub_answers_a_cancel_after_the_last_paced_reply_with_what_the_gate
     assert asyncio.run(run()) == [["4", "2", "7", "300", "Can't find EId with tickerId:7"]]
 
 
+def test_the_stub_answers_an_unsubscribe_with_the_2100_even_one_that_cuts_a_paced_answer_short() -> None:
+    """The live gateway answered EVERY unsubscribe with exactly one 2100 (2026-11-23), so the stub does
+    too, whether or not the account's replies were all sent."""
+    conversation = copy.deepcopy(load_conversation("account-paper"))
+    exchange = conversation["exchanges"][0]
+    exchange["atMs"] = [0 if i == 0 else 5000 for i in range(len(exchange["replies"]))]
+
+    async def run() -> list[list[str]]:
+        gateway = await start_fake_gateway(conversation, pace=1)
+        reader, writer = await _session(gateway)
+        await _replies(reader, 1 + len(conversation["handshake"]["onStartApi"]))
+        writer.write(frame(["6", "2", "1", "DU0000000"]))
+        await writer.drain()
+        first = await _replies(reader, 1)
+        writer.write(frame(["6", "2", "0", "DU0000000"]))
+        await writer.drain()
+        after = await _replies(reader, 1)
+        writer.close()
+        await gateway.close()
+        return first + after
+
+    first, after = asyncio.run(run())[:2]
+    assert first[0] == "6"
+    assert after[:4] == ["4", "2", "-1", "2100"]
+
+
 def _data(req_id: str, snapshot: str) -> list[str]:
     """reqMktData for the control, a snapshot ("1") or a stream ("0") — field 17."""
     return ["1", "11", req_id, *_lookup(req_id, "8100.0")[3:15], "0", "", snapshot, "0", ""]
@@ -901,7 +927,7 @@ def test_the_account_read_answers_totals_and_holdings_with_the_account_masked() 
         "U•••••000",
         False,
         "USD",
-        "18:07",
+        "14:32",
     )
     # the P&L from $LEDGER's BASE row, which counts the HKD stock's; the USD row does not
     assert got["totals"] == {
@@ -914,8 +940,8 @@ def test_the_account_read_answers_totals_and_holdings_with_the_account_masked() 
         ("ACME", "STK", "USD", 300),
         ("GLOBEX", "STK", "USD", 120),
         ("INITECH", "STK", "HKD", 2000),
-        ("ACME", "OPT", "USD", 2),
-        ("ACME", "OPT", "USD", -2),
+        ("ACME", "OPT", "USD", 4),
+        ("ACME", "OPT", "USD", -6),
     ]
     # IB's averageCost for an option is per contract; the answer's is per share
     assert got["holdings"][3]["average_cost"] == 2.625

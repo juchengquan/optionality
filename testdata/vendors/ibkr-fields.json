@@ -297,6 +297,17 @@
       "expect": []
     },
     {
+      "fn": "managedAccounts",
+      "name": "trimmed as JavaScript trims: a BOM goes, a \\x1c stays",
+      "args": [
+        "﻿U0000000,U0000001\u001c"
+      ],
+      "expect": [
+        "U0000000",
+        "U0000001\u001c"
+      ]
+    },
+    {
       "fn": "maskAccount",
       "name": "the prefix, five bullets, the last three",
       "args": [
@@ -730,6 +741,42 @@
     },
     {
       "fn": "holdingFrom",
+      "name": "a side and an expiry trimmed as JavaScript trims",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "\u001c",
+          "strike": "45",
+          "right": "﻿P",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "1",
+          "market_price": "0.92",
+          "market_value": "92",
+          "average_cost": "100",
+          "unrealized_pnl": "-8",
+          "realized_pnl": "0"
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "\u001c",
+        "strike": 45,
+        "right": "P",
+        "multiplier": 100,
+        "position": 1,
+        "market_price": 0.92,
+        "market_value": 92,
+        "average_cost": 1,
+        "unrealized_pnl": -8,
+        "realized_pnl": 0
+      }
+    },
+    {
+      "fn": "holdingFrom",
       "name": "an empty figure is none, never 0",
       "args": [
         {
@@ -951,13 +998,13 @@
           }
         ],
         [],
-        "18:07"
+        "14:32"
       ],
       "expect": {
         "account": "U•••••000",
         "paper": false,
         "base_currency": "USD",
-        "updated_at": "18:07",
+        "updated_at": "14:32",
         "totals": {
           "net_liquidation": 184523.17,
           "total_cash": 61230.55,

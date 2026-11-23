@@ -83,6 +83,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypedDict, cast
 
 from optionality.contract import parse_spx_code
+
+# JavaScript's whitespace, which `trim()` and `Number` strip: a BOM is in it, and `\x1c`-`\x1f`, which
+# Python's `str.strip()` strips, are not — every trim below is the TypeScript's, through this
 from optionality.js import _WS as _JS_WHITESPACE
 from optionality.js import number
 from optionality.quote import Batch, Quote, mid_price
@@ -328,7 +331,7 @@ class PortfolioRow(TypedDict):
 def managed_accounts(accounts: str) -> list[str]:
     """The accounts MANAGED_ACCTS names: one field, the ids separated by commas, the empty ones (a
     trailing comma) dropped."""
-    return [a.strip() for a in accounts.split(",") if a.strip()]
+    return [a.strip(_JS_WHITESPACE) for a in accounts.split(",") if a.strip(_JS_WHITESPACE)]
 
 
 def mask_account(account_id: str) -> str:
@@ -355,7 +358,7 @@ def choose_account(managed: list[str], wanted: str | None) -> dict[str, str]:
     """Which of the login's accounts to read (`{"account": id}`), or why none (`{"refused": words}`):
     the one there is; where there are several, the one `wanted` names; never a guess. Every id in a
     refusal is masked, `wanted`'s too."""
-    named = (wanted or "").strip() or None
+    named = (wanted or "").strip(_JS_WHITESPACE) or None
     masked = ", ".join(mask_account(a) for a in managed)
     if not managed:
         return {"refused": "IB Gateway named no account on this login"}
@@ -388,7 +391,7 @@ def _figure_of(text: str) -> float | None:
 
 
 def _side_of(right: str) -> Literal["C", "P"] | None:
-    r = right.strip().upper()
+    r = right.strip(_JS_WHITESPACE).upper()
     if r in ("C", "CALL"):
         return "C"
     if r in ("P", "PUT"):
@@ -404,7 +407,7 @@ def holding_from(row: PortfolioRow) -> IbkrHolding:
         "sec_type": row["sec_type"],
         "symbol": row["symbol"],
         "currency": row["currency"],
-        "expiry": None if not row["expiry"].strip() else row["expiry"],
+        "expiry": None if not row["expiry"].strip(_JS_WHITESPACE) else row["expiry"],
         # a stock's row carries a strike of 0: no strike, rather than one at zero
         "strike": None if right is None else _figure_of(row["strike"]),
         "right": right,
@@ -427,7 +430,7 @@ def account_answer(
     the base code. The exchange rates are the ledger's by currency, BASE left out, the base 1, and a
     rate that is not a positive number left out."""
     net = next((v for v in values if v["key"] == "NetLiquidation" and v["currency"] != BASE), None)
-    base = net["currency"] if net is not None and net["currency"].strip() else None
+    base = net["currency"] if net is not None and net["currency"].strip(_JS_WHITESPACE) else None
     totals: dict[str, float | None] = {}
     for key, name in ACCOUNT_TOTALS.items():
         row = next((v for v in values if v["key"] == key and v["currency"] == BASE), None)
@@ -438,7 +441,7 @@ def account_answer(
         totals[name] = None if row is None else _figure_of(row["value"])
     exchange_rates: dict[str, float] = {}
     for v in values:
-        if v["key"] != EXCHANGE_RATE or v["currency"] == BASE or not v["currency"].strip():
+        if v["key"] != EXCHANGE_RATE or v["currency"] == BASE or not v["currency"].strip(_JS_WHITESPACE):
             continue
         rate = _figure_of(v["value"])
         if rate is not None and rate > 0:

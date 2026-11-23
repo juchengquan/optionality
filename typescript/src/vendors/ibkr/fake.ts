@@ -221,16 +221,18 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
         }
         if (f[0] === REQ_ACCT_DATA) {
           // An account's subscription, matched on the account it names; every reply goes as the
-          // recording has it, account messages carrying no request id. Stopping it is answered
-          // with what the gateway said to that, and cuts a paced answer short. Keyed in `pending`
-          // by the account, which no request id can be
+          // recording has it, account messages carrying no request id. Stopping it cuts a paced
+          // answer short and is answered with what the gateway said to that — ALWAYS, unlike a
+          // cancelled snapshot: the live gateway sent exactly one 2100 after every unsubscribe
+          // (2026-11-23). Keyed in `pending` by the account, which no request id can be
           const account = f[ACCOUNT_AT] ?? "";
           const exchange = conversation.exchanges.find(
             (e): e is AccountExchange => e.request === "reqAccountUpdates" && e.account === account);
           const key = `account:${account}`;
           if (f[SUBSCRIBE_AT] === "1") {
             if (exchange) reply(exchange, key);
-          } else if (!stop(key)) {
+          } else {
+            stop(key);
             send(exchange?.onCancel ?? []);
           }
           continue;

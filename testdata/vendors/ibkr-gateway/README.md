@@ -53,14 +53,15 @@ conversation with `accountReads` or a `reqAccountUpdates` exchange whose provena
 `recorded`. They are laid out field for field as `ibapi` 9.81 encodes reqAccountUpdates and reads
 its five answers at protocol 157, and that layout was CHECKED against a capture of the live gateway
 on 2026-11-23, run with the owner's go-ahead on a client id that is not the service's; the capture
-stayed on the owner's machine and none of its figures is here. What it settled, and the files
-follow: the greeting, then managedAccounts, nextValidId and notices 2104, 2106 and 2158; every
-account value (NetLiquidation and TotalCashValue plain in USD beside their `-S` rows, the P&L only as
-`$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL`, the rates as `$LEDGER-ExchangeRate`, for BASE and
-each currency), then the portfolio with the update time (`HH:MM`) between its rows, then the
-download end; a stock's row with strike `0`, right `0`, expiry and multiplier empty, an option's
-with a whole strike, multiplier `100` and exchange `CBOE`; and exactly one message after each
-unsubscribe, error 2100 against -1, kept as the exchange's `onCancel`. The symbols, contract ids,
+stayed on the owner's machine and none of its values is here. The LAYOUT it settled, which the
+files follow: the greeting, then managedAccounts, nextValidId and notices 2104, 2106 and 2158;
+every account value (NetLiquidation and TotalCashValue plain in the base code beside their `-S`
+rows; the P&L only as `$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL` and the rates as
+`$LEDGER-ExchangeRate`, for BASE and each currency), then the portfolio with the update time
+(`HH:MM`) between its rows, then the download end; a stock's row with strike `0`, right `0`,
+expiry and multiplier empty, an option's with a whole-number strike, multiplier `100` and exchange
+`CBOE`; and exactly one message after each unsubscribe, error 2100 against -1, kept as the
+exchange's `onCancel`. The symbols, contract ids,
 quantities, prices, totals, exchange rates and clock times are invented, and the accounts
 placeholders.
 
@@ -170,9 +171,11 @@ The rules `typescript/src/vendors/ibkr/fake.ts` follows, which a stub in any lan
 
 6. On reqAccountUpdates (`6`) subscribing (field 2 `"1"`), send the `replies` of the
    `reqAccountUpdates` exchange whose `account` field 3 names, as they are; one naming an account no
-   exchange holds gets nothing. Stopping it (field 2 `"0"`) gets that exchange's `onCancel`, or
-   nothing — and a stub told to pace that still has replies to send for that account sends none of
-   them, as rule 5 has it for a snapshot.
+   exchange holds gets nothing. Stopping it (field 2 `"0"`) gets that exchange's `onCancel` (the
+   2100, in every account conversation), or nothing where no exchange holds the account — and a
+   stub told to pace that still has replies to send for that account sends none of them, but
+   sends the `onCancel` all the same: unlike a snapshot cancelled before its end (rule 5), the live
+   gateway answered every unsubscribe with exactly one 2100 (2026-11-23).
 
 One rule is OPT-IN, for a client test and never for the corpus: told to (`oneSessionPerClientId`,
 `one_session_per_client_id`), a stub answers a startApi whose client id another OPEN connection
@@ -224,7 +227,7 @@ MESSAGES as well as the same answer, an unsubscribe after a deadline included:
 ```jsonc
   "accountReads": [
     { "wanted": null,
-      "expect": { "account": "U•••••000", "paper": false, "base_currency": "USD", "updated_at": "18:07",
+      "expect": { "account": "U•••••000", "paper": false, "base_currency": "USD", "updated_at": "14:32",
                   "totals": { … }, "exchange_rates": { "USD": 1, "HKD": 0.1284, … },
                   "holdings": [ … ] },
       "sent": [["6", "2", "1", "U0000000"], ["6", "2", "0", "U0000000"]] },

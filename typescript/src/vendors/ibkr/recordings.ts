@@ -84,7 +84,7 @@ export type Exchange = QuoteExchange | AccountExchange;
 export const SUBSCRIBE_AT = 2;
 export const ACCOUNT_AT = 3;
 
-/** The account ids a recording may carry, each the SHAPE of a real one (a prefix and seven digits)
+/** The account ids a recording may carry, each the SHAPE of a real one (a letter prefix and digits)
  *  and none anybody's: the owner's are never committed (ADR 0030; the repository is public). */
 export const PLACEHOLDER_ACCOUNTS = ["DU0000000", "DU0000001", "U0000000", "U0000001"] as const;
 

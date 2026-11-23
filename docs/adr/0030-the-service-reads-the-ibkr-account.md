@@ -91,18 +91,18 @@ as a holding, in its own currency, its average cost PER SHARE (IB's `averageCost
 multiplier). The mapping is pure, in `ibkr/fields.ts`, ported to `ibkr.py` and held in both
 directions by the vendor corpus.
 
-**What the live gateway sends**, measured by a capture on 2026-11-23 (server version 157, three
-reads), whose figures are not in the repository: the greeting, then MANAGED_ACCTS (one account, `U`
-and seven digits), nextValidId, and notices 2104, 2106 and 2158 against -1; on subscribe, every
-ACCT_VALUE (version 2, each naming the account), then the PORTFOLIO_VALUE rows (version 8, twenty
-fields) with ACCT_UPDATE_TIME interleaved, then the download end, about 10 ms after the subscribe;
-after each unsubscribe exactly one message, error 2100, and no late download end. NetLiquidation and
-TotalCashValue come plain, in USD only, beside `-S` segment rows; the P&L comes ONLY as
-`$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL`, for BASE and each currency. A stock's row has
-strike `0`, right `0`, expiry and multiplier empty; an option's a whole strike (`6800`), right `C` or
-`P`, multiplier `100`, a signed whole position, and an `averageCost` about 136 times its mark — the
-cost per contract, the mark per share. The marks moved between reads 70 seconds apart, and so did
-the update time.
+**What the live gateway sends**, its LAYOUT learned from a capture on 2026-11-23 (server version
+157), none of whose values is in the repository: the greeting, then MANAGED_ACCTS (one
+comma-separated field; a live id is `U` and digits, a paper one `DU` and digits), nextValidId, and
+notices 2104, 2106 and 2158 against -1; on subscribe, every ACCT_VALUE (version 2, each naming the
+account), then the PORTFOLIO_VALUE rows (version 8, twenty fields) with ACCT_UPDATE_TIME (`HH:MM`)
+interleaved, then the download end; after each unsubscribe exactly one message, error 2100, and no
+late download end. NetLiquidation and TotalCashValue come plain, in the base currency's code only,
+beside `-S` segment rows; the P&L comes ONLY as `$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL`,
+for BASE and each currency. A stock's row has strike `0`, right `0`, expiry and multiplier empty;
+an option's a whole-number strike with no `.0`, right `C` or `P`, multiplier `100`, and a signed
+whole position; an option's `averageCost` is per contract, the multiplier included, and its mark
+per share. A later read carries newer marks and a newer update time.
 
 **Nothing stored**: no table, no column, no sample. The read answers and is gone.
 

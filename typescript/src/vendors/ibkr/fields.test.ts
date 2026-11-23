@@ -272,7 +272,7 @@ describe("the account's answer", () => {
 
   it("reads the P&L from $LEDGER's BASE row, which is all the live gateway sends", () => {
     // measured on 2026-11-23: no plain UnrealizedPnL or RealizedPnL at all, only $LEDGER-…, in
-    // BASE and each currency; and NetLiquidation and TotalCashValue plain, in USD only, beside
+    // BASE and each currency; and NetLiquidation and TotalCashValue plain, in the base code, beside
     // their `-S` segment rows, which are not the account's total
     const got = accountAnswer("U0000000", [
       row("NetLiquidation", "184523.17", "USD"),
@@ -284,7 +284,7 @@ describe("the account's answer", () => {
       row("$LEDGER-UnrealizedPnL", "2635.10", "HKD"),
       row("$LEDGER-RealizedPnL", "-412.80", "BASE"),
       row("$LEDGER-RealizedPnL", "-412.80", "USD"),
-    ], [], "18:07");
+    ], [], "14:32");
     expect(got.totals).toEqual({
       net_liquidation: 184523.17, total_cash: 61230.55, unrealized_pnl: 2071.4,
       realized_pnl: -412.8,

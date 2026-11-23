@@ -347,7 +347,10 @@ class FakeGateway:
             if len(fields) > SUBSCRIBE_AT and fields[SUBSCRIBE_AT] == "1":
                 if exchange is not None:
                     reply(exchange, key)
-            elif not stop(key):
+            else:
+                # answered ALWAYS, unlike a cancelled snapshot: the live gateway sent exactly one 2100
+                # after every unsubscribe (2026-11-23), whether or not the answer was all sent
+                stop(key)
                 send(exchange.get("onCancel", []) if exchange else [])
             return
         if message_id == CANCEL_MKT_DATA:
