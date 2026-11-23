@@ -259,7 +259,7 @@
     },
     {
       "fn": "managedAccounts",
-      "name": "one account",
+      "name": "a single account",
       "args": [
         "U0000000"
       ],
@@ -452,7 +452,7 @@
     },
     {
       "fn": "chooseAccount",
-      "name": "named, even with one account, it must be that one",
+      "name": "named, even with a single account, it must be that one",
       "args": [
         [
           "U0000000"
@@ -474,6 +474,34 @@
       ],
       "expect": {
         "account": "U0000000"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "a name led by a BOM is the name",
+      "args": [
+        [
+          "U0000000",
+          "U0000001"
+        ],
+        "﻿U0000001"
+      ],
+      "expect": {
+        "account": "U0000001"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "a name led by a \\x1c names no account",
+      "args": [
+        [
+          "U0000000",
+          "U0000001"
+        ],
+        "\u001cU0000001"
+      ],
+      "expect": {
+        "refused": "IBKR_ACCOUNT (•••••001) names no account on this login, which has U•••••000, U•••••001"
       }
     },
     {
@@ -642,7 +670,7 @@
           "strike": "0",
           "right": "0",
           "multiplier": "",
-          "currency": "HKD",
+          "currency": "EUR",
           "position": "50",
           "market_price": "108.4",
           "market_value": "5420.0",
@@ -654,7 +682,7 @@
       "expect": {
         "sec_type": "STK",
         "symbol": "INITECH",
-        "currency": "HKD",
+        "currency": "EUR",
         "expiry": null,
         "strike": null,
         "right": null,
@@ -772,6 +800,42 @@
         "market_value": 92,
         "average_cost": 1,
         "unrealized_pnl": -8,
+        "realized_pnl": 0
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a figure that is only a BOM is none, never 0",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "20261218",
+          "strike": "45",
+          "right": "C",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "1",
+          "market_price": "﻿",
+          "market_value": "﻿",
+          "average_cost": "100",
+          "unrealized_pnl": "0",
+          "realized_pnl": "0"
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "20261218",
+        "strike": 45,
+        "right": "C",
+        "multiplier": 100,
+        "position": 1,
+        "market_price": null,
+        "market_value": null,
+        "average_cost": 1,
+        "unrealized_pnl": 0,
         "realized_pnl": 0
       }
     },
@@ -963,8 +1027,8 @@
           },
           {
             "key": "$LEDGER-UnrealizedPnL",
-            "value": "2635.10",
-            "currency": "HKD"
+            "value": "310.00",
+            "currency": "EUR"
           },
           {
             "key": "$LEDGER-RealizedPnL",
@@ -988,13 +1052,13 @@
           },
           {
             "key": "$LEDGER-ExchangeRate",
-            "value": "0.1284",
-            "currency": "HKD"
+            "value": "1.0841",
+            "currency": "EUR"
           },
           {
             "key": "$LEDGER-ExchangeRate",
-            "value": "0.7712",
-            "currency": "SGD"
+            "value": "1.1307",
+            "currency": "CHF"
           }
         ],
         [],
@@ -1013,8 +1077,8 @@
         },
         "exchange_rates": {
           "USD": 1,
-          "HKD": 0.1284,
-          "SGD": 0.7712
+          "EUR": 1.0841,
+          "CHF": 1.1307
         },
         "holdings": []
       }
@@ -1102,6 +1166,76 @@
         },
         "exchange_rates": {
           "GBP": 16,
+          "USD": 1
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "a base currency of \\x1c is one, as JavaScript trims",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "NetLiquidation",
+            "value": "1.00",
+            "currency": "\u001c"
+          }
+        ],
+        [],
+        null
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "\u001c",
+        "updated_at": null,
+        "totals": {
+          "net_liquidation": 1,
+          "total_cash": null,
+          "unrealized_pnl": null,
+          "realized_pnl": null
+        },
+        "exchange_rates": {
+          "\u001c": 1
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "a rate currency of \\x1c is one, as JavaScript trims",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "NetLiquidation",
+            "value": "1.00",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "1.5",
+            "currency": "\u001c"
+          }
+        ],
+        [],
+        null
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": null,
+        "totals": {
+          "net_liquidation": 1,
+          "total_cash": null,
+          "unrealized_pnl": null,
+          "realized_pnl": null
+        },
+        "exchange_rates": {
+          "\u001c": 1.5,
           "USD": 1
         },
         "holdings": []

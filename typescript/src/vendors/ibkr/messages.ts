@@ -118,7 +118,7 @@ export function cancelMktData(reqId: number): string {
   return toFields([OUT.CANCEL_MKT_DATA, VERSION, reqId]);
 }
 
-/** Subscribe to one account's values and portfolio (`subscribe` true), or stop (`false`): ibapi
+/** Subscribe to an account's values and portfolio (`subscribe` true), or stop (`false`): ibapi
  *  9.81's reqAccountUpdates, version 2, field for field. The account code is sent whatever the
  *  login manages, because the messages that answer carry the account's name and no request id:
  *  naming it is the only way to know which answer is the one asked for. */

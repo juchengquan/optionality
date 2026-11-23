@@ -23,14 +23,14 @@
         "updated_at": "14:32",
         "totals": {
           "net_liquidation": 184523.17,
-          "total_cash": 61230.55,
-          "unrealized_pnl": 2071.4,
+          "total_cash": 64829.28,
+          "unrealized_pnl": 2071.37,
           "realized_pnl": -412.8
         },
         "exchange_rates": {
           "USD": 1,
-          "HKD": 0.1284,
-          "SGD": 0.7712
+          "EUR": 1.0841,
+          "CHF": 1.1307
         },
         "holdings": [
           {
@@ -66,16 +66,16 @@
           {
             "sec_type": "STK",
             "symbol": "INITECH",
-            "currency": "HKD",
+            "currency": "EUR",
             "expiry": null,
             "strike": null,
             "right": null,
             "multiplier": null,
-            "position": 2000,
-            "market_price": 103,
-            "market_value": 206000,
-            "average_cost": 101.6912,
-            "unrealized_pnl": 2617.6,
+            "position": 50,
+            "market_price": 108.4,
+            "market_value": 5420,
+            "average_cost": 102.2,
+            "unrealized_pnl": 310,
             "realized_pnl": 0
           },
           {

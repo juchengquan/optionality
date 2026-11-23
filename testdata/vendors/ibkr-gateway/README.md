@@ -42,7 +42,7 @@ client read, which is why `ib_async` could not decode it.
 | `no-prices` | constructed | the normal answer with bid and ask sent as -1 |
 | `client-id-in-use` | constructed | startApi refused with 326 against -1 |
 | `session-never-starts` | constructed | the greeting, then nothing |
-| `account-stocks-and-options` | constructed | a live account: stocks in USD (NASDAQ, NYSE) and HKD (SEHK), a long call and a short put with realised P&L, cash in SGD, the P&L and exchange rates under `$LEDGER-`; then the download end, and 2100 after the unsubscribe |
+| `account-stocks-and-options` | constructed | a live account: stocks in USD and EUR, a long call and a short put with realised P&L, cash in CHF, the P&L and exchange rates under `$LEDGER-`; then the download end, and 2100 after the unsubscribe |
 | `account-paper` | constructed | a paper account (`DU`): totals and one short option, then the download end, and 2100 after the unsubscribe |
 | `account-several` | constructed | two managed accounts, each with its own subscription: a read naming neither refused, one naming the second answered, one naming an account not on the login refused |
 | `account-never-ends` | constructed | account values and a holding, and no download end; 2100 after the unsubscribe the deadline sends |
@@ -59,9 +59,9 @@ every account value (NetLiquidation and TotalCashValue plain in the base code be
 rows; the P&L only as `$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL` and the rates as
 `$LEDGER-ExchangeRate`, for BASE and each currency), then the portfolio with the update time
 (`HH:MM`) between its rows, then the download end; a stock's row with strike `0`, right `0`,
-expiry and multiplier empty, an option's with a whole-number strike, multiplier `100` and exchange
-`CBOE`; and exactly one message after each unsubscribe, error 2100 against -1, kept as the
-exchange's `onCancel`. The symbols, contract ids,
+expiry and multiplier empty, an option's with a whole-number strike, multiplier `100` and the
+exchange field filled; and exactly one message after each unsubscribe, error 2100 against -1, kept
+as the exchange's `onCancel`. The symbols, contract ids,
 quantities, prices, totals, exchange rates and clock times are invented, and the accounts
 placeholders.
 
@@ -228,7 +228,7 @@ MESSAGES as well as the same answer, an unsubscribe after a deadline included:
   "accountReads": [
     { "wanted": null,
       "expect": { "account": "U•••••000", "paper": false, "base_currency": "USD", "updated_at": "14:32",
-                  "totals": { … }, "exchange_rates": { "USD": 1, "HKD": 0.1284, … },
+                  "totals": { … }, "exchange_rates": { "USD": 1, "EUR": 1.0841, … },
                   "holdings": [ … ] },
       "sent": [["6", "2", "1", "U0000000"], ["6", "2", "0", "U0000000"]] },
     { "wanted": "DU0000001",

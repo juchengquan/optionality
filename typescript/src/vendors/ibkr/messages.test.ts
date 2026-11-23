@@ -232,7 +232,7 @@ describe("the account (ADR 0030)", () => {
       .toEqual({ kind: "accounts", list: "U0000000,U0000001" });
   });
 
-  it("reads one account value as its key, value and currency, and whose it is", () => {
+  it("reads an account value as its key, value and currency, and whose it is", () => {
     expect(readMessage(msg(6, 2, "NetLiquidation", "184523.17", "USD", "U0000000"))).toEqual({
       kind: "accountValue", account: "U0000000",
       row: { key: "NetLiquidation", value: "184523.17", currency: "USD" },

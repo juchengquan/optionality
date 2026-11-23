@@ -12,7 +12,7 @@ say what they add.
 prices and nothing else, and the documents built on it said so in those words — the corpus README,
 `messages.ts`, the Python port's docstring and its gateway test: "a quote fetch has nothing
 account-shaped in it (ADR 0019)". That stays true of a quote fetch. The client as a whole now also
-reads ONE account, read-only, and this record says how far that goes. Everything else in ADR 0019
+reads a SINGLE account, read-only, and this record says how far that goes. Everything else in ADR 0019
 stands, its "no order message" included (scoped to the TypeScript by ADR 0021, held in the Python by
 `no_trading.py`).
 
@@ -52,7 +52,7 @@ rather than through the per-id `waiting` map.
 
 **One bounded read**, `IbkrClient.account(wanted?)` in both languages: subscribe, collect until the
 download's end, unsubscribe, answer. A deadline — the client's `requestTimeoutMs`, as for a quote —
-fails it with its own words, and the unsubscribe is sent on that path too. IB allows one account
+fails it with its own words, and the unsubscribe is sent on that path too. IB allows a single account
 subscription per client at a time, so a second caller for the same account while a read runs JOINS
 it; a caller for another account waits for it to finish, then takes the connection — and chooses
 the account — afresh, since the read it waited on may have ended because the connection went. A
@@ -93,7 +93,7 @@ directions by the vendor corpus.
 
 **What the live gateway sends**, its LAYOUT learned from a capture on 2026-11-23 (server version
 157), none of whose values is in the repository: the greeting, then MANAGED_ACCTS (one
-comma-separated field; a live id is `U` and digits, a paper one `DU` and digits), nextValidId, and
+comma-separated field; an id is a letter prefix and digits), nextValidId, and
 notices 2104, 2106 and 2158 against -1; on subscribe, every ACCT_VALUE (version 2, each naming the
 account), then the PORTFOLIO_VALUE rows (version 8, twenty fields) with ACCT_UPDATE_TIME (`HH:MM`)
 interleaved, then the download end; after each unsubscribe exactly one message, error 2100, and no
@@ -121,8 +121,8 @@ placeholders, in every message that carries one.
 - The market-data invariant gains no call: an account read asks for no market data. Its marks are
   IBKR's, refreshed at IBKR's pace (a faster source for them is a later decision, once that pace is
   measured).
-- A holding closed today may arrive with a position of 0 and its realised P&L (the capture had
-  none); the read keeps every row as sent, and what a page shows of it is the page's decision.
+- A holding closed today may arrive with a position of 0 and its realised P&L (position 0 is not
+  yet measured); the read keeps every row as sent, and what a page shows of it is the page's decision.
 - Python reads the account messages field by field rather than through `ib_async`'s readers, whose
   PORTFOLIO_VALUE drops a whole row over one empty figure; `ib_async`'s DEBUG log writes every wire
   field, the account id included, which is one more reason the Python backend holds every library at

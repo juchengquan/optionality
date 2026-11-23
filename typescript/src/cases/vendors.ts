@@ -127,7 +127,7 @@ export const VENDOR_INPUTS: Record<
     // --- the account (ADR 0030). Laid out as ibapi 9.81 reads PORTFOLIO_VALUE and ACCT_VALUE at
     // protocol 157; every symbol, figure and account id is INVENTED, the ids placeholders — the
     // owner's account is never committed (the repository is public)
-    { fn: "managedAccounts", name: "one account", args: ["U0000000"] },
+    { fn: "managedAccounts", name: "a single account", args: ["U0000000"] },
     { fn: "managedAccounts", name: "several, comma-separated", args: ["U0000000,U0000001"] },
     { fn: "managedAccounts", name: "a trailing comma names no account", args: ["DU0000000,"] },
     { fn: "managedAccounts", name: "an empty field names none", args: [""] },
@@ -160,9 +160,14 @@ export const VENDOR_INPUTS: Record<
       args: [["U0000000", "U0000001"], null] },
     { fn: "chooseAccount", name: "a named account not on the login: refused, it masked too",
       args: [["U0000000", "U0000001"], "DU0000001"] },
-    { fn: "chooseAccount", name: "named, even with one account, it must be that one",
+    { fn: "chooseAccount", name: "named, even with a single account, it must be that one",
       args: [["U0000000"], "U0000001"] },
     { fn: "chooseAccount", name: "a blank name is none", args: [["U0000000"], " "] },
+    // trimmed as JavaScript trims, not as Python strips (round 5): a BOM is whitespace, \x1c is not
+    { fn: "chooseAccount", name: "a name led by a BOM is the name", args: [
+      ["U0000000", "U0000001"], "\uFEFFU0000001"] },
+    { fn: "chooseAccount", name: "a name led by a \\x1c names no account", args: [
+      ["U0000000", "U0000001"], "\u001cU0000001"] },
     { fn: "chooseAccount", name: "no account named by the gateway", args: [[], null] },
     // IB's averageCost for an option is per CONTRACT: 2.50 arrives as 250
     { fn: "perShareCost", name: "an option's average cost per share", args: [250, 100] },
@@ -186,7 +191,7 @@ export const VENDOR_INPUTS: Record<
       average_cost: "38.115", unrealized_pnl: "946.5", realized_pnl: "0.0" }] },
     { fn: "holdingFrom", name: "a stock in another currency, its figures in that one", args: [{
       sec_type: "STK", symbol: "INITECH", expiry: "", strike: "0", right: "0", multiplier: "",
-      currency: "HKD", position: "50", market_price: "108.4", market_value: "5420.0",
+      currency: "EUR", position: "50", market_price: "108.4", market_value: "5420.0",
       average_cost: "102.2", unrealized_pnl: "310.0", realized_pnl: "0.0" }] },
     { fn: "holdingFrom", name: "a side written out in full", args: [{
       sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "35", right: "PUT",
@@ -201,6 +206,10 @@ export const VENDOR_INPUTS: Record<
       sec_type: "OPT", symbol: "ACME", expiry: "\u001c", strike: "45", right: "\uFEFFP",
       multiplier: "100", currency: "USD", position: "1", market_price: "0.92",
       market_value: "92", average_cost: "100", unrealized_pnl: "-8", realized_pnl: "0" }] },
+    { fn: "holdingFrom", name: "a figure that is only a BOM is none, never 0", args: [{
+      sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "45", right: "C",
+      multiplier: "100", currency: "USD", position: "1", market_price: "\uFEFF",
+      market_value: "\uFEFF", average_cost: "100", unrealized_pnl: "0", realized_pnl: "0" }] },
     { fn: "holdingFrom", name: "an empty figure is none, never 0", args: [{
       sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "45.0", right: "C",
       multiplier: "100", currency: "USD", position: "4", market_price: "", market_value: "",
@@ -239,13 +248,13 @@ export const VENDOR_INPUTS: Record<
         { key: "TotalCashValue-S", value: "61000.00", currency: "USD" },
         { key: "$LEDGER-UnrealizedPnL", value: "2071.40", currency: "BASE" },
         { key: "$LEDGER-UnrealizedPnL", value: "1735.30", currency: "USD" },
-        { key: "$LEDGER-UnrealizedPnL", value: "2635.10", currency: "HKD" },
+        { key: "$LEDGER-UnrealizedPnL", value: "310.00", currency: "EUR" },
         { key: "$LEDGER-RealizedPnL", value: "-412.80", currency: "BASE" },
         { key: "$LEDGER-RealizedPnL", value: "-412.80", currency: "USD" },
         { key: "$LEDGER-ExchangeRate", value: "1.00", currency: "BASE" },
         { key: "$LEDGER-ExchangeRate", value: "1.00", currency: "USD" },
-        { key: "$LEDGER-ExchangeRate", value: "0.1284", currency: "HKD" },
-        { key: "$LEDGER-ExchangeRate", value: "0.7712", currency: "SGD" },
+        { key: "$LEDGER-ExchangeRate", value: "1.0841", currency: "EUR" },
+        { key: "$LEDGER-ExchangeRate", value: "1.1307", currency: "CHF" },
       ],
       [], "14:32"] },
     { fn: "accountAnswer", name: "a plain BASE row is preferred to $LEDGER's", args: [
@@ -263,6 +272,15 @@ export const VENDOR_INPUTS: Record<
         { key: "$LEDGER-ExchangeRate", value: "", currency: "JPY" },
         { key: "$LEDGER-ExchangeRate", value: "-1", currency: "CHF" },
         { key: "$LEDGER-ExchangeRate", value: "0x10", currency: "GBP" },
+      ],
+      [], null] },
+    { fn: "accountAnswer", name: "a base currency of \\x1c is one, as JavaScript trims", args: [
+      "U0000000", [{ key: "NetLiquidation", value: "1.00", currency: "\u001c" }], [], null] },
+    { fn: "accountAnswer", name: "a rate currency of \\x1c is one, as JavaScript trims", args: [
+      "U0000000",
+      [
+        { key: "NetLiquidation", value: "1.00", currency: "USD" },
+        { key: "$LEDGER-ExchangeRate", value: "1.5", currency: "\u001c" },
       ],
       [], null] },
     { fn: "accountAnswer", name: "nothing said is nothing claimed", args: ["U0000001", [], [], null] },

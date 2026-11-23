@@ -281,7 +281,7 @@ describe("the account's answer", () => {
       row("TotalCashValue-S", "61000.00", "USD"),
       row("$LEDGER-UnrealizedPnL", "2071.40", "BASE"),
       row("$LEDGER-UnrealizedPnL", "1735.30", "USD"),
-      row("$LEDGER-UnrealizedPnL", "2635.10", "HKD"),
+      row("$LEDGER-UnrealizedPnL", "310.00", "EUR"),
       row("$LEDGER-RealizedPnL", "-412.80", "BASE"),
       row("$LEDGER-RealizedPnL", "-412.80", "USD"),
     ], [], "14:32");
@@ -299,18 +299,18 @@ describe("the account's answer", () => {
   });
 
   it("carries IBKR's exchange rates, base units per unit of each currency", () => {
-    // the owner's decision on #469: so a holding in HKD can be weighed in the base
+    // the owner's decision on #469: so a holding in another currency can be weighed in the base
     const got = accountAnswer("U0000000", [
       row("NetLiquidation", "184523.17", "USD"),
       row("$LEDGER-ExchangeRate", "1.00", "BASE"),
       row("$LEDGER-ExchangeRate", "1.00", "USD"),
-      row("$LEDGER-ExchangeRate", "0.1284", "HKD"),
-      row("$LEDGER-ExchangeRate", "0.7712", "SGD"),
-      row("$LEDGER-ExchangeRate", "0", "EUR"),          // not a rate
+      row("$LEDGER-ExchangeRate", "1.0841", "EUR"),
+      row("$LEDGER-ExchangeRate", "1.1307", "CHF"),
+      row("$LEDGER-ExchangeRate", "0", "GBP"),          // not a rate
       row("$LEDGER-ExchangeRate", "", "JPY"),           // nor is nothing
-      row("$LEDGER-ExchangeRate", "-1", "CHF"),
+      row("$LEDGER-ExchangeRate", "-1", "AUD"),
     ], [], null);
-    expect(got.exchange_rates).toEqual({ USD: 1, HKD: 0.1284, SGD: 0.7712 });
+    expect(got.exchange_rates).toEqual({ USD: 1, EUR: 1.0841, CHF: 1.1307 });
   });
 
   it("gives the base currency a rate of 1 though no row says so", () => {

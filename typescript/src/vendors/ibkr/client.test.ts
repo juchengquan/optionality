@@ -519,14 +519,14 @@ describe("the account read (ADR 0030)", () => {
     const got = await c.account();
     expect(got).toMatchObject({
       account: "U•••••000", paper: false, base_currency: "USD", updated_at: "14:32",
-      // the P&L from $LEDGER's BASE row, which counts the HKD stock's; the USD row does not
+      // the P&L from $LEDGER's BASE row, which counts the EUR stock's; the USD row does not
       totals: {
-        net_liquidation: 184523.17, total_cash: 61230.55, unrealized_pnl: 2071.4,
+        net_liquidation: 184523.17, total_cash: 64829.28, unrealized_pnl: 2071.37,
         realized_pnl: -412.8,
       },
     });
     expect(got.holdings.map((h) => [h.symbol, h.sec_type, h.currency, h.position])).toEqual([
-      ["ACME", "STK", "USD", 300], ["GLOBEX", "STK", "USD", 120], ["INITECH", "STK", "HKD", 2000],
+      ["ACME", "STK", "USD", 300], ["GLOBEX", "STK", "USD", 120], ["INITECH", "STK", "EUR", 50],
       ["ACME", "OPT", "USD", 4], ["ACME", "OPT", "USD", -6],
     ]);
     // IB's averageCost for an option is per contract; the answer's is per share
@@ -534,7 +534,7 @@ describe("the account read (ADR 0030)", () => {
     // a stock's strike "0" and right "0" are no strike and no side; an option's "45" is 45
     expect(got.holdings[0]).toMatchObject({ strike: null, right: null, multiplier: null });
     expect(got.holdings[3]).toMatchObject({ strike: 45, right: "C", multiplier: 100 });
-    expect(got.exchange_rates).toEqual({ USD: 1, HKD: 0.1284, SGD: 0.7712 });
+    expect(got.exchange_rates).toEqual({ USD: 1, EUR: 1.0841, CHF: 1.1307 });
   });
 
   it("sends exactly a subscribe naming the account, then its unsubscribe", async () => {
@@ -568,7 +568,7 @@ describe("the account read (ADR 0030)", () => {
   });
 
   it("holds a read of ANOTHER account until the running one has unsubscribed", async () => {
-    // IB allows one account subscription per client at a time: a second subscribe while the first
+    // IB allows a single account subscription per client at a time: a second subscribe while the first
     // runs would take its place, and the first read would never hear its download end
     const c = await connected({ conversation: "account-several" });
     const [first, second] = await Promise.all([c.account("U0000000"), c.account("U0000001")]);

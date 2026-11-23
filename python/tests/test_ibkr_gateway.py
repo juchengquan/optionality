@@ -63,7 +63,7 @@ async def unsubscribed(gateway: Any) -> None:
 
 
 async def account_read(client: IbkrClient, gateway: Any, wanted: str | None) -> dict[str, Any]:
-    """One account read in the expectation's terms: the answer, `{"$refused": message}` where the
+    """An account read in the expectation's terms: the answer, `{"$refused": message}` where the
     client refused to choose, or `{"$throws": message}` — and the subscriptions it sent."""
     before = len(subscriptions(gateway))
     got: Any

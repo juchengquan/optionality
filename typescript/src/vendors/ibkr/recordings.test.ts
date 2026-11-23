@@ -157,6 +157,33 @@ describe("provenance, which is the point of the files", () => {
   });
 });
 
+describe("a constructed account that adds up", () => {
+  // invented figures are still held to arithmetic: a BASE cash that is not the sum of the
+  // currencies' cash at their own rates is a fixture a reader would trust and should not
+  it("states a BASE cash, and a TotalCashValue, that are each currency's cash at its rate", () => {
+    for (const name of conversationNames()) {
+      for (const e of loadConversation(name).exchanges) {
+        if (e.request !== "reqAccountUpdates") continue;
+        const ledger = (key: string) => new Map(e.replies
+          .filter((m) => m[0] === "6" && m[2] === `$LEDGER-${key}`)
+          .map((m) => [m[4]!, Number(m[3])]));
+        const cash = ledger("CashBalance");
+        const rates = ledger("ExchangeRate");
+        if (!cash.has("BASE")) continue;
+        let sum = 0;
+        for (const [currency, amount] of cash) {
+          if (currency === "BASE") continue;
+          expect(rates.has(currency), `${name}: no rate for ${currency}`).toBe(true);
+          sum += amount * rates.get(currency)!;
+        }
+        expect(cash.get("BASE")!, `${name}: BASE cash`).toBeCloseTo(sum, 2);
+        const total = e.replies.find((m) => m[0] === "6" && m[2] === "TotalCashValue");
+        expect(Number(total![3]), `${name}: TotalCashValue`).toBeCloseTo(sum, 2);
+      }
+    }
+  });
+});
+
 describe("nothing of the owner's", () => {
   /** Every account id a conversation names, wherever a message carries one: managedAccounts'
    *  list, an account value's account (and AccountCode's value, which is the id itself), a

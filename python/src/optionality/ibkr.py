@@ -269,7 +269,7 @@ class IbkrAccount(TypedDict):
     updated_at: str | None
     totals: IbkrTotals
     #: IBKR's exchange rates from `$LEDGER-ExchangeRate`: units of the base currency per ONE unit of
-    #: each currency, by its code ({"USD": 1, "HKD": 0.1284} on a USD base). BASE itself is left
+    #: each currency, by its code ({"USD": 1, "EUR": 1.0841} on a USD base). BASE itself is left
     #: out, the base currency is always 1, and a rate that is not a positive number is left out.
     exchange_rates: dict[str, float]
     holdings: list[IbkrHolding]
@@ -1010,7 +1010,7 @@ class IbkrClient:
         self._waiting: dict[int, tuple[Client, Callable[[_Incoming], None]]] = {}
         self._next_id = 1
         #: the account read in flight, which a second caller for the same account joins: IB allows
-        #: one account subscription per client at a time
+        #: a single account subscription per client at a time
         self._reading: _AccountRead | None = None
 
     @property
@@ -1047,7 +1047,7 @@ class IbkrClient:
         raises `IbkrUnreachable` (a ConnectionError) in the connect's own words; a plain ConnectionError
         is a read that failed once it began: a connection that closed under it, or a deadline
         (`request_timeout_ms`), in its own words, the unsubscribe sent on that path too. A second caller while a read of the same account
-        runs JOINS it: IB allows one account subscription per client at a time."""
+        runs JOINS it: IB allows a single account subscription per client at a time."""
         while True:
             # taken afresh on every turn, and the account chosen afresh from what THAT session
             # names: the read waited on below may have ended because its connection went

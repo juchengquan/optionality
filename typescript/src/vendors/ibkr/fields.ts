@@ -169,7 +169,7 @@ export interface IbkrAccount {
   updated_at: string | null;
   totals: IbkrTotals;
   /** IBKR's exchange rates from `$LEDGER-ExchangeRate`: units of the base currency per ONE unit
-   *  of each currency, by its code (`{ USD: 1, HKD: 0.1284 }` on a USD base), so a holding in
+   *  of each currency, by its code (`{ USD: 1, EUR: 1.0841 }` on a USD base), so a holding in
    *  another currency can be weighed in the base. BASE itself is left out, the base currency is
    *  always 1, and a rate that is not a positive number is left out. */
   exchange_rates: Record<string, number>;
@@ -362,7 +362,7 @@ export function holdingFrom(row: PortfolioRow): IbkrHolding {
  *  `-S` segment row is another key, never read). A total is read, in this order, from its plain
  *  `BASE` row — summed over every currency, in the base — then from the ledger's (`$LEDGER-…`
  *  BASE, which is where the live gateway sends the P&L), then from its plain row in the base
- *  code: UnrealizedPnL in a USD row alone would leave out an HKD holding's.
+ *  code: UnrealizedPnL in a USD row alone would leave out a EUR holding's.
  *
  *  The exchange rates are the ledger's, by currency, BASE itself left out and the base currency
  *  always 1; a rate that is not a positive number is no rate. */

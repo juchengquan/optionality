@@ -929,23 +929,23 @@ def test_the_account_read_answers_totals_and_holdings_with_the_account_masked() 
         "USD",
         "14:32",
     )
-    # the P&L from $LEDGER's BASE row, which counts the HKD stock's; the USD row does not
+    # the P&L from $LEDGER's BASE row, which counts the EUR stock's; the USD row does not
     assert got["totals"] == {
         "net_liquidation": 184523.17,
-        "total_cash": 61230.55,
-        "unrealized_pnl": 2071.4,
+        "total_cash": 64829.28,
+        "unrealized_pnl": 2071.37,
         "realized_pnl": -412.8,
     }
     assert [(h["symbol"], h["sec_type"], h["currency"], h["position"]) for h in got["holdings"]] == [
         ("ACME", "STK", "USD", 300),
         ("GLOBEX", "STK", "USD", 120),
-        ("INITECH", "STK", "HKD", 2000),
+        ("INITECH", "STK", "EUR", 50),
         ("ACME", "OPT", "USD", 4),
         ("ACME", "OPT", "USD", -6),
     ]
     # IB's averageCost for an option is per contract; the answer's is per share
     assert got["holdings"][3]["average_cost"] == 2.625
-    assert got["exchange_rates"] == {"USD": 1, "HKD": 0.1284, "SGD": 0.7712}
+    assert got["exchange_rates"] == {"USD": 1, "EUR": 1.0841, "CHF": 1.1307}
 
 
 def test_the_account_read_sends_a_subscribe_then_its_unsubscribe_and_nothing_else() -> None:
@@ -982,7 +982,7 @@ def test_two_callers_of_the_account_read_send_one_subscribe() -> None:
 
 
 def test_a_read_of_another_account_waits_until_the_running_one_has_unsubscribed() -> None:
-    """IB allows one account subscription per client at a time: a second subscribe while the first
+    """IB allows a single account subscription per client at a time: a second subscribe while the first
     runs would take its place, and the first read would never hear its download end."""
 
     async def read(client: IbkrClient, gateway: FakeGateway) -> Any:

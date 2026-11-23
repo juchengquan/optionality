@@ -65,7 +65,7 @@ export interface QuoteExchange {
   onCancel?: Message[];
 }
 
-/** One account subscription and everything the gateway sent because of it (ADR 0030). Matched on
+/** An account subscription and everything the gateway sent because of it (ADR 0030). Matched on
  *  the account the subscribe names (`ACCOUNT_AT`), since the account's messages carry no request
  *  id; `onCancel` is what the gateway said to the unsubscribe. */
 export interface AccountExchange {

@@ -304,7 +304,7 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   also READS THE ACCOUNT, read-only: `IbkrClient.account(wanted?)` sends reqAccountUpdates (6) to
   subscribe, collects ACCT_VALUE (6), PORTFOLIO_VALUE (7), ACCT_UPDATE_TIME (8) until
   ACCT_DOWNLOAD_END (54), and unsubscribes — at a deadline too — the account chosen from
-  MANAGED_ACCTS (15, with the handshake), a second caller joining a read that runs, one account of
+  MANAGED_ACCTS (15, with the handshake), a second caller joining a read that runs, an account of
   several only by name (`IbkrAccountRefused` otherwise), a gateway it cannot reach
   `IbkrUnreachable`, the id leaving the client only masked — its letter prefix, five bullets, at
   most its last three (`U•••••567`) — nothing stored, never asked by the sweep; a read of another
