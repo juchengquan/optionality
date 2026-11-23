@@ -56,8 +56,13 @@ fails it with its own words, and the unsubscribe is sent on that path too. IB al
 subscription per client at a time, so a second caller for the same account while a read runs JOINS
 it; a caller for another account waits for it to finish, then takes the connection — and chooses
 the account — afresh, since the read it waited on may have ended because the connection went. A
-read whose connection goes fails at once, in its own words, rather than at its deadline. Never asked by the sweep, nor by anything
-on a timer: it is read when asked for (#470), over the price feed's connection and client id.
+read whose connection goes fails at once, in its own words, rather than at its deadline. A read that
+cannot connect at all throws `IbkrUnreachable` (in Python a `ConnectionError` subclass) in the
+connect's own words — a refused session, a refused connection, a handshake out of time, a socket a
+logged-out gateway closed — distinct from a read that failed once it began. Error 2100 ("API client
+has been unsubscribed from account data"), which answers every unsubscribe, is not the read's, even
+when it arrives during the next one. Never asked by the sweep, nor by anything on a timer: it is
+read when asked for (#470), over the price feed's connection and client id.
 
 **Which account**: the login's only one; of several, the one `wanted` names; refused, with the ids
 masked, where several are managed and none is named ("several accounts on this login; set
@@ -65,29 +70,47 @@ IBKR_ACCOUNT to one of …") or where the one named is not on the login. A refus
 (`IbkrAccountRefused`), a fact about the configuration rather than the gateway's health, and it
 sends nothing.
 
-**Masked**: the account id leaves the client only masked — its leading letters and its last three
-characters kept, every character between replaced by `•` (`U1234567` is `U••••567`, `DU1234567`
-is `DU••••567`; the owner's decision on #469: the letters say what kind of account, the last three
-which one) — in the answer, every error and every log line. At least one character after the
-letters is always hidden, so a short id shows at most all but one of its last three (`U001` is
-`U•01`, `U1` is `U•`), and an id that is letters through and through has no prefix kept: neither
-rule can ever show an id whole. `paper` says
-whether it is a paper account (an id that starts `DU`).
+**Masked**: the account id leaves the client only masked — its leading letters, then always FIVE
+`•`, then at most its last three characters (`U1234567` is `U•••••567`, `DU1234567` is
+`DU•••••567`; the owner's decisions on #469: the letters say what kind of account, the last three
+which one, and five bullets whatever the length so the mask does not tell the id's length) — in the
+answer, every error and every log line. At least one character after the letters is always hidden,
+so a short id shows at most all but one of its last three (`U001` is `U•••••01`, `U1` is `U•••••`),
+and an id that is letters through and through has no prefix kept: neither rule can ever show an id
+whole. `paper` says whether it is a paper account (an id that starts `DU`).
 
 **The answer**: the masked account, `paper`, the base currency (the one NetLiquidation is sent in);
-`updated_at`, ACCT_UPDATE_TIME as sent — a time of day with no date; the totals NetLiquidation,
-TotalCashValue, UnrealizedPnL and RealizedPnL in the base currency, each from its `BASE` row where the
-gateway sends one and otherwise from its row in the base code; and every PORTFOLIO_VALUE row as a
-holding, in its own currency, its average cost PER SHARE (IB's `averageCost` includes the
+`updated_at`, ACCT_UPDATE_TIME as sent — `HH:MM`, a time of day with no date; the totals
+NetLiquidation, TotalCashValue, UnrealizedPnL and RealizedPnL in the base currency, each read from
+its plain `BASE` row if a gateway sends one, then from the ledger's `$LEDGER-…` BASE row, then from
+its plain row in the base code; IBKR's exchange rates, `exchange_rates`, from the
+`$LEDGER-ExchangeRate` rows — base units per one unit of each currency, BASE itself left out, the
+base currency 1, a rate that is not a positive number left out (the owner's decision on #469, so
+holdings in another currency can be weighed and sorted in the base); and every PORTFOLIO_VALUE row
+as a holding, in its own currency, its average cost PER SHARE (IB's `averageCost` includes the
 multiplier). The mapping is pure, in `ibkr/fields.ts`, ported to `ibkr.py` and held in both
 directions by the vendor corpus.
+
+**What the live gateway sends**, measured by a capture on 2026-11-23 (server version 157, three
+reads), whose figures are not in the repository: the greeting, then MANAGED_ACCTS (one account, `U`
+and seven digits), nextValidId, and notices 2104, 2106 and 2158 against -1; on subscribe, every
+ACCT_VALUE (version 2, each naming the account), then the PORTFOLIO_VALUE rows (version 8, twenty
+fields) with ACCT_UPDATE_TIME interleaved, then the download end, about 10 ms after the subscribe;
+after each unsubscribe exactly one message, error 2100, and no late download end. NetLiquidation and
+TotalCashValue come plain, in USD only, beside `-S` segment rows; the P&L comes ONLY as
+`$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL`, for BASE and each currency. A stock's row has
+strike `0`, right `0`, expiry and multiplier empty; an option's a whole strike (`6800`), right `C` or
+`P`, multiplier `100`, a signed whole position, and an `averageCost` about 136 times its mark — the
+cost per contract, the mark per share. The marks moved between reads 70 seconds apart, and so did
+the update time.
 
 **Nothing stored**: no table, no column, no sample. The read answers and is gone.
 
 **Recordings constructed, never captured into the repository**, and `parseConversation` refuses a
 conversation that reads the account and says it was recorded. The conversations committed in
-`testdata/vendors/ibkr-gateway/` are built in ibapi's layout with invented symbols, quantities,
-prices, totals and placeholder accounts, each saying so in its `provenance`. A capture from the live
+`testdata/vendors/ibkr-gateway/` are built in ibapi's layout, checked against that capture, with
+invented symbols, quantities, prices, totals, exchange rates and placeholder accounts, each saying
+so in its `provenance`. A capture from the live
 gateway, run by the orchestrating session with the owner's go-ahead on a client id that is not the
 service's, is kept on the owner's machine only long enough to learn the exact layout and the
 `ACCT_VALUE` keys and currencies, then deleted. `recordings.test.ts` refuses any account id but the
@@ -98,8 +121,8 @@ placeholders, in every message that carries one.
 - The market-data invariant gains no call: an account read asks for no market data. Its marks are
   IBKR's, refreshed at IBKR's pace (a faster source for them is a later decision, once that pace is
   measured).
-- A holding closed today can arrive with a position of 0 and its realised P&L; the read keeps every
-  row as sent, and what a page shows of it is the page's decision.
+- A holding closed today may arrive with a position of 0 and its realised P&L (the capture had
+  none); the read keeps every row as sent, and what a page shows of it is the page's decision.
 - Python reads the account messages field by field rather than through `ib_async`'s readers, whose
   PORTFOLIO_VALUE drops a whole row over one empty figure; `ib_async`'s DEBUG log writes every wire
   field, the account id included, which is one more reason the Python backend holds every library at

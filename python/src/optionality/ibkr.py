@@ -83,6 +83,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypedDict, cast
 
 from optionality.contract import parse_spx_code
+from optionality.js import _WS as _JS_WHITESPACE
+from optionality.js import number
 from optionality.quote import Batch, Quote, mid_price
 
 if TYPE_CHECKING:
@@ -239,11 +241,21 @@ class IbkrAccountRefused(Exception):
     about the configuration rather than the gateway's health; its message carries the ids MASKED."""
 
 
+class IbkrUnreachable(ConnectionError):
+    """The account read could not reach IB Gateway at all (`client.ts`' `IbkrUnreachable`): the
+    connect failed, in its own words — a refused session ("IB Gateway refused the session: 326 …"), a
+    refused connection ("could not reach IB Gateway at …"), a handshake that did not complete in time,
+    or a gateway that closed the socket during the handshake. Distinct from a read that failed once it
+    began (its deadline, or its connection closing under it), a plain ConnectionError, and from
+    `IbkrAccountRefused`. Raised by `account()` only: `fetch_quotes` and `reachable()` are as they
+    were."""
+
+
 class IbkrAccount(TypedDict):
     """What the account read answers, read once and never stored, the id only ever MASKED."""
 
-    #: the account id, masked: its leading letters and last three characters kept, every character
-    #: between replaced by `•` (`U1234567` is `U••••567`)
+    #: the account id, masked: its leading letters, then always five `•`, then at most its last three
+    #: characters (`U1234567` is `U•••••567`)
     account: str
     #: IB's paper accounts, whose ids start `DU`
     paper: bool
@@ -253,6 +265,10 @@ class IbkrAccount(TypedDict):
     #: zone, which is all the message carries; None where none arrived before the end
     updated_at: str | None
     totals: IbkrTotals
+    #: IBKR's exchange rates from `$LEDGER-ExchangeRate`: units of the base currency per ONE unit of
+    #: each currency, by its code ({"USD": 1, "HKD": 0.1284} on a USD base). BASE itself is left
+    #: out, the base currency is always 1, and a rate that is not a positive number is left out.
+    exchange_rates: dict[str, float]
     holdings: list[IbkrHolding]
 
 
@@ -267,6 +283,17 @@ ACCOUNT_TOTALS: dict[str, str] = {
 
 #: the tag ACCT_VALUE gives a figure summed over every currency and expressed in the base one
 BASE = "BASE"
+
+#: what stands for the hidden part of an account id: always five, so the mask does not say how long
+#: the id is (the owner's decision on #469)
+MASK = "•••••"
+
+#: the prefix of the ledger's keys: the live gateway sends the P&L only as `$LEDGER-UnrealizedPnL` and
+#: `$LEDGER-RealizedPnL`, a row for BASE and one per currency (measured on 2026-11-23)
+LEDGER = "$LEDGER-"
+
+#: the ledger key whose rows are IBKR's exchange rates: base units per unit of the row's currency
+EXCHANGE_RATE = "$LEDGER-ExchangeRate"
 
 #: the letters an account id's prefix is made of: ASCII only, as `fields.ts`' `/^[A-Za-z]*/`
 _LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
@@ -305,18 +332,18 @@ def managed_accounts(accounts: str) -> list[str]:
 
 
 def mask_account(account_id: str) -> str:
-    """An account id as it may leave the client: every character after its leading letters but the
-    last three replaced by `•`, so the owner can tell two accounts apart and nobody else learns either
-    — the leading letters kept, which say what KIND of account it is (`fields.ts`' `maskAccount`, the owner's
-    decision on #469): `U1234567` is `U••••567`. At least one character after the letters is always
-    hidden (`U001` is `U•01`), and an id of letters alone has no prefix kept: neither rule may ever
-    show an id whole."""
+    """An account id as it may leave the client (`fields.ts`' `maskAccount`): its leading letters,
+    which say what KIND of account it is, then always FIVE `•`, then at most its last three
+    characters, which tell two apart — `U1234567` is `U•••••567`, the owner's decisions on #469: five
+    whatever the length, so the id's length is hidden too. At least one character after the letters
+    is always hidden (`U001` is `U•••••01`), and an id of letters alone has no prefix kept: neither
+    rule may ever show an id whole."""
     letters = len(account_id) - len(account_id.lstrip(_LETTERS))
     prefix = "" if letters == len(account_id) else account_id[:letters]
     rest = account_id[len(prefix) :]
     # at most three shown, and never all of them: a short id would otherwise come out whole
     showing = max(0, min(3, len(rest) - 1))
-    return prefix + "•" * (len(rest) - showing) + rest[len(rest) - showing :]
+    return prefix + MASK + rest[len(rest) - showing :]
 
 
 def is_paper(account_id: str) -> bool:
@@ -351,13 +378,12 @@ def per_share_cost(average_cost: float | None, multiplier: float | None) -> floa
 
 
 def _figure_of(text: str) -> float | None:
-    """A figure out of a text field, or None where it carries none (`fields.ts`' `figureOf`)."""
-    if not text.strip():
+    """A figure out of a text field, or None where it carries none (`fields.ts`' `figureOf`): read
+    by JavaScript's `Number` (`optionality.js`), not by `float`, which reads "1_00" as 100 and
+    refuses "0x1C" — the TypeScript reads them as no number and 28. Empty and non-finite are none."""
+    if not text.strip(_JS_WHITESPACE):
         return None
-    try:
-        value = float(text)
-    except ValueError:
-        return None
+    value = number(text)
     return value if math.isfinite(value) else None
 
 
@@ -396,22 +422,36 @@ def account_answer(
     account_id: str, values: list[AccountValueRow], holdings: list[IbkrHolding], updated_at: str | None
 ) -> IbkrAccount:
     """The account's answer from what its read collected (`fields.ts`' `accountAnswer`): the base
-    currency is the one NetLiquidation is sent in, and a total is read from its `BASE` row where the
-    gateway sends one, and otherwise from its row in the base currency."""
+    currency is the one NetLiquidation is sent in, and a total is read from its plain `BASE` row, then
+    the ledger's `$LEDGER-…` BASE row (where the live gateway sends the P&L), then its plain row in
+    the base code. The exchange rates are the ledger's by currency, BASE left out, the base 1, and a
+    rate that is not a positive number left out."""
     net = next((v for v in values if v["key"] == "NetLiquidation" and v["currency"] != BASE), None)
     base = net["currency"] if net is not None and net["currency"].strip() else None
     totals: dict[str, float | None] = {}
     for key, name in ACCOUNT_TOTALS.items():
         row = next((v for v in values if v["key"] == key and v["currency"] == BASE), None)
+        if row is None:
+            row = next((v for v in values if v["key"] == LEDGER + key and v["currency"] == BASE), None)
         if row is None and base is not None:
             row = next((v for v in values if v["key"] == key and v["currency"] == base), None)
         totals[name] = None if row is None else _figure_of(row["value"])
+    exchange_rates: dict[str, float] = {}
+    for v in values:
+        if v["key"] != EXCHANGE_RATE or v["currency"] == BASE or not v["currency"].strip():
+            continue
+        rate = _figure_of(v["value"])
+        if rate is not None and rate > 0:
+            exchange_rates[v["currency"]] = rate
+    if base is not None:
+        exchange_rates[base] = 1.0
     return {
         "account": mask_account(account_id),
         "paper": is_paper(account_id),
         "base_currency": base,
         "updated_at": updated_at,
         "totals": cast(IbkrTotals, totals),
+        "exchange_rates": exchange_rates,
         "holdings": holdings,
     }
 
@@ -1001,13 +1041,17 @@ class IbkrClient:
         Which account: the login's one managed account; or, where it has several, the one `wanted`
         names. Refused with `IbkrAccountRefused`, every id MASKED, where several are managed and
         `wanted` is unset, or where `wanted` names none of them. A gateway that cannot be reached
-        raises as `fetch_quotes` does (ConnectionError), and so does a deadline
+        raises `IbkrUnreachable` (a ConnectionError) in the connect's own words; a plain ConnectionError
+        is a read that failed once it began: a connection that closed under it, or a deadline
         (`request_timeout_ms`), in its own words, the unsubscribe sent on that path too. A second caller while a read of the same account
         runs JOINS it: IB allows one account subscription per client at a time."""
         while True:
             # taken afresh on every turn, and the account chosen afresh from what THAT session
             # names: the read waited on below may have ended because its connection went
-            client = await self._connected()
+            try:
+                client = await self._connected()
+            except ConnectionError as err:
+                raise IbkrUnreachable(str(err)) from err
             reader = client.wrapper
             listed = reader.accounts if isinstance(reader, _Reader) else ""
             choice = choose_account(managed_accounts(listed), wanted)

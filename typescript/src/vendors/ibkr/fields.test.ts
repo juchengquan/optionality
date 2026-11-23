@@ -141,24 +141,26 @@ const STOCK_ROW: PortfolioRow = {
 };
 
 describe("the account id, which leaves the client only masked", () => {
-  it("keeps the leading letters and the last three, every character between masked", () => {
-    // the owner's decision on #469: the prefix says which kind of account, the last three which one
-    expect(maskAccount("U1234567")).toBe("U••••567");
-    expect(maskAccount("DU0000000")).toBe("DU••••000");
+  it("keeps the leading letters, then FIVE bullets, then the last three", () => {
+    // the owner's decisions on #469: the prefix says which kind of account, the last three which
+    // one, and the bullets are always five, so the mask does not say how long the id is either
+    expect(maskAccount("U1234567")).toBe("U•••••567");
+    expect(maskAccount("DU1234567")).toBe("DU•••••567");
     expect(maskAccount("U12345678")).toBe("U•••••678");
+    expect(maskAccount("U12345")).toBe("U•••••345");
     expect(maskAccount("F1234A567")).toBe("F•••••567");
   });
 
   it("always hides at least one character after the letters, however short the id", () => {
     // review round 2: "U001" came out whole
-    expect(maskAccount("U123")).toBe("U•23");
-    expect(maskAccount("U12")).toBe("U•2");
-    expect(maskAccount("U1")).toBe("U•");
-    expect(maskAccount("")).toBe("");
+    expect(maskAccount("U001")).toBe("U•••••01");
+    expect(maskAccount("U12")).toBe("U•••••2");
+    expect(maskAccount("U1")).toBe("U•••••");
+    expect(maskAccount("")).toBe("•••••");
   });
 
-  it("never shows an id that is ALL letters whole: only its last three", () => {
-    expect(maskAccount("ABCDEFG")).toBe("••••EFG");
+  it("never shows an id that is ALL letters whole: no prefix kept, only its last three", () => {
+    expect(maskAccount("ABCDEFG")).toBe("•••••EFG");
   });
 
   it("calls an account paper where IB does: an id that starts DU", () => {
@@ -186,14 +188,14 @@ describe("which account is read", () => {
 
   it("is refused, never guessed, where several are managed and none is named", () => {
     expect(chooseAccount(["U0000000", "U0000001"], null)).toEqual({
-      refused: "several accounts on this login; set IBKR_ACCOUNT to one of U••••000, U••••001",
+      refused: "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001",
     });
   });
 
   it("is refused where the one named is not on the login, that one masked too", () => {
     const got = chooseAccount(["U0000000"], "U7654321");
     expect(got).toEqual({
-      refused: "IBKR_ACCOUNT (U••••321) names no account on this login, which has U••••000",
+      refused: "IBKR_ACCOUNT (U•••••321) names no account on this login, which has U•••••000",
     });
     expect(JSON.stringify(got)).not.toContain("7654321");
   });
@@ -259,13 +261,62 @@ describe("the account's answer", () => {
       row("AccountCode", "U0000000", ""),
     ], [], "14:32");
     expect(got).toEqual({
-      account: "U••••000", paper: false, base_currency: "USD", updated_at: "14:32",
+      account: "U•••••000", paper: false, base_currency: "USD", updated_at: "14:32",
       totals: {
         net_liquidation: 184523.17, total_cash: 61230.55, unrealized_pnl: 2875.4,
         realized_pnl: -412.8,
       },
-      holdings: [],
+      exchange_rates: { USD: 1 }, holdings: [],
     });
+  });
+
+  it("reads the P&L from $LEDGER's BASE row, which is all the live gateway sends", () => {
+    // measured on 2026-11-23: no plain UnrealizedPnL or RealizedPnL at all, only $LEDGER-…, in
+    // BASE and each currency; and NetLiquidation and TotalCashValue plain, in USD only, beside
+    // their `-S` segment rows, which are not the account's total
+    const got = accountAnswer("U0000000", [
+      row("NetLiquidation", "184523.17", "USD"),
+      row("NetLiquidation-S", "184000.00", "USD"),
+      row("TotalCashValue", "61230.55", "USD"),
+      row("TotalCashValue-S", "61000.00", "USD"),
+      row("$LEDGER-UnrealizedPnL", "2071.40", "BASE"),
+      row("$LEDGER-UnrealizedPnL", "1735.30", "USD"),
+      row("$LEDGER-UnrealizedPnL", "2635.10", "HKD"),
+      row("$LEDGER-RealizedPnL", "-412.80", "BASE"),
+      row("$LEDGER-RealizedPnL", "-412.80", "USD"),
+    ], [], "18:07");
+    expect(got.totals).toEqual({
+      net_liquidation: 184523.17, total_cash: 61230.55, unrealized_pnl: 2071.4,
+      realized_pnl: -412.8,
+    });
+  });
+
+  it("prefers a plain BASE row to $LEDGER's, should a gateway send one", () => {
+    const got = accountAnswer("U0000000", [
+      row("UnrealizedPnL", "1.00", "BASE"), row("$LEDGER-UnrealizedPnL", "2.00", "BASE"),
+    ], [], null);
+    expect(got.totals.unrealized_pnl).toBe(1);
+  });
+
+  it("carries IBKR's exchange rates, base units per unit of each currency", () => {
+    // the owner's decision on #469: so a holding in HKD can be weighed in the base
+    const got = accountAnswer("U0000000", [
+      row("NetLiquidation", "184523.17", "USD"),
+      row("$LEDGER-ExchangeRate", "1.00", "BASE"),
+      row("$LEDGER-ExchangeRate", "1.00", "USD"),
+      row("$LEDGER-ExchangeRate", "0.1284", "HKD"),
+      row("$LEDGER-ExchangeRate", "0.7712", "SGD"),
+      row("$LEDGER-ExchangeRate", "0", "EUR"),          // not a rate
+      row("$LEDGER-ExchangeRate", "", "JPY"),           // nor is nothing
+      row("$LEDGER-ExchangeRate", "-1", "CHF"),
+    ], [], null);
+    expect(got.exchange_rates).toEqual({ USD: 1, HKD: 0.1284, SGD: 0.7712 });
+  });
+
+  it("gives the base currency a rate of 1 though no row says so", () => {
+    const got = accountAnswer("U0000000", [row("NetLiquidation", "1.00", "USD")], [], null);
+    expect(got.exchange_rates).toEqual({ USD: 1 });
+    expect(accountAnswer("U0000000", [], [], null).exchange_rates).toEqual({});
   });
 
   it("says nothing of a total, or of the base, the gateway did not send", () => {

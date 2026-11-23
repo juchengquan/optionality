@@ -18,7 +18,14 @@ from typing import Any
 import pytest
 from fake_gateway import FakeGateway, frame, load_conversation, read_frames, start_fake_gateway
 
-from optionality.ibkr import INDEX_EXCHANGE, IbkrAccountRefused, IbkrClient, TwsContract, contract_for
+from optionality.ibkr import (
+    INDEX_EXCHANGE,
+    IbkrAccountRefused,
+    IbkrClient,
+    IbkrUnreachable,
+    TwsContract,
+    contract_for,
+)
 
 OPTION = "US.SPXW261218C8100000"
 #: the model's computation for OPTION, as the gateway sent it (tick 13, normal-with-greeks)
@@ -891,12 +898,12 @@ def test_the_account_read_answers_totals_and_holdings_with_the_account_masked() 
 
     got = against("account-stocks-and-options", read)
     assert (got["account"], got["paper"], got["base_currency"], got["updated_at"]) == (
-        "U••••000",
+        "U•••••000",
         False,
         "USD",
-        "14:32",
+        "18:07",
     )
-    # UnrealizedPnL from its BASE row, which counts the EUR stock's; the USD row does not
+    # the P&L from $LEDGER's BASE row, which counts the HKD stock's; the USD row does not
     assert got["totals"] == {
         "net_liquidation": 184523.17,
         "total_cash": 61230.55,
@@ -905,12 +912,14 @@ def test_the_account_read_answers_totals_and_holdings_with_the_account_masked() 
     }
     assert [(h["symbol"], h["sec_type"], h["currency"], h["position"]) for h in got["holdings"]] == [
         ("ACME", "STK", "USD", 300),
-        ("INITECH", "STK", "EUR", 50),
-        ("ACME", "OPT", "USD", 4),
-        ("ACME", "OPT", "USD", -6),
+        ("GLOBEX", "STK", "USD", 120),
+        ("INITECH", "STK", "HKD", 2000),
+        ("ACME", "OPT", "USD", 2),
+        ("ACME", "OPT", "USD", -2),
     ]
     # IB's averageCost for an option is per contract; the answer's is per share
-    assert got["holdings"][2]["average_cost"] == 2.625
+    assert got["holdings"][3]["average_cost"] == 2.625
+    assert got["exchange_rates"] == {"USD": 1, "HKD": 0.1284, "SGD": 0.7712}
 
 
 def test_the_account_read_sends_a_subscribe_then_its_unsubscribe_and_nothing_else() -> None:
@@ -956,7 +965,7 @@ def test_a_read_of_another_account_waits_until_the_running_one_has_unsubscribed(
         return [first["account"], second["account"]], subscriptions(gateway)
 
     assert against("account-several", read) == (
-        ["U••••000", "U••••001"],
+        ["U•••••000", "U•••••001"],
         [["1", "U0000000"], ["0", "U0000000"], ["1", "U0000001"], ["0", "U0000001"]],
     )
 
@@ -984,10 +993,23 @@ def test_a_waiting_read_takes_the_connection_afresh_where_the_one_it_waited_on_l
 
     assert against(conversation, read, request_timeout_ms=5000) == (
         "IB Gateway's connection closed during the account read",
-        "U••••001",
+        "U•••••001",
         [["1", "U0000000"], ["1", "U0000001"], ["0", "U0000001"]],
         2,
     )
+
+
+def test_the_2100_answering_an_unsubscribe_is_ignored_though_it_arrives_during_the_next_read() -> None:
+    """Measured on 2026-11-23: every unsubscribe is answered with error 2100 against -1. A read begun
+    straight after the last one's unsubscribe has its subscribe on the wire before that 2100 comes
+    back, so the 2100 arrives DURING it, and must not end it."""
+
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        first = await client.account()
+        second = await client.account()
+        return first == second
+
+    assert against("account-stocks-and-options", read) is True
 
 
 def test_a_read_after_one_has_finished_subscribes_afresh() -> None:
@@ -1007,7 +1029,7 @@ def test_several_accounts_with_none_named_are_refused_masked_and_nothing_is_subs
         return str(raised.value), subscriptions(gateway)
 
     assert against("account-several", read) == (
-        "several accounts on this login; set IBKR_ACCOUNT to one of U••••000, U••••001",
+        "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001",
         [],
     )
 
@@ -1020,9 +1042,9 @@ def test_the_account_named_of_several_is_read_and_one_not_on_the_login_refused()
         return named["account"], named["totals"]["net_liquidation"], str(raised.value)
 
     assert against("account-several", read) == (
-        "U••••001",
+        "U•••••001",
         25010,
-        "IBKR_ACCOUNT (DU••••001) names no account on this login, which has U••••000, U••••001",
+        "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001",
     )
 
 
@@ -1049,6 +1071,45 @@ def test_closing_the_client_fails_an_account_read_at_once() -> None:
 
     got = against("account-never-ends", read, request_timeout_ms=5000)
     assert got == "IB Gateway's connection closed during the account read"
+
+
+def test_an_account_read_that_cannot_connect_raises_ibkr_unreachable_in_the_connects_words() -> None:
+    """Round 4, for the route (#473): a gateway the read cannot reach is neither a refusal to choose
+    an account nor a read that failed once it began."""
+
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        with pytest.raises(IbkrUnreachable) as raised:
+            await client.account()
+        return str(raised.value)
+
+    assert against("client-id-in-use", read).startswith("IB Gateway refused the session: 326 ")
+
+
+def test_an_account_read_with_nothing_on_the_port_raises_ibkr_unreachable() -> None:
+    async def read() -> str:
+        probe = await start_fake_gateway("normal-with-greeks")
+        port = probe.port
+        await probe.close()
+        client = IbkrClient(port=port, client_id=31419, connect_timeout_ms=1000)
+        try:
+            with pytest.raises(IbkrUnreachable) as raised:
+                await client.account()
+        finally:
+            client.close()
+        return str(raised.value)
+
+    words = asyncio.run(read())
+    assert words.startswith("could not reach IB Gateway at 127.0.0.1:")
+
+
+def test_a_read_that_failed_once_it_began_is_not_called_unreachable() -> None:
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        with pytest.raises(ConnectionError) as raised:
+            await client.account()
+        return raised.value
+
+    assert not isinstance(against("account-never-ends", read, request_timeout_ms=300), IbkrUnreachable)
+    assert issubclass(IbkrUnreachable, ConnectionError)
 
 
 def test_no_account_id_is_written_in_full_in_an_answer_an_error_or_a_log_line(

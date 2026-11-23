@@ -17,14 +17,14 @@
     {
       "wanted": null,
       "expect": {
-        "$refused": "several accounts on this login; set IBKR_ACCOUNT to one of U••••000, U••••001"
+        "$refused": "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001"
       },
       "sent": []
     },
     {
       "wanted": "U0000001",
       "expect": {
-        "account": "U••••001",
+        "account": "U•••••001",
         "paper": false,
         "base_currency": "USD",
         "updated_at": "11:47",
@@ -33,6 +33,9 @@
           "total_cash": 25010,
           "unrealized_pnl": 0,
           "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
         },
         "holdings": []
       },
@@ -54,7 +57,7 @@
     {
       "wanted": "DU0000001",
       "expect": {
-        "$refused": "IBKR_ACCOUNT (DU••••001) names no account on this login, which has U••••000, U••••001"
+        "$refused": "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001"
       },
       "sent": []
     }

@@ -1,24 +1,24 @@
 {
   "conversation": "account-paper",
-  "summary": "A paper account (its id starts DU): totals and one short option, then the download end.",
+  "summary": "A paper account (its id starts DU): totals and one short option, then the download end, and error 2100 after the unsubscribe.",
   "provenance": {
     "kind": "constructed",
     "why": "Nothing of the owner's account may be committed (the repository is public), so no account conversation is ever captured into it (ADR 0030).",
-    "built": "Laid out as ibapi 9.81's decoder at server version 157 (decoder.py processPortfolioValueMsg; updateAccountValue, updateAccountTime, accountDownloadEnd and managedAccounts by their EWrapper signatures) and its reqAccountUpdates encoder, read on 2026-11-23.",
-    "invented": "Every symbol, contract id, quantity, price, value, total, clock time and account id in this file is invented; the accounts are placeholders."
+    "built": "Laid out as ibapi 9.81's decoder at server version 157 (decoder.py processPortfolioValueMsg; updateAccountValue, updateAccountTime, accountDownloadEnd and managedAccounts by their EWrapper signatures) and its reqAccountUpdates encoder, read on 2026-11-23; then checked against a capture of the live gateway on 2026-11-23 (server version 157), whose figures are not in the repository: the handshake's order and notices, the keys and currency tags of the account values (the P&L only under $LEDGER-, NetLiquidation and TotalCashValue plain in USD beside their -S rows), the spellings of a stock's and an option's portfolio row, the update time interleaved with the portfolio, and error 2100 after each unsubscribe.",
+    "invented": "Every symbol, contract id, quantity, price, value, total, exchange rate, clock time and account id in this file is invented; the accounts are placeholders."
   },
   "ask": [],
   "accountReads": [
     {"wanted": null}
   ],
   "handshake": {
-    "greeting": ["157", "20261123 21:40:12 SGT"],
+    "greeting": ["157", "20261123 18:06:51 SGT"],
     "onStartApi": [
       ["15", "1", "DU0000000"],
       ["9", "1", "1"],
-      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm.nj"],
-      ["4", "2", "-1", "2104", "Market data farm connection is OK:usopt"],
-      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefhk"]
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm"],
+      ["4", "2", "-1", "2106", "HMDS data farm connection is OK:ushmds"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefil"]
     ]
   },
   "exchanges": [
@@ -30,26 +30,31 @@
         ["6", "2", "AccountCode", "DU0000000", "", "DU0000000"],
         ["6", "2", "AccountReady", "true", "", "DU0000000"],
         ["6", "2", "AccountType", "INDIVIDUAL", "", "DU0000000"],
-        ["6", "2", "Currency", "BASE", "BASE", "DU0000000"],
-        ["6", "2", "Currency", "USD", "USD", "DU0000000"],
-        ["6", "2", "ExchangeRate", "1.00", "BASE", "DU0000000"],
-        ["6", "2", "ExchangeRate", "1.00", "USD", "DU0000000"],
-        ["6", "2", "CashBalance", "998100.00", "BASE", "DU0000000"],
-        ["6", "2", "CashBalance", "998100.00", "USD", "DU0000000"],
         ["6", "2", "NetLiquidation", "1003250.00", "USD", "DU0000000"],
-        ["6", "2", "NetLiquidationByCurrency", "1003250.00", "BASE", "DU0000000"],
-        ["6", "2", "NetLiquidationByCurrency", "1003250.00", "USD", "DU0000000"],
+        ["6", "2", "NetLiquidation-S", "1003250.00", "USD", "DU0000000"],
         ["6", "2", "TotalCashValue", "998100.00", "USD", "DU0000000"],
-        ["6", "2", "UnrealizedPnL", "150.00", "BASE", "DU0000000"],
-        ["6", "2", "UnrealizedPnL", "150.00", "USD", "DU0000000"],
-        ["6", "2", "RealizedPnL", "0.00", "BASE", "DU0000000"],
-        ["6", "2", "RealizedPnL", "0.00", "USD", "DU0000000"],
-        ["7", "8", "100000301", "ACME", "OPT", "20261120", "50.0", "C", "100", "", "USD", "ACME  261120C00050000", "ACME", "-1", "1.15", "-115.0", "130.0", "15.0", "0.0", "DU0000000"],
+        ["6", "2", "TotalCashValue-S", "998100.00", "USD", "DU0000000"],
+        ["6", "2", "$LEDGER-Currency", "BASE", "BASE", "DU0000000"],
+        ["6", "2", "$LEDGER-CashBalance", "998100.00", "BASE", "DU0000000"],
+        ["6", "2", "$LEDGER-ExchangeRate", "1.00", "BASE", "DU0000000"],
+        ["6", "2", "$LEDGER-NetLiquidationByCurrency", "1003250.00", "BASE", "DU0000000"],
+        ["6", "2", "$LEDGER-UnrealizedPnL", "15.00", "BASE", "DU0000000"],
+        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "BASE", "DU0000000"],
+        ["6", "2", "$LEDGER-Currency", "USD", "USD", "DU0000000"],
+        ["6", "2", "$LEDGER-CashBalance", "998100.00", "USD", "DU0000000"],
+        ["6", "2", "$LEDGER-ExchangeRate", "1.00", "USD", "DU0000000"],
+        ["6", "2", "$LEDGER-NetLiquidationByCurrency", "1003250.00", "USD", "DU0000000"],
+        ["6", "2", "$LEDGER-UnrealizedPnL", "15.00", "USD", "DU0000000"],
+        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "USD", "DU0000000"],
+        ["8", "1", "09:05"],
+        ["7", "8", "100000301", "ACME", "OPT", "20261120", "50", "C", "100", "CBOE", "USD", "ACME  261120C00050000", "ACME", "-1", "1.15", "-115.00", "130.0", "15.00", "0.0", "DU0000000"],
         ["8", "1", "09:05"],
         ["54", "1", "DU0000000"]
       ],
       "atMs": [],
-      "onCancel": []
+      "onCancel": [
+        ["4", "2", "-1", "2100", "API client has been unsubscribed from account data."]
+      ]
     }
   ]
 }

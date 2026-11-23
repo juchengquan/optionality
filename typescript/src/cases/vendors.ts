@@ -132,8 +132,10 @@ export const VENDOR_INPUTS: Record<
     { fn: "managedAccounts", name: "a trailing comma names no account", args: ["DU0000000,"] },
     { fn: "managedAccounts", name: "an empty field names none", args: [""] },
     // the owner's decision on #469: the letters say what kind of account, the last three which
-    { fn: "maskAccount", name: "the prefix and the last three kept, the digits between masked",
+    { fn: "maskAccount", name: "the prefix, five bullets, the last three",
       args: ["U0000001"] },
+    // five whatever the length: the mask does not say how long the id is
+    { fn: "maskAccount", name: "five bullets for a longer id too", args: ["U00000001"] },
     { fn: "maskAccount", name: "a paper id keeps its DU", args: ["DU0000000"] },
     { fn: "maskAccount", name: "a digit after the prefix's last letter is masked like the rest",
       args: ["DU00A0001"] },
@@ -172,19 +174,25 @@ export const VENDOR_INPUTS: Record<
       multiplier: "100", currency: "USD", position: "-6", market_price: "0.92",
       market_value: "-552.0", average_cost: "141.8", unrealized_pnl: "298.8",
       realized_pnl: "-412.8" }] },
-    // a stock's row carries right "0" and strike 0.0 (ibapi's decoder reads them as sent)
+    // a stock's row carries right "0" and strike "0", expiry and multiplier empty (measured on the
+    // live gateway on 2026-11-23)
     { fn: "holdingFrom", name: "a stock: no strike, no side, no expiry, no multiplier", args: [{
-      sec_type: "STK", symbol: "ACME", expiry: "", strike: "0.0", right: "0", multiplier: "",
+      sec_type: "STK", symbol: "ACME", expiry: "", strike: "0", right: "0", multiplier: "",
       currency: "USD", position: "300", market_price: "41.27", market_value: "12381.0",
       average_cost: "38.115", unrealized_pnl: "946.5", realized_pnl: "0.0" }] },
     { fn: "holdingFrom", name: "a stock in another currency, its figures in that one", args: [{
-      sec_type: "STK", symbol: "INITECH", expiry: "", strike: "0.0", right: "0", multiplier: "",
-      currency: "EUR", position: "50", market_price: "108.4", market_value: "5420.0",
+      sec_type: "STK", symbol: "INITECH", expiry: "", strike: "0", right: "0", multiplier: "",
+      currency: "HKD", position: "50", market_price: "108.4", market_value: "5420.0",
       average_cost: "102.2", unrealized_pnl: "310.0", realized_pnl: "0.0" }] },
     { fn: "holdingFrom", name: "a side written out in full", args: [{
       sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "35", right: "PUT",
       multiplier: "100", currency: "USD", position: "1", market_price: "0.92",
       market_value: "92", average_cost: "100", unrealized_pnl: "-8", realized_pnl: "0" }] },
+    // JavaScript's Number, not Python's float: "0x1C" is 28 and "1_00" is no number (round 3)
+    { fn: "holdingFrom", name: "a figure is read by JavaScript's Number rules", args: [{
+      sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "0x1C", right: "C",
+      multiplier: "100", currency: "USD", position: "1_00", market_price: " 3.85 ",
+      market_value: "Infinity", average_cost: "1e3", unrealized_pnl: "-12.5", realized_pnl: "+5" }] },
     { fn: "holdingFrom", name: "an empty figure is none, never 0", args: [{
       sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "45.0", right: "C",
       multiplier: "100", currency: "USD", position: "4", market_price: "", market_value: "",
@@ -210,6 +218,45 @@ export const VENDOR_INPUTS: Record<
         { key: "RealizedPnL", value: "1.00", currency: "EUR" },
       ],
       [], "09:05"] },
+    // the live gateway's keys, measured on 2026-11-23: the P&L only under $LEDGER-, in BASE and
+    // each currency; NetLiquidation and TotalCashValue plain in USD beside their -S segment rows;
+    // the exchange rates in $LEDGER-ExchangeRate, base units per unit of each currency
+    { fn: "accountAnswer", name: "the live gateway's keys: P&L from $LEDGER's BASE row", args: [
+      "U0000000",
+      [
+        { key: "AccountCode", value: "U0000000", currency: "" },
+        { key: "NetLiquidation", value: "184523.17", currency: "USD" },
+        { key: "NetLiquidation-S", value: "184000.00", currency: "USD" },
+        { key: "TotalCashValue", value: "61230.55", currency: "USD" },
+        { key: "TotalCashValue-S", value: "61000.00", currency: "USD" },
+        { key: "$LEDGER-UnrealizedPnL", value: "2071.40", currency: "BASE" },
+        { key: "$LEDGER-UnrealizedPnL", value: "1735.30", currency: "USD" },
+        { key: "$LEDGER-UnrealizedPnL", value: "2635.10", currency: "HKD" },
+        { key: "$LEDGER-RealizedPnL", value: "-412.80", currency: "BASE" },
+        { key: "$LEDGER-RealizedPnL", value: "-412.80", currency: "USD" },
+        { key: "$LEDGER-ExchangeRate", value: "1.00", currency: "BASE" },
+        { key: "$LEDGER-ExchangeRate", value: "1.00", currency: "USD" },
+        { key: "$LEDGER-ExchangeRate", value: "0.1284", currency: "HKD" },
+        { key: "$LEDGER-ExchangeRate", value: "0.7712", currency: "SGD" },
+      ],
+      [], "18:07"] },
+    { fn: "accountAnswer", name: "a plain BASE row is preferred to $LEDGER's", args: [
+      "U0000000",
+      [
+        { key: "UnrealizedPnL", value: "1.00", currency: "BASE" },
+        { key: "$LEDGER-UnrealizedPnL", value: "2.00", currency: "BASE" },
+      ],
+      [], null] },
+    { fn: "accountAnswer", name: "a rate that is not a positive number is no rate", args: [
+      "U0000000",
+      [
+        { key: "NetLiquidation", value: "1.00", currency: "USD" },
+        { key: "$LEDGER-ExchangeRate", value: "0", currency: "EUR" },
+        { key: "$LEDGER-ExchangeRate", value: "", currency: "JPY" },
+        { key: "$LEDGER-ExchangeRate", value: "-1", currency: "CHF" },
+        { key: "$LEDGER-ExchangeRate", value: "0x10", currency: "GBP" },
+      ],
+      [], null] },
     { fn: "accountAnswer", name: "nothing said is nothing claimed", args: ["U0000001", [], [], null] },
   ],
   // the record's fields are a list, which the Python's SDK-frame reader is held to

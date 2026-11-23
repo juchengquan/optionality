@@ -82,7 +82,7 @@ describe("testdata/vendors/ibkr-gateway/expected/", () => {
       (JSON.parse(built[name]!) as { accountReads: Read[] }).accountReads;
     const subscribed = (account: string) => [["6", "2", "1", account], ["6", "2", "0", account]];
     const [stocks] = readsOf("account-stocks-and-options");
-    expect(stocks!.expect).toMatchObject({ account: "U••••000", paper: false, base_currency: "USD" });
+    expect(stocks!.expect).toMatchObject({ account: "U•••••000", paper: false, base_currency: "USD" });
     expect(stocks!.sent).toEqual(subscribed("U0000000"));
     expect(readsOf("account-paper")[0]!.expect).toMatchObject({ paper: true });
     // a download end that never comes is a failure, and still unsubscribes

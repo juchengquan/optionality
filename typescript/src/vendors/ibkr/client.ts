@@ -75,6 +75,20 @@ import type { QuoteBatch } from "../../quotes.ts";
 
 export type { IbkrAccount, IbkrHolding, IbkrTotals } from "./fields.ts";
 
+/** The account read could not reach IB Gateway at all: the connect failed, in its own words — a
+ *  refused session ("IB Gateway refused the session: 326 …"), a refused connection ("could not
+ *  reach IB Gateway at …"), a handshake that did not complete in time, or a gateway that closed
+ *  the socket during the handshake (what a logged-out one does). Distinct from a read that failed
+ *  once it began (its deadline, or its connection closing under it), which throws a plain `Error`,
+ *  and from `IbkrAccountRefused`. Thrown by `account()` only: `fetchQuotes` and `reachable()` are
+ *  as they were. */
+export class IbkrUnreachable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "IbkrUnreachable";
+  }
+}
+
 /** The account read refused to choose: several accounts on the login and none named, a named one
  *  not on it, or none named by the gateway at all. A fact about the configuration rather than the
  *  gateway's health, so a caller can tell it from a read that failed. Its message carries the ids
@@ -316,15 +330,21 @@ export class IbkrClient {
    *  Which account: the login's one managed account; or, where it has several, the one `wanted`
    *  names. Refused with `IbkrAccountRefused`, every id MASKED, where several are managed and
    *  `wanted` is unset ("several accounts on this login; set IBKR_ACCOUNT …"), or where `wanted`
-   *  names none of them. A gateway that cannot be reached throws as `fetchQuotes` does, and a
-   *  deadline (`requestTimeoutMs`) fails it with its own words, the unsubscribe sent on that path
-   *  too. A second caller while a read of the same account runs JOINS it: IB allows one
+   *  names none of them. A gateway that cannot be reached throws `IbkrUnreachable` in the
+   *  connect's own words; a deadline (`requestTimeoutMs`) fails it with a plain `Error` in its
+   *  own words, the unsubscribe sent on that path too, and so does a connection that closes under
+   *  it. A second caller while a read of the same account runs JOINS it: IB allows one
    *  account subscription per client at a time. */
   async account(wanted?: string): Promise<IbkrAccount> {
     for (;;) {
       // taken afresh on every turn, and the account chosen afresh from what THAT session names:
       // the read waited on below may have ended because its connection went (review round 2)
-      const socket = await this.connected();
+      let socket: TwsSocket;
+      try {
+        socket = await this.connected();
+      } catch (err) {
+        throw new IbkrUnreachable(err instanceof Error ? err.message : String(err));
+      }
       const choice = chooseAccount(managedAccounts(this.managed.get(socket) ?? ""), wanted ?? null);
       if ("refused" in choice) throw new IbkrAccountRefused(choice.refused);
       const running = this.reading;

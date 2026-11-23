@@ -305,10 +305,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   subscribe, collects ACCT_VALUE (6), PORTFOLIO_VALUE (7), ACCT_UPDATE_TIME (8) until
   ACCT_DOWNLOAD_END (54), and unsubscribes — at a deadline too — the account chosen from
   MANAGED_ACCTS (15, with the handshake), a second caller joining a read that runs, one account of
-  several only by name (`IbkrAccountRefused` otherwise), the id leaving the client only masked,
-  its letter prefix and last three kept (`U••••567`), nothing stored, never asked by the sweep;
-  a read of another account waits for the running one; the answer's mapping is `fields.ts`',
-  cased; `yahoo/` wraps
+  several only by name (`IbkrAccountRefused` otherwise), a gateway it cannot reach
+  `IbkrUnreachable`, the id leaving the client only masked — its letter prefix, five bullets, at
+  most its last three (`U•••••567`) — nothing stored, never asked by the sweep; a read of another
+  account waits for the running one, and the 2100 answering each unsubscribe is ignored. The P&L
+  is read from `$LEDGER-…` BASE rows and the exchange rates from `$LEDGER-ExchangeRate`, as the
+  live gateway sends them (measured 2026-11-23); the answer's mapping is `fields.ts`', cased;
+  `yahoo/` wraps
   `yahoo-finance2`. Each vendor's pure `fields.ts` is re-exported by `vendors/fields.ts`, a door
   of its own so `testdata/vendors/` can record one truth for two languages: it imports nothing but
   the vendors' `fields.ts` modules (`opend/fields.ts` is a list, `RECORD_FIELDS`: what

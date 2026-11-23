@@ -17,15 +17,18 @@
     {
       "wanted": null,
       "expect": {
-        "account": "DU••••000",
+        "account": "DU•••••000",
         "paper": true,
         "base_currency": "USD",
         "updated_at": "09:05",
         "totals": {
           "net_liquidation": 1003250,
           "total_cash": 998100,
-          "unrealized_pnl": 150,
+          "unrealized_pnl": 15,
           "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
         },
         "holdings": [
           {

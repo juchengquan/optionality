@@ -42,20 +42,27 @@ client read, which is why `ib_async` could not decode it.
 | `no-prices` | constructed | the normal answer with bid and ask sent as -1 |
 | `client-id-in-use` | constructed | startApi refused with 326 against -1 |
 | `session-never-starts` | constructed | the greeting, then nothing |
-| `account-stocks-and-options` | constructed | a live account's totals and four holdings — two stocks, one in EUR, two options, one short with realised P&L — then the download end |
-| `account-paper` | constructed | a paper account (`DU`): totals and one short option, then the download end |
+| `account-stocks-and-options` | constructed | a live account: stocks in USD (NASDAQ, NYSE) and HKD (SEHK), a long call and a short put with realised P&L, cash in SGD, the P&L and exchange rates under `$LEDGER-`; then the download end, and 2100 after the unsubscribe |
+| `account-paper` | constructed | a paper account (`DU`): totals and one short option, then the download end, and 2100 after the unsubscribe |
 | `account-several` | constructed | two managed accounts, each with its own subscription: a read naming neither refused, one naming the second answered, one naming an account not on the login refused |
-| `account-never-ends` | constructed | account values and a holding, and no download end |
+| `account-never-ends` | constructed | account values and a holding, and no download end; 2100 after the unsubscribe the deadline sends |
 
 The four account conversations are CONSTRUCTED, and every one always will be: the repository is
 public, and nothing of the owner's account is committed (ADR 0030). `recordings.ts` refuses a
 conversation with `accountReads` or a `reqAccountUpdates` exchange whose provenance says
-`recorded`. They are laid out field for
-field as `ibapi` 9.81 encodes reqAccountUpdates and reads its five answers at protocol 157, with
-invented symbols, contract ids, quantities, prices, totals and clock times, and placeholder
-accounts. A capture from the live gateway, run with the owner's go-ahead on a client id that is not
-the service's, is kept on the owner's machine only long enough to check this layout against, then
-deleted; it never becomes a file here.
+`recorded`. They are laid out field for field as `ibapi` 9.81 encodes reqAccountUpdates and reads
+its five answers at protocol 157, and that layout was CHECKED against a capture of the live gateway
+on 2026-11-23, run with the owner's go-ahead on a client id that is not the service's; the capture
+stayed on the owner's machine and none of its figures is here. What it settled, and the files
+follow: the greeting, then managedAccounts, nextValidId and notices 2104, 2106 and 2158; every
+account value (NetLiquidation and TotalCashValue plain in USD beside their `-S` rows, the P&L only as
+`$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL`, the rates as `$LEDGER-ExchangeRate`, for BASE and
+each currency), then the portfolio with the update time (`HH:MM`) between its rows, then the
+download end; a stock's row with strike `0`, right `0`, expiry and multiplier empty, an option's
+with a whole strike, multiplier `100` and exchange `CBOE`; and exactly one message after each
+unsubscribe, error 2100 against -1, kept as the exchange's `onCancel`. The symbols, contract ids,
+quantities, prices, totals, exchange rates and clock times are invented, and the accounts
+placeholders.
 
 ## The format
 
@@ -217,11 +224,12 @@ MESSAGES as well as the same answer, an unsubscribe after a deadline included:
 ```jsonc
   "accountReads": [
     { "wanted": null,
-      "expect": { "account": "U••••000", "paper": false, "base_currency": "USD", "updated_at": "14:32",
-                  "totals": { … }, "holdings": [ … ] },
+      "expect": { "account": "U•••••000", "paper": false, "base_currency": "USD", "updated_at": "18:07",
+                  "totals": { … }, "exchange_rates": { "USD": 1, "HKD": 0.1284, … },
+                  "holdings": [ … ] },
       "sent": [["6", "2", "1", "U0000000"], ["6", "2", "0", "U0000000"]] },
     { "wanted": "DU0000001",
-      "expect": { "$refused": "IBKR_ACCOUNT (DU••••001) names no account on this login, which has …" },
+      "expect": { "$refused": "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has …" },
       "sent": [] }
   ]
 ```

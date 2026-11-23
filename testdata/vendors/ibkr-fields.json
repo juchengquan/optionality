@@ -8,13 +8,16 @@
       "RealizedPnL": "realized_pnl"
     },
     "BASE": "BASE",
+    "EXCHANGE_RATE": "$LEDGER-ExchangeRate",
     "GREEK_TICKS": {
       "$set": [
         13,
         83
       ]
     },
+    "LEDGER": "$LEDGER-",
     "MARKET_DATA_DELAYED_FROZEN": 4,
+    "MASK": "•••••",
     "PRICE_TICKS": {
       "1": "bid_price",
       "2": "ask_price",
@@ -295,11 +298,19 @@
     },
     {
       "fn": "maskAccount",
-      "name": "the prefix and the last three kept, the digits between masked",
+      "name": "the prefix, five bullets, the last three",
       "args": [
         "U0000001"
       ],
-      "expect": "U••••001"
+      "expect": "U•••••001"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "five bullets for a longer id too",
+      "args": [
+        "U00000001"
+      ],
+      "expect": "U•••••001"
     },
     {
       "fn": "maskAccount",
@@ -307,7 +318,7 @@
       "args": [
         "DU0000000"
       ],
-      "expect": "DU••••000"
+      "expect": "DU•••••000"
     },
     {
       "fn": "maskAccount",
@@ -315,7 +326,7 @@
       "args": [
         "DU00A0001"
       ],
-      "expect": "DU••••001"
+      "expect": "DU•••••001"
     },
     {
       "fn": "maskAccount",
@@ -323,7 +334,7 @@
       "args": [
         "U001"
       ],
-      "expect": "U•01"
+      "expect": "U•••••01"
     },
     {
       "fn": "maskAccount",
@@ -331,7 +342,7 @@
       "args": [
         "U1"
       ],
-      "expect": "U•"
+      "expect": "U•••••"
     },
     {
       "fn": "maskAccount",
@@ -339,7 +350,7 @@
       "args": [
         "ABCDEFG"
       ],
-      "expect": "••••EFG"
+      "expect": "•••••EFG"
     },
     {
       "fn": "maskAccount",
@@ -347,7 +358,7 @@
       "args": [
         ""
       ],
-      "expect": ""
+      "expect": "•••••"
     },
     {
       "fn": "isPaper",
@@ -411,7 +422,7 @@
         null
       ],
       "expect": {
-        "refused": "several accounts on this login; set IBKR_ACCOUNT to one of U••••000, U••••001"
+        "refused": "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001"
       }
     },
     {
@@ -425,7 +436,7 @@
         "DU0000001"
       ],
       "expect": {
-        "refused": "IBKR_ACCOUNT (DU••••001) names no account on this login, which has U••••000, U••••001"
+        "refused": "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001"
       }
     },
     {
@@ -438,7 +449,7 @@
         "U0000001"
       ],
       "expect": {
-        "refused": "IBKR_ACCOUNT (U••••001) names no account on this login, which has U••••000"
+        "refused": "IBKR_ACCOUNT (U•••••001) names no account on this login, which has U•••••000"
       }
     },
     {
@@ -581,7 +592,7 @@
           "sec_type": "STK",
           "symbol": "ACME",
           "expiry": "",
-          "strike": "0.0",
+          "strike": "0",
           "right": "0",
           "multiplier": "",
           "currency": "USD",
@@ -617,10 +628,10 @@
           "sec_type": "STK",
           "symbol": "INITECH",
           "expiry": "",
-          "strike": "0.0",
+          "strike": "0",
           "right": "0",
           "multiplier": "",
-          "currency": "EUR",
+          "currency": "HKD",
           "position": "50",
           "market_price": "108.4",
           "market_value": "5420.0",
@@ -632,7 +643,7 @@
       "expect": {
         "sec_type": "STK",
         "symbol": "INITECH",
-        "currency": "EUR",
+        "currency": "HKD",
         "expiry": null,
         "strike": null,
         "right": null,
@@ -679,6 +690,42 @@
         "average_cost": 1,
         "unrealized_pnl": -8,
         "realized_pnl": 0
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a figure is read by JavaScript's Number rules",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "20261218",
+          "strike": "0x1C",
+          "right": "C",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "1_00",
+          "market_price": " 3.85 ",
+          "market_value": "Infinity",
+          "average_cost": "1e3",
+          "unrealized_pnl": "-12.5",
+          "realized_pnl": "+5"
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "20261218",
+        "strike": 28,
+        "right": "C",
+        "multiplier": 100,
+        "position": null,
+        "market_price": 3.85,
+        "market_value": null,
+        "average_cost": 10,
+        "unrealized_pnl": -12.5,
+        "realized_pnl": 5
       }
     },
     {
@@ -768,7 +815,7 @@
         "14:32"
       ],
       "expect": {
-        "account": "U••••000",
+        "account": "U•••••000",
         "paper": false,
         "base_currency": "USD",
         "updated_at": "14:32",
@@ -777,6 +824,9 @@
           "total_cash": 61230.55,
           "unrealized_pnl": 2875.4,
           "realized_pnl": -412.8
+        },
+        "exchange_rates": {
+          "USD": 1
         },
         "holdings": []
       }
@@ -807,7 +857,7 @@
         "09:05"
       ],
       "expect": {
-        "account": "DU••••000",
+        "account": "DU•••••000",
         "paper": true,
         "base_currency": "USD",
         "updated_at": "09:05",
@@ -816,6 +866,196 @@
           "total_cash": null,
           "unrealized_pnl": 150,
           "realized_pnl": null
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "the live gateway's keys: P&L from $LEDGER's BASE row",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "AccountCode",
+            "value": "U0000000",
+            "currency": ""
+          },
+          {
+            "key": "NetLiquidation",
+            "value": "184523.17",
+            "currency": "USD"
+          },
+          {
+            "key": "NetLiquidation-S",
+            "value": "184000.00",
+            "currency": "USD"
+          },
+          {
+            "key": "TotalCashValue",
+            "value": "61230.55",
+            "currency": "USD"
+          },
+          {
+            "key": "TotalCashValue-S",
+            "value": "61000.00",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-UnrealizedPnL",
+            "value": "2071.40",
+            "currency": "BASE"
+          },
+          {
+            "key": "$LEDGER-UnrealizedPnL",
+            "value": "1735.30",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-UnrealizedPnL",
+            "value": "2635.10",
+            "currency": "HKD"
+          },
+          {
+            "key": "$LEDGER-RealizedPnL",
+            "value": "-412.80",
+            "currency": "BASE"
+          },
+          {
+            "key": "$LEDGER-RealizedPnL",
+            "value": "-412.80",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "1.00",
+            "currency": "BASE"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "1.00",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "0.1284",
+            "currency": "HKD"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "0.7712",
+            "currency": "SGD"
+          }
+        ],
+        [],
+        "18:07"
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "18:07",
+        "totals": {
+          "net_liquidation": 184523.17,
+          "total_cash": 61230.55,
+          "unrealized_pnl": 2071.4,
+          "realized_pnl": -412.8
+        },
+        "exchange_rates": {
+          "USD": 1,
+          "HKD": 0.1284,
+          "SGD": 0.7712
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "a plain BASE row is preferred to $LEDGER's",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "UnrealizedPnL",
+            "value": "1.00",
+            "currency": "BASE"
+          },
+          {
+            "key": "$LEDGER-UnrealizedPnL",
+            "value": "2.00",
+            "currency": "BASE"
+          }
+        ],
+        [],
+        null
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": null,
+        "updated_at": null,
+        "totals": {
+          "net_liquidation": null,
+          "total_cash": null,
+          "unrealized_pnl": 1,
+          "realized_pnl": null
+        },
+        "exchange_rates": {},
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "a rate that is not a positive number is no rate",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "NetLiquidation",
+            "value": "1.00",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "0",
+            "currency": "EUR"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "",
+            "currency": "JPY"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "-1",
+            "currency": "CHF"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "0x10",
+            "currency": "GBP"
+          }
+        ],
+        [],
+        null
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": null,
+        "totals": {
+          "net_liquidation": 1,
+          "total_cash": null,
+          "unrealized_pnl": null,
+          "realized_pnl": null
+        },
+        "exchange_rates": {
+          "GBP": 16,
+          "USD": 1
         },
         "holdings": []
       }
@@ -830,7 +1070,7 @@
         null
       ],
       "expect": {
-        "account": "U••••001",
+        "account": "U•••••001",
         "paper": false,
         "base_currency": null,
         "updated_at": null,
@@ -840,6 +1080,7 @@
           "unrealized_pnl": null,
           "realized_pnl": null
         },
+        "exchange_rates": {},
         "holdings": []
       }
     }

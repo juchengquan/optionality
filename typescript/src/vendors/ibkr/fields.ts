@@ -157,8 +157,8 @@ export function hasFigures(record: Quote): boolean {
  *  The messages hand it their fields as TEXT (`messages.ts`), so the two clients read the same
  *  strings through the same rules: an empty field is no figure, never 0. */
 export interface IbkrAccount {
-  /** the account id, masked: its leading letters and its last three characters kept, every
-   *  character between replaced by `•` (`U1234567` is `U••••567`) */
+  /** the account id, masked: its leading letters, then always five `•`, then at most its last
+   *  three characters (`U1234567` is `U•••••567`) */
   account: string;
   /** IB's paper accounts, whose ids start `DU` */
   paper: boolean;
@@ -168,6 +168,11 @@ export interface IbkrAccount {
    *  and no zone, which is all the message carries. Null where none arrived before the end. */
   updated_at: string | null;
   totals: IbkrTotals;
+  /** IBKR's exchange rates from `$LEDGER-ExchangeRate`: units of the base currency per ONE unit
+   *  of each currency, by its code (`{ USD: 1, HKD: 0.1284 }` on a USD base), so a holding in
+   *  another currency can be weighed in the base. BASE itself is left out, the base currency is
+   *  always 1, and a rate that is not a positive number is left out. */
+  exchange_rates: Record<string, number>;
   holdings: IbkrHolding[];
 }
 
@@ -221,6 +226,15 @@ export const ACCOUNT_TOTALS: Record<string, keyof IbkrTotals> = {
 /** The tag ACCT_VALUE gives a figure summed over every currency and expressed in the base one. */
 export const BASE = "BASE";
 
+/** The prefix of the ledger's keys. The live gateway sends no plain UnrealizedPnL or RealizedPnL
+ *  (measured on 2026-11-23): only `$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL`, a row for
+ *  BASE and one per currency. NetLiquidation and TotalCashValue come plain, in the base code. */
+export const LEDGER = "$LEDGER-";
+
+/** The ledger key whose rows are IBKR's exchange rates: units of the base per unit of the currency
+ *  the row names (an HKD row reads about 0.13 against a USD base). */
+export const EXCHANGE_RATE = "$LEDGER-ExchangeRate";
+
 /** One ACCT_VALUE, its fields as the wire carried them (`messages.ts` reads them). */
 export interface AccountValueRow {
   key: string;
@@ -254,18 +268,23 @@ export function managedAccounts(list: string): string[] {
 
 /** An account id as it may leave the client: its leading letters, which say what KIND of account
  *  it is (`U` an individual's, `DU` paper), and its last three characters, which tell two apart,
- *  with every character between replaced by `•` — `U1234567` is `U••••567`, the owner's decision on
- *  #469. At least one character after the letters is always hidden — a short id shows at most all
- *  but one of its last three (`U001` is `U•01`) — and an id that is letters through and through has
- *  no prefix kept: neither rule may ever show an id whole. */
+ *  with whatever is between replaced by FIVE `•` — `U1234567` is `U•••••567`, the owner's decisions
+ *  on #469: five whatever the length, so the id's length is hidden too. At least one character
+ *  after the letters is always hidden — a short id shows at most all but one of its last three
+ *  (`U001` is `U•••••01`) — and an id that is letters through and through has no prefix kept:
+ *  neither rule may ever show an id whole. */
 export function maskAccount(id: string): string {
   const letters = /^[A-Za-z]*/.exec(id)![0];
   const prefix = letters.length === id.length ? "" : letters;
   const rest = id.slice(prefix.length);
   // at most three shown, and never all of them: a short id would otherwise come out whole
   const showing = Math.max(0, Math.min(3, rest.length - 1));
-  return prefix + "•".repeat(rest.length - showing) + rest.slice(rest.length - showing);
+  return prefix + MASK + rest.slice(rest.length - showing);
 }
+
+/** What stands for the hidden part of an account id: always five, whatever was hidden, so the mask
+ *  does not say how long the id is (the owner's decision on #469). */
+export const MASK = "•••••";
 
 /** IB's paper accounts are the ids that start `DU`. */
 export function isPaper(id: string): boolean {
@@ -339,10 +358,14 @@ export function holdingFrom(row: PortfolioRow): IbkrHolding {
 /** The account's answer from what its read collected: the latest ACCT_VALUE for each key and
  *  currency, its holdings in the order they first came, and the update time.
  *
- *  The base currency is the one NetLiquidation is sent in, which IB always states in the base. A
- *  total is read from its `BASE` row where the gateway sends one — summed over every currency,
- *  in the base — and otherwise from its row in the base currency: UnrealizedPnL in a USD row
- *  alone would leave out a EUR holding's. */
+ *  The base currency is the one NetLiquidation is sent in, which IB always states in the base (its
+ *  `-S` segment row is another key, never read). A total is read, in this order, from its plain
+ *  `BASE` row — summed over every currency, in the base — then from the ledger's (`$LEDGER-…`
+ *  BASE, which is where the live gateway sends the P&L), then from its plain row in the base
+ *  code: UnrealizedPnL in a USD row alone would leave out an HKD holding's.
+ *
+ *  The exchange rates are the ledger's, by currency, BASE itself left out and the base currency
+ *  always 1; a rate that is not a positive number is no rate. */
 export function accountAnswer(
   id: string, values: AccountValueRow[], holdings: IbkrHolding[], updatedAt: string | null,
 ): IbkrAccount {
@@ -353,11 +376,19 @@ export function accountAnswer(
   };
   for (const [key, name] of Object.entries(ACCOUNT_TOTALS)) {
     const row = values.find((v) => v.key === key && v.currency === BASE)
+      ?? values.find((v) => v.key === LEDGER + key && v.currency === BASE)
       ?? (base === null ? undefined : values.find((v) => v.key === key && v.currency === base));
     totals[name] = row ? figureOf(row.value) : null;
   }
+  const exchangeRates: Record<string, number> = {};
+  for (const v of values) {
+    if (v.key !== EXCHANGE_RATE || v.currency === BASE || v.currency.trim() === "") continue;
+    const rate = figureOf(v.value);
+    if (rate !== null && rate > 0) exchangeRates[v.currency] = rate;
+  }
+  if (base !== null) exchangeRates[base] = 1;
   return {
     account: maskAccount(id), paper: isPaper(id), base_currency: base, updated_at: updatedAt,
-    totals, holdings,
+    totals, exchange_rates: exchangeRates, holdings,
   };
 }

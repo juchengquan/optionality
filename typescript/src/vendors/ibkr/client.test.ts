@@ -2,7 +2,7 @@ import { createConnection } from "node:net";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { IbkrAccountRefused, IbkrClient } from "./client.ts";
+import { IbkrAccountRefused, IbkrClient, IbkrUnreachable } from "./client.ts";
 import { type FakeGateway, type FakeOptions, startFakeGateway } from "./fake.ts";
 import {
   type Conversation, type Exchange, PLACEHOLDER_ACCOUNTS, loadConversation,
@@ -518,19 +518,23 @@ describe("the account read (ADR 0030)", () => {
     const c = await connected({ conversation: "account-stocks-and-options" });
     const got = await c.account();
     expect(got).toMatchObject({
-      account: "U••••000", paper: false, base_currency: "USD", updated_at: "14:32",
-      // UnrealizedPnL from its BASE row, which counts the EUR stock's; the USD row does not
+      account: "U•••••000", paper: false, base_currency: "USD", updated_at: "18:07",
+      // the P&L from $LEDGER's BASE row, which counts the HKD stock's; the USD row does not
       totals: {
         net_liquidation: 184523.17, total_cash: 61230.55, unrealized_pnl: 2071.4,
         realized_pnl: -412.8,
       },
     });
     expect(got.holdings.map((h) => [h.symbol, h.sec_type, h.currency, h.position])).toEqual([
-      ["ACME", "STK", "USD", 300], ["INITECH", "STK", "EUR", 50],
-      ["ACME", "OPT", "USD", 4], ["ACME", "OPT", "USD", -6],
+      ["ACME", "STK", "USD", 300], ["GLOBEX", "STK", "USD", 120], ["INITECH", "STK", "HKD", 2000],
+      ["ACME", "OPT", "USD", 2], ["ACME", "OPT", "USD", -2],
     ]);
     // IB's averageCost for an option is per contract; the answer's is per share
-    expect(got.holdings[2]!.average_cost).toBe(2.625);
+    expect(got.holdings[3]!.average_cost).toBe(2.625);
+    // a stock's strike "0" and right "0" are no strike and no side; an option's "45" is 45
+    expect(got.holdings[0]).toMatchObject({ strike: null, right: null, multiplier: null });
+    expect(got.holdings[3]).toMatchObject({ strike: 45, right: "C", multiplier: 100 });
+    expect(got.exchange_rates).toEqual({ USD: 1, HKD: 0.1284, SGD: 0.7712 });
   });
 
   it("sends exactly a subscribe naming the account, then its unsubscribe", async () => {
@@ -542,7 +546,7 @@ describe("the account read (ADR 0030)", () => {
 
   it("calls a DU account paper", async () => {
     const c = await connected({ conversation: "account-paper" });
-    expect(await c.account()).toMatchObject({ account: "DU••••000", paper: true });
+    expect(await c.account()).toMatchObject({ account: "DU•••••000", paper: true });
   });
 
   it("fails at the deadline when the download never ends, and unsubscribes anyway", async () => {
@@ -568,7 +572,7 @@ describe("the account read (ADR 0030)", () => {
     // runs would take its place, and the first read would never hear its download end
     const c = await connected({ conversation: "account-several" });
     const [first, second] = await Promise.all([c.account("U0000000"), c.account("U0000001")]);
-    expect([first.account, second.account]).toEqual(["U••••000", "U••••001"]);
+    expect([first.account, second.account]).toEqual(["U•••••000", "U•••••001"]);
     await unsubscribed(gateway!);
     expect(subscriptions(gateway!)).toEqual([
       ["1", "U0000000"], ["0", "U0000000"], ["1", "U0000001"], ["0", "U0000001"],
@@ -593,12 +597,22 @@ describe("the account read (ADR 0030)", () => {
     }
     gateway!.dropConnections();
     await expect(first).rejects.toThrow("IB Gateway's connection closed during the account read");
-    expect(await second).toMatchObject({ account: "U••••001" });
+    expect(await second).toMatchObject({ account: "U•••••001" });
     await unsubscribed(gateway!);
     expect(subscriptions(gateway!)).toEqual([
       ["1", "U0000000"], ["1", "U0000001"], ["0", "U0000001"],
     ]);
     expect(gateway!.sessionsAsked).toBe(2);
+  });
+
+  it("ignores the 2100 that answers an unsubscribe, though it arrives during the next read", async () => {
+    // measured on 2026-11-23: every unsubscribe is answered with error 2100 against -1. A read
+    // begun in the same turn as the last one's unsubscribe has its subscribe on the wire before
+    // that 2100 comes back, so the 2100 arrives DURING it, and must not end it
+    const c = await connected({ conversation: "account-stocks-and-options" });
+    const first = await c.account();
+    const second = await c.account();
+    expect(second).toEqual(first);
   });
 
   it("subscribes afresh for a read that comes after one has finished", async () => {
@@ -616,21 +630,21 @@ describe("the account read (ADR 0030)", () => {
     const err = await c.account().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(IbkrAccountRefused);
     expect((err as Error).message)
-      .toBe("several accounts on this login; set IBKR_ACCOUNT to one of U••••000, U••••001");
+      .toBe("several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001");
     expect(subscriptions(gateway!)).toEqual([]);
   });
 
   it("reads the one named, of several", async () => {
     const c = await connected({ conversation: "account-several" });
     expect(await c.account("U0000001")).toMatchObject({
-      account: "U••••001", totals: { net_liquidation: 25010 }, holdings: [],
+      account: "U•••••001", totals: { net_liquidation: 25010 }, holdings: [],
     });
   });
 
   it("refuses a named account not on the login, naming it masked", async () => {
     const c = await connected({ conversation: "account-several" });
     await expect(c.account("DU0000001")).rejects.toThrow(new IbkrAccountRefused(
-      "IBKR_ACCOUNT (DU••••001) names no account on this login, which has U••••000, U••••001"));
+      "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001"));
   });
 
   it("ignores what the gateway says about another account while it reads one", async () => {
@@ -650,6 +664,36 @@ describe("the account read (ADR 0030)", () => {
     await new Promise((r) => setTimeout(r, 50));
     c.close();
     await expect(read).rejects.toThrow("IB Gateway's connection closed during the account read");
+  });
+
+  it("throws IbkrUnreachable, in the connect's own words, where the session is refused", async () => {
+    // round 4, for the route (#473): a gateway the read cannot reach is neither a refusal to choose
+    // an account nor a read that failed once it began
+    const c = await connected({ conversation: "client-id-in-use" });
+    const err = await c.account().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(IbkrUnreachable);
+    expect((err as Error).message).toMatch(/^IB Gateway refused the session: 326 /);
+  });
+
+  it("throws IbkrUnreachable where nothing listens on the port", async () => {
+    const probe = await startFakeGateway(0, {});
+    const port = probe.port;
+    await probe.close();
+    const c = new IbkrClient({ host: "127.0.0.1", port, clientId: 31419, connectTimeoutMs: 1000 });
+    try {
+      const err = await c.account().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(IbkrUnreachable);
+      expect((err as Error).message).toMatch(`could not reach IB Gateway at 127.0.0.1:${port}: `);
+    } finally {
+      c.close();
+    }
+  });
+
+  it("does not call a read that failed once it began unreachable", async () => {
+    const c = await connected({ conversation: "account-never-ends" }, 300);
+    const err = await c.account().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(IbkrUnreachable);
   });
 
   it("never writes an account id in full: not in an answer, an error, or a log line", async () => {
