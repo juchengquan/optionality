@@ -1,0 +1,94 @@
+{
+  "conversation": "account-several",
+  "summary": "A login managing two accounts, each with its own subscription: a read naming neither is refused, one naming the second answers its totals, and one naming an account not on the login is refused.",
+  "provenance": {
+    "kind": "constructed",
+    "why": "Nothing of the owner's account may be committed (the repository is public), so no account conversation is ever captured into it (ADR 0030).",
+    "built": "Laid out as ibapi 9.81's decoder at server version 157 (decoder.py processPortfolioValueMsg; updateAccountValue, updateAccountTime, accountDownloadEnd and managedAccounts by their EWrapper signatures) and its reqAccountUpdates encoder, read on 2026-11-23; then checked against a capture of the live gateway on 2026-11-23 (server version 157), none of whose values is in the repository: the handshake's order and notices, the keys and currency tags of the account values (the P&L only under $LEDGER-, NetLiquidation and TotalCashValue plain in the base code beside their -S rows), the spellings of a stock's and an option's portfolio row, the update time interleaved with the portfolio, and error 2100 after each unsubscribe. The managed accounts are one comma-separated field, as ibapi reads it.",
+    "invented": "Every symbol, contract id, quantity, price, value, total, exchange rate, clock time and account id in this file is invented; the accounts are placeholders."
+  },
+  "ask": [],
+  "accountReads": [
+    {"wanted": null},
+    {"wanted": "U0000001"},
+    {"wanted": "DU0000001"}
+  ],
+  "handshake": {
+    "greeting": ["157", "20261109 19:13:53 SGT"],
+    "onStartApi": [
+      ["15", "1", "U0000000,U0000001"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm"],
+      ["4", "2", "-1", "2106", "HMDS data farm connection is OK:ushmds"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefil"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqAccountUpdates",
+      "account": "U0000000",
+      "sent": ["6", "2", "1", "U0000000"],
+      "replies": [
+        ["6", "2", "AccountCode", "U0000000", "", "U0000000"],
+        ["6", "2", "AccountReady", "true", "", "U0000000"],
+        ["6", "2", "AccountType", "INDIVIDUAL", "", "U0000000"],
+        ["6", "2", "NetLiquidation", "73611.55", "USD", "U0000000"],
+        ["6", "2", "NetLiquidation-S", "73611.55", "USD", "U0000000"],
+        ["6", "2", "TotalCashValue", "61230.55", "USD", "U0000000"],
+        ["6", "2", "TotalCashValue-S", "61230.55", "USD", "U0000000"],
+        ["6", "2", "$LEDGER-Currency", "BASE", "BASE", "U0000000"],
+        ["6", "2", "$LEDGER-CashBalance", "61230.55", "BASE", "U0000000"],
+        ["6", "2", "$LEDGER-ExchangeRate", "1.00", "BASE", "U0000000"],
+        ["6", "2", "$LEDGER-NetLiquidationByCurrency", "73611.55", "BASE", "U0000000"],
+        ["6", "2", "$LEDGER-UnrealizedPnL", "946.50", "BASE", "U0000000"],
+        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "BASE", "U0000000"],
+        ["6", "2", "$LEDGER-Currency", "USD", "USD", "U0000000"],
+        ["6", "2", "$LEDGER-CashBalance", "61230.55", "USD", "U0000000"],
+        ["6", "2", "$LEDGER-ExchangeRate", "1.00", "USD", "U0000000"],
+        ["6", "2", "$LEDGER-NetLiquidationByCurrency", "73611.55", "USD", "U0000000"],
+        ["6", "2", "$LEDGER-UnrealizedPnL", "946.50", "USD", "U0000000"],
+        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "USD", "U0000000"],
+        ["8", "1", "11:46"],
+        ["7", "8", "100000101", "ACME", "STK", "", "0", "0", "", "NASDAQ", "USD", "ACME", "NMS", "300", "41.27", "12381.00", "38.115", "946.50", "0.0", "U0000000"],
+        ["8", "1", "11:46"],
+        ["54", "1", "U0000000"]
+      ],
+      "atMs": [],
+      "onCancel": [
+        ["4", "2", "-1", "2100", "API client has been unsubscribed from account data."]
+      ]
+    },
+    {
+      "request": "reqAccountUpdates",
+      "account": "U0000001",
+      "sent": ["6", "2", "1", "U0000001"],
+      "replies": [
+        ["6", "2", "AccountCode", "U0000001", "", "U0000001"],
+        ["6", "2", "AccountReady", "true", "", "U0000001"],
+        ["6", "2", "AccountType", "INDIVIDUAL", "", "U0000001"],
+        ["6", "2", "NetLiquidation", "25010.00", "USD", "U0000001"],
+        ["6", "2", "NetLiquidation-S", "25010.00", "USD", "U0000001"],
+        ["6", "2", "TotalCashValue", "25010.00", "USD", "U0000001"],
+        ["6", "2", "TotalCashValue-S", "25010.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-Currency", "BASE", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-CashBalance", "25010.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-ExchangeRate", "1.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-NetLiquidationByCurrency", "25010.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-UnrealizedPnL", "0.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-Currency", "USD", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-CashBalance", "25010.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-ExchangeRate", "1.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-NetLiquidationByCurrency", "25010.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-UnrealizedPnL", "0.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "USD", "U0000001"],
+        ["8", "1", "11:47"],
+        ["54", "1", "U0000001"]
+      ],
+      "atMs": [],
+      "onCancel": [
+        ["4", "2", "-1", "2100", "API client has been unsubscribed from account data."]
+      ]
+    }
+  ]
+}

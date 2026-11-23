@@ -5,11 +5,13 @@
     client.close()
 
     records, unknown = quotes([...], port=4002, client_id=9301)   # one-shot, from a script
+    account = await client.account()                  # the account's totals and holdings (ADR 0030)
 
 A PORT of `typescript/src/vendors/ibkr/`, in three parts, and each is held to the TypeScript:
 
 * the MAPPING (`fields.ts`) — tick ids to the service's names, the four data grades as the two
-  facts they are, the 100x on implied volatility. `tests/test_ibkr.py` holds it to
+  facts they are, the 100x on implied volatility; and the account's (ADR 0030): which account,
+  the id masked, a portfolio row as a holding with its cost per share, the totals in the base. `tests/test_ibkr.py` holds it to
   `testdata/vendors/ibkr-fields.json`, what the TypeScript computes for every recorded case.
 * the NAMING (`contract.ts`) — a service code as the contract IB Gateway wants: an option by
   parsing it, an index by the exchange that calculates it. `tests/test_ibkr_client.py` mirrors
@@ -50,7 +52,13 @@ answer; `readonly=True` turns off only the open- and completed-order fetches. Ne
 `readonly` refuses no order. A quote fetch has nothing account-shaped in it (ADR 0019), so this
 connects `ib_async`'s `Client` directly, which performs the handshake and sends nothing else,
 and the Python sends exactly what `messages.ts` sends: startApi, reqMarketDataType,
-reqContractDetails, reqMktData, cancelMktData. `tests/test_ibkr_gateway.py` holds it to that.
+reqContractDetails, reqMktData, cancelMktData — and, only when the account is read (ADR 0030),
+reqAccountUpdates, a subscribe and its unsubscribe. `tests/test_ibkr_gateway.py` holds it to that.
+
+The account's four messages are read field by field too (`_FigureDecoder`), at `ibapi` 9.81's
+positions: `ib_async`'s PORTFOLIO_VALUE reader converts every figure with `float()`, so one empty
+field would drop a whole holding where the TypeScript reads it as no figure. MANAGED_ACCTS, which
+arrives with the handshake, reaches `_Reader.managedAccounts` and is read by `managed_accounts`.
 
 Two differences `ib_async` forces, neither in a recording: it calls a session started once BOTH
 nextValidId and managedAccounts have arrived (the TypeScript, on nextValidId), so a gateway that
@@ -72,9 +80,14 @@ import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypedDict, cast
 
 from optionality.contract import parse_spx_code
+
+# JavaScript's whitespace, which `trim()` and `Number` strip: a BOM is in it, and `\x1c`-`\x1f`, which
+# Python's `str.strip()` strips, are not — every trim below is the TypeScript's, through this
+from optionality.js import _WS as _JS_WHITESPACE
+from optionality.js import number
 from optionality.quote import Batch, Quote, mid_price
 
 if TYPE_CHECKING:
@@ -184,6 +197,266 @@ def has_figures(record: Quote) -> bool:
     does not exist. Those are different answers and the service keeps them apart.
     """
     return any(key not in _NOT_A_FIGURE and value is not None for key, value in record.items())
+
+
+# --- the account (ADR 0030; `fields.ts`' `IbkrAccount`) -----------------------------------------
+
+
+class IbkrTotals(TypedDict):
+    """The account's totals from ACCT_VALUE, in the base currency; None where the gateway sent none."""
+
+    net_liquidation: float | None
+    total_cash: float | None
+    unrealized_pnl: float | None
+    realized_pnl: float | None
+
+
+class IbkrHolding(TypedDict):
+    """One PORTFOLIO_VALUE row: a position as IBKR marks it, in its own currency."""
+
+    #: IB's security type, `STK`, `OPT`, `FUT`, ... as sent
+    sec_type: str
+    symbol: str
+    currency: str
+    #: lastTradeDateOrContractMonth as sent (`20261218`); None where empty, as for a stock
+    expiry: str | None
+    #: None for anything that is not an option
+    strike: float | None
+    #: "C" or "P"; None for anything that is not an option
+    right: Literal["C", "P"] | None
+    #: None where the gateway sent none, as for a stock
+    multiplier: float | None
+    #: signed: a short position is negative; None only where the field came empty
+    position: float | None
+    #: IBKR's own mark, per share
+    market_price: float | None
+    #: the position's value at that mark, in `currency`
+    market_value: float | None
+    #: PER SHARE: IB's `averageCost` divided by the multiplier, which IB's includes (`per_share_cost`)
+    average_cost: float | None
+    unrealized_pnl: float | None
+    realized_pnl: float | None
+
+
+class IbkrAccountRefused(Exception):
+    """The account read refused to choose: several accounts on the login and none named, a named
+    one not on it, or none named by the gateway at all (`client.ts`' `IbkrAccountRefused`). A fact
+    about the configuration rather than the gateway's health; its message carries the ids MASKED."""
+
+
+class IbkrUnreachable(ConnectionError):
+    """The account read could not reach IB Gateway at all (`client.ts`' `IbkrUnreachable`): the
+    connect failed, in its own words — a refused session ("IB Gateway refused the session: 326 …"), a
+    refused connection ("could not reach IB Gateway at …"), a handshake that did not complete in time,
+    or a gateway that closed the socket during the handshake. Distinct from a read that failed once it
+    began (its deadline, or its connection closing under it), a plain ConnectionError, and from
+    `IbkrAccountRefused`. Raised by `account()` only: `fetch_quotes` and `reachable()` are as they
+    were."""
+
+
+class IbkrAccount(TypedDict):
+    """What the account read answers, read once and never stored, the id only ever MASKED."""
+
+    #: the account id, masked: its leading letters, then always five `•`, then at most its last three
+    #: characters (`U1234567` is `U•••••567`)
+    account: str
+    #: IB's paper accounts, whose ids start `DU`
+    paper: bool
+    #: the base currency the totals are in; None where the gateway did not say
+    base_currency: str | None
+    #: the gateway's ACCT_UPDATE_TIME exactly as sent: a time of day ("13:45") with NO DATE and no
+    #: zone, which is all the message carries; None where none arrived before the end
+    updated_at: str | None
+    totals: IbkrTotals
+    #: IBKR's exchange rates from `$LEDGER-ExchangeRate`: units of the base currency per ONE unit of
+    #: each currency, by its code ({"USD": 1, "EUR": 1.0841} on a USD base). BASE itself is left
+    #: out, the base currency is always 1, and a rate that is not a positive number is left out.
+    exchange_rates: dict[str, float]
+    holdings: list[IbkrHolding]
+
+
+#: ACCT_VALUE's keys the answer's totals are read from, and the name each takes (`fields.ts`).
+#: Nothing else the gateway sends about the account is read: an AccountCode carries the id in full.
+ACCOUNT_TOTALS: dict[str, str] = {
+    "NetLiquidation": "net_liquidation",
+    "TotalCashValue": "total_cash",
+    "UnrealizedPnL": "unrealized_pnl",
+    "RealizedPnL": "realized_pnl",
+}
+
+#: the tag ACCT_VALUE gives a figure summed over every currency and expressed in the base one
+BASE = "BASE"
+
+#: what stands for the hidden part of an account id: always five, so the mask does not say how long
+#: the id is (the owner's decision on #469)
+MASK = "•••••"
+
+#: the prefix of the ledger's keys: the live gateway sends the P&L only as `$LEDGER-UnrealizedPnL` and
+#: `$LEDGER-RealizedPnL`, a row for BASE and one per currency (measured on 2026-11-23)
+LEDGER = "$LEDGER-"
+
+#: the ledger key whose rows are IBKR's exchange rates: base units per unit of the row's currency
+EXCHANGE_RATE = "$LEDGER-ExchangeRate"
+
+#: the letters an account id's prefix is made of: ASCII only, as `fields.ts`' `/^[A-Za-z]*/`
+_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+
+class AccountValueRow(TypedDict):
+    """One ACCT_VALUE, its fields as the wire carried them."""
+
+    key: str
+    value: str
+    currency: str
+
+
+class PortfolioRow(TypedDict):
+    """One PORTFOLIO_VALUE's fields as the wire carried them, the account aside."""
+
+    sec_type: str
+    symbol: str
+    expiry: str
+    strike: str
+    right: str
+    multiplier: str
+    currency: str
+    position: str
+    market_price: str
+    market_value: str
+    average_cost: str
+    unrealized_pnl: str
+    realized_pnl: str
+
+
+def managed_accounts(accounts: str) -> list[str]:
+    """The accounts MANAGED_ACCTS names: one field, the ids separated by commas, the empty ones (a
+    trailing comma) dropped."""
+    return [a.strip(_JS_WHITESPACE) for a in accounts.split(",") if a.strip(_JS_WHITESPACE)]
+
+
+def mask_account(account_id: str) -> str:
+    """An account id as it may leave the client (`fields.ts`' `maskAccount`): its leading letters,
+    which say what KIND of account it is, then always FIVE `•`, then at most its last three
+    characters, which tell two apart — `U1234567` is `U•••••567`, the owner's decisions on #469: five
+    whatever the length, so the id's length is hidden too. At least one character after the letters
+    is always hidden (`U001` is `U•••••01`), and an id of letters alone has no prefix kept: neither
+    rule may ever show an id whole."""
+    letters = len(account_id) - len(account_id.lstrip(_LETTERS))
+    prefix = "" if letters == len(account_id) else account_id[:letters]
+    rest = account_id[len(prefix) :]
+    # at most three shown, and never all of them: a short id would otherwise come out whole
+    showing = max(0, min(3, len(rest) - 1))
+    return prefix + MASK + rest[len(rest) - showing :]
+
+
+def is_paper(account_id: str) -> bool:
+    """IB's paper accounts are the ids that start `DU`."""
+    return account_id.startswith("DU")
+
+
+def choose_account(managed: list[str], wanted: str | None) -> dict[str, str]:
+    """Which of the login's accounts to read (`{"account": id}`), or why none (`{"refused": words}`):
+    the one there is; where there are several, the one `wanted` names; never a guess. Every id in a
+    refusal is masked, `wanted`'s too."""
+    named = (wanted or "").strip(_JS_WHITESPACE) or None
+    masked = ", ".join(mask_account(a) for a in managed)
+    if not managed:
+        return {"refused": "IB Gateway named no account on this login"}
+    if named is not None:
+        if named in managed:
+            return {"account": named}
+        return {"refused": f"IBKR_ACCOUNT ({mask_account(named)}) names no account on this login, which has {masked}"}
+    if len(managed) > 1:
+        return {"refused": f"several accounts on this login; set IBKR_ACCOUNT to one of {masked}"}
+    return {"account": managed[0]}
+
+
+def per_share_cost(average_cost: float | None, multiplier: float | None) -> float | None:
+    """The average cost PER SHARE: IB's `averageCost` for anything with a multiplier includes it — an
+    option bought at 2.50 arrives as 250 — while its market price is per share. A multiplier that is
+    absent, zero or not a number divides by nothing."""
+    if average_cost is None:
+        return None
+    return average_cost / multiplier if multiplier is not None and multiplier > 0 else average_cost
+
+
+def _figure_of(text: str) -> float | None:
+    """A figure out of a text field, or None where it carries none (`fields.ts`' `figureOf`): read
+    by JavaScript's `Number` (`optionality.js`), not by `float`, which reads "1_00" as 100 and
+    refuses "0x1C" — the TypeScript reads them as no number and 28. Empty and non-finite are none."""
+    if not text.strip(_JS_WHITESPACE):
+        return None
+    value = number(text)
+    return value if math.isfinite(value) else None
+
+
+def _side_of(right: str) -> Literal["C", "P"] | None:
+    r = right.strip(_JS_WHITESPACE).upper()
+    if r in ("C", "CALL"):
+        return "C"
+    if r in ("P", "PUT"):
+        return "P"
+    return None
+
+
+def holding_from(row: PortfolioRow) -> IbkrHolding:
+    """One PORTFOLIO_VALUE row as the answer's holding."""
+    right = _side_of(row["right"])
+    multiplier = _figure_of(row["multiplier"])
+    return {
+        "sec_type": row["sec_type"],
+        "symbol": row["symbol"],
+        "currency": row["currency"],
+        "expiry": None if not row["expiry"].strip(_JS_WHITESPACE) else row["expiry"],
+        # a stock's row carries a strike of 0: no strike, rather than one at zero
+        "strike": None if right is None else _figure_of(row["strike"]),
+        "right": right,
+        "multiplier": multiplier,
+        "position": _figure_of(row["position"]),
+        "market_price": _figure_of(row["market_price"]),
+        "market_value": _figure_of(row["market_value"]),
+        "average_cost": per_share_cost(_figure_of(row["average_cost"]), multiplier),
+        "unrealized_pnl": _figure_of(row["unrealized_pnl"]),
+        "realized_pnl": _figure_of(row["realized_pnl"]),
+    }
+
+
+def account_answer(
+    account_id: str, values: list[AccountValueRow], holdings: list[IbkrHolding], updated_at: str | None
+) -> IbkrAccount:
+    """The account's answer from what its read collected (`fields.ts`' `accountAnswer`): the base
+    currency is the one NetLiquidation is sent in, and a total is read from its plain `BASE` row, then
+    the ledger's `$LEDGER-…` BASE row (where the live gateway sends the P&L), then its plain row in
+    the base code. The exchange rates are the ledger's by currency, BASE left out, the base 1, and a
+    rate that is not a positive number left out."""
+    net = next((v for v in values if v["key"] == "NetLiquidation" and v["currency"] != BASE), None)
+    base = net["currency"] if net is not None and net["currency"].strip(_JS_WHITESPACE) else None
+    totals: dict[str, float | None] = {}
+    for key, name in ACCOUNT_TOTALS.items():
+        row = next((v for v in values if v["key"] == key and v["currency"] == BASE), None)
+        if row is None:
+            row = next((v for v in values if v["key"] == LEDGER + key and v["currency"] == BASE), None)
+        if row is None and base is not None:
+            row = next((v for v in values if v["key"] == key and v["currency"] == base), None)
+        totals[name] = None if row is None else _figure_of(row["value"])
+    exchange_rates: dict[str, float] = {}
+    for v in values:
+        if v["key"] != EXCHANGE_RATE or v["currency"] == BASE or not v["currency"].strip(_JS_WHITESPACE):
+            continue
+        rate = _figure_of(v["value"])
+        if rate is not None and rate > 0:
+            exchange_rates[v["currency"]] = rate
+    if base is not None:
+        exchange_rates[base] = 1.0
+    return {
+        "account": mask_account(account_id),
+        "paper": is_paper(account_id),
+        "base_currency": base,
+        "updated_at": updated_at,
+        "totals": cast(IbkrTotals, totals),
+        "exchange_rates": exchange_rates,
+        "holdings": holdings,
+    }
 
 
 # --- the naming: a service code as the contract IB Gateway wants (`contract.ts`) ---------------
@@ -403,6 +676,83 @@ class _Error:
 type _Incoming = _Contract | _ContractEnd | _Price | _GreeksTick | _SnapshotEnd | _DataType | _Error
 
 
+# --- the account's messages (ADR 0030; `messages.ts`), which carry the account and no request id --
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountValue:
+    account: str
+    row: AccountValueRow
+
+
+@dataclass(frozen=True, slots=True)
+class _Portfolio:
+    account: str
+    #: the row's identity: a later row for it replaces the earlier one
+    con_id: str
+    row: PortfolioRow
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountTime:
+    time: str
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountEnd:
+    account: str
+
+
+@dataclass(frozen=True, slots=True)
+class _ConnectionClosed:
+    """The attached connection went underneath the client: an account read on it hears nothing
+    more (`socket.ts`' `onClose`)."""
+
+    client: Any
+
+
+type _AccountMessage = _AccountValue | _Portfolio | _AccountTime | _AccountEnd
+
+
+def _text(fields: list[str], at: int) -> str:
+    """A field as the text it came as, empty where the message ended before it (`messages.ts`)."""
+    return fields[at] if at < len(fields) else ""
+
+
+def _read_account_value(fields: list[str]) -> _AccountValue:
+    """Message 6, ACCT_VALUE: `id, version, key, value, currency, account`."""
+    return _AccountValue(
+        account=_text(fields, 5),
+        row={"key": _text(fields, 2), "value": _text(fields, 3), "currency": _text(fields, 4)},
+    )
+
+
+def _read_portfolio(fields: list[str]) -> _Portfolio:
+    """Message 7, PORTFOLIO_VALUE, version 8: `id, version, conId, symbol, secType, expiry, strike,
+    right, multiplier, primaryExchange, currency, localSymbol, tradingClass, position, marketPrice,
+    marketValue, averageCost, unrealizedPNL, realizedPNL, account` — every field kept as text, what
+    each MEANS being `holding_from`'s, as it is `fields.ts`' `holdingFrom`'s."""
+    return _Portfolio(
+        account=_text(fields, 19),
+        con_id=_text(fields, 2),
+        row={
+            "sec_type": _text(fields, 4),
+            "symbol": _text(fields, 3),
+            "expiry": _text(fields, 5),
+            "strike": _text(fields, 6),
+            "right": _text(fields, 7),
+            "multiplier": _text(fields, 8),
+            "currency": _text(fields, 10),
+            "position": _text(fields, 13),
+            "market_price": _text(fields, 14),
+            "market_value": _text(fields, 15),
+            "average_cost": _text(fields, 16),
+            "unrealized_pnl": _text(fields, 17),
+            "realized_pnl": _text(fields, 18),
+        },
+    )
+
+
 def _read_price(fields: list[str]) -> _Price:
     """Message 1, tickPrice: `id, version, reqId, tickType, price, size, attrib`."""
     return _Price(req_id=_ident(fields, 2), tick_type=_ident(fields, 3), price=_price(fields, 4))
@@ -437,8 +787,12 @@ class _Reader:
     fails with the gateway's words at once rather than at the timeout.
     """
 
-    def __init__(self, route: Callable[[_Incoming], None], failed: "asyncio.Future[str]") -> None:
+    def __init__(
+        self, route: Callable[[_Incoming | _AccountMessage | _ConnectionClosed], None], failed: "asyncio.Future[str]"
+    ) -> None:
         self._route = route
+        #: MANAGED_ACCTS' one field as the session sent it, with the handshake: the login's accounts
+        self.accounts = ""
         self._failed: asyncio.Future[str] | None = failed
         self.client: Client | None = None
         #: nextValidId has arrived: the session STARTED, which is where the TypeScript stops
@@ -458,7 +812,7 @@ class _Reader:
         if self._failed is not None and not self._failed.done():
             self._failed.set_result(why)
 
-    def _deliver(self, message: _Incoming) -> None:
+    def _deliver(self, message: _Incoming | _AccountMessage | _ConnectionClosed) -> None:
         if self._attached:
             self._route(message)
 
@@ -467,7 +821,11 @@ class _Reader:
         self._started = True
 
     def setEventsDone(self) -> None:
-        """`ib_async` calls this whenever its socket goes, before it resets."""
+        """`ib_async` calls this whenever its socket goes, before it resets. Once the session has
+        started, a connection that goes while still attached — not one the client hung up, which
+        detaches it first — is told to the client, for an account read running on it."""
+        if self._failed is None and self.client is not None:
+            self._deliver(_ConnectionClosed(self.client))
         version = self.client.serverVersion() if self.client is not None else 0
         floor = self.client.MinClientVersion if self.client is not None else 0
         if 0 < version < floor:
@@ -502,6 +860,14 @@ class _Reader:
         """Ticks 1 and 21, read field by field by `_FigureDecoder`."""
         self._deliver(message)
 
+    # the account read's (ADR 0030)
+    def managedAccounts(self, accountsList: str) -> None:
+        self.accounts = accountsList
+
+    def account(self, message: _AccountMessage) -> None:
+        """Messages 6, 7, 8 and 54, read field by field by `_FigureDecoder`."""
+        self._deliver(message)
+
     def __getattr__(self, name: str) -> Callable[..., None]:
         if name.startswith("_"):
             raise AttributeError(name)
@@ -528,7 +894,18 @@ def _transport() -> tuple[Any, Any, Any]:
         raise ImportError(_MISSING) from err
 
     class _FigureDecoder(Decoder):  # type: ignore[misc]
-        """`ib_async`'s decoder, but ticks 1 and 21 are read field by field (see the docstring)."""
+        """`ib_async`'s decoder, but ticks 1 and 21 are read field by field (see the docstring), and
+        so are the account's four messages: its PORTFOLIO_VALUE reader converts every figure with
+        `float()`, so one empty field drops the whole row with a logged traceback where the
+        TypeScript reads it as no figure, and the other three are read here too so that every
+        account message reaches the client one way."""
+
+        def __init__(self, wrapper: Any, server_version: int) -> None:
+            super().__init__(wrapper, server_version)
+            self.handlers[6] = lambda fields: self.wrapper.account(_read_account_value(fields))
+            self.handlers[7] = lambda fields: self.wrapper.account(_read_portfolio(fields))
+            self.handlers[8] = lambda fields: self.wrapper.account(_AccountTime(_text(fields, 2)))
+            self.handlers[54] = lambda fields: self.wrapper.account(_AccountEnd(_text(fields, 2)))
 
         def priceSizeTick(self, fields: list[str]) -> None:
             self.wrapper.figures(_read_price(fields))
@@ -559,6 +936,17 @@ QUIET_MS = 250
 class _Found(NamedTuple):
     con_id: int | None
     silent: bool
+
+
+@dataclass(slots=True)
+class _AccountRead:
+    """The account read running now: whose, over which connection, and how to feed or fail it."""
+
+    client: "Client"
+    account: str
+    answer: "asyncio.Future[IbkrAccount]"
+    read: Callable[[_AccountMessage], None]
+    fail: Callable[[BaseException], None]
 
 
 class IbkrClient:
@@ -621,6 +1009,9 @@ class IbkrClient:
         #: that asked, so tearing one down drops only its own listeners
         self._waiting: dict[int, tuple[Client, Callable[[_Incoming], None]]] = {}
         self._next_id = 1
+        #: the account read in flight, which a second caller for the same account joins: IB allows
+        #: a single account subscription per client at a time
+        self._reading: _AccountRead | None = None
 
     @property
     def name(self) -> str:
@@ -645,10 +1036,111 @@ class IbkrClient:
         if self._client is not None:
             self._drop(self._client)
 
+    async def account(self, wanted: str | None = None) -> IbkrAccount:
+        """The account's totals and holdings, read once (ADR 0030; `client.ts`' `account`):
+        subscribe, collect until the gateway's download end, unsubscribe, answer — over the same
+        connection and client id as the price reads.
+
+        Which account: the login's one managed account; or, where it has several, the one `wanted`
+        names. Refused with `IbkrAccountRefused`, every id MASKED, where several are managed and
+        `wanted` is unset, or where `wanted` names none of them. A gateway that cannot be reached
+        raises `IbkrUnreachable` (a ConnectionError) in the connect's own words; a plain ConnectionError
+        is a read that failed once it began: a connection that closed under it, or a deadline
+        (`request_timeout_ms`), in its own words, the unsubscribe sent on that path too. A second caller while a read of the same account
+        runs JOINS it: IB allows a single account subscription per client at a time."""
+        while True:
+            # taken afresh on every turn, and the account chosen afresh from what THAT session
+            # names: the read waited on below may have ended because its connection went
+            try:
+                client = await self._connected()
+            except ConnectionError as err:
+                raise IbkrUnreachable(str(err)) from err
+            reader = client.wrapper
+            listed = reader.accounts if isinstance(reader, _Reader) else ""
+            choice = choose_account(managed_accounts(listed), wanted)
+            if "refused" in choice:
+                raise IbkrAccountRefused(choice["refused"])
+            account = choice["account"]
+            running = self._reading
+            if running is None:
+                running = self._read_account(client, account)
+            elif running.client is not client or running.account != account:
+                # another account's read holds the one subscription: it finishes first, whatever it
+                # comes to
+                await asyncio.wait({running.answer})
+                continue
+            # shielded, so one caller giving up does not cancel the read under the others; the read
+            # is bounded by its own deadline
+            return await asyncio.shield(running.answer)
+
+    def _read_account(self, client: "Client", account: str) -> _AccountRead:
+        """Subscribe, collect until the download's end, unsubscribe, answer — or fail at the
+        deadline, unsubscribing all the same (`client.ts`' `readAccount`). The account messages
+        carry no request id, so they reach this by the account they name; one naming another
+        account is not this read's. A value or a holding sent twice is the later one, a holding kept
+        where it first came. Nothing it reads leaves it but `account_answer`'s, whose id is masked."""
+        loop = asyncio.get_running_loop()
+        answer: asyncio.Future[IbkrAccount] = loop.create_future()
+        # retrieved, so a read every caller gave up on does not warn that nobody heard its failure
+        answer.add_done_callback(lambda done: done.cancelled() or done.exception())
+        values: dict[tuple[str, str], AccountValueRow] = {}
+        holdings: dict[str, IbkrHolding] = {}
+        updated_at: str | None = None
+
+        def settle(result: IbkrAccount | None, error: BaseException | None, unsubscribe: bool) -> None:
+            if answer.done():
+                return
+            timer.cancel()
+            if self._reading is entry:
+                self._reading = None
+            if unsubscribe and client.isReady():
+                client.reqAccountUpdates(False, account)
+            if error is not None:
+                answer.set_exception(error)
+            else:
+                answer.set_result(cast(IbkrAccount, result))
+
+        def read(message: _AccountMessage) -> None:
+            nonlocal updated_at
+            match message:
+                case _AccountTime(time=time):
+                    updated_at = time
+                case _AccountValue(account=whose, row=row) if whose == account:
+                    values[(row["key"], row["currency"])] = row
+                case _Portfolio(account=whose, con_id=con_id, row=row) if whose == account:
+                    holdings[con_id] = holding_from(row)
+                case _AccountEnd(account=whose) if whose == account:
+                    settle(
+                        account_answer(account, list(values.values()), list(holdings.values()), updated_at), None, True
+                    )
+
+        def late() -> None:
+            settle(
+                None,
+                ConnectionError(
+                    f"IB Gateway did not finish sending the account within {self.request_timeout_ms}ms — its link "
+                    "to IBKR may be down while its own socket is still open"
+                ),
+                True,
+            )
+
+        timer = loop.call_later(self.request_timeout_ms / 1000, late)
+        entry = _AccountRead(client, account, answer, read, lambda error: settle(None, error, False))
+        self._reading = entry
+        try:
+            _send(client, lambda: client.reqAccountUpdates(True, account))
+        except Exception as err:  # noqa: BLE001 — the read's own failure, told to every caller
+            settle(None, err, False)
+        return entry
+
     def _drop(self, client: "Client") -> None:
         """Hang up ONE connection, and forget what was asked over it. The client's own connection
         is forgotten only if it is this one: an ask that failed on a connection since replaced must
         not close the replacement, nor drop the listeners of the asks running on it."""
+        # an account read on this connection can hear nothing more, and is told so now rather than at
+        # its deadline; there is no connection left to unsubscribe over
+        if self._reading is not None and self._reading.client is client:
+            self._reading.fail(ConnectionError("IB Gateway's connection closed during the account read"))
         _detach(client)
         for req_id in [k for k, (owner, _) in self._waiting.items() if owner is client]:
             del self._waiting[req_id]
@@ -756,7 +1248,17 @@ class IbkrClient:
         reader.handshake_done()
         return client
 
-    def _route(self, message: _Incoming) -> None:
+    def _route(self, message: _Incoming | _AccountMessage | _ConnectionClosed) -> None:
+        if isinstance(message, _ConnectionClosed):
+            # only the account read: the price asks judge a silence themselves, as they always have
+            if self._reading is not None and self._reading.client is message.client:
+                self._reading.fail(ConnectionError("IB Gateway's connection closed during the account read"))
+            return
+        if isinstance(message, _AccountValue | _Portfolio | _AccountTime | _AccountEnd):
+            # only the attached connection's reader delivers anything (`_Reader.detach`)
+            if self._reading is not None:
+                self._reading.read(message)
+            return
         if message.req_id is None:
             return
         entry = self._waiting.get(message.req_id)

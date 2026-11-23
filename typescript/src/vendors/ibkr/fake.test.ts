@@ -5,7 +5,7 @@ import { createConnection } from "node:net";
 import { type FakeGateway, startFakeGateway } from "./fake.ts";
 import { greeting, startApi } from "./handshake.ts";
 import type { Incoming } from "./messages.ts";
-import { cancelMktData, reqContractDetails, reqMktData } from "./messages.ts";
+import { cancelMktData, reqAccountUpdates, reqContractDetails, reqMktData } from "./messages.ts";
 import { loadConversation } from "./recordings.ts";
 import { TwsSocket } from "./socket.ts";
 import { frame, readFields, readFrames } from "./wire.ts";
@@ -180,6 +180,28 @@ describe("replaying a recording", () => {
     await waitFor(() => seen.some((m) => m.kind === "snapshotEnd"), 3000);
     socket.send(cancelMktData(7));
     await waitFor(() => seen.some((m) => m.kind === "error" && m.code === 300));
+  });
+
+  it("answers an unsubscribe with the 2100, even one that cuts a paced answer short", async () => {
+    // the live gateway answered EVERY unsubscribe with exactly one 2100 (2026-11-23), so the
+    // stub does too, whether or not the account's replies were all sent
+    const recorded = loadConversation("account-paper");
+    const [exchange] = recorded.exchanges;
+    gateway = await startFakeGateway(0, {
+      pace: 1,
+      conversation: { ...recorded, exchanges: [{
+        ...exchange!, atMs: exchange!.replies.map((_, i) => (i === 0 ? 0 : 5000)),
+      }] },
+    });
+    const seen: Incoming[] = [];
+    const socket = new TwsSocket({ host: "127.0.0.1", port: gateway.port, clientId: 31419 });
+    client = socket;
+    await socket.connect((m) => seen.push(m));
+    socket.send(reqAccountUpdates(true, "DU0000000"));
+    await waitFor(() => seen.some((m) => m.kind === "accountValue"));
+    socket.send(reqAccountUpdates(false, "DU0000000"));
+    await waitFor(() => seen.some((m) => m.kind === "error" && m.code === 2100));
+    expect(seen.filter((m) => m.kind === "accountValue")).toHaveLength(1);
   });
 
   it("replays a conversation given as data, not only by name", async () => {

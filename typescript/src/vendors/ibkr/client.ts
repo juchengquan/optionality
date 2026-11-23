@@ -60,17 +60,45 @@
  */
 import { contractFor } from "./contract.ts";
 import {
-  GREEK_TICKS, MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS, grade, greekFields, hasFigures,
-  withMid,
+  type AccountValueRow, GREEK_TICKS, type IbkrAccount, type IbkrHolding,
+  MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS, accountAnswer, chooseAccount, grade, greekFields,
+  hasFigures, holdingFrom, managedAccounts, withMid,
 } from "./fields.ts";
 import {
-  type Incoming, cancelMktData, reqContractDetails,
+  type Incoming, cancelMktData, reqAccountUpdates, reqContractDetails,
   reqMarketDataType,
   reqMktData,
 } from "./messages.ts";
 import { TwsSocket, type TwsSocketConfig } from "./socket.ts";
 import type { Quote } from "../../domain/quote.ts";
 import type { QuoteBatch } from "../../quotes.ts";
+
+export type { IbkrAccount, IbkrHolding, IbkrTotals } from "./fields.ts";
+
+/** The account read could not reach IB Gateway at all: the connect failed, in its own words — a
+ *  refused session ("IB Gateway refused the session: 326 …"), a refused connection ("could not
+ *  reach IB Gateway at …"), a handshake that did not complete in time, or a gateway that closed
+ *  the socket during the handshake (what a logged-out one does). Distinct from a read that failed
+ *  once it began (its deadline, or its connection closing under it), which throws a plain `Error`,
+ *  and from `IbkrAccountRefused`. Thrown by `account()` only: `fetchQuotes` and `reachable()` are
+ *  as they were. */
+export class IbkrUnreachable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "IbkrUnreachable";
+  }
+}
+
+/** The account read refused to choose: several accounts on the login and none named, a named one
+ *  not on it, or none named by the gateway at all. A fact about the configuration rather than the
+ *  gateway's health, so a caller can tell it from a read that failed. Its message carries the ids
+ *  MASKED, never in full. */
+export class IbkrAccountRefused extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "IbkrAccountRefused";
+  }
+}
 
 export interface IbkrConfig extends TwsSocketConfig {
   /** Bounds the ASK, where the socket's own timeout bounds the handshake. A logged-in gateway can
@@ -88,6 +116,18 @@ export interface IbkrConfig extends TwsSocketConfig {
  *  connection, because a reconnect is where a stale assumption would otherwise survive. */
 type Conids = Map<string, number>;
 
+/** The account messages, which carry the account's name and no request id. */
+type AccountMessage = Extract<Incoming, { kind: "accountValue" | "portfolio" | "accountTime" | "accountEnd" }>;
+
+/** The account read running now: whose, over which socket, and how to feed or fail it. */
+interface AccountRead {
+  socket: TwsSocket;
+  account: string;
+  answer: Promise<IbkrAccount>;
+  read: (message: AccountMessage) => void;
+  fail: (err: Error) => void;
+}
+
 export class IbkrClient {
   private socket: TwsSocket | null = null;
   /** The connect in flight, shared by every caller who arrives while it runs. IB Gateway allows
@@ -104,6 +144,12 @@ export class IbkrClient {
   /** Every message the gateway sends, routed by the id that asked for it — and the socket that
    *  asked, so tearing one socket down drops only its own listeners. */
   private readonly waiting = new Map<number, { socket: TwsSocket; read: (m: Incoming) => void }>();
+  /** What each session said its managed accounts were — MANAGED_ACCTS' one field, which the
+   *  gateway sends with the handshake. Kept by socket, because it is a fact about that session. */
+  private readonly managed = new WeakMap<TwsSocket, string>();
+  /** The account read in flight, which a second caller for the same account joins: IB allows one
+   *  account subscription per client at a time. */
+  private reading: AccountRead | null = null;
 
   constructor(config: IbkrConfig) {
     this.config = config;
@@ -134,6 +180,11 @@ export class IbkrClient {
    *  forgotten only if it is this one: an ask that failed on a socket since replaced must not
    *  close the replacement, nor drop the listeners of the asks running on it. */
   private drop(socket: TwsSocket): void {
+    // an account read on this socket can hear nothing more, and is told so now rather than at
+    // its deadline; there is no connection left to unsubscribe over
+    if (this.reading?.socket === socket) {
+      this.reading.fail(new Error("IB Gateway's connection closed during the account read"));
+    }
     socket.close();
     for (const [id, entry] of this.waiting) if (entry.socket === socket) this.waiting.delete(id);
     if (this.socket !== socket) return;
@@ -174,7 +225,13 @@ export class IbkrClient {
     if (this.socket) this.drop(this.socket);
     const socket = new TwsSocket(this.config);
     // a refused or failed handshake closes this socket itself (`socket.ts`), and only this one
-    await socket.connect((message) => this.route(message));
+    await socket.connect((message) => this.route(socket, message), () => {
+      // an account read on a socket that went hears nothing more: told now, not at its deadline.
+      // Only the account read: the price asks judge a silence themselves, as they always have
+      if (this.reading?.socket === socket) {
+        this.reading.fail(new Error("IB Gateway's connection closed during the account read"));
+      }
+    });
     if (generation !== this.generation) {
       socket.close();
       throw new Error("IB Gateway client was closed while it was connecting");
@@ -184,7 +241,16 @@ export class IbkrClient {
     return socket;
   }
 
-  private route(message: Incoming): void {
+  private route(socket: TwsSocket, message: Incoming): void {
+    if (message.kind === "accounts") {
+      this.managed.set(socket, message.list);
+      return;
+    }
+    if (message.kind === "accountValue" || message.kind === "portfolio"
+      || message.kind === "accountTime" || message.kind === "accountEnd") {
+      if (this.reading?.socket === socket) this.reading.read(message);
+      return;
+    }
     if (!("reqId" in message)) return;
     this.waiting.get(message.reqId)?.read(message);
   }
@@ -255,6 +321,95 @@ export class IbkrClient {
       );
     }
     return { records, unknown };
+  }
+
+  /** The account's totals and holdings, read once (ADR 0030): subscribe, collect until the
+   *  gateway's download end, unsubscribe, answer. Over the same connection and client id as the
+   *  price reads.
+   *
+   *  Which account: the login's one managed account; or, where it has several, the one `wanted`
+   *  names. Refused with `IbkrAccountRefused`, every id MASKED, where several are managed and
+   *  `wanted` is unset ("several accounts on this login; set IBKR_ACCOUNT …"), or where `wanted`
+   *  names none of them. A gateway that cannot be reached throws `IbkrUnreachable` in the
+   *  connect's own words; a deadline (`requestTimeoutMs`) fails it with a plain `Error` in its
+   *  own words, the unsubscribe sent on that path too, and so does a connection that closes under
+   *  it. A second caller while a read of the same account runs JOINS it: IB allows one
+   *  account subscription per client at a time. */
+  async account(wanted?: string): Promise<IbkrAccount> {
+    for (;;) {
+      // taken afresh on every turn, and the account chosen afresh from what THAT session names:
+      // the read waited on below may have ended because its connection went (review round 2)
+      let socket: TwsSocket;
+      try {
+        socket = await this.connected();
+      } catch (err) {
+        throw new IbkrUnreachable(err instanceof Error ? err.message : String(err));
+      }
+      const choice = chooseAccount(managedAccounts(this.managed.get(socket) ?? ""), wanted ?? null);
+      if ("refused" in choice) throw new IbkrAccountRefused(choice.refused);
+      const running = this.reading;
+      if (running === null) return this.readAccount(socket, choice.account);
+      if (running.socket === socket && running.account === choice.account) return running.answer;
+      // another account's read holds the one subscription: it finishes first, whatever it comes to
+      await running.answer.catch(() => undefined);
+    }
+  }
+
+  /** Subscribe, collect until the download's end, unsubscribe, answer — or fail at the deadline,
+   *  unsubscribing all the same. The account messages carry no request id, so they reach this by
+   *  the account they name (`route`); one naming another account is not this read's. A value or
+   *  a holding sent twice is the later one, a holding kept where it first came. Nothing it reads
+   *  leaves it but `accountAnswer`'s answer, whose id is masked. */
+  private readAccount(socket: TwsSocket, account: string): Promise<IbkrAccount> {
+    const { requestTimeoutMs = 8_000 } = this.config;
+    const values = new Map<string, AccountValueRow>();
+    const holdings = new Map<string, IbkrHolding>();
+    let updatedAt: string | null = null;
+    let settle!: (outcome: { answer: IbkrAccount } | { error: Error }, unsubscribe: boolean) => void;
+    const answer = new Promise<IbkrAccount>((resolve, reject) => {
+      let settled = false;
+      settle = (outcome, unsubscribe) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (this.reading === entry) this.reading = null;
+        if (unsubscribe && socket.connected) socket.send(reqAccountUpdates(false, account));
+        if ("answer" in outcome) resolve(outcome.answer);
+        else reject(outcome.error);
+      };
+      const timer = setTimeout(() => settle({
+        error: new Error(
+          `IB Gateway did not finish sending the account within ${requestTimeoutMs}ms — its link `
+          + "to IBKR may be down while its own socket is still open"),
+      }, true), requestTimeoutMs);
+    });
+    const entry: AccountRead = {
+      socket, account, answer,
+      read: (message) => {
+        if (message.kind === "accountTime") {
+          updatedAt = message.time;
+          return;
+        }
+        if (message.account !== account) return;
+        if (message.kind === "accountValue") {
+          values.set(`${message.row.key}\0${message.row.currency}`, message.row);
+        } else if (message.kind === "portfolio") {
+          holdings.set(message.conId, holdingFrom(message.row));
+        } else {
+          settle({
+            answer: accountAnswer(account, [...values.values()], [...holdings.values()], updatedAt),
+          }, true);
+        }
+      },
+      fail: (error) => settle({ error }, false),
+    };
+    this.reading = entry;
+    try {
+      socket.send(reqAccountUpdates(true, account));
+    } catch (err) {
+      settle({ error: err instanceof Error ? err : new Error(String(err)) }, false);
+    }
+    return answer;
   }
 
   /** Resolve a code to a conid, once per connection.

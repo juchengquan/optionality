@@ -1,4 +1,5 @@
-/** IB Gateway's ticks, turned into the figures the rest of the service reads (ADR 0019, track C).
+/** IB Gateway's ticks, turned into the figures the rest of the service reads (ADR 0019, track C),
+ *  and since ADR 0030 the account's messages into the account's answer (the end of the file).
  *
  *  Every name on the right of this mapping is the service's own — `mid_price`, `option_delta` —
  *  and every number on the left is IBKR's. That translation is the whole job, and two parts of it
@@ -144,4 +145,250 @@ export function withMid(record: Quote): Quote {
 export function hasFigures(record: Quote): boolean {
   return Object.keys(record).some((key) => key !== "code" && key !== "name"
     && key !== "delayed" && key !== "last_known" && record[key] !== undefined);
+}
+
+// --- the account (ADR 0030) ---------------------------------------------------------------------
+
+/** What the account read answers: the account's totals and every position in it, as IBKR marks
+ *  them. Read once, never stored, and the account id only ever MASKED (`maskAccount`).
+ *
+ *  Everything below is pure and canonical, and held as the tick mapping is: `make cases` records
+ *  it in `testdata/vendors/ibkr-fields.json` and the Python port (`ibkr.py`) is compared to it.
+ *  The messages hand it their fields as TEXT (`messages.ts`), so the two clients read the same
+ *  strings through the same rules: an empty field is no figure, never 0. */
+export interface IbkrAccount {
+  /** the account id, masked: its leading letters, then always five `•`, then at most its last
+   *  three characters (`U1234567` is `U•••••567`) */
+  account: string;
+  /** IB's paper accounts, whose ids start `DU` */
+  paper: boolean;
+  /** the account's base currency, which the totals are in; null where the gateway did not say */
+  base_currency: string | null;
+  /** The gateway's ACCT_UPDATE_TIME exactly as it sent it: a time of day ("13:45") with NO DATE
+   *  and no zone, which is all the message carries. Null where none arrived before the end. */
+  updated_at: string | null;
+  totals: IbkrTotals;
+  /** IBKR's exchange rates from `$LEDGER-ExchangeRate`: units of the base currency per ONE unit
+   *  of each currency, by its code (`{ USD: 1, EUR: 1.0841 }` on a USD base), so a holding in
+   *  another currency can be weighed in the base. BASE itself is left out, the base currency is
+   *  always 1, and a rate that is not a positive number is left out. */
+  exchange_rates: Record<string, number>;
+  holdings: IbkrHolding[];
+}
+
+/** The account's totals from ACCT_VALUE, in the base currency; null where the gateway sent none. */
+export interface IbkrTotals {
+  /** NetLiquidation */
+  net_liquidation: number | null;
+  /** TotalCashValue */
+  total_cash: number | null;
+  /** UnrealizedPnL */
+  unrealized_pnl: number | null;
+  /** RealizedPnL */
+  realized_pnl: number | null;
+}
+
+/** One PORTFOLIO_VALUE row: a position as IBKR marks it, in its own currency. */
+export interface IbkrHolding {
+  /** IB's security type: `STK`, `OPT`, `FUT`, … as sent */
+  sec_type: string;
+  symbol: string;
+  currency: string;
+  /** lastTradeDateOrContractMonth as sent (`20261218`); null where empty, as for a stock */
+  expiry: string | null;
+  /** null for anything that is not an option */
+  strike: number | null;
+  /** "C" or "P"; null for anything that is not an option */
+  right: "C" | "P" | null;
+  /** null where the gateway sent none, as for a stock */
+  multiplier: number | null;
+  /** signed: a short position is negative; null only where the field came empty */
+  position: number | null;
+  /** IBKR's own mark, per share */
+  market_price: number | null;
+  /** the position's value at that mark, in `currency` */
+  market_value: number | null;
+  /** PER SHARE: IB's `averageCost` divided by the multiplier, which IB's includes (an option's
+   *  2.50 arrives as 250) — `perShareCost` */
+  average_cost: number | null;
+  unrealized_pnl: number | null;
+  realized_pnl: number | null;
+}
+
+/** ACCT_VALUE's keys the answer's totals are read from, and the name each takes. Nothing else the
+ *  gateway sends about the account is read: an AccountCode carries the id in full, and the rest
+ *  answers questions nobody asked. */
+export const ACCOUNT_TOTALS: Record<string, keyof IbkrTotals> = {
+  NetLiquidation: "net_liquidation", TotalCashValue: "total_cash",
+  UnrealizedPnL: "unrealized_pnl", RealizedPnL: "realized_pnl",
+};
+
+/** The tag ACCT_VALUE gives a figure summed over every currency and expressed in the base one. */
+export const BASE = "BASE";
+
+/** The prefix of the ledger's keys. The live gateway sends no plain UnrealizedPnL or RealizedPnL
+ *  (measured on 2026-11-23): only `$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL`, a row for
+ *  BASE and one per currency. NetLiquidation and TotalCashValue come plain, in the base code. */
+export const LEDGER = "$LEDGER-";
+
+/** The ledger key whose rows are IBKR's exchange rates: units of the base per unit of the currency
+ *  the row names. */
+export const EXCHANGE_RATE = "$LEDGER-ExchangeRate";
+
+/** One ACCT_VALUE, its fields as the wire carried them (`messages.ts` reads them). */
+export interface AccountValueRow {
+  key: string;
+  value: string;
+  currency: string;
+}
+
+/** One PORTFOLIO_VALUE's fields as the wire carried them, the account aside. */
+export interface PortfolioRow {
+  sec_type: string;
+  symbol: string;
+  /** lastTradeDateOrContractMonth */
+  expiry: string;
+  strike: string;
+  right: string;
+  multiplier: string;
+  currency: string;
+  position: string;
+  market_price: string;
+  market_value: string;
+  average_cost: string;
+  unrealized_pnl: string;
+  realized_pnl: string;
+}
+
+/** The accounts MANAGED_ACCTS names: one field, the ids separated by commas, the empty ones (a
+ *  trailing comma) dropped. */
+export function managedAccounts(list: string): string[] {
+  return list.split(",").map((id) => id.trim()).filter((id) => id.length > 0);
+}
+
+/** An account id as it may leave the client: its leading letters, which say what KIND of account
+ *  it is (`U` an individual's, `DU` paper), and its last three characters, which tell two apart,
+ *  with whatever is between replaced by FIVE `•` — `U1234567` is `U•••••567`, the owner's decisions
+ *  on #469: five whatever the length, so the id's length is hidden too. At least one character
+ *  after the letters is always hidden — a short id shows at most all but one of its last three
+ *  (`U001` is `U•••••01`) — and an id that is letters through and through has no prefix kept:
+ *  neither rule may ever show an id whole. */
+export function maskAccount(id: string): string {
+  const letters = /^[A-Za-z]*/.exec(id)![0];
+  const prefix = letters.length === id.length ? "" : letters;
+  const rest = id.slice(prefix.length);
+  // at most three shown, and never all of them: a short id would otherwise come out whole
+  const showing = Math.max(0, Math.min(3, rest.length - 1));
+  return prefix + MASK + rest.slice(rest.length - showing);
+}
+
+/** What stands for the hidden part of an account id: always five, whatever was hidden, so the mask
+ *  does not say how long the id is (the owner's decision on #469). */
+export const MASK = "•••••";
+
+/** IB's paper accounts are the ids that start `DU`. */
+export function isPaper(id: string): boolean {
+  return id.startsWith("DU");
+}
+
+/** Which of the login's accounts to read, or why none: the one there is; where there are several,
+ *  the one `wanted` names; never a guess. Every id in a refusal is masked, `wanted`'s too. */
+export function chooseAccount(
+  managed: string[], wanted: string | null,
+): { account: string } | { refused: string } {
+  const named = wanted?.trim() || null;
+  const masked = managed.map(maskAccount).join(", ");
+  if (managed.length === 0) return { refused: "IB Gateway named no account on this login" };
+  if (named !== null) {
+    return managed.includes(named) ? { account: named } : {
+      refused: `IBKR_ACCOUNT (${maskAccount(named)}) names no account on this login, which has `
+        + masked,
+    };
+  }
+  if (managed.length > 1) {
+    return { refused: `several accounts on this login; set IBKR_ACCOUNT to one of ${masked}` };
+  }
+  return { account: managed[0]! };
+}
+
+/** The average cost PER SHARE: IB's `averageCost` for anything with a multiplier includes it — an
+ *  option bought at 2.50 arrives as 250 — while its market price is per share, so the two could
+ *  not be compared as sent. A multiplier that is absent, zero or not a number divides by nothing. */
+export function perShareCost(averageCost: number | null, multiplier: number | null): number | null {
+  if (averageCost === null) return null;
+  return multiplier !== null && multiplier > 0 ? averageCost / multiplier : averageCost;
+}
+
+/** A figure out of a text field, or null where it carries none: `messages.ts`' `reading`. An empty
+ *  field is not 0. */
+function figureOf(text: string): number | null {
+  if (text.trim() === "") return null;
+  const value = Number(text);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** An option's side as IB writes it, "C" or "P" ("CALL" and "PUT" taken too), or null for
+ *  anything that has none — a stock's row carries "0" or nothing there. */
+function sideOf(right: string): "C" | "P" | null {
+  const r = right.trim().toUpperCase();
+  if (r === "C" || r === "CALL") return "C";
+  if (r === "P" || r === "PUT") return "P";
+  return null;
+}
+
+/** One PORTFOLIO_VALUE row as the answer's holding. */
+export function holdingFrom(row: PortfolioRow): IbkrHolding {
+  const right = sideOf(row.right);
+  const multiplier = figureOf(row.multiplier);
+  return {
+    sec_type: row.sec_type, symbol: row.symbol, currency: row.currency,
+    expiry: row.expiry.trim() === "" ? null : row.expiry,
+    // a stock's row carries a strike of 0: no strike, rather than one at zero
+    strike: right === null ? null : figureOf(row.strike),
+    right, multiplier,
+    position: figureOf(row.position),
+    market_price: figureOf(row.market_price),
+    market_value: figureOf(row.market_value),
+    average_cost: perShareCost(figureOf(row.average_cost), multiplier),
+    unrealized_pnl: figureOf(row.unrealized_pnl),
+    realized_pnl: figureOf(row.realized_pnl),
+  };
+}
+
+/** The account's answer from what its read collected: the latest ACCT_VALUE for each key and
+ *  currency, its holdings in the order they first came, and the update time.
+ *
+ *  The base currency is the one NetLiquidation is sent in, which IB always states in the base (its
+ *  `-S` segment row is another key, never read). A total is read, in this order, from its plain
+ *  `BASE` row — summed over every currency, in the base — then from the ledger's (`$LEDGER-…`
+ *  BASE, which is where the live gateway sends the P&L), then from its plain row in the base
+ *  code: UnrealizedPnL in a USD row alone would leave out a EUR holding's.
+ *
+ *  The exchange rates are the ledger's, by currency, BASE itself left out and the base currency
+ *  always 1; a rate that is not a positive number is no rate. */
+export function accountAnswer(
+  id: string, values: AccountValueRow[], holdings: IbkrHolding[], updatedAt: string | null,
+): IbkrAccount {
+  const net = values.find((v) => v.key === "NetLiquidation" && v.currency !== BASE);
+  const base = net && net.currency.trim() !== "" ? net.currency : null;
+  const totals: IbkrTotals = {
+    net_liquidation: null, total_cash: null, unrealized_pnl: null, realized_pnl: null,
+  };
+  for (const [key, name] of Object.entries(ACCOUNT_TOTALS)) {
+    const row = values.find((v) => v.key === key && v.currency === BASE)
+      ?? values.find((v) => v.key === LEDGER + key && v.currency === BASE)
+      ?? (base === null ? undefined : values.find((v) => v.key === key && v.currency === base));
+    totals[name] = row ? figureOf(row.value) : null;
+  }
+  const exchangeRates: Record<string, number> = {};
+  for (const v of values) {
+    if (v.key !== EXCHANGE_RATE || v.currency === BASE || v.currency.trim() === "") continue;
+    const rate = figureOf(v.value);
+    if (rate !== null && rate > 0) exchangeRates[v.currency] = rate;
+  }
+  if (base !== null) exchangeRates[base] = 1;
+  return {
+    account: maskAccount(id), paper: isPaper(id), base_currency: base, updated_at: updatedAt,
+    totals, exchange_rates: exchangeRates, holdings,
+  };
 }

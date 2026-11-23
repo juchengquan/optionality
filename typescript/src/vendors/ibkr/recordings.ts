@@ -51,7 +51,7 @@ export const SNAPSHOT_AT = 17;
  *  after it (`fake.ts`). That is how a file says "answered once, silent after", which is what a
  *  link dropping between two asks looks like; a file holding one per request is unchanged by it.
  */
-export interface Exchange {
+export interface QuoteExchange {
   request: "reqContractDetails" | "reqMktData";
   contract: Record<ContractKey, string>;
   /** What the recording session sent, for the reader. A replay matches on `contract`, and for
@@ -64,6 +64,29 @@ export interface Exchange {
   /** what the gateway said to cancelMktData for this request, if anything */
   onCancel?: Message[];
 }
+
+/** An account subscription and everything the gateway sent because of it (ADR 0030). Matched on
+ *  the account the subscribe names (`ACCOUNT_AT`), since the account's messages carry no request
+ *  id; `onCancel` is what the gateway said to the unsubscribe. */
+export interface AccountExchange {
+  request: "reqAccountUpdates";
+  account: string;
+  sent: Message;
+  replies: Message[];
+  atMs: number[];
+  onCancel?: Message[];
+}
+
+export type Exchange = QuoteExchange | AccountExchange;
+
+/** Where reqAccountUpdates says whether it subscribes ("1") or stops ("0"), and which account it
+ *  names: version 2, from this client and `ib_async` alike. */
+export const SUBSCRIBE_AT = 2;
+export const ACCOUNT_AT = 3;
+
+/** The account ids a recording may carry, each the SHAPE of a real one (a letter prefix and digits)
+ *  and none anybody's: the owner's are never committed (ADR 0030; the repository is public). */
+export const PLACEHOLDER_ACCOUNTS = ["DU0000000", "DU0000001", "U0000000", "U0000001"] as const;
 
 export interface Recorded {
   kind: "recorded";
@@ -85,13 +108,17 @@ export interface Conversation {
   conversation: string;
   summary: string;
   provenance: Recorded | Constructed;
-  /** the service codes the client is asked to price, in this order */
+  /** the service codes the client is asked to price, in this order; empty for a conversation that
+   *  only reads the account */
   ask: string[];
   /** Asks made after `ask` by the SAME client, in order, so the connection and whatever the client
    *  cached on earlier asks carry over. Absent for the usual conversation of one ask. It exists
    *  because a fresh connection cannot show a silence met behind a warm conid cache, and that is
    *  where the service meets one: it holds its session open for days. */
   later?: string[][];
+  /** Account reads made after the asks by the SAME client, in order, each naming the account it
+   *  wants or none (ADR 0030). Absent for a quote fetch's conversation. */
+  accountReads?: { wanted: string | null }[];
   handshake: {
     /** the gateway's answer to the version range: its protocol version, then its clock */
     greeting: Message;
@@ -165,17 +192,23 @@ export function parseConversation(name: string, value: unknown): Conversation {
   const greeting = message(h.greeting, "handshake.greeting");
   if (!Number.isInteger(Number(greeting[0]))) fail("handshake.greeting[0] must be a version");
 
+  const reads = c.accountReads === undefined ? undefined : Array.isArray(c.accountReads)
+    ? c.accountReads.map((r, i) => {
+      const read = object(r, `accountReads[${i}]`);
+      if (read.wanted !== null && typeof read.wanted !== "string") {
+        fail(`accountReads[${i}].wanted must be an account or null`);
+      }
+      return { wanted: read.wanted as string | null };
+    })
+    : fail("accountReads must be a list");
+  if (ask.length === 0 && (reads === undefined || reads.length === 0)) {
+    fail("a conversation must ask for a quote or read the account");
+  }
+
   const exchanges = Array.isArray(c.exchanges)
     ? c.exchanges.map((e, i): Exchange => {
       const where = `exchanges[${i}]`;
       const x = object(e, where);
-      if (x.request !== "reqContractDetails" && x.request !== "reqMktData") {
-        fail(`${where}.request must be reqContractDetails or reqMktData`);
-      }
-      const contract = object(x.contract, `${where}.contract`);
-      for (const key of CONTRACT_KEYS) {
-        if (typeof contract[key] !== "string") fail(`${where}.contract.${key} must be a string`);
-      }
       const replies = messages(x.replies, `${where}.replies`);
       const atMs = Array.isArray(x.atMs) && x.atMs.every((t) => typeof t === "number")
         ? x.atMs as number[] : fail(`${where}.atMs must be a list of numbers`);
@@ -183,18 +216,40 @@ export function parseConversation(name: string, value: unknown): Conversation {
         fail(`${where}.atMs must time every reply or none`);
       }
       const sent = message(x.sent, `${where}.sent`);
+      const onCancel = x.onCancel === undefined
+        ? {} : { onCancel: messages(x.onCancel, `${where}.onCancel`) };
+      if (x.request === "reqAccountUpdates") {
+        const account = text(x.account, `${where}.account`);
+        if (sent[0] !== "6" || sent[SUBSCRIBE_AT] !== "1" || sent[ACCOUNT_AT] !== account) {
+          fail(`${where}.sent must subscribe to ${account}, as reqAccountUpdates does`);
+        }
+        return { request: "reqAccountUpdates", account, sent, replies, atMs, ...onCancel };
+      }
+      if (x.request !== "reqContractDetails" && x.request !== "reqMktData") {
+        fail(`${where}.request must be reqContractDetails, reqMktData or reqAccountUpdates`);
+      }
+      const contract = object(x.contract, `${where}.contract`);
+      for (const key of CONTRACT_KEYS) {
+        if (typeof contract[key] !== "string") fail(`${where}.contract.${key} must be a string`);
+      }
       if (x.request === "reqMktData" && sent[SNAPSHOT_AT] !== "0" && sent[SNAPSHOT_AT] !== "1") {
         fail(`${where}.sent[${SNAPSHOT_AT}] must say whether it asked for a snapshot, "1" or "0"`);
       }
       return {
-        request: x.request as Exchange["request"],
+        request: x.request as QuoteExchange["request"],
         contract: contract as Record<ContractKey, string>,
         sent,
         replies, atMs,
-        ...(x.onCancel === undefined ? {} : { onCancel: messages(x.onCancel, `${where}.onCancel`) }),
+        ...onCancel,
       };
     })
     : fail("exchanges must be a list");
+
+  // ADR 0030: the owner's account is never committed, so nothing that reads one can be a capture
+  if (p.kind !== "constructed"
+    && (reads !== undefined || exchanges.some((e) => e.request === "reqAccountUpdates"))) {
+    fail("reads the account, so it must be constructed: no capture of an account is committed");
+  }
 
   return {
     conversation: name,
@@ -202,6 +257,7 @@ export function parseConversation(name: string, value: unknown): Conversation {
     provenance: p as unknown as Recorded | Constructed,
     ask,
     ...(later === undefined ? {} : { later }),
+    ...(reads === undefined ? {} : { accountReads: reads }),
     handshake: { greeting, onStartApi: messages(h.onStartApi, "handshake.onStartApi") },
     exchanges,
   };

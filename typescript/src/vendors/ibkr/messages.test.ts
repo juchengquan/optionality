@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  type TwsContract, cancelMktData, readMessage,
+  type TwsContract, cancelMktData, readMessage, reqAccountUpdates,
   reqContractDetails,
   reqMarketDataType, reqMktData,
 } from "./messages.ts";
@@ -214,6 +214,51 @@ describe("reading everything else", () => {
   it("shrugs at a message it does not read, rather than failing the sweep", () => {
     // the gateway volunteers plenty nobody asked for — farm notices, account summaries — and
     // treating the unexpected as fatal would break a sweep over a message meant for no one
-    expect(readMessage(msg(15, 1, "DU1234567"))).toEqual({ kind: "other", id: 15 });
+    expect(readMessage(msg(12, 1, 7, 0, 1, 0, 4.1, 3))).toEqual({ kind: "other", id: 12 });
+  });
+});
+
+describe("the account (ADR 0030)", () => {
+  // Every layout here is ibapi 9.81's at protocol 157: its reqAccountUpdates encoder, and its
+  // decoder's reading of each message, run on 2026-11-23 over these exact fields. Every figure and
+  // account id is invented.
+  it("subscribes and unsubscribes as the reference client does, naming the account", () => {
+    expect(readFields(reqAccountUpdates(true, "U0000000"))).toEqual(["6", "2", "1", "U0000000"]);
+    expect(readFields(reqAccountUpdates(false, "U0000000"))).toEqual(["6", "2", "0", "U0000000"]);
+  });
+
+  it("reads the managed accounts, which come with the handshake", () => {
+    expect(readMessage(msg(15, 1, "U0000000,U0000001")))
+      .toEqual({ kind: "accounts", list: "U0000000,U0000001" });
+  });
+
+  it("reads an account value as its key, value and currency, and whose it is", () => {
+    expect(readMessage(msg(6, 2, "NetLiquidation", "184523.17", "USD", "U0000000"))).toEqual({
+      kind: "accountValue", account: "U0000000",
+      row: { key: "NetLiquidation", value: "184523.17", currency: "USD" },
+    });
+  });
+
+  it("reads a portfolio row at version 8's positions, every field as sent", () => {
+    // 0 id, 1 version, 2 conId, 3 symbol, 4 secType, 5 expiry, 6 strike, 7 right, 8 multiplier,
+    // 9 primaryExchange, 10 currency, 11 localSymbol, 12 tradingClass, 13 position,
+    // 14 marketPrice, 15 marketValue, 16 averageCost, 17 unrealizedPNL, 18 realizedPNL, 19 account
+    const row = msg(7, 8, 100000202, "ACME", "OPT", "20261218", "35.0", "P", "100", "", "USD",
+      "ACME  261218P00035000", "ACME", "-6", "0.92", "-552.0", "141.8", "298.8", "-412.8",
+      "U0000000");
+    expect(readMessage(row)).toEqual({
+      kind: "portfolio", account: "U0000000", conId: "100000202",
+      row: {
+        sec_type: "OPT", symbol: "ACME", expiry: "20261218", strike: "35.0", right: "P",
+        multiplier: "100", currency: "USD", position: "-6", market_price: "0.92",
+        market_value: "-552.0", average_cost: "141.8", unrealized_pnl: "298.8",
+        realized_pnl: "-412.8",
+      },
+    });
+  });
+
+  it("reads the update time as the clock time it is, and the download's end", () => {
+    expect(readMessage(msg(8, 1, "14:32"))).toEqual({ kind: "accountTime", time: "14:32" });
+    expect(readMessage(msg(54, 1, "U0000000"))).toEqual({ kind: "accountEnd", account: "U0000000" });
   });
 });

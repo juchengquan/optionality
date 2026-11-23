@@ -9,6 +9,7 @@ that say so. Over a real loopback socket against `fake_gateway.py`, never a real
 
 import asyncio
 import copy
+import logging
 import struct
 import time
 from collections.abc import Awaitable, Callable
@@ -17,7 +18,14 @@ from typing import Any
 import pytest
 from fake_gateway import FakeGateway, frame, load_conversation, read_frames, start_fake_gateway
 
-from optionality.ibkr import INDEX_EXCHANGE, IbkrClient, TwsContract, contract_for
+from optionality.ibkr import (
+    INDEX_EXCHANGE,
+    IbkrAccountRefused,
+    IbkrClient,
+    IbkrUnreachable,
+    TwsContract,
+    contract_for,
+)
 
 OPTION = "US.SPXW261218C8100000"
 #: the model's computation for OPTION, as the gateway sent it (tick 13, normal-with-greeks)
@@ -809,6 +817,32 @@ def test_the_stub_answers_a_cancel_after_the_last_paced_reply_with_what_the_gate
     assert asyncio.run(run()) == [["4", "2", "7", "300", "Can't find EId with tickerId:7"]]
 
 
+def test_the_stub_answers_an_unsubscribe_with_the_2100_even_one_that_cuts_a_paced_answer_short() -> None:
+    """The live gateway answered EVERY unsubscribe with exactly one 2100 (2026-11-23), so the stub does
+    too, whether or not the account's replies were all sent."""
+    conversation = copy.deepcopy(load_conversation("account-paper"))
+    exchange = conversation["exchanges"][0]
+    exchange["atMs"] = [0 if i == 0 else 5000 for i in range(len(exchange["replies"]))]
+
+    async def run() -> list[list[str]]:
+        gateway = await start_fake_gateway(conversation, pace=1)
+        reader, writer = await _session(gateway)
+        await _replies(reader, 1 + len(conversation["handshake"]["onStartApi"]))
+        writer.write(frame(["6", "2", "1", "DU0000000"]))
+        await writer.drain()
+        first = await _replies(reader, 1)
+        writer.write(frame(["6", "2", "0", "DU0000000"]))
+        await writer.drain()
+        after = await _replies(reader, 1)
+        writer.close()
+        await gateway.close()
+        return first + after
+
+    first, after = asyncio.run(run())[:2]
+    assert first[0] == "6"
+    assert after[:4] == ["4", "2", "-1", "2100"]
+
+
 def _data(req_id: str, snapshot: str) -> list[str]:
     """reqMktData for the control, a snapshot ("1") or a stream ("0") — field 17."""
     return ["1", "11", req_id, *_lookup(req_id, "8100.0")[3:15], "0", "", snapshot, "0", ""]
@@ -864,3 +898,298 @@ def test_an_empty_price_is_delivered_as_no_price_rather_than_dropped() -> None:
     _, decoder_class, _ = ibkr._transport()
     decoder_class(Wrapper(), 0).priceSizeTick(["1", "6", "7", "9", "", "0", "0"])
     assert [(m.req_id, m.tick_type, m.price) for m in delivered] == [(7, 9, None)]
+
+
+# --- the account read (ADR 0030) -----------------------------------------------------------------
+#
+# `client.test.ts`' account claims, ported. Every conversation is CONSTRUCTED in ibapi 9.81's layout,
+# with invented figures and placeholder accounts: nothing of the owner's account is ever committed.
+
+
+def subscriptions(gateway: FakeGateway) -> list[list[str]]:
+    """The account subscriptions the stub was sent, in order: [subscribe, account]."""
+    return [[f[2], f[3]] for f in gateway.received if f[0] == "6"]
+
+
+async def unsubscribed(gateway: FakeGateway) -> None:
+    """Until every subscribe has had its unsubscribe, or a second has passed."""
+    until = time.monotonic() + 1
+    while sum(1 if on == "1" else -1 for on, _ in subscriptions(gateway)) > 0 and time.monotonic() < until:
+        await asyncio.sleep(0.005)
+
+
+def test_the_account_read_answers_totals_and_holdings_with_the_account_masked() -> None:
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        return await client.account()
+
+    got = against("account-stocks-and-options", read)
+    assert (got["account"], got["paper"], got["base_currency"], got["updated_at"]) == (
+        "U•••••000",
+        False,
+        "USD",
+        "14:32",
+    )
+    # the P&L from $LEDGER's BASE row, which counts the EUR stock's; the USD row does not
+    assert got["totals"] == {
+        "net_liquidation": 94532.1,
+        "total_cash": 64829.28,
+        "unrealized_pnl": 2137.37,
+        "realized_pnl": -412.8,
+    }
+    assert [(h["symbol"], h["sec_type"], h["currency"], h["position"]) for h in got["holdings"]] == [
+        ("ACME", "STK", "USD", 300),
+        ("GLOBEX", "STK", "USD", 120),
+        ("INITECH", "STK", "EUR", 50),
+        ("ACME", "OPT", "USD", 4),
+        ("ACME", "OPT", "USD", -6),
+    ]
+    # IB's averageCost for an option is per contract; the answer's is per share
+    assert got["holdings"][3]["average_cost"] == 2.625
+    assert got["exchange_rates"] == {"USD": 1, "EUR": 1.0841, "CHF": 1.1307}
+
+
+def test_the_account_read_sends_a_subscribe_then_its_unsubscribe_and_nothing_else() -> None:
+    async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
+        await client.account()
+        await unsubscribed(gateway)
+        return subscriptions(gateway)
+
+    assert against("account-stocks-and-options", read) == [["1", "U0000000"], ["0", "U0000000"]]
+
+
+def test_the_account_read_fails_at_the_deadline_and_unsubscribes_anyway() -> None:
+    async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
+        with pytest.raises(ConnectionError) as raised:
+            await client.account()
+        await unsubscribed(gateway)
+        return str(raised.value), subscriptions(gateway)
+
+    words, sent = against("account-never-ends", read, request_timeout_ms=300)
+    assert words == (
+        "IB Gateway did not finish sending the account within 300ms — its link to IBKR may be down "
+        "while its own socket is still open"
+    )
+    assert sent == [["1", "U0000000"], ["0", "U0000000"]]
+
+
+def test_two_callers_of_the_account_read_send_one_subscribe() -> None:
+    async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
+        a, b = await asyncio.gather(client.account(), client.account())
+        await unsubscribed(gateway)
+        return a == b, subscriptions(gateway)
+
+    assert against("account-stocks-and-options", read) == (True, [["1", "U0000000"], ["0", "U0000000"]])
+
+
+def test_a_read_of_another_account_waits_until_the_running_one_has_unsubscribed() -> None:
+    """IB allows a single account subscription per client at a time: a second subscribe while the first
+    runs would take its place, and the first read would never hear its download end."""
+
+    async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
+        first, second = await asyncio.gather(client.account("U0000000"), client.account("U0000001"))
+        await unsubscribed(gateway)
+        return [first["account"], second["account"]], subscriptions(gateway)
+
+    assert against("account-several", read) == (
+        ["U•••••000", "U•••••001"],
+        [["1", "U0000000"], ["0", "U0000000"], ["1", "U0000001"], ["0", "U0000001"]],
+    )
+
+
+def test_a_waiting_read_takes_the_connection_afresh_where_the_one_it_waited_on_lost_it() -> None:
+    """Review round 2: the waiting read held the connection it found before the wait, and
+    subscribed on a dead one — "not connected to IB Gateway"."""
+    conversation = copy.deepcopy(load_conversation("account-several"))
+    for exchange in conversation["exchanges"]:
+        if exchange["account"] == "U0000000":
+            exchange["replies"] = [m for m in exchange["replies"] if m[0] != "54"]
+
+    async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
+        first = asyncio.ensure_future(client.account("U0000000"))
+        second = asyncio.ensure_future(client.account("U0000001"))
+        until = time.monotonic() + 1
+        while not subscriptions(gateway) and time.monotonic() < until:
+            await asyncio.sleep(0.005)
+        gateway.drop_connections()
+        with pytest.raises(ConnectionError) as raised:
+            await first
+        answered = await second
+        await unsubscribed(gateway)
+        return str(raised.value), answered["account"], subscriptions(gateway), gateway.sessions_asked
+
+    assert against(conversation, read, request_timeout_ms=5000) == (
+        "IB Gateway's connection closed during the account read",
+        "U•••••001",
+        [["1", "U0000000"], ["1", "U0000001"], ["0", "U0000001"]],
+        2,
+    )
+
+
+def test_the_2100_answering_an_unsubscribe_is_ignored_though_it_arrives_during_the_next_read() -> None:
+    """Measured on 2026-11-23: every unsubscribe is answered with error 2100 against -1. A read begun
+    straight after the last one's unsubscribe has its subscribe on the wire before that 2100 comes
+    back, so the 2100 arrives DURING it, and must not end it."""
+
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        first = await client.account()
+        second = await client.account()
+        return first == second
+
+    assert against("account-stocks-and-options", read) is True
+
+
+def test_a_read_after_one_has_finished_subscribes_afresh() -> None:
+    async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
+        await client.account()
+        await client.account()
+        await unsubscribed(gateway)
+        return subscriptions(gateway)
+
+    assert against("account-paper", read) == [["1", "DU0000000"], ["0", "DU0000000"]] * 2
+
+
+def test_several_accounts_with_none_named_are_refused_masked_and_nothing_is_subscribed() -> None:
+    async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
+        with pytest.raises(IbkrAccountRefused) as raised:
+            await client.account()
+        return str(raised.value), subscriptions(gateway)
+
+    assert against("account-several", read) == (
+        "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001",
+        [],
+    )
+
+
+def test_the_account_named_of_several_is_read_and_one_not_on_the_login_refused() -> None:
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        named = await client.account("U0000001")
+        with pytest.raises(IbkrAccountRefused) as raised:
+            await client.account("DU0000001")
+        return named["account"], named["totals"]["net_liquidation"], str(raised.value)
+
+    assert against("account-several", read) == (
+        "U•••••001",
+        25010,
+        "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001",
+    )
+
+
+def test_the_account_read_ignores_what_the_gateway_says_about_another_account() -> None:
+    conversation = copy.deepcopy(load_conversation("account-paper"))
+    stray = ["7", "8", "100000999", "ACME", "STK", "", "0.0", "0", "", "NASDAQ", "USD", "ACME", "NMS", "1"]
+    stray += ["41.27", "41.27", "40", "1.27", "0.0", "DU0000001"]
+    conversation["exchanges"][0]["replies"].insert(0, stray)
+
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        return [h["position"] for h in (await client.account())["holdings"]]
+
+    assert against(conversation, read) == [-1]
+
+
+def test_closing_the_client_fails_an_account_read_at_once() -> None:
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        running = asyncio.ensure_future(client.account())
+        await asyncio.sleep(0.05)
+        client.close()
+        with pytest.raises(ConnectionError) as raised:
+            await running
+        return str(raised.value)
+
+    got = against("account-never-ends", read, request_timeout_ms=5000)
+    assert got == "IB Gateway's connection closed during the account read"
+
+
+def test_an_account_read_that_cannot_connect_raises_ibkr_unreachable_in_the_connects_words() -> None:
+    """Round 4, for the route (#473): a gateway the read cannot reach is neither a refusal to choose
+    an account nor a read that failed once it began."""
+
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        with pytest.raises(IbkrUnreachable) as raised:
+            await client.account()
+        return str(raised.value)
+
+    assert against("client-id-in-use", read).startswith("IB Gateway refused the session: 326 ")
+
+
+def test_an_account_read_with_nothing_on_the_port_raises_ibkr_unreachable() -> None:
+    async def read() -> str:
+        probe = await start_fake_gateway("normal-with-greeks")
+        port = probe.port
+        await probe.close()
+        client = IbkrClient(port=port, client_id=31419, connect_timeout_ms=1000)
+        try:
+            with pytest.raises(IbkrUnreachable) as raised:
+                await client.account()
+        finally:
+            client.close()
+        return str(raised.value)
+
+    words = asyncio.run(read())
+    assert words.startswith("could not reach IB Gateway at 127.0.0.1:")
+
+
+def test_a_read_that_failed_once_it_began_is_not_called_unreachable() -> None:
+    async def read(client: IbkrClient, _: FakeGateway) -> Any:
+        with pytest.raises(ConnectionError) as raised:
+            await client.account()
+        return raised.value
+
+    assert not isinstance(against("account-never-ends", read, request_timeout_ms=300), IbkrUnreachable)
+    assert issubclass(IbkrUnreachable, ConnectionError)
+
+
+def test_no_account_id_is_written_in_full_in_an_answer_an_error_or_a_log_line(
+    caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Logs at INFO and up, which is all the service lets a library write: `ib_async`'s DEBUG log is
+    the wire itself, every field of every message, and the backend holds every library at WARNING."""
+    caplog.set_level(logging.INFO)
+    caplog.set_level(logging.DEBUG, logger="optionality")
+    said: list[str] = []
+    for name, wanted in (
+        ("account-stocks-and-options", None),
+        ("account-paper", None),
+        ("account-several", None),
+        ("account-several", "U0000001"),
+        ("account-several", "DU0000001"),
+        ("account-never-ends", None),
+    ):
+
+        async def read(client: IbkrClient, _: FakeGateway, wanted: str | None = wanted) -> str:
+            try:
+                return repr(await client.account(wanted))
+            except Exception as err:  # noqa: BLE001 — the words are what is searched
+                return str(err)
+
+        said.append(against(name, read, request_timeout_ms=300))
+    out = capsys.readouterr()
+    said += [record.getMessage() for record in caplog.records] + [out.out, out.err]
+    for account in ("DU0000000", "DU0000001", "U0000000", "U0000001"):
+        assert [line for line in said if account in line] == [], account
+
+
+def test_the_account_messages_are_read_field_by_field_an_empty_figure_kept_as_none() -> None:
+    """`ib_async`'s PORTFOLIO_VALUE reader converts every figure with `float()`, so one empty field
+    drops the whole row with a logged traceback; this one delivers it, the figure as none."""
+    pytest.importorskip("ib_async")
+    from optionality import ibkr
+
+    delivered: list[Any] = []
+
+    class Wrapper:
+        def account(self, message: Any) -> None:
+            delivered.append(message)
+
+    _, decoder_class, _ = ibkr._transport()
+    decoder = decoder_class(Wrapper(), 157)
+    row = ["7", "8", "100000201", "ACME", "OPT", "20261218", "45.0", "C", "100", "", "USD"]
+    row += ["ACME  261218C00045000", "ACME", "4", "", "1540.0", "262.5", "490.0", "0.0", "U0000000"]
+    for fields in (["6", "2", "NetLiquidation", "184523.17", "USD", "U0000000"], row, ["8", "1", "14:32"]):
+        decoder.interpret(fields)
+    decoder.interpret(["54", "1", "U0000000"])
+    value, portfolio, when, end = delivered
+    assert value.row == {"key": "NetLiquidation", "value": "184523.17", "currency": "USD"}
+    assert (portfolio.account, portfolio.con_id) == ("U0000000", "100000201")
+    assert ibkr.holding_from(portfolio.row)["market_price"] is None
+    assert ibkr.holding_from(portfolio.row)["average_cost"] == 2.625
+    assert (when.time, end.account) == ("14:32", "U0000000")

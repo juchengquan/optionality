@@ -1,13 +1,23 @@
 {
   "module": "ibkr-fields",
   "constants": {
+    "ACCOUNT_TOTALS": {
+      "NetLiquidation": "net_liquidation",
+      "TotalCashValue": "total_cash",
+      "UnrealizedPnL": "unrealized_pnl",
+      "RealizedPnL": "realized_pnl"
+    },
+    "BASE": "BASE",
+    "EXCHANGE_RATE": "$LEDGER-ExchangeRate",
     "GREEK_TICKS": {
       "$set": [
         13,
         83
       ]
     },
+    "LEDGER": "$LEDGER-",
     "MARKET_DATA_DELAYED_FROZEN": 4,
+    "MASK": "•••••",
     "PRICE_TICKS": {
       "1": "bid_price",
       "2": "ask_price",
@@ -246,6 +256,1014 @@
         }
       ],
       "expect": true
+    },
+    {
+      "fn": "managedAccounts",
+      "name": "a single account",
+      "args": [
+        "U0000000"
+      ],
+      "expect": [
+        "U0000000"
+      ]
+    },
+    {
+      "fn": "managedAccounts",
+      "name": "several, comma-separated",
+      "args": [
+        "U0000000,U0000001"
+      ],
+      "expect": [
+        "U0000000",
+        "U0000001"
+      ]
+    },
+    {
+      "fn": "managedAccounts",
+      "name": "a trailing comma names no account",
+      "args": [
+        "DU0000000,"
+      ],
+      "expect": [
+        "DU0000000"
+      ]
+    },
+    {
+      "fn": "managedAccounts",
+      "name": "an empty field names none",
+      "args": [
+        ""
+      ],
+      "expect": []
+    },
+    {
+      "fn": "managedAccounts",
+      "name": "trimmed as JavaScript trims: a BOM goes, a \\x1c stays",
+      "args": [
+        "﻿U0000000,U0000001\u001c"
+      ],
+      "expect": [
+        "U0000000",
+        "U0000001\u001c"
+      ]
+    },
+    {
+      "fn": "maskAccount",
+      "name": "the prefix, five bullets, the last three",
+      "args": [
+        "U0000001"
+      ],
+      "expect": "U•••••001"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "five bullets for a longer id too",
+      "args": [
+        "U00000001"
+      ],
+      "expect": "U•••••001"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "a paper id keeps its DU",
+      "args": [
+        "DU0000000"
+      ],
+      "expect": "DU•••••000"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "a digit after the prefix's last letter is masked like the rest",
+      "args": [
+        "DU00A0001"
+      ],
+      "expect": "DU•••••001"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "a short id shows all but one of its digits, never all",
+      "args": [
+        "U001"
+      ],
+      "expect": "U•••••01"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "a one-digit id shows no digit",
+      "args": [
+        "U1"
+      ],
+      "expect": "U•••••"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "an id of letters alone keeps no prefix, only its last three",
+      "args": [
+        "ABCDEFG"
+      ],
+      "expect": "•••••EFG"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "an empty id is the five bullets alone",
+      "args": [
+        ""
+      ],
+      "expect": "•••••"
+    },
+    {
+      "fn": "isPaper",
+      "name": "an id that starts DU is paper",
+      "args": [
+        "DU0000000"
+      ],
+      "expect": true
+    },
+    {
+      "fn": "isPaper",
+      "name": "a live individual account is not",
+      "args": [
+        "U0000000"
+      ],
+      "expect": false
+    },
+    {
+      "fn": "isPaper",
+      "name": "nor is an advisor's DF",
+      "args": [
+        "DF0000000"
+      ],
+      "expect": false
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "the login's only account, unasked",
+      "args": [
+        [
+          "U0000000"
+        ],
+        null
+      ],
+      "expect": {
+        "account": "U0000000"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "the one named, of several",
+      "args": [
+        [
+          "U0000000",
+          "U0000001"
+        ],
+        "U0000001"
+      ],
+      "expect": {
+        "account": "U0000001"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "several and none named: refused, the ids masked",
+      "args": [
+        [
+          "U0000000",
+          "U0000001"
+        ],
+        null
+      ],
+      "expect": {
+        "refused": "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "a named account not on the login: refused, it masked too",
+      "args": [
+        [
+          "U0000000",
+          "U0000001"
+        ],
+        "DU0000001"
+      ],
+      "expect": {
+        "refused": "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "named, even with a single account, it must be that one",
+      "args": [
+        [
+          "U0000000"
+        ],
+        "U0000001"
+      ],
+      "expect": {
+        "refused": "IBKR_ACCOUNT (U•••••001) names no account on this login, which has U•••••000"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "a blank name is none",
+      "args": [
+        [
+          "U0000000"
+        ],
+        " "
+      ],
+      "expect": {
+        "account": "U0000000"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "a name led by a BOM is the name",
+      "args": [
+        [
+          "U0000000",
+          "U0000001"
+        ],
+        "﻿U0000001"
+      ],
+      "expect": {
+        "account": "U0000001"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "a name led by a \\x1c names no account",
+      "args": [
+        [
+          "U0000000",
+          "U0000001"
+        ],
+        "\u001cU0000001"
+      ],
+      "expect": {
+        "refused": "IBKR_ACCOUNT (•••••001) names no account on this login, which has U•••••000, U•••••001"
+      }
+    },
+    {
+      "fn": "chooseAccount",
+      "name": "no account named by the gateway",
+      "args": [
+        [],
+        null
+      ],
+      "expect": {
+        "refused": "IB Gateway named no account on this login"
+      }
+    },
+    {
+      "fn": "perShareCost",
+      "name": "an option's average cost per share",
+      "args": [
+        250,
+        100
+      ],
+      "expect": 2.5
+    },
+    {
+      "fn": "perShareCost",
+      "name": "a stock's, which has no multiplier, as sent",
+      "args": [
+        38.115,
+        null
+      ],
+      "expect": 38.115
+    },
+    {
+      "fn": "perShareCost",
+      "name": "a multiplier of zero divides by nothing",
+      "args": [
+        38.115,
+        0
+      ],
+      "expect": 38.115
+    },
+    {
+      "fn": "perShareCost",
+      "name": "no cost is no cost",
+      "args": [
+        null,
+        100
+      ],
+      "expect": null
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a long call, its cost per share",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "20261218",
+          "strike": "45.0",
+          "right": "C",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "4",
+          "market_price": "3.85",
+          "market_value": "1540.0",
+          "average_cost": "262.5",
+          "unrealized_pnl": "490.0",
+          "realized_pnl": "0.0"
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "20261218",
+        "strike": 45,
+        "right": "C",
+        "multiplier": 100,
+        "position": 4,
+        "market_price": 3.85,
+        "market_value": 1540,
+        "average_cost": 2.625,
+        "unrealized_pnl": 490,
+        "realized_pnl": 0
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a short put with realised P&L, its sign kept",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "20261218",
+          "strike": "35.0",
+          "right": "P",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "-6",
+          "market_price": "0.92",
+          "market_value": "-552.0",
+          "average_cost": "141.8",
+          "unrealized_pnl": "298.8",
+          "realized_pnl": "-412.8"
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "20261218",
+        "strike": 35,
+        "right": "P",
+        "multiplier": 100,
+        "position": -6,
+        "market_price": 0.92,
+        "market_value": -552,
+        "average_cost": 1.4180000000000001,
+        "unrealized_pnl": 298.8,
+        "realized_pnl": -412.8
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a stock: no strike, no side, no expiry, no multiplier",
+      "args": [
+        {
+          "sec_type": "STK",
+          "symbol": "ACME",
+          "expiry": "",
+          "strike": "0",
+          "right": "0",
+          "multiplier": "",
+          "currency": "USD",
+          "position": "300",
+          "market_price": "41.27",
+          "market_value": "12381.0",
+          "average_cost": "38.115",
+          "unrealized_pnl": "946.5",
+          "realized_pnl": "0.0"
+        }
+      ],
+      "expect": {
+        "sec_type": "STK",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": null,
+        "strike": null,
+        "right": null,
+        "multiplier": null,
+        "position": 300,
+        "market_price": 41.27,
+        "market_value": 12381,
+        "average_cost": 38.115,
+        "unrealized_pnl": 946.5,
+        "realized_pnl": 0
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a stock in another currency, its figures in that one",
+      "args": [
+        {
+          "sec_type": "STK",
+          "symbol": "INITECH",
+          "expiry": "",
+          "strike": "0",
+          "right": "0",
+          "multiplier": "",
+          "currency": "EUR",
+          "position": "50",
+          "market_price": "108.4",
+          "market_value": "5420.0",
+          "average_cost": "102.2",
+          "unrealized_pnl": "310.0",
+          "realized_pnl": "0.0"
+        }
+      ],
+      "expect": {
+        "sec_type": "STK",
+        "symbol": "INITECH",
+        "currency": "EUR",
+        "expiry": null,
+        "strike": null,
+        "right": null,
+        "multiplier": null,
+        "position": 50,
+        "market_price": 108.4,
+        "market_value": 5420,
+        "average_cost": 102.2,
+        "unrealized_pnl": 310,
+        "realized_pnl": 0
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a side written out in full",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "20261218",
+          "strike": "35",
+          "right": "PUT",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "1",
+          "market_price": "0.92",
+          "market_value": "92",
+          "average_cost": "100",
+          "unrealized_pnl": "-8",
+          "realized_pnl": "0"
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "20261218",
+        "strike": 35,
+        "right": "P",
+        "multiplier": 100,
+        "position": 1,
+        "market_price": 0.92,
+        "market_value": 92,
+        "average_cost": 1,
+        "unrealized_pnl": -8,
+        "realized_pnl": 0
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a figure is read by JavaScript's Number rules",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "20261218",
+          "strike": "0x1C",
+          "right": "C",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "1_00",
+          "market_price": " 3.85 ",
+          "market_value": "Infinity",
+          "average_cost": "1e3",
+          "unrealized_pnl": "-12.5",
+          "realized_pnl": "+5"
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "20261218",
+        "strike": 28,
+        "right": "C",
+        "multiplier": 100,
+        "position": null,
+        "market_price": 3.85,
+        "market_value": null,
+        "average_cost": 10,
+        "unrealized_pnl": -12.5,
+        "realized_pnl": 5
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a side and an expiry trimmed as JavaScript trims",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "\u001c",
+          "strike": "45",
+          "right": "﻿P",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "1",
+          "market_price": "0.92",
+          "market_value": "92",
+          "average_cost": "100",
+          "unrealized_pnl": "-8",
+          "realized_pnl": "0"
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "\u001c",
+        "strike": 45,
+        "right": "P",
+        "multiplier": 100,
+        "position": 1,
+        "market_price": 0.92,
+        "market_value": 92,
+        "average_cost": 1,
+        "unrealized_pnl": -8,
+        "realized_pnl": 0
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "a figure that is only a BOM is none, never 0",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "20261218",
+          "strike": "45",
+          "right": "C",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "1",
+          "market_price": "﻿",
+          "market_value": "﻿",
+          "average_cost": "100",
+          "unrealized_pnl": "0",
+          "realized_pnl": "0"
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "20261218",
+        "strike": 45,
+        "right": "C",
+        "multiplier": 100,
+        "position": 1,
+        "market_price": null,
+        "market_value": null,
+        "average_cost": 1,
+        "unrealized_pnl": 0,
+        "realized_pnl": 0
+      }
+    },
+    {
+      "fn": "holdingFrom",
+      "name": "an empty figure is none, never 0",
+      "args": [
+        {
+          "sec_type": "OPT",
+          "symbol": "ACME",
+          "expiry": "20261218",
+          "strike": "45.0",
+          "right": "C",
+          "multiplier": "100",
+          "currency": "USD",
+          "position": "4",
+          "market_price": "",
+          "market_value": "",
+          "average_cost": "",
+          "unrealized_pnl": "",
+          "realized_pnl": ""
+        }
+      ],
+      "expect": {
+        "sec_type": "OPT",
+        "symbol": "ACME",
+        "currency": "USD",
+        "expiry": "20261218",
+        "strike": 45,
+        "right": "C",
+        "multiplier": 100,
+        "position": 4,
+        "market_price": null,
+        "market_value": null,
+        "average_cost": null,
+        "unrealized_pnl": null,
+        "realized_pnl": null
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "the base from NetLiquidation, each total from BASE first",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "AccountCode",
+            "value": "U0000000",
+            "currency": ""
+          },
+          {
+            "key": "NetLiquidation",
+            "value": "184523.17",
+            "currency": "USD"
+          },
+          {
+            "key": "TotalCashValue",
+            "value": "61230.55",
+            "currency": "USD"
+          },
+          {
+            "key": "UnrealizedPnL",
+            "value": "2875.40",
+            "currency": "BASE"
+          },
+          {
+            "key": "UnrealizedPnL",
+            "value": "2565.40",
+            "currency": "USD"
+          },
+          {
+            "key": "UnrealizedPnL",
+            "value": "310.00",
+            "currency": "EUR"
+          },
+          {
+            "key": "RealizedPnL",
+            "value": "-412.80",
+            "currency": "BASE"
+          },
+          {
+            "key": "RealizedPnL",
+            "value": "-412.80",
+            "currency": "USD"
+          }
+        ],
+        [],
+        "14:32"
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "14:32",
+        "totals": {
+          "net_liquidation": 184523.17,
+          "total_cash": 61230.55,
+          "unrealized_pnl": 2875.4,
+          "realized_pnl": -412.8
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "a total with no BASE row is read in the base currency",
+      "args": [
+        "DU0000000",
+        [
+          {
+            "key": "NetLiquidation",
+            "value": "1003250.00",
+            "currency": "USD"
+          },
+          {
+            "key": "UnrealizedPnL",
+            "value": "150.00",
+            "currency": "USD"
+          },
+          {
+            "key": "RealizedPnL",
+            "value": "1.00",
+            "currency": "EUR"
+          }
+        ],
+        [],
+        "09:05"
+      ],
+      "expect": {
+        "account": "DU•••••000",
+        "paper": true,
+        "base_currency": "USD",
+        "updated_at": "09:05",
+        "totals": {
+          "net_liquidation": 1003250,
+          "total_cash": null,
+          "unrealized_pnl": 150,
+          "realized_pnl": null
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "the live gateway's keys: P&L from $LEDGER's BASE row",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "AccountCode",
+            "value": "U0000000",
+            "currency": ""
+          },
+          {
+            "key": "NetLiquidation",
+            "value": "184523.17",
+            "currency": "USD"
+          },
+          {
+            "key": "NetLiquidation-S",
+            "value": "184000.00",
+            "currency": "USD"
+          },
+          {
+            "key": "TotalCashValue",
+            "value": "61230.55",
+            "currency": "USD"
+          },
+          {
+            "key": "TotalCashValue-S",
+            "value": "61000.00",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-UnrealizedPnL",
+            "value": "2071.40",
+            "currency": "BASE"
+          },
+          {
+            "key": "$LEDGER-UnrealizedPnL",
+            "value": "1735.30",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-UnrealizedPnL",
+            "value": "310.00",
+            "currency": "EUR"
+          },
+          {
+            "key": "$LEDGER-RealizedPnL",
+            "value": "-412.80",
+            "currency": "BASE"
+          },
+          {
+            "key": "$LEDGER-RealizedPnL",
+            "value": "-412.80",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "1.00",
+            "currency": "BASE"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "1.00",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "1.0841",
+            "currency": "EUR"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "1.1307",
+            "currency": "CHF"
+          }
+        ],
+        [],
+        "14:32"
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "14:32",
+        "totals": {
+          "net_liquidation": 184523.17,
+          "total_cash": 61230.55,
+          "unrealized_pnl": 2071.4,
+          "realized_pnl": -412.8
+        },
+        "exchange_rates": {
+          "USD": 1,
+          "EUR": 1.0841,
+          "CHF": 1.1307
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "a plain BASE row is preferred to $LEDGER's",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "UnrealizedPnL",
+            "value": "1.00",
+            "currency": "BASE"
+          },
+          {
+            "key": "$LEDGER-UnrealizedPnL",
+            "value": "2.00",
+            "currency": "BASE"
+          }
+        ],
+        [],
+        null
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": null,
+        "updated_at": null,
+        "totals": {
+          "net_liquidation": null,
+          "total_cash": null,
+          "unrealized_pnl": 1,
+          "realized_pnl": null
+        },
+        "exchange_rates": {},
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "a rate that is not a positive number is no rate",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "NetLiquidation",
+            "value": "1.00",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "0",
+            "currency": "EUR"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "",
+            "currency": "JPY"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "-1",
+            "currency": "CHF"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "0x10",
+            "currency": "GBP"
+          }
+        ],
+        [],
+        null
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": null,
+        "totals": {
+          "net_liquidation": 1,
+          "total_cash": null,
+          "unrealized_pnl": null,
+          "realized_pnl": null
+        },
+        "exchange_rates": {
+          "GBP": 16,
+          "USD": 1
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "a base currency of \\x1c is one, as JavaScript trims",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "NetLiquidation",
+            "value": "1.00",
+            "currency": "\u001c"
+          }
+        ],
+        [],
+        null
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "\u001c",
+        "updated_at": null,
+        "totals": {
+          "net_liquidation": 1,
+          "total_cash": null,
+          "unrealized_pnl": null,
+          "realized_pnl": null
+        },
+        "exchange_rates": {
+          "\u001c": 1
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "a rate currency of \\x1c is one, as JavaScript trims",
+      "args": [
+        "U0000000",
+        [
+          {
+            "key": "NetLiquidation",
+            "value": "1.00",
+            "currency": "USD"
+          },
+          {
+            "key": "$LEDGER-ExchangeRate",
+            "value": "1.5",
+            "currency": "\u001c"
+          }
+        ],
+        [],
+        null
+      ],
+      "expect": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": null,
+        "totals": {
+          "net_liquidation": 1,
+          "total_cash": null,
+          "unrealized_pnl": null,
+          "realized_pnl": null
+        },
+        "exchange_rates": {
+          "\u001c": 1.5,
+          "USD": 1
+        },
+        "holdings": []
+      }
+    },
+    {
+      "fn": "accountAnswer",
+      "name": "nothing said is nothing claimed",
+      "args": [
+        "U0000001",
+        [],
+        [],
+        null
+      ],
+      "expect": {
+        "account": "U•••••001",
+        "paper": false,
+        "base_currency": null,
+        "updated_at": null,
+        "totals": {
+          "net_liquidation": null,
+          "total_cash": null,
+          "unrealized_pnl": null,
+          "realized_pnl": null
+        },
+        "exchange_rates": {},
+        "holdings": []
+      }
     }
   ]
 }

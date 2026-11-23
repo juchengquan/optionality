@@ -1,6 +1,6 @@
 """A stub IB Gateway that replays one recorded conversation to `ib_async` (ADR 0021, Decision 7).
 
-The Python twin of `typescript/src/vendors/ibkr/fake.ts`, and it follows the same five rules,
+The Python twin of `typescript/src/vendors/ibkr/fake.ts`, and it follows the same six rules,
 which `testdata/vendors/ibkr-gateway/README.md` writes down for "a stub in any language". It says
 nothing of its own: every byte it sends is in a recording, captured from the real gateway or
 constructed and labelled so, and the same files are what the TypeScript's stub replays to its own
@@ -12,7 +12,8 @@ entitlements, a dead session or an open market.
 What it adds to the TypeScript's: `received`, every message the client sent after its version
 range. `ib_async` is a general-purpose client that asks for positions, orders and the account when
 it connects through `IB.connectAsync`, and the TypeScript sends none of that; recording what
-arrives is how a test holds the Python to the same five messages rather than trusting it to.
+arrives is how a test holds the Python to the same five messages rather than trusting it to — and
+to reqAccountUpdates, a subscribe and its unsubscribe, only where a conversation reads the account.
 
 Not a test module, so pytest collects nothing here.
 """
@@ -55,7 +56,11 @@ AT = {
 SNAPSHOT_AT = 17
 
 #: the message ids the stub reads; everything else a client sends is accepted and never answered
-START_API, REQ_MKT_DATA, CANCEL_MKT_DATA, REQ_CONTRACT_DATA = "71", "1", "2", "9"
+START_API, REQ_MKT_DATA, CANCEL_MKT_DATA, REQ_CONTRACT_DATA, REQ_ACCT_DATA = "71", "1", "2", "9", "6"
+
+#: where reqAccountUpdates (version 2) says whether it subscribes ("1") or stops ("0"), and which
+#: account it names — `recordings.ts`' `SUBSCRIBE_AT` and `ACCOUNT_AT`
+SUBSCRIBE_AT, ACCOUNT_AT = 2, 3
 
 #: what the client sends before its first frame, raw
 PREFIX = b"API\0"
@@ -324,6 +329,29 @@ class FakeGateway:
             if request == "reqMktData":
                 answered[req_id] = exchange
             reply(exchange, req_id)
+            return
+        if message_id == REQ_ACCT_DATA:
+            # an account's subscription (ADR 0030), matched on the account it names; its replies
+            # carry no request id. Stopping it is answered with what the gateway said to that, and
+            # cuts a paced answer short. Keyed in `pending` by the account, which no id can be
+            account = fields[ACCOUNT_AT] if len(fields) > ACCOUNT_AT else ""
+            exchange = next(
+                (
+                    e
+                    for e in self.conversation["exchanges"]
+                    if e["request"] == "reqAccountUpdates" and e["account"] == account
+                ),
+                None,
+            )
+            key = f"account:{account}"
+            if len(fields) > SUBSCRIBE_AT and fields[SUBSCRIBE_AT] == "1":
+                if exchange is not None:
+                    reply(exchange, key)
+            else:
+                # answered ALWAYS, unlike a cancelled snapshot: the live gateway sent exactly one 2100
+                # after every unsubscribe (2026-11-23), whether or not the answer was all sent
+                stop(key)
+                send(exchange.get("onCancel", []) if exchange else [])
             return
         if message_id == CANCEL_MKT_DATA:
             # rule 5: what the gateway said to that cancel, if anything — `onCancel` is what a

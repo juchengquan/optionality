@@ -19,6 +19,9 @@ and why.
 
 Amends **CONTEXT.md**: `Reference` loses its proxy clause and gains a source.
 
+Its IB Gateway client read prices and nothing account-shaped; since **ADR 0030** (2026-11-23) it also
+reads a single account, read-only, and that record says how far.
+
 ## Context
 
 ADR 0018 chose `SPY ×10` because the index could not be had. That premise was true of moomoo and

@@ -3,7 +3,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { RECORDINGS, conversationNames, loadConversation, parseConversation } from "./recordings.ts";
+import {
+  PLACEHOLDER_ACCOUNTS, RECORDINGS, conversationNames, loadConversation, parseConversation,
+} from "./recordings.ts";
 
 /** The recorded gateway conversations under `testdata/vendors/ibkr-gateway/` (ADR 0021, phase 1d).
  *
@@ -24,7 +26,8 @@ describe("the conversations", () => {
     for (const name of conversationNames()) {
       const conversation = loadConversation(name);
       expect(conversation.conversation, `${name}.json names itself`).toBe(name);
-      expect(conversation.ask.length, `${name} asks for nothing`).toBeGreaterThan(0);
+      expect(conversation.ask.length + (conversation.accountReads?.length ?? 0),
+        `${name} asks for nothing`).toBeGreaterThan(0);
     }
   });
 
@@ -55,6 +58,29 @@ describe("the conversations", () => {
       data.sent = data.sent.slice(0, 17).concat(flag === undefined ? [] : [flag, "0", ""]);
       expect(() => parseConversation("normal-with-greeks", file), String(flag))
         .toThrow(/sent\[17\] must say whether it asked for a snapshot/);
+    }
+  });
+
+  it("reads the account reads, where a file has them (ADR 0030)", () => {
+    expect(loadConversation("account-several").accountReads)
+      .toEqual([{ wanted: null }, { wanted: "U0000001" }, { wanted: "DU0000001" }]);
+    expect(loadConversation("normal-with-greeks").accountReads).toBeUndefined();
+  });
+
+  it("refuses a conversation that neither asks for a quote nor reads the account", () => {
+    const text = readFileSync(join(RECORDINGS, "account-paper.json"), "utf8");
+    const file = { ...JSON.parse(text) as object, accountReads: [] };
+    expect(() => parseConversation("account-paper", file))
+      .toThrow(/must ask for a quote or read the account/);
+  });
+
+  it("refuses an account exchange whose subscribe does not name its account", () => {
+    const text = readFileSync(join(RECORDINGS, "account-paper.json"), "utf8");
+    for (const sent of [["6", "2", "1", "DU0000001"], ["6", "2", "0", "DU0000000"]]) {
+      const file = JSON.parse(text) as { exchanges: { sent: string[] }[] };
+      file.exchanges[0]!.sent = sent;
+      expect(() => parseConversation("account-paper", file), sent.join(","))
+        .toThrow(/must subscribe to DU0000000/);
     }
   });
 
@@ -99,6 +125,29 @@ describe("provenance, which is the point of the files", () => {
     }
   });
 
+  it("holds every conversation that touches the account to CONSTRUCTED (ADR 0030)", () => {
+    // the repository is public: a capture of the owner's account is read on the owner's machine
+    // and deleted, never committed, so a file that reads the account and says it was recorded is
+    // either mislabelled or the thing ADR 0030 forbids
+    const touches = conversationNames().map(loadConversation).filter((c) =>
+      c.accountReads !== undefined || c.exchanges.some((e) => e.request === "reqAccountUpdates"));
+    expect(touches.length).toBeGreaterThanOrEqual(4);
+    for (const c of touches) expect(c.provenance.kind, c.conversation).toBe("constructed");
+  });
+
+  it("refuses an account conversation that says it was recorded", () => {
+    const text = readFileSync(join(RECORDINGS, "account-paper.json"), "utf8");
+    const recorded = { kind: "recorded", at: "2026-11-23T13:00:00Z", how: "a capture",
+      gateway: "IB Gateway 10.52", protocol: 157 };
+    const withReads = { ...JSON.parse(text) as object, provenance: recorded };
+    expect(() => parseConversation("account-paper", withReads))
+      .toThrow(/reads the account, so it must be constructed/);
+    // an account exchange alone is enough: the quote asks around it change nothing
+    const exchangeOnly = { ...withReads, accountReads: undefined, ask: ["US.SPXW261218C8100000"] };
+    expect(() => parseConversation("account-paper", exchangeOnly))
+      .toThrow(/reads the account, so it must be constructed/);
+  });
+
   it("refuses a file that does not say which it is", () => {
     const text = readFileSync(join(RECORDINGS, "normal-with-greeks.json"), "utf8");
     const unlabelled = JSON.parse(text) as { provenance: Record<string, unknown> };
@@ -108,17 +157,140 @@ describe("provenance, which is the point of the files", () => {
   });
 });
 
-describe("nothing of the owner's", () => {
-  it("carries the placeholder account wherever the gateway named one", () => {
-    // managedAccounts is the one reply that names the owner. The number is replaced before a
-    // capture reaches disk, and this is what notices if a new capture forgets.
-    for (const name of conversationNames()) {
-      const c = loadConversation(name);
-      const accounts = c.handshake.onStartApi.filter((m) => m[0] === "15").map((m) => m[2]);
-      for (const a of accounts) expect(a, name).toBe("DU0000000");
-      const raw = readFileSync(join(RECORDINGS, `${name}.json`), "utf8");
-      expect(raw.match(/\b(DU|DF|U)\d{5,8}\b/g)?.filter((a) => a !== "DU0000000") ?? [], name)
-        .toEqual([]);
+describe("a constructed account that adds up", () => {
+  // invented figures are still held to arithmetic: a total that is not the sum of what it totals
+  // is a fixture a reader would trust and should not
+  const accountExchanges = () => conversationNames().flatMap((name) => loadConversation(name)
+    .exchanges.filter((e) => e.request === "reqAccountUpdates").map((e) => ({ name, e })));
+  const ledger = (replies: string[][], key: string) => new Map(replies
+    .filter((m) => m[0] === "6" && m[2] === `$LEDGER-${key}`).map((m) => [m[4]!, Number(m[3])]));
+  const plain = (replies: string[][], key: string) =>
+    Number(replies.find((m) => m[0] === "6" && m[2] === key)![3]);
+  /** each PORTFOLIO_VALUE row's figure at `at`, summed by the row's currency (field 10) */
+  const byCurrency = (replies: string[][], at: number) => {
+    const sums = new Map<string, number>();
+    for (const m of replies.filter((r) => r[0] === "7")) {
+      sums.set(m[10]!, (sums.get(m[10]!) ?? 0) + Number(m[at]));
     }
+    return sums;
+  };
+
+  it("has the account conversations to check", () => {
+    expect(accountExchanges().filter(({ e }) => ledger(e.replies, "CashBalance").has("BASE")))
+      .toHaveLength(5);
+  });
+
+  it("states each BASE figure as the currencies' at their rates", () => {
+    for (const { name, e } of accountExchanges()) {
+      const rates = ledger(e.replies, "ExchangeRate");
+      for (const key of ["CashBalance", "NetLiquidationByCurrency", "UnrealizedPnL", "RealizedPnL"]) {
+        const rows = ledger(e.replies, key);
+        if (!rows.has("BASE")) continue;
+        let sum = 0;
+        for (const [currency, amount] of rows) {
+          if (currency === "BASE") continue;
+          expect(rates.has(currency), `${name}: no rate for ${currency}`).toBe(true);
+          sum += amount * rates.get(currency)!;
+        }
+        expect(rows.get("BASE")!, `${name}: BASE ${key}`).toBeCloseTo(sum, 2);
+      }
+      const base = (key: string) => ledger(e.replies, key).get("BASE")!;
+      expect(plain(e.replies, "TotalCashValue"), `${name}: TotalCashValue`)
+        .toBeCloseTo(base("CashBalance"), 2);
+      expect(plain(e.replies, "NetLiquidation"), `${name}: NetLiquidation`)
+        .toBeCloseTo(base("NetLiquidationByCurrency"), 2);
+    }
+  });
+
+  it("keeps the ledger for every currency a holding is in", () => {
+    // otherwise a holding in a currency with no `$LEDGER-` rows would be counted in no total, and
+    // the sums below, which walk the ledger's currencies, would never see it
+    for (const { name, e } of accountExchanges()) {
+      const ledgered = new Set(ledger(e.replies, "Currency").keys());
+      for (const currency of byCurrency(e.replies, 15).keys()) {
+        expect(ledgered.has(currency), `${name}: a holding in ${currency}, no $LEDGER- rows for it`)
+          .toBe(true);
+      }
+    }
+  });
+
+  it("states each currency's liquidation value as its cash and its holdings' market value", () => {
+    for (const { name, e } of accountExchanges()) {
+      const cash = ledger(e.replies, "CashBalance");
+      const values = byCurrency(e.replies, 15);
+      for (const [currency, nlv] of ledger(e.replies, "NetLiquidationByCurrency")) {
+        if (currency === "BASE") continue;
+        expect(nlv, `${name}: ${currency} NetLiquidationByCurrency`)
+          .toBeCloseTo((cash.get(currency) ?? 0) + (values.get(currency) ?? 0), 2);
+      }
+    }
+  });
+
+  it("states each currency's P&L as its holdings'", () => {
+    for (const { name, e } of accountExchanges()) {
+      for (const [key, at] of [["UnrealizedPnL", 17], ["RealizedPnL", 18]] as const) {
+        const held = byCurrency(e.replies, at);
+        for (const [currency, pnl] of ledger(e.replies, key)) {
+          if (currency === "BASE") continue;
+          expect(pnl, `${name}: ${currency} ${key}`).toBeCloseTo(held.get(currency) ?? 0, 2);
+        }
+      }
+    }
+  });
+});
+
+describe("nothing of the owner's", () => {
+  /** Every account id a conversation names, wherever a message carries one: managedAccounts'
+   *  list, an account value's account (and AccountCode's value, which is the id itself), a
+   *  portfolio row's, the download end's, an account exchange's and its subscribe's, and the
+   *  account a read asks for. */
+  function accountsNamed(name: string): string[] {
+    const c = loadConversation(name);
+    const messages = [
+      ...c.handshake.onStartApi,
+      ...c.exchanges.flatMap((e) => [e.sent, ...e.replies, ...(e.onCancel ?? [])]),
+    ];
+    const named: string[] = [];
+    for (const m of messages) {
+      if (m[0] === "15") named.push(...(m[2] ?? "").split(",").filter(Boolean));
+      if (m[0] === "6" && m.length === 6) {          // an account value, not a subscribe
+        named.push(m[5]!);
+        if (m[2] === "AccountCode") named.push(m[3]!);
+      }
+      if (m[0] === "6" && m.length === 4) named.push(m[3]!);  // reqAccountUpdates
+      if (m[0] === "7") named.push(m[19]!);
+      if (m[0] === "54") named.push(m[2]!);
+    }
+    for (const e of c.exchanges) if (e.request === "reqAccountUpdates") named.push(e.account);
+    for (const r of c.accountReads ?? []) if (r.wanted !== null) named.push(r.wanted);
+    return named;
+  }
+
+  it("carries only placeholder accounts wherever the gateway, or a read, named one", () => {
+    // managedAccounts used to be the one reply that named the owner; since ADR 0030 every
+    // account message does. The number is never committed, and this is what notices if a
+    // conversation built from a capture forgets.
+    const placeholders = new Set<string>(PLACEHOLDER_ACCOUNTS);
+    for (const name of conversationNames()) {
+      const named = accountsNamed(name);
+      expect(named.filter((a) => !placeholders.has(a)), name).toEqual([]);
+      const raw = readFileSync(join(RECORDINGS, `${name}.json`), "utf8");
+      expect(raw.match(/\b(DU|DF|DI|U|F|I)\d{5,9}\b/g)?.filter((a) => !placeholders.has(a)) ?? [],
+        name).toEqual([]);
+    }
+  });
+
+  it("finds the account in every message that carries one, so the check above has a subject", () => {
+    // read off a conversation that holds each kind, so a reader that stopped looking at one
+    // would be seen here rather than passing everything
+    expect(new Set(accountsNamed("account-several"))).toEqual(new Set(["U0000000", "U0000001",
+      "DU0000001"]));
+    expect(accountsNamed("account-stocks-and-options").length).toBeGreaterThan(20);
+  });
+
+  it("would refuse an account that is not a placeholder", () => {
+    const text = readFileSync(join(RECORDINGS, "account-paper.json"), "utf8");
+    expect(text.replaceAll("DU0000000", "DU1234567").match(/\b(DU|DF|DI|U|F|I)\d{5,9}\b/g))
+      .toContain("DU1234567");
   });
 });
