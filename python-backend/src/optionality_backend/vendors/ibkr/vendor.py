@@ -19,18 +19,80 @@ to the same recorded gateway conversations. It is asyncio already, so unlike moo
 needs no worker thread: it runs on the loop with the routes, the sweep and the bot. And the descriptor
 hands back the client itself, where the TypeScript's hands back an object of closures — a Python bound
 method keeps its receiver — so the one thing a Provider owes that the library's client does not have,
-`quote_grade`, is added by a subclass here rather than a closure.
+`quote_grade`, is added by a subclass here rather than a closure — and so is the account's read
+(ADR 0030, #470), `read_account`, which the TypeScript's object carries as `readAccount`.
 """
 
-from optionality.ibkr import IbkrClient
+from optionality.ibkr import (
+    CONNECT_TIMEOUT_MS,
+    DEFAULT_HOST,
+    QUIET_MS,
+    REQUEST_TIMEOUT_MS,
+    IbkrAccountRefused,
+    IbkrClient,
+    IbkrUnreachable,
+)
 
 from ...env import Settings
-from ...ports import QuoteGradeReading
+from ...ports import (
+    AccountFailed,
+    AccountRead,
+    AccountReading,
+    AccountRefused,
+    AccountUnreachable,
+    QuoteGradeReading,
+    ReadAccount,
+)
 from .. import ProviderVendor
 
 
+def account_reader(client: IbkrClient) -> ReadAccount:
+    """The account's one read over `client` (ADR 0030, #470), every way it ends sorted for the route: the
+    library's `IbkrUnreachable` — no session at all, in the connect's own words — apart from a read that
+    failed once it began (a plain ConnectionError: its deadline, or its connection closing under it)
+    and from `IbkrAccountRefused`. One connect, made by `account` itself, so the words of a refused
+    session reach the route rather than a probe's yes or no.
+
+    **Where the Python differs, and why.** `IbkrUnreachable` is a ConnectionError, as a failed read is,
+    so it is caught first; the TypeScript's are unrelated `Error`s and the order there is free."""
+
+    async def read(wanted: str | None) -> AccountReading:
+        try:
+            return AccountRead(await client.account(wanted))
+        except IbkrUnreachable as err:
+            return AccountUnreachable(str(err))
+        except IbkrAccountRefused as err:
+            return AccountRefused(str(err))
+        except Exception as err:  # noqa: BLE001 — every other way the read ends is its failure, in its words
+            return AccountFailed(str(err))
+
+    return read
+
+
 class IbkrProvider(IbkrClient):
-    """The library's client as a Provider."""
+    """The library's client as a Provider, and the account's one read over it."""
+
+    def __init__(
+        self,
+        host: str = DEFAULT_HOST,
+        *,
+        port: int,
+        client_id: int,
+        connect_timeout_ms: int = CONNECT_TIMEOUT_MS,
+        request_timeout_ms: int = REQUEST_TIMEOUT_MS,
+        quiet_ms: int = QUIET_MS,
+    ) -> None:
+        # everything the library's client takes, with its defaults, so a Provider is built as one is
+        super().__init__(
+            host,
+            port=port,
+            client_id=client_id,
+            connect_timeout_ms=connect_timeout_ms,
+            request_timeout_ms=request_timeout_ms,
+            quiet_ms=quiet_ms,
+        )
+        #: over the same client, so the account is read on the session the prices are
+        self.read_account: ReadAccount = account_reader(self)
 
     def quote_grade(self) -> QuoteGradeReading | None:
         """None: IB Gateway grades each REQUEST, which a Reference row carries as `delayed`; it states no

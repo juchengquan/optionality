@@ -73,6 +73,7 @@ const deps: Deps = {
   sweeper: sweeper.health,
   provider,
   sources: vendors.sources,
+  account: vendors.account,
 };
 
 // 127.0.0.1 (takePort's default): reachable only via the tailscale serve proxy and localhost,

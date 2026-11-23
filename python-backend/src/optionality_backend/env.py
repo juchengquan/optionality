@@ -51,6 +51,10 @@ class Settings:
     #: the first in silence. The ids are the owning process's port so a refusal names the culprit:
     #: 31415 the service, 31417 `make serve`, 31419 a harness.
     ibkr_client_id: int
+    #: Which of the login's IBKR accounts `GET /account` reads (ADR 0030, #470), in full; blank is
+    #: unset, which reads the login's only account and refuses where it has several. Never written
+    #: anywhere but here: every answer, error and log line carries it masked.
+    ibkr_account: str
     #: OpenD's WEBSOCKET port, which is all the TypeScript's npm client speaks (ADR 0009, phase 6)
     moomoo_ws_port: int
     #: OpenD's websocket key, in plaintext; the client hashes it. Gitignored, like the bot token.
@@ -122,6 +126,7 @@ DEFAULTS = Settings(
     ibkr_host="",
     ibkr_port=4001,
     ibkr_client_id=31415,
+    ibkr_account="",
     moomoo_ws_port=33333,
     moomoo_ws_key="",
     api_token="",
@@ -161,6 +166,7 @@ FROM_ENV = {
     "ibkr_host": "IBKR_HOST",
     "ibkr_port": "IBKR_PORT",
     "ibkr_client_id": "IBKR_CLIENT_ID",
+    "ibkr_account": "IBKR_ACCOUNT",
     "moomoo_ws_port": "MOOMOO_WS_PORT",
     "moomoo_ws_key": "MOOMOO_WS_KEY",
     "api_token": "API_TOKEN",

@@ -1,0 +1,68 @@
+{
+  "name": "GET /account says the gateway refused the session, in its words",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "IBKR_HOST": "127.0.0.1",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "quote_grade": {
+        "us_option": null,
+        "realtime": null,
+        "read_at": null,
+        "failure": null
+      },
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "ibkr_account": {
+      "down": "IB Gateway refused the session: 326 Unable to connect as the client id is already in use. Retry with a unique client id.",
+      "refused": null,
+      "fails": null,
+      "account": null
+    },
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/account",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 502,
+      "body": {
+        "detail": "IB Gateway refused the session: 326 Unable to connect as the client id is already in use. Retry with a unique client id."
+      }
+    },
+    "rows": {},
+    "calls": {
+      "ibkr account": [
+        []
+      ]
+    }
+  }
+}

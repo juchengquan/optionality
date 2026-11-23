@@ -57,6 +57,13 @@ function written(world: World): World {
     sources: Object.fromEntries(
       Object.keys(world.sources).sort().map((name) => [name, vendorTable(world.sources[name]!)]),
     ),
+    // only where IB Gateway is configured; its rules' order, as a vendor's table is written
+    ...(world.ibkr_account === undefined ? {} : {
+      ibkr_account: {
+        down: world.ibkr_account.down, refused: world.ibkr_account.refused,
+        fails: world.ibkr_account.fails, account: world.ibkr_account.account,
+      },
+    }),
     telegram: world.telegram,
     sweeps: world.sweeps.map((s) => ({ at: s.at, down: s.down })),
     tables,

@@ -31,6 +31,8 @@ Every scenario starts from one, written out in full:
 - `sources` — vendors a Reference may name besides the Provider, each a table of the same shape.
   The Provider is a source under its own name as well. A source not listed does not exist in this
   build.
+- `ibkr_account` — IB Gateway's account read (ADR 0030), a table of what it answers (below);
+  absent where IB Gateway is not configured (`IBKR_HOST` blank), so a world without the key has none.
 - `telegram` — `"up"`, or `"down"`: every send fails.
 - `sweeps` — sweeps that happened BEFORE the event, each `{at, down}`, run in order with the clock
   at `at`. They exist to give the engine its memory — a run of failed sweeps, a figure silent for
@@ -71,6 +73,29 @@ the backend's Provider as it stands; asking for it asks the world nothing.
    with no answer is "subscribed, nothing yet", which is not the same as unknown.
 
 Every call is recorded, the failed ones included.
+
+### IB Gateway's account read
+
+`ibkr_account` is `{down, refused, fails, account}`: what the library's account read answers, as a
+vendor's table states its batch — the IB Gateway clients are held to the wire by their recorded
+conversations (`testdata/vendors/ibkr-gateway/`), and the choice of account and the masking by the
+library's cases. A read asks for an account — `IBKR_ACCOUNT` trimmed as JavaScript's `trim()`
+trims (a control character such as `\x1f` is kept, where Python's `str.strip()` would take it), or
+none where it is blank — and gets, in this order:
+
+1. "unreachable", with the words `down`, if it is not null: no session with IB Gateway at all, in
+   the connect's own words (the library's `IbkrUnreachable`) — a session the gateway refused
+   ("IB Gateway refused the session: …") is answered in them, anything else as a gateway that did
+   not answer;
+2. a refusal with the words `refused`, if it is not null: the library would not choose an account
+   (several on the login and none named, or one named that is not on it), every id masked;
+3. a failure with the words `fails`, if it is not null: connected, and the read did not finish
+   (its deadline passed);
+4. otherwise `account`, the library's answer — `{account, paper, base_currency, updated_at, totals,
+   exchange_rates, holdings}`, the id masked as the library masks it.
+
+The ids behind them are placeholders only (`U0000000`, `DU0000001`, …), as in the recordings. Each
+read is recorded in `calls` under `"ibkr account"`, as `[<the id asked for>]`, or `[]` for none.
 
 ### Ids
 

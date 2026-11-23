@@ -6,6 +6,7 @@
  *  reaches a second table.
  */
 import { buildSpxCode } from "optionality/domain/contract";
+import { ibkrFields } from "optionality/vendors/fields";
 
 import type { EarlierRequest, HttpRequest, World } from "../format.ts";
 import {
@@ -24,6 +25,87 @@ export interface HttpInput {
 }
 
 const DOWN = "connect ECONNREFUSED 127.0.0.1:33333";
+
+/** IB Gateway configured, as `.env` would say it (ADR 0030, #470). */
+const IBKR = { IBKR_HOST: "127.0.0.1" };
+
+/** A holding as the library maps IBKR's PORTFOLIO_VALUE row: a stock unless it says otherwise. */
+const ibkrHolding = (over: Record<string, unknown>) => ({
+  sec_type: "STK", symbol: "ACME", currency: "USD", expiry: null, strike: null, right: null,
+  multiplier: null, position: 300, market_price: 41.25, market_value: 12375, average_cost: 38.125,
+  unrealized_pnl: 937.5, realized_pnl: 0, ...over,
+});
+
+/** An account holding stocks and options in two currencies, and three things that are neither. */
+const WHOLE_ACCOUNT = {
+  base_currency: "USD", updated_at: "14:32",
+  totals: { net_liquidation: 184523.25, total_cash: 61230.5, unrealized_pnl: 2071.5, realized_pnl: -412.75 },
+  // IBKR's own: base units per one unit of each currency, the base 1
+  exchange_rates: { USD: 1, EUR: 1.0625 },
+  holdings: [
+    ibkrHolding({}),
+    ibkrHolding({
+      sec_type: "OPT", expiry: "20261218", strike: 45, right: "C", multiplier: 100, position: 4,
+      market_price: 3.75, market_value: 1500, average_cost: 2.625, unrealized_pnl: 450,
+    }),
+    ibkrHolding({
+      symbol: "INITECH", currency: "EUR", position: 50, market_price: 108.5, market_value: 5425,
+      average_cost: 102.25, unrealized_pnl: 312.5,
+    }),
+    ibkrHolding({
+      sec_type: "FUT", symbol: "ES", expiry: "20261218", multiplier: 50, position: 1,
+      market_price: 6812.25, market_value: 0, average_cost: 6790.5, unrealized_pnl: 1087.5,
+    }),
+    ibkrHolding({
+      sec_type: "OPT", expiry: "20261218", strike: 35, right: "P", multiplier: 100, position: -6,
+      market_price: 0.875, market_value: -525, average_cost: 1.375, unrealized_pnl: 300,
+      realized_pnl: -412.75,
+    }),
+    ibkrHolding({
+      sec_type: "CASH", symbol: "EUR.USD", position: 1200, market_price: 1.0625, market_value: 1275,
+      average_cost: null, unrealized_pnl: null, realized_pnl: null,
+    }),
+    ibkrHolding({
+      sec_type: "BOND", symbol: "US-T", position: 10, market_price: 99.5, market_value: 9950,
+      average_cost: 99.25, unrealized_pnl: 25,
+    }),
+  ],
+};
+
+/** An account holding nothing, its cash alone. */
+const CASH_ONLY = {
+  base_currency: "USD", updated_at: "11:47",
+  totals: { net_liquidation: 25010, total_cash: 25010, unrealized_pnl: 0, realized_pnl: 0 },
+  exchange_rates: { USD: 1 },
+  holdings: [],
+};
+
+/** The library's answer for the account `id`: its id masked and `paper` as the library says them, so
+ *  no masked id is written here and every one follows the library's rule. */
+const answered = (id: string, answer: Record<string, unknown>) => ({
+  account: { account: ibkrFields.maskAccount(id), paper: ibkrFields.isPaper(id), ...answer },
+});
+
+/** The library's refusal for a login managing `managed`, asked for `wanted`, in its own words. */
+function refusedFor(managed: string[], wanted: string | null) {
+  const choice = ibkrFields.chooseAccount(managed, wanted);
+  if (!("refused" in choice)) throw new Error(`the library chooses ${choice.account}: no refusal`);
+  return { refused: choice.refused };
+}
+
+/** Two accounts on one login. */
+const TWO = ["U0000000", "U0000001"];
+
+/** The library's words for a gateway nothing listens for (`socket.ts`): down, or at its login
+ *  screen with its API port shut. */
+const GATEWAY_DOWN = "could not reach IB Gateway at 127.0.0.1:4001: connect ECONNREFUSED 127.0.0.1:4001";
+/** The library's words for a session the gateway refused: its `client-id-in-use` recording. */
+const SESSION_REFUSED = "IB Gateway refused the session: 326 Unable to connect as the client id is already "
+  + "in use. Retry with a unique client id.";
+
+/** The library's words for a read whose deadline passed (`client.ts`). */
+const ACCOUNT_DEADLINE = "IB Gateway did not finish sending the account within 8000ms — its link "
+  + "to IBKR may be down while its own socket is still open";
 /** A GetUserInfo that never answered, in the client's words (#464). */
 const GRADE_TIMED_OUT = "OpenD GetUserInfo timed out after 10000ms";
 
@@ -3268,6 +3350,118 @@ export const HTTP: readonly HttpInput[] = [
     name: "GET /openapi.json names the path the browser sees behind the proxy",
     world: world({ settings: { ROOT_PATH: "/opt/api" } }),
     request: request("GET", "/openapi.json", null, { anonymous: true }),
+  },
+  // --- the IBKR account (ADR 0030, #470) -----------------------------------------------------
+  {
+    // stocks and options apart, each currency its own; a future, a forex balance and a bond under
+    // other with only what the page lists of them, in the order IBKR sent them
+    name: "GET /account answers the account, stocks and options apart and the rest under other",
+    world: world({
+      settings: IBKR, ibkr_account: answered("U0000000", WHOLE_ACCOUNT),
+    }),
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account names a paper account as such",
+    world: world({
+      settings: IBKR, ibkr_account: answered("DU0000000", CASH_ONLY),
+    }),
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account reads the account IBKR_ACCOUNT names of several",
+    world: world({ settings: { ...IBKR, IBKR_ACCOUNT: "U0000001" }, ibkr_account: answered("U0000001", CASH_ONLY) }),
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account refuses a login with several accounts while IBKR_ACCOUNT is unset",
+    world: world({ settings: IBKR, ibkr_account: refusedFor(TWO, null) }),
+    request: request("GET", "/account"),
+  },
+  {
+    // blank is unset, whatever spaces it holds
+    name: "GET /account refuses a login with several accounts while IBKR_ACCOUNT is blank",
+    world: world({ settings: { ...IBKR, IBKR_ACCOUNT: "  " }, ibkr_account: refusedFor(TWO, null) }),
+    request: request("GET", "/account"),
+  },
+  {
+    // trimmed as JavaScript trims, in both backends: a unit separator is no whitespace to it, so this
+    // asks for "\x1f" — which the library refuses — rather than reading the login's only account
+    name: "GET /account asks for an IBKR_ACCOUNT of a control character as written, not as blank",
+    world: world({
+      settings: { ...IBKR, IBKR_ACCOUNT: "\x1f" }, ibkr_account: refusedFor(["U0000000"], "\x1f"),
+    }),
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account refuses an IBKR_ACCOUNT that names no account on the login",
+    world: world({ settings: { ...IBKR, IBKR_ACCOUNT: "DU0000001" }, ibkr_account: refusedFor(TWO, "DU0000001") }),
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account says IB Gateway is not configured",
+    world: world(),
+    request: request("GET", "/account"),
+  },
+  {
+    // down, or at its login screen with its API port shut: the page is told in a person's words
+    name: "GET /account says the gateway did not answer",
+    world: world({
+      settings: IBKR,
+      ibkr_account: {
+        down: GATEWAY_DOWN, ...answered("U0000000", WHOLE_ACCOUNT),
+      },
+    }),
+    request: request("GET", "/account"),
+  },
+  {
+    // the gateway answered and refused: told in its words, not as a gateway to start
+    name: "GET /account says the gateway refused the session, in its words",
+    world: world({ settings: IBKR, ibkr_account: { down: SESSION_REFUSED } }),
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account says the read did not finish by its deadline",
+    world: world({
+      settings: IBKR,
+      ibkr_account: { fails: ACCOUNT_DEADLINE, ...answered("U0000000", WHOLE_ACCOUNT) },
+    }),
+    request: request("GET", "/account"),
+  },
+  {
+    // read 9s ago: answered from that read, read_at and all, asking the gateway nothing
+    name: "GET /account answers a second request within 10s from the first read",
+    world: world({
+      settings: IBKR, ibkr_account: answered("U0000000", WHOLE_ACCOUNT),
+    }),
+    earlier: [{ at: at(-9), request: request("GET", "/account") }],
+    request: request("GET", "/account"),
+  },
+  {
+    // read exactly 10s ago: the page's 15s refresh always reads afresh (the owner's decision on #470)
+    name: "GET /account reads again once 10s have passed",
+    world: world({
+      settings: IBKR, ibkr_account: answered("U0000000", CASH_ONLY),
+    }),
+    earlier: [{ at: at(-10), request: request("GET", "/account") }],
+    request: request("GET", "/account"),
+  },
+  {
+    // a gateway that is down is asked once per window, however often the page asks
+    name: "GET /account shares a failure for 10s",
+    world: world({
+      settings: IBKR,
+      ibkr_account: { down: GATEWAY_DOWN },
+    }),
+    earlier: [{ at: at(-5), request: request("GET", "/account") }],
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account wants the API's token",
+    world: world({
+      settings: IBKR, ibkr_account: answered("U0000000", WHOLE_ACCOUNT),
+    }),
+    request: request("GET", "/account", null, { anonymous: true }),
   },
   {
     name: "GET /docs is the reference page, without a token",

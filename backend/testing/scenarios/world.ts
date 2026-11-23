@@ -17,9 +17,10 @@ import type { DatabaseSync } from "node:sqlite";
 import { createDatabase } from "../../src/db/open.ts";
 import { type Settings, settingsFromEnv } from "../../src/env.ts";
 import type { QuoteFetcher } from "optionality/quotes";
-import type { QuoteGradeReading } from "../../src/ports.ts";
+import type { ibkrFields } from "optionality/vendors/fields";
+import type { QuoteGradeReading, ReadAccount } from "../../src/ports.ts";
 import {
-  type Calls, type Diff, JSON_COLUMNS, type QuoteGrade, type Row, TABLES, type TableName, type Tables,
+  ACCOUNT_CALLS, type Calls, type Diff, type IbkrAccountTable, JSON_COLUMNS, type QuoteGrade, type Row, TABLES, type TableName, type Tables,
   type Vendor, type World, columnsOf, primaryKeys,
 } from "./format.ts";
 
@@ -40,6 +41,8 @@ export interface OpenWorld {
   };
   /** every vendor by name, the Provider among them under its own, as `openVendors` assembles */
   sources: Record<string, QuoteFetcher>;
+  /** the IBKR account's read, or null where IB Gateway is not configured */
+  account: ReadAccount | null;
   /** whether the Provider is failing right now, and with what: an earlier sweep may say so */
   outage: { down: string | null };
   /** the Telegram transport: what it delivered, in order */
@@ -71,6 +74,19 @@ function fakeVendor(
       records: codes.filter((c) => c in table.quotes).map((c) => ({ code: c, ...table.quotes[c] })),
       unknown: codes.filter((c) => table.unknown.includes(c)),
     };
+  };
+}
+
+/** IB Gateway's account read answering from its table, recording every read. See
+ *  `IbkrAccountTable` for the rules. */
+function fakeAccount(table: IbkrAccountTable, calls: Calls): ReadAccount {
+  return async (wanted) => {
+    (calls[ACCOUNT_CALLS] ??= []).push(wanted === null ? [] : [wanted]);
+    if (table.down !== null) return { unreachable: table.down };
+    if (table.refused !== null) return { refused: table.refused };
+    if (table.fails !== null) return { failed: table.fails };
+    if (table.account === null) throw new Error("the world's account read answers nothing at all");
+    return { account: table.account as unknown as ibkrFields.IbkrAccount };
   };
 }
 
@@ -170,6 +186,7 @@ export function openWorld(world: World): OpenWorld {
     newId: () => mintedId(++minted),
     provider,
     sources,
+    account: world.ibkr_account === undefined ? null : fakeAccount(world.ibkr_account, calls),
     outage,
     send: (text) => {
       if (world.telegram === "down") throw new Error("telegram is down");

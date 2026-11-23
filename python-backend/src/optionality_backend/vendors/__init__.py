@@ -60,7 +60,7 @@ from dataclasses import dataclass, field
 from typing import ClassVar, Literal
 
 from ..env import Settings
-from ..ports import ProviderClient, QuoteFetcher, VendorClient
+from ..ports import ProviderClient, QuoteFetcher, ReadAccount, VendorClient
 
 log = logging.getLogger(__name__)
 
@@ -195,6 +195,9 @@ class OpenVendors:
     provider: ProviderClient
     #: Every vendor that opened, by name — the Provider among them.
     sources: Mapping[str, QuoteFetcher] = field(repr=False)
+    #: The IBKR account's read (ADR 0030, #470): the opened vendor whose client has one — IB Gateway's,
+    #: the same client its prices come through — or None where none opened.
+    account: ReadAccount | None = field(repr=False)
     #: Hang up everything that opened. One loop, so a vendor cannot be forgotten by growing a `close`
     #: after the fact.
     close: Callable[[], None] = field(repr=False)
@@ -211,10 +214,15 @@ def open_vendors(settings: Settings, vendors: Sequence[Vendor] = VENDORS) -> Ope
     """
     opened: list[VendorClient] = []
     sources: dict[str, QuoteFetcher] = {}
+    account: ReadAccount | None = None
 
     def register(client: VendorClient) -> None:
+        nonlocal account
         opened.append(client)
         sources[client.name] = client.fetch_quotes
+        if account is None:
+            # an optional member, as `VendorClient.readAccount` is in the TypeScript
+            account = getattr(client, "read_account", None)
 
     provider = make_provider(settings, vendors)
     register(provider)
@@ -238,4 +246,4 @@ def open_vendors(settings: Settings, vendors: Sequence[Vendor] = VENDORS) -> Ope
             except Exception:
                 log.exception("hanging up %s failed:", client.name)
 
-    return OpenVendors(provider=provider, sources=sources, close=close)
+    return OpenVendors(provider=provider, sources=sources, account=account, close=close)

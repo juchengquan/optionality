@@ -31,6 +31,8 @@ SURFACE = {
     "DELETE /monitors/:id",
     "DELETE /positions/:id",
     "DELETE /references/:id",
+    # the IBKR account (ADR 0030, #470), for the account page
+    "GET /account",
     "GET /docs",
     "GET /health",
     # the MCP door (ADR 0026): a POST per message, and the GET that says it offers no stream
@@ -268,7 +270,7 @@ class TestTheBearerToken:
         # GET, each with no body: auth runs before validation too.
         h = start()
         doors = {d for d in served(h.app) if d.split(" ")[1] not in OPEN}
-        assert len(doors) == 26, "the real number of doors"
+        assert len(doors) == 27, "the real number of doors"
         for door in sorted(doors):
             method, path = door.split(" ")
             resp = await h.call(path.replace(":id", "x"), method=method, anonymous=True)

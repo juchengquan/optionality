@@ -130,6 +130,16 @@ describe("opening what this build carries", () => {
     open.close();
   });
 
+  it("hands on IB Gateway's account read where IB Gateway is configured, and none where not", () => {
+    // ADR 0030: the account is read over the client the prices come through, opened once
+    const off = openVendors(settingsFor({ ibkrHost: "" }));
+    expect(off.account).toBeNull();
+    off.close();
+    const on = quietly(() => openVendors(settingsFor({ ibkrHost: "127.0.0.1", ibkrPort: 1 })));
+    expect(typeof on.account).toBe("function");
+    on.close();
+  });
+
   it("opens no connection while opening a vendor", async () => {
     // A client that connected when it was built could not be named in a test at all, and a dead
     // port blocks indefinitely — which is why `open` must only construct. Proven against a port

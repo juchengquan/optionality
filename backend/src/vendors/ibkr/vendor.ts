@@ -15,9 +15,27 @@
  *  Off unless `IBKR_HOST` is set: `open` answers null, a Reference naming `ibkr` gets a dash
  *  saying "no ibkr client in this build", and naming it as the Provider is fatal at boot.
  */
-import { IbkrClient } from "optionality/vendors/ibkr/client";
+import { IbkrAccountRefused, IbkrClient, IbkrUnreachable } from "optionality/vendors/ibkr/client";
 import type { Settings } from "../../env.ts";
+import type { ReadAccount } from "../../ports.ts";
 import type { ProviderVendor } from "../index.ts";
+
+/** The account's one read over `client` (ADR 0030, #470), every way it ends sorted for the route:
+ *  the library's `IbkrUnreachable` — no session at all, in the connect's own words — apart from a
+ *  read that failed once it began (a plain `Error`: its deadline, or its connection closing under
+ *  it) and from `IbkrAccountRefused`. One connect, made by `account` itself, so the words of a
+ *  refused session reach the route rather than a probe's yes or no. */
+export function accountReader(client: IbkrClient): ReadAccount {
+  return async (wanted) => {
+    try {
+      return { account: await client.account(wanted ?? undefined) };
+    } catch (err) {
+      const words = err instanceof Error ? err.message : String(err);
+      if (err instanceof IbkrUnreachable) return { unreachable: words };
+      return err instanceof IbkrAccountRefused ? { refused: words } : { failed: words };
+    }
+  };
+}
 
 export const ibkrVendor: ProviderVendor = {
   name: "ibkr",
@@ -48,6 +66,8 @@ export const ibkrVendor: ProviderVendor = {
       // grade for the account, and passing a request's through as one is out of scope (#464)
       quoteGrade: () => null,
       close: () => client.close(),
+      // over the same client, so the account is read on the session the prices are
+      readAccount: accountReader(client),
     };
   },
 };

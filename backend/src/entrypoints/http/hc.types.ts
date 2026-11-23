@@ -57,6 +57,10 @@ async function endpoints() {
     health: await (await client.health.$get()).json(),
     quotes: await (await client.quotes.$get()).json(),
 
+    // --- account -----------------------------------------------------------------------
+    // the IBKR account, as IBKR marks it (#470, ADR 0030): the account page reads it
+    account: await (await client.account.$get()).json(),
+
     // --- monitors ----------------------------------------------------------------------
     monitors: await (await client.monitors.$get()).json(),
     monitorCreated: await client.monitors.$post({
@@ -295,6 +299,29 @@ export type HcChecks = [
     "entry" | "mid" | "shape" | null>>,
   Checked<Exactly<NonNullable<Ok<Awaited<ReturnType<E["spreadsQuote"]["json"]>>>["spreads"][number]["legs"][number]["last_known"]>["price"],
     number>>,
+
+  // /account (#470): the IBKR account, its id masked, stocks, options and the rest apart --------
+  Checked<Known<Ok<E["account"]>>>,
+  Checked<Exactly<Ok<E["account"]>["account"], string>>,
+  Checked<Exactly<Ok<E["account"]>["paper"], boolean>>,
+  Checked<Exactly<Ok<E["account"]>["base_currency"], string | null>>,
+  Checked<Exactly<Ok<E["account"]>["updated_at"], string | null>>,
+  Checked<Exactly<Ok<E["account"]>["read_at"], string>>,
+  Checked<Exactly<Ok<E["account"]>["totals"], {
+    net_liquidation: number | null; total_cash: number | null;
+    unrealized_pnl: number | null; realized_pnl: number | null;
+  }>>,
+  Checked<Exactly<Ok<E["account"]>["exchange_rates"], Record<string, number>>>,
+  Checked<Exactly<Ok<E["account"]>["stocks"][number]["symbol"], string>>,
+  Checked<Exactly<Ok<E["account"]>["stocks"][number]["market_value"], number | null>>,
+  Checked<Exactly<Ok<E["account"]>["options"][number]["right"], "C" | "P" | null>>,
+  Checked<Exactly<Ok<E["account"]>["options"][number]["strike"], number | null>>,
+  Checked<Exactly<Ok<E["account"]>["options"][number]["expiry"], string | null>>,
+  Checked<Exactly<Ok<E["account"]>["options"][number]["average_cost"], number | null>>,
+  Checked<Exactly<Ok<E["account"]>["other"][number], {
+    sec_type: string; symbol: string; position: number | null; market_value: number | null;
+    currency: string;
+  }>>,
 ];
 
 /** The statuses are typed too, so a caller can narrow on them.
