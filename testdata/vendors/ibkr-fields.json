@@ -346,7 +346,7 @@
     },
     {
       "fn": "maskAccount",
-      "name": "an id of letters alone keeps only its last three",
+      "name": "an id of letters alone keeps no prefix, only its last three",
       "args": [
         "ABCDEFG"
       ],
@@ -354,7 +354,7 @@
     },
     {
       "fn": "maskAccount",
-      "name": "an empty id is empty",
+      "name": "an empty id is the five bullets alone",
       "args": [
         ""
       ],
