@@ -158,27 +158,70 @@ describe("provenance, which is the point of the files", () => {
 });
 
 describe("a constructed account that adds up", () => {
-  // invented figures are still held to arithmetic: a BASE cash that is not the sum of the
-  // currencies' cash at their own rates is a fixture a reader would trust and should not
-  it("states a BASE cash, and a TotalCashValue, that are each currency's cash at its rate", () => {
-    for (const name of conversationNames()) {
-      for (const e of loadConversation(name).exchanges) {
-        if (e.request !== "reqAccountUpdates") continue;
-        const ledger = (key: string) => new Map(e.replies
-          .filter((m) => m[0] === "6" && m[2] === `$LEDGER-${key}`)
-          .map((m) => [m[4]!, Number(m[3])]));
-        const cash = ledger("CashBalance");
-        const rates = ledger("ExchangeRate");
-        if (!cash.has("BASE")) continue;
+  // invented figures are still held to arithmetic: a total that is not the sum of what it totals
+  // is a fixture a reader would trust and should not
+  const accountExchanges = () => conversationNames().flatMap((name) => loadConversation(name)
+    .exchanges.filter((e) => e.request === "reqAccountUpdates").map((e) => ({ name, e })));
+  const ledger = (replies: string[][], key: string) => new Map(replies
+    .filter((m) => m[0] === "6" && m[2] === `$LEDGER-${key}`).map((m) => [m[4]!, Number(m[3])]));
+  const plain = (replies: string[][], key: string) =>
+    Number(replies.find((m) => m[0] === "6" && m[2] === key)![3]);
+  /** each PORTFOLIO_VALUE row's figure at `at`, summed by the row's currency (field 10) */
+  const byCurrency = (replies: string[][], at: number) => {
+    const sums = new Map<string, number>();
+    for (const m of replies.filter((r) => r[0] === "7")) {
+      sums.set(m[10]!, (sums.get(m[10]!) ?? 0) + Number(m[at]));
+    }
+    return sums;
+  };
+
+  it("has the account conversations to check", () => {
+    expect(accountExchanges().filter(({ e }) => ledger(e.replies, "CashBalance").has("BASE")))
+      .toHaveLength(5);
+  });
+
+  it("states each BASE figure as the currencies' at their rates", () => {
+    for (const { name, e } of accountExchanges()) {
+      const rates = ledger(e.replies, "ExchangeRate");
+      for (const key of ["CashBalance", "NetLiquidationByCurrency", "UnrealizedPnL", "RealizedPnL"]) {
+        const rows = ledger(e.replies, key);
+        if (!rows.has("BASE")) continue;
         let sum = 0;
-        for (const [currency, amount] of cash) {
+        for (const [currency, amount] of rows) {
           if (currency === "BASE") continue;
           expect(rates.has(currency), `${name}: no rate for ${currency}`).toBe(true);
           sum += amount * rates.get(currency)!;
         }
-        expect(cash.get("BASE")!, `${name}: BASE cash`).toBeCloseTo(sum, 2);
-        const total = e.replies.find((m) => m[0] === "6" && m[2] === "TotalCashValue");
-        expect(Number(total![3]), `${name}: TotalCashValue`).toBeCloseTo(sum, 2);
+        expect(rows.get("BASE")!, `${name}: BASE ${key}`).toBeCloseTo(sum, 2);
+      }
+      const base = (key: string) => ledger(e.replies, key).get("BASE")!;
+      expect(plain(e.replies, "TotalCashValue"), `${name}: TotalCashValue`)
+        .toBeCloseTo(base("CashBalance"), 2);
+      expect(plain(e.replies, "NetLiquidation"), `${name}: NetLiquidation`)
+        .toBeCloseTo(base("NetLiquidationByCurrency"), 2);
+    }
+  });
+
+  it("states each currency's liquidation value as its cash and its holdings' market value", () => {
+    for (const { name, e } of accountExchanges()) {
+      const cash = ledger(e.replies, "CashBalance");
+      const values = byCurrency(e.replies, 15);
+      for (const [currency, nlv] of ledger(e.replies, "NetLiquidationByCurrency")) {
+        if (currency === "BASE") continue;
+        expect(nlv, `${name}: ${currency} NetLiquidationByCurrency`)
+          .toBeCloseTo((cash.get(currency) ?? 0) + (values.get(currency) ?? 0), 2);
+      }
+    }
+  });
+
+  it("states each currency's P&L as its holdings'", () => {
+    for (const { name, e } of accountExchanges()) {
+      for (const [key, at] of [["UnrealizedPnL", 17], ["RealizedPnL", 18]] as const) {
+        const held = byCurrency(e.replies, at);
+        for (const [currency, pnl] of ledger(e.replies, key)) {
+          if (currency === "BASE") continue;
+          expect(pnl, `${name}: ${currency} ${key}`).toBeCloseTo(held.get(currency) ?? 0, 2);
+        }
       }
     }
   });

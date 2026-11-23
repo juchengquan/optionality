@@ -22,7 +22,7 @@
         "base_currency": "USD",
         "updated_at": "09:05",
         "totals": {
-          "net_liquidation": 1003250,
+          "net_liquidation": 997985,
           "total_cash": 998100,
           "unrealized_pnl": 15,
           "realized_pnl": 0

@@ -521,7 +521,7 @@ describe("the account read (ADR 0030)", () => {
       account: "U•••••000", paper: false, base_currency: "USD", updated_at: "14:32",
       // the P&L from $LEDGER's BASE row, which counts the EUR stock's; the USD row does not
       totals: {
-        net_liquidation: 184523.17, total_cash: 64829.28, unrealized_pnl: 2071.37,
+        net_liquidation: 94532.1, total_cash: 64829.28, unrealized_pnl: 2137.37,
         realized_pnl: -412.8,
       },
     });

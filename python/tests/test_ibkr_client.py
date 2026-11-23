@@ -931,9 +931,9 @@ def test_the_account_read_answers_totals_and_holdings_with_the_account_masked() 
     )
     # the P&L from $LEDGER's BASE row, which counts the EUR stock's; the USD row does not
     assert got["totals"] == {
-        "net_liquidation": 184523.17,
+        "net_liquidation": 94532.1,
         "total_cash": 64829.28,
-        "unrealized_pnl": 2071.37,
+        "unrealized_pnl": 2137.37,
         "realized_pnl": -412.8,
     }
     assert [(h["symbol"], h["sec_type"], h["currency"], h["position"]) for h in got["holdings"]] == [
