@@ -229,6 +229,24 @@ function counted<T extends { contracts: number | null }>(row: T): T & { contract
 }
 export const fetchHealth = () => read<Health>(client.health.$get(), "/health");
 
+/** The IBKR account as IBKR marks it (#470, ADR 0030): its totals in the base currency, and every
+ *  holding in its own — stocks, options and anything else apart. The account page's one read
+ *  (#471), asked on opening, on its refresh button and at the page's own cadence while it is in
+ *  view; never by the book. A failure throws the service's own words — IB Gateway not configured,
+ *  not answering, the deadline passed, the account refused — which the page says in place of every
+ *  figure, so the refusal's body is read rather than its status. */
+export type Account = Exclude<Infer<typeof client.account.$get>, { detail: string }>;
+export type AccountHolding = Account["stocks"][number];
+export type OtherHolding = Account["other"][number];
+export async function fetchAccount(): Promise<Account> {
+  const response = await client.account.$get();
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok || isRefusal(body)) {
+    throw new Error(isRefusal(body) ? body.detail : `/account → ${response.status}`);
+  }
+  return body as Account;
+}
+
 /** A write, whose only interesting answer is whether it was refused. */
 async function sent(
   request: Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>,

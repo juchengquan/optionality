@@ -5,6 +5,7 @@
  *  control, and 16px text in every box, below which iOS zooms the page when a box is focused.
  */
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { page } from "@vitest/browser/context";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Next } from "../Next";
@@ -94,32 +95,52 @@ describe("under the iPhone profile", () => {
   });
 });
 
-/** The phone's header (#374; #410): "optionality" and its buttons — the picture, the text, the
- *  refresh, and since #410 Add and Settings, which were tabs of a bar along the bottom — one row,
- *  inside the gutter, held at the top of the screen while the page scrolls. It never had the
- *  desk's switch; this holds it as it is. */
+/** The phone's header (#374; #410): its buttons — the picture, the text, the refresh, since #471 the
+ *  account page's link, drawn as a button, and since #410 Add and Settings, which were tabs of a bar
+ *  along the bottom — one row, inside the gutter, held at the top of the screen while the page
+ *  scrolls. Since #471 the title "optionality" is dropped on the phone (the owner, 2026-11-23): it
+ *  was cut to "optio…" at 390px and to nothing at 320px once the sixth control came. It stays for a
+ *  screen reader, drawn nowhere. It never had the desk's switch; this holds it as it is. */
 describe("the header", () => {
-  for (const outside of [false, true]) {
-    it(`is the title and five buttons on one row, inside the screen, ${outside ? "outside the session" : "in session"}`, async () => {
+  afterEach(async () => { await page.viewport(390, 664); });
+
+  for (const width of [390, 320]) for (const outside of [false, true]) {
+    it(`is six controls on one row at ${width}px, nothing cut and nothing past the screen, ${outside ? "outside the session" : "in session"}`, async () => {
       if (outside) vi.setSystemTime(new Date("2026-11-15T17:00:00Z")); // Sunday 12:00 ET
+      await page.viewport(width, 664);
       await show();
+      expect(document.documentElement.clientWidth).toBe(width);
       const head = document.querySelector<HTMLElement>(".nx-head")!;
       const kids = [...head.children] as HTMLElement[];
       const [title, spacer, ...buttons] = kids;
+      // the title: there for a screen reader, and drawn nowhere — no box, taking no room in the row
       expect(title!.tagName).toBe("H1");
+      expect(screen.getByRole("heading", { level: 1, name: "optionality" })).toBe(title);
+      const box = (el: Element) => el.getBoundingClientRect();
+      expect(box(title!).width * box(title!).height).toBeLessThanOrEqual(1);
+      expect(getComputedStyle(title!).position).toBe("absolute");
       expect(spacer!.classList.contains("nx-spacer")).toBe(true);
       expect(buttons.map((b) => b.getAttribute("aria-label")))
-        .toEqual(["save as image", "copy as text", "refresh now", "add", "settings"]);
+        .toEqual(["save as image", "copy as text", "refresh now", "account", "add", "settings"]);
+      // the link drawn as the buttons are: no taller, so the header keeps its height
+      const link = buttons[3]!;
+      expect(link.tagName).toBe("A");
+      expect(box(link).height).toBeCloseTo(box(buttons[2]!).height, 0);
       expect(within(head).queryByRole("group")).toBeNull();
       expect(head.textContent).not.toMatch(/live|review|by the clock|your choice/i);
-      const box = (el: Element) => el.getBoundingClientRect();
-      const gap = parseFloat(getComputedStyle(head).columnGap);
-      expect(box(spacer!).left - box(title!).right).toBeCloseTo(gap, 0);
-      expect(new Set(kids.map((k) => Math.round(box(k).top + box(k).height / 2))).size, "not one row").toBe(1);
+      expect(new Set(buttons.map((k) => Math.round(box(k).top + box(k).height / 2))).size, "not one row").toBe(1);
       const inner = box(head).right - parseFloat(getComputedStyle(head).paddingRight);
       expect(box(buttons.at(-1)!).right).toBeCloseTo(inner, 0);
-      expect(inner).toBeLessThanOrEqual(document.documentElement.clientWidth - 16 + 0.5);
-      for (const b of buttons) expect(Math.min(hitBox(b).width, hitBox(b).height)).toBeGreaterThanOrEqual(44);
+      expect(inner).toBeLessThanOrEqual(width - 16 + 0.5);
+      expect(box(buttons[0]!).left).toBeGreaterThanOrEqual(16 - 0.5);
+      for (const b of buttons) {
+        const label = b.getAttribute("aria-label");
+        expect(Math.min(hitBox(b).width, hitBox(b).height), label!).toBeGreaterThanOrEqual(44);
+        // nothing cut: each drawn whole, its glyph inside it
+        expect(b.scrollWidth, label!).toBeLessThanOrEqual(b.clientWidth);
+        const glyph = b.querySelector("svg")!.getBoundingClientRect();
+        expect(glyph.left >= box(b).left - 0.5 && glyph.right <= box(b).right + 0.5, label!).toBe(true);
+      }
       expect(overflowsSideways()).toBe(false);
       expect(head.scrollWidth).toBeLessThanOrEqual(head.clientWidth);
     });

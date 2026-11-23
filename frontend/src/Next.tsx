@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { ClipboardCopy, ImageDown, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
+import { ClipboardCopy, ImageDown, Landmark, Plus, RefreshCw, Search, Settings2 } from "lucide-react";
 
 import "./next.css";
 import {
@@ -9,7 +9,7 @@ import {
   type Added, type Closes, type Entry, type Health, type Holding, type Monitor, type Reference,
   type SweepChoice,
 } from "./shared/api";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Toaster, toast } from "@/components/ui/toast";
 import { marketDay } from "./shared/format";
@@ -30,6 +30,7 @@ import { takenOverBy, type Rule } from "./edit";
 import { ClosedResult } from "./ClosedResult";
 import type { ClosedOutcome, HoldingWrites } from "./HoldingActions";
 import { arrangementFor, useViewportWidth } from "./arrangement";
+import { accountHref } from "./pages";
 import type { BookProps } from "./Book";
 import { DeskBook } from "./desk/DeskBook";
 import { DeskJournal } from "./desk/DeskJournal";
@@ -71,7 +72,10 @@ import { ErrorWords } from "./shared/ErrorWords";
  *  holding's history starts open (outside it), in the inspector and the phone's sheet; and the
  *  saved picture's header. `session` is computed here, once, and handed to everything that asks.
  */
-export function Next() {
+export function Next({ base = import.meta.env.BASE_URL }: {
+  /** the bundle's base, which the header's link to the account page is under (#471) */
+  base?: string;
+} = {}) {
   const [up, setUp] = useState(readUp);
   const [entryStyle, setEntryStyle] = useState(readEntryStyle);
   const [privacy, setPrivacy] = useState(readPrivacy);
@@ -419,6 +423,12 @@ export function Next() {
             <Search /><kbd aria-hidden="true">{shortcut.shown}</kbd>
           </Button>
         )}
+        {/* the IBKR account (#471): a page of its own, reached by a plain link drawn as the buttons
+            beside it are, so the book's polls stop as it goes */}
+        <a href={accountHref(base)} aria-label="account" data-slot="button"
+           className={buttonVariants({ variant: "ghost", size: "sm" })}>
+          <Landmark />
+        </a>
         {/* Add and Settings on the phone too since #410, where they were tabs of a bar along the
             bottom: each opens its bottom sheet there, and the desk's panel and side sheet here */}
         <Button ref={plusButton} variant="ghost" size="sm" aria-label="add" aria-haspopup="dialog"

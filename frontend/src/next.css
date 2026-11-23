@@ -197,10 +197,16 @@ html[data-nx-arrangement="desk"] { scroll-padding-top: calc(var(--nx-head-h, 0px
   padding-left: max(var(--nx-gutter), env(safe-area-inset-left));
   padding-right: max(var(--nx-gutter), env(safe-area-inset-right));
 }
-/* the header's five 44pt buttons and the title on one row at 390px, and at 320px with the title
-   cut short rather than the row pushed past the screen (#410) */
+/* the book's header on the phone is its six 44pt buttons on one row, at 390px and at 320px: the
+   title is dropped (the owner, 2026-11-23, #471) rather than cut to "optio…" — kept for a screen
+   reader, drawn nowhere and taking no room in the row. The account page's header (`.nx-acct`) keeps
+   its title, which its three controls leave room for */
 .nx[data-arrangement="phone"] .nx-head { gap: 0.25rem; }
-.nx[data-arrangement="phone"] .nx-head h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx[data-arrangement="phone"]:not(.nx-acct) .nx-head h1 {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+.nx-acct[data-arrangement="phone"] .nx-head h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* one Reference a line (the owner, 2026-11-17): SPX (yahoo) above SPX (ibkr), never side by side
    where a wide phone or a short figure would have let them share one — the same reading, in the
    same place, card after card */
@@ -212,13 +218,15 @@ html[data-nx-arrangement="desk"] { scroll-padding-top: calc(var(--nx-head-h, 0px
    and their buttons are targets too. Unlayered, so it wins over the components' own sizes, which
    are Tailwind utilities in a layer. */
 html[data-nx-arrangement="phone"] :is(select, input, a) { min-height: 44px; min-width: 44px; }
-/* A button is DRAWN smaller than its target (the owner, 2026-11-16): 32px high, and 44pt to a finger
+/* A button — and a link drawn as one, the header's to the account page and back (#471), matched
+   with no more weight than `button` alone (`:where`) so every rule that sizes a particular button
+   still wins — is DRAWN smaller than its target (the owner, 2026-11-16): 32px high, and 44pt to a finger
    through an invisible area above and below it, its ::after, exactly as tall as the 44pt needs and
    no taller (none on a button already taller). The area belongs to the button, so a tap on it is a
    tap on the button; a neighbour's own area over it would shorten it, which is why the suites
    measure where a tap LANDS (`__browser__/targets.ts`) rather than a box. */
-html[data-nx-arrangement="phone"] button { min-height: 2rem; min-width: 44px; }
-html[data-nx-arrangement="phone"] button::after {
+html[data-nx-arrangement="phone"] :is(button, a:where([data-slot="button"])) { min-height: 2rem; min-width: 44px; }
+html[data-nx-arrangement="phone"] :is(button, a:where([data-slot="button"]))::after {
   content: ""; position: absolute; left: 0; right: 0;
   top: min(0px, calc((100% - 44px) / 2)); bottom: min(0px, calc((100% - 44px) / 2));
   /* over anything positioned that is drawn after the button: the strike strip under a watched
@@ -228,7 +236,7 @@ html[data-nx-arrangement="phone"] button::after {
 /* the area is placed against its button, which takes a position for it — in a layer, so a button
    placed by a utility (a sheet's close, `absolute`) or by the page's own rules keeps its own */
 @layer components {
-  html[data-nx-arrangement="phone"] button { position: relative; }
+  html[data-nx-arrangement="phone"] :is(button, a:where([data-slot="button"])) { position: relative; }
 }
 /* the area reaches 6px above and below a button, so a row of buttons wrapped or stacked under
    another sits 12px from it at least, or each would lie over the other's. What is guaranteed, and

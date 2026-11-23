@@ -1,0 +1,74 @@
+/* The account page (#471), over next.css's tokens: everything scoped under .nx-acct, so nothing
+   reaches the book. A table per kind on the desk, a card per holding on the phone. */
+
+.nx-acct-cadence { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.nx-acct-view { display: flex; flex-direction: column; gap: 1.25rem; }
+/* the last good read, kept under a refresh that failed: dimmed, the error and its time above it */
+.nx-acct-view[data-stale] { opacity: 0.55; }
+.nx-acct-asof { margin: -0.25rem 0 0.75rem; }
+
+/* a paper account says so before anything else, in the warning's colours: it is not the money */
+.nx-acct-paper {
+  padding: 0.5rem 0.75rem; border-radius: var(--radius-md);
+  background: var(--warn); color: var(--warn-ink);
+  font-weight: 700; letter-spacing: 0.02em;
+}
+
+.nx-acct-total-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem 1.5rem; }
+.nx-acct-total-figs dt { color: var(--muted-foreground); font-size: 0.8125rem; }
+.nx-acct-total-figs dd { font-size: 1.375rem; font-weight: 650; overflow-wrap: anywhere; }
+.nx-acct-about { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin-top: 0.5rem; }
+.nx-acct-id { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--foreground); }
+
+.nx-acct-section h2 { font-size: 1rem; font-weight: 650; margin-bottom: 0.25rem; }
+.nx-acct-underlying + .nx-acct-underlying { margin-top: 1rem; }
+.nx-acct-underlying h3 { font-size: 0.9375rem; font-weight: 650; margin-top: 0.5rem; }
+.nx-acct-group h4 { font-size: 0.8125rem; font-weight: 600; color: var(--muted-foreground); margin: 0.5rem 0 0.25rem; }
+
+/* a figure's currency where it is not the base: beside it, quieter */
+.nx-acct-ccy { margin-left: 0.35em; color: var(--muted-foreground); font-size: 0.85em; }
+
+/* ---- the desk: a table per kind, an underlying's expiries each a body of it ---- */
+/* app.css's element rules for the journal's tables — a grid, a sticky first column, a margin — are
+   undone here: these are read across a row, with a rule under each */
+.nx-acct-table {
+  width: 100%; margin: 0; border-collapse: collapse;
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-size: 0.8125rem; font-variant-numeric: tabular-nums;
+}
+/* every underlying's table the same columns, shared out evenly, so one lines up under the next */
+.nx-acct-table[data-fixed] { table-layout: fixed; }
+.nx-acct-table[data-fixed] thead th:first-child { width: 16%; }
+.nx-acct-table :is(th, td) {
+  padding: 0.3rem 0.75ch; border: 0; text-align: right; white-space: nowrap;
+  position: static; box-shadow: none; min-width: 0;
+}
+.nx-acct-table thead th {
+  color: var(--muted-foreground); font-size: 0.75rem; font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  border-bottom: 1px solid var(--border);
+}
+.nx-acct-table :is(th, td):first-child { text-align: left; }
+.nx-acct-table tbody th { font-weight: 600; }
+.nx-acct-table tbody tr[data-holding] { border-bottom: 1px solid color-mix(in oklch, var(--border) 60%, transparent); }
+/* an expiry, across the table above its contracts */
+.nx-acct-table .nx-acct-group-head th {
+  padding-top: 0.75rem; color: var(--muted-foreground); font-size: 0.75rem; font-weight: 600;
+}
+
+/* ---- the phone: a card per holding ---- */
+.nx-acct[data-arrangement="phone"] .nx-acct-total-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; }
+.nx-acct[data-arrangement="phone"] .nx-acct-total-figs dd { font-size: 1.125rem; }
+.nx-acct-cards { display: flex; flex-direction: column; gap: 0.625rem; min-width: 0; }
+.nx-acct-card {
+  min-width: 0; padding: 0.75rem 1rem;
+  background: var(--card); color: var(--card-foreground);
+  border: 1px solid var(--border); border-radius: 1rem;
+  overflow-wrap: anywhere;
+}
+.nx-acct-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; font-weight: 650; }
+.nx-acct-qty { font-variant-numeric: tabular-nums; }
+.nx-acct-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem 1rem; margin-top: 0.5rem; }
+.nx-acct-figs > div { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0 0.5rem; min-width: 0; }
+.nx-acct-figs dt { color: var(--muted-foreground); font-size: 0.8125rem; }
+.nx-acct-figs dd { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; }
