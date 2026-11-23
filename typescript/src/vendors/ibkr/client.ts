@@ -211,7 +211,13 @@ export class IbkrClient {
     if (this.socket) this.drop(this.socket);
     const socket = new TwsSocket(this.config);
     // a refused or failed handshake closes this socket itself (`socket.ts`), and only this one
-    await socket.connect((message) => this.route(socket, message));
+    await socket.connect((message) => this.route(socket, message), () => {
+      // an account read on a socket that went hears nothing more: told now, not at its deadline.
+      // Only the account read: the price asks judge a silence themselves, as they always have
+      if (this.reading?.socket === socket) {
+        this.reading.fail(new Error("IB Gateway's connection closed during the account read"));
+      }
+    });
     if (generation !== this.generation) {
       socket.close();
       throw new Error("IB Gateway client was closed while it was connecting");
@@ -315,10 +321,12 @@ export class IbkrClient {
    *  too. A second caller while a read of the same account runs JOINS it: IB allows one
    *  account subscription per client at a time. */
   async account(wanted?: string): Promise<IbkrAccount> {
-    const socket = await this.connected();
-    const choice = chooseAccount(managedAccounts(this.managed.get(socket) ?? ""), wanted ?? null);
-    if ("refused" in choice) throw new IbkrAccountRefused(choice.refused);
     for (;;) {
+      // taken afresh on every turn, and the account chosen afresh from what THAT session names:
+      // the read waited on below may have ended because its connection went (review round 2)
+      const socket = await this.connected();
+      const choice = chooseAccount(managedAccounts(this.managed.get(socket) ?? ""), wanted ?? null);
+      if ("refused" in choice) throw new IbkrAccountRefused(choice.refused);
       const running = this.reading;
       if (running === null) return this.readAccount(socket, choice.account);
       if (running.socket === socket && running.account === choice.account) return running.answer;

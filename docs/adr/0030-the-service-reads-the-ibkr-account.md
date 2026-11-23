@@ -54,7 +54,9 @@ rather than through the per-id `waiting` map.
 download's end, unsubscribe, answer. A deadline — the client's `requestTimeoutMs`, as for a quote —
 fails it with its own words, and the unsubscribe is sent on that path too. IB allows one account
 subscription per client at a time, so a second caller for the same account while a read runs JOINS
-it; a caller for another account waits for it to finish. Never asked by the sweep, nor by anything
+it; a caller for another account waits for it to finish, then takes the connection — and chooses
+the account — afresh, since the read it waited on may have ended because the connection went. A
+read whose connection goes fails at once, in its own words, rather than at its deadline. Never asked by the sweep, nor by anything
 on a timer: it is read when asked for (#470), over the price feed's connection and client id.
 
 **Which account**: the login's only one; of several, the one `wanted` names; refused, with the ids
@@ -66,8 +68,10 @@ sends nothing.
 **Masked**: the account id leaves the client only masked — its leading letters and its last three
 characters kept, every character between replaced by `•` (`U1234567` is `U••••567`, `DU1234567`
 is `DU••••567`; the owner's decision on #469: the letters say what kind of account, the last three
-which one) — in the answer, every error and every log line. An id that is letters through and
-through keeps only its last three, so the prefix rule can never show an id whole. `paper` says
+which one) — in the answer, every error and every log line. At least one character after the
+letters is always hidden, so a short id shows at most all but one of its last three (`U001` is
+`U•01`, `U1` is `U•`), and an id that is letters through and through has no prefix kept: neither
+rule can ever show an id whole. `paper` says
 whether it is a paper account (an id that starts `DU`).
 
 **The answer**: the masked account, `paper`, the base currency (the one NetLiquidation is sent in);

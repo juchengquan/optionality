@@ -149,8 +149,11 @@ describe("the account id, which leaves the client only masked", () => {
     expect(maskAccount("F1234A567")).toBe("F•••••567");
   });
 
-  it("shows nothing more of an id with three characters or fewer after its letters", () => {
-    expect(maskAccount("U123")).toBe("U123");
+  it("always hides at least one character after the letters, however short the id", () => {
+    // review round 2: "U001" came out whole
+    expect(maskAccount("U123")).toBe("U•23");
+    expect(maskAccount("U12")).toBe("U•2");
+    expect(maskAccount("U1")).toBe("U•");
     expect(maskAccount("")).toBe("");
   });
 

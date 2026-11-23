@@ -319,11 +319,19 @@
     },
     {
       "fn": "maskAccount",
-      "name": "nothing more of an id with three characters after its letters",
+      "name": "a short id shows all but one of its digits, never all",
       "args": [
         "U001"
       ],
-      "expect": "U001"
+      "expect": "U•01"
+    },
+    {
+      "fn": "maskAccount",
+      "name": "a one-digit id shows no digit",
+      "args": [
+        "U1"
+      ],
+      "expect": "U•"
     },
     {
       "fn": "maskAccount",

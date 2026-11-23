@@ -961,6 +961,35 @@ def test_a_read_of_another_account_waits_until_the_running_one_has_unsubscribed(
     )
 
 
+def test_a_waiting_read_takes_the_connection_afresh_where_the_one_it_waited_on_lost_it() -> None:
+    """Review round 2: the waiting read held the connection it found before the wait, and
+    subscribed on a dead one — "not connected to IB Gateway"."""
+    conversation = copy.deepcopy(load_conversation("account-several"))
+    for exchange in conversation["exchanges"]:
+        if exchange["account"] == "U0000000":
+            exchange["replies"] = [m for m in exchange["replies"] if m[0] != "54"]
+
+    async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
+        first = asyncio.ensure_future(client.account("U0000000"))
+        second = asyncio.ensure_future(client.account("U0000001"))
+        until = time.monotonic() + 1
+        while not subscriptions(gateway) and time.monotonic() < until:
+            await asyncio.sleep(0.005)
+        gateway.drop_connections()
+        with pytest.raises(ConnectionError) as raised:
+            await first
+        answered = await second
+        await unsubscribed(gateway)
+        return str(raised.value), answered["account"], subscriptions(gateway), gateway.sessions_asked
+
+    assert against(conversation, read, request_timeout_ms=5000) == (
+        "IB Gateway's connection closed during the account read",
+        "U••••001",
+        [["1", "U0000000"], ["1", "U0000001"], ["0", "U0000001"]],
+        2,
+    )
+
+
 def test_a_read_after_one_has_finished_subscribes_afresh() -> None:
     async def read(client: IbkrClient, gateway: FakeGateway) -> Any:
         await client.account()

@@ -575,6 +575,32 @@ describe("the account read (ADR 0030)", () => {
     ]);
   });
 
+  it("takes the connection afresh after waiting, where the read it waited on lost it", async () => {
+    // review round 2: the waiting read held the connection it found before the wait, and
+    // subscribed on a dead one — "not connected to IB Gateway"
+    const conversation = loadConversation("account-several");
+    const withheld = {
+      ...conversation,
+      exchanges: conversation.exchanges.map((e) => e.request === "reqAccountUpdates"
+        && e.account === "U0000000" ? { ...e, replies: e.replies.filter((m) => m[0] !== "54") } : e),
+    };
+    const c = await connected({ conversation: withheld }, 5000);
+    const first = c.account("U0000000");
+    const second = c.account("U0000001");
+    const until = Date.now() + 1000;
+    while (subscriptions(gateway!).length === 0 && Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    gateway!.dropConnections();
+    await expect(first).rejects.toThrow("IB Gateway's connection closed during the account read");
+    expect(await second).toMatchObject({ account: "U••••001" });
+    await unsubscribed(gateway!);
+    expect(subscriptions(gateway!)).toEqual([
+      ["1", "U0000000"], ["1", "U0000001"], ["0", "U0000001"],
+    ]);
+    expect(gateway!.sessionsAsked).toBe(2);
+  });
+
   it("subscribes afresh for a read that comes after one has finished", async () => {
     const c = await connected({ conversation: "account-paper" });
     await c.account();

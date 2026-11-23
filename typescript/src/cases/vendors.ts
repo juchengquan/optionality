@@ -137,8 +137,10 @@ export const VENDOR_INPUTS: Record<
     { fn: "maskAccount", name: "a paper id keeps its DU", args: ["DU0000000"] },
     { fn: "maskAccount", name: "a digit after the prefix's last letter is masked like the rest",
       args: ["DU00A0001"] },
-    { fn: "maskAccount", name: "nothing more of an id with three characters after its letters",
+    // review round 2: an id of three digits or fewer still hides at least one of them
+    { fn: "maskAccount", name: "a short id shows all but one of its digits, never all",
       args: ["U001"] },
+    { fn: "maskAccount", name: "a one-digit id shows no digit", args: ["U1"] },
     { fn: "maskAccount", name: "an id of letters alone keeps only its last three", args: ["ABCDEFG"] },
     { fn: "maskAccount", name: "an empty id is empty", args: [""] },
     { fn: "isPaper", name: "an id that starts DU is paper", args: ["DU0000000"] },

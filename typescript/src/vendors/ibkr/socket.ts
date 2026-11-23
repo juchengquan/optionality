@@ -30,6 +30,8 @@ export interface TwsSocketConfig {
 }
 
 export type OnMessage = (message: Incoming) => void;
+/** Told once when an open session's socket goes, however it went. */
+export type OnClose = () => void;
 
 /** At most this many messages in any `PACE_WINDOW_MS`, the rest queued in order: `ib_async`'s own
  *  throttle (`Client.MaxRequests` 45 per `RequestsInterval` 1s), copied so that the two clients put
@@ -45,6 +47,7 @@ export class TwsSocket {
   private socket: Socket | null = null;
   private buffer: Buffer = Buffer.alloc(0);
   private listener: OnMessage | null = null;
+  private closed: OnClose | null = null;
   /** The gateway's protocol version, once it has said. Null means no session. */
   serverVersion: number | null = null;
   /** when each of the messages in the current window went, and the ones still waiting their turn */
@@ -72,7 +75,7 @@ export class TwsSocket {
    *  decided anything about the client id, so stopping there would report success and then fail
    *  the first request.
    */
-  async connect(onMessage: OnMessage): Promise<void> {
+  async connect(onMessage: OnMessage, onClose?: OnClose): Promise<void> {
     if (this.socket) throw new Error("already connected to IB Gateway");
     const { host, port, clientId, connectTimeoutMs = 10_000 } = this.config;
     const open = this.config.connect ?? ((h, p) => createConnection({ host: h, port: p }));
@@ -84,6 +87,8 @@ export class TwsSocket {
 
     try {
       await this.handshake(socket, clientId, connectTimeoutMs);
+      // only a session that started is told it ended: a failed handshake rejects instead
+      this.closed = onClose ?? null;
     } catch (err) {
       // the whole point of holding a connection is that the next call can reuse it, which is only
       // safe if a failed one leaves nothing behind
@@ -224,6 +229,8 @@ export class TwsSocket {
 
   /** Idempotent, because every failure path calls it and some of them race. */
   close(): void {
+    const closed = this.closed;
+    this.closed = null;
     const socket = this.socket;
     this.socket = null;
     this.serverVersion = null;
@@ -237,5 +244,6 @@ export class TwsSocket {
       socket.removeAllListeners();
       socket.destroy();
     }
+    closed?.();
   }
 }

@@ -255,14 +255,16 @@ export function managedAccounts(list: string): string[] {
 /** An account id as it may leave the client: its leading letters, which say what KIND of account
  *  it is (`U` an individual's, `DU` paper), and its last three characters, which tell two apart,
  *  with every character between replaced by `•` — `U1234567` is `U••••567`, the owner's decision on
- *  #469. An id that is letters through and through keeps only its last three: the prefix rule must
- *  never show an id whole. */
+ *  #469. At least one character after the letters is always hidden — a short id shows at most all
+ *  but one of its last three (`U001` is `U•01`) — and an id that is letters through and through has
+ *  no prefix kept: neither rule may ever show an id whole. */
 export function maskAccount(id: string): string {
   const letters = /^[A-Za-z]*/.exec(id)![0];
   const prefix = letters.length === id.length ? "" : letters;
   const rest = id.slice(prefix.length);
-  const shown = rest.slice(-3);
-  return prefix + "•".repeat(rest.length - shown.length) + shown;
+  // at most three shown, and never all of them: a short id would otherwise come out whole
+  const showing = Math.max(0, Math.min(3, rest.length - 1));
+  return prefix + "•".repeat(rest.length - showing) + rest.slice(rest.length - showing);
 }
 
 /** IB's paper accounts are the ids that start `DU`. */

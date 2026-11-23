@@ -308,13 +308,15 @@ def mask_account(account_id: str) -> str:
     """An account id as it may leave the client: every character after its leading letters but the
     last three replaced by `•`, so the owner can tell two accounts apart and nobody else learns either
     — the leading letters kept, which say what KIND of account it is (`fields.ts`' `maskAccount`, the owner's
-    decision on #469): `U1234567` is `U••••567`. An id that is letters through and through keeps only
-    its last three: the prefix rule must never show an id whole."""
+    decision on #469): `U1234567` is `U••••567`. At least one character after the letters is always
+    hidden (`U001` is `U•01`), and an id of letters alone has no prefix kept: neither rule may ever
+    show an id whole."""
     letters = len(account_id) - len(account_id.lstrip(_LETTERS))
     prefix = "" if letters == len(account_id) else account_id[:letters]
     rest = account_id[len(prefix) :]
-    shown = rest[-3:]
-    return prefix + "•" * (len(rest) - len(shown)) + shown
+    # at most three shown, and never all of them: a short id would otherwise come out whole
+    showing = max(0, min(3, len(rest) - 1))
+    return prefix + "•" * (len(rest) - showing) + rest[len(rest) - showing :]
 
 
 def is_paper(account_id: str) -> bool:
@@ -658,6 +660,14 @@ class _AccountEnd:
     account: str
 
 
+@dataclass(frozen=True, slots=True)
+class _ConnectionClosed:
+    """The attached connection went underneath the client: an account read on it hears nothing
+    more (`socket.ts`' `onClose`)."""
+
+    client: Any
+
+
 type _AccountMessage = _AccountValue | _Portfolio | _AccountTime | _AccountEnd
 
 
@@ -734,7 +744,9 @@ class _Reader:
     fails with the gateway's words at once rather than at the timeout.
     """
 
-    def __init__(self, route: Callable[[_Incoming | _AccountMessage], None], failed: "asyncio.Future[str]") -> None:
+    def __init__(
+        self, route: Callable[[_Incoming | _AccountMessage | _ConnectionClosed], None], failed: "asyncio.Future[str]"
+    ) -> None:
         self._route = route
         #: MANAGED_ACCTS' one field as the session sent it, with the handshake: the login's accounts
         self.accounts = ""
@@ -757,7 +769,7 @@ class _Reader:
         if self._failed is not None and not self._failed.done():
             self._failed.set_result(why)
 
-    def _deliver(self, message: _Incoming | _AccountMessage) -> None:
+    def _deliver(self, message: _Incoming | _AccountMessage | _ConnectionClosed) -> None:
         if self._attached:
             self._route(message)
 
@@ -766,7 +778,11 @@ class _Reader:
         self._started = True
 
     def setEventsDone(self) -> None:
-        """`ib_async` calls this whenever its socket goes, before it resets."""
+        """`ib_async` calls this whenever its socket goes, before it resets. Once the session has
+        started, a connection that goes while still attached — not one the client hung up, which
+        detaches it first — is told to the client, for an account read running on it."""
+        if self._failed is None and self.client is not None:
+            self._deliver(_ConnectionClosed(self.client))
         version = self.client.serverVersion() if self.client is not None else 0
         floor = self.client.MinClientVersion if self.client is not None else 0
         if 0 < version < floor:
@@ -988,14 +1004,16 @@ class IbkrClient:
         raises as `fetch_quotes` does (ConnectionError), and so does a deadline
         (`request_timeout_ms`), in its own words, the unsubscribe sent on that path too. A second caller while a read of the same account
         runs JOINS it: IB allows one account subscription per client at a time."""
-        client = await self._connected()
-        reader = client.wrapper
-        listed = reader.accounts if isinstance(reader, _Reader) else ""
-        choice = choose_account(managed_accounts(listed), wanted)
-        if "refused" in choice:
-            raise IbkrAccountRefused(choice["refused"])
-        account = choice["account"]
         while True:
+            # taken afresh on every turn, and the account chosen afresh from what THAT session
+            # names: the read waited on below may have ended because its connection went
+            client = await self._connected()
+            reader = client.wrapper
+            listed = reader.accounts if isinstance(reader, _Reader) else ""
+            choice = choose_account(managed_accounts(listed), wanted)
+            if "refused" in choice:
+                raise IbkrAccountRefused(choice["refused"])
+            account = choice["account"]
             running = self._reading
             if running is None:
                 running = self._read_account(client, account)
@@ -1183,7 +1201,12 @@ class IbkrClient:
         reader.handshake_done()
         return client
 
-    def _route(self, message: _Incoming | _AccountMessage) -> None:
+    def _route(self, message: _Incoming | _AccountMessage | _ConnectionClosed) -> None:
+        if isinstance(message, _ConnectionClosed):
+            # only the account read: the price asks judge a silence themselves, as they always have
+            if self._reading is not None and self._reading.client is message.client:
+                self._reading.fail(ConnectionError("IB Gateway's connection closed during the account read"))
+            return
         if isinstance(message, _AccountValue | _Portfolio | _AccountTime | _AccountEnd):
             # only the attached connection's reader delivers anything (`_Reader.detach`)
             if self._reading is not None:
