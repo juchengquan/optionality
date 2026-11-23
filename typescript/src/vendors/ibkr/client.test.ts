@@ -1,10 +1,12 @@
 import { createConnection } from "node:net";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { IbkrClient } from "./client.ts";
+import { IbkrAccountRefused, IbkrClient } from "./client.ts";
 import { type FakeGateway, type FakeOptions, startFakeGateway } from "./fake.ts";
-import { type Conversation, type Exchange, loadConversation } from "./recordings.ts";
+import {
+  type Conversation, type Exchange, PLACEHOLDER_ACCOUNTS, loadConversation,
+} from "./recordings.ts";
 
 /** The bounded ask, over a real loopback socket against the recorded stub.
  *
@@ -496,9 +498,146 @@ describe("reachable, for /health", () => {
   });
 });
 
-describe("the account read (ADR 0030, #469)", () => {
-  it.todo("answers each constructed account recording's totals and holdings");
-  it.todo("sends exactly subscribe, then unsubscribe — including when the deadline fails it");
-  it.todo("joins a read already running, so two callers send one subscribe");
-  it.todo("refuses several accounts with none named, and a named one not on the login, masked");
+describe("the account read (ADR 0030)", () => {
+  // Every conversation here is CONSTRUCTED, in ibapi 9.81's layout, with invented figures and
+  // placeholder accounts: nothing of the owner's account is ever committed.
+
+  /** The account subscriptions the stub was sent, in order: [subscribe, account]. */
+  const subscriptions = (g: FakeGateway) =>
+    g.received.filter((f) => f[0] === "6").map((f) => [f[2], f[3]]);
+
+  /** Until every subscribe has had its unsubscribe, or a second has passed: the unsubscribe is
+   *  sent as the read settles, and reaches the stub a moment later. */
+  async function unsubscribed(g: FakeGateway): Promise<void> {
+    const until = Date.now() + 1000;
+    const open = () => subscriptions(g).reduce((n, [on]) => n + (on === "1" ? 1 : -1), 0);
+    while (open() > 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 5));
+  }
+
+  it("answers the totals and every holding, IBKR's marks, the account masked", async () => {
+    const c = await connected({ conversation: "account-stocks-and-options" });
+    const got = await c.account();
+    expect(got).toMatchObject({
+      account: "•••••000", paper: false, base_currency: "USD", updated_at: "14:32",
+      // UnrealizedPnL from its BASE row, which counts the EUR stock's; the USD row does not
+      totals: {
+        net_liquidation: 184523.17, total_cash: 61230.55, unrealized_pnl: 2071.4,
+        realized_pnl: -412.8,
+      },
+    });
+    expect(got.holdings.map((h) => [h.symbol, h.sec_type, h.currency, h.position])).toEqual([
+      ["ACME", "STK", "USD", 300], ["INITECH", "STK", "EUR", 50],
+      ["ACME", "OPT", "USD", 4], ["ACME", "OPT", "USD", -6],
+    ]);
+    // IB's averageCost for an option is per contract; the answer's is per share
+    expect(got.holdings[2]!.average_cost).toBe(2.625);
+  });
+
+  it("sends exactly a subscribe naming the account, then its unsubscribe", async () => {
+    const c = await connected({ conversation: "account-stocks-and-options" });
+    await c.account();
+    await unsubscribed(gateway!);
+    expect(subscriptions(gateway!)).toEqual([["1", "U0000000"], ["0", "U0000000"]]);
+  });
+
+  it("calls a DU account paper", async () => {
+    const c = await connected({ conversation: "account-paper" });
+    expect(await c.account()).toMatchObject({ account: "••••••000", paper: true });
+  });
+
+  it("fails at the deadline when the download never ends, and unsubscribes anyway", async () => {
+    const c = await connected({ conversation: "account-never-ends" }, 300);
+    await expect(c.account()).rejects.toThrow(
+      "IB Gateway did not finish sending the account within 300ms — its link to IBKR may be "
+      + "down while its own socket is still open");
+    await unsubscribed(gateway!);
+    expect(subscriptions(gateway!)).toEqual([["1", "U0000000"], ["0", "U0000000"]]);
+  });
+
+  it("joins a read already running, so two callers send ONE subscribe", async () => {
+    const c = await connected({ conversation: "account-stocks-and-options" });
+    // the second caller arrives while the first's subscribe is on the wire, before any answer
+    const [a, b] = await Promise.all([c.account(), c.account()]);
+    expect(b).toEqual(a);
+    await unsubscribed(gateway!);
+    expect(subscriptions(gateway!)).toEqual([["1", "U0000000"], ["0", "U0000000"]]);
+  });
+
+  it("subscribes afresh for a read that comes after one has finished", async () => {
+    const c = await connected({ conversation: "account-paper" });
+    await c.account();
+    await c.account();
+    await unsubscribed(gateway!);
+    expect(subscriptions(gateway!)).toEqual([
+      ["1", "DU0000000"], ["0", "DU0000000"], ["1", "DU0000000"], ["0", "DU0000000"],
+    ]);
+  });
+
+  it("refuses several accounts with none named, masked, and subscribes to nothing", async () => {
+    const c = await connected({ conversation: "account-several" });
+    const err = await c.account().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(IbkrAccountRefused);
+    expect((err as Error).message)
+      .toBe("several accounts on this login; set IBKR_ACCOUNT to one of •••••000, •••••001");
+    expect(subscriptions(gateway!)).toEqual([]);
+  });
+
+  it("reads the one named, of several", async () => {
+    const c = await connected({ conversation: "account-several" });
+    expect(await c.account("U0000001")).toMatchObject({
+      account: "•••••001", totals: { net_liquidation: 25010 }, holdings: [],
+    });
+  });
+
+  it("refuses a named account not on the login, naming it masked", async () => {
+    const c = await connected({ conversation: "account-several" });
+    await expect(c.account("DU0000001")).rejects.toThrow(new IbkrAccountRefused(
+      "IBKR_ACCOUNT (••••••001) names no account on this login, which has •••••000, •••••001"));
+  });
+
+  it("ignores what the gateway says about another account while it reads one", async () => {
+    const conversation = loadConversation("account-paper");
+    const [exchange] = conversation.exchanges;
+    const stray = ["7", "8", "100000999", "ACME", "STK", "", "0.0", "0", "", "NASDAQ", "USD",
+      "ACME", "NMS", "1", "41.27", "41.27", "40", "1.27", "0.0", "DU0000001"];
+    const c = await connected({ conversation: {
+      ...conversation, exchanges: [{ ...exchange!, replies: [stray, ...exchange!.replies] }],
+    } });
+    expect((await c.account()).holdings.map((h) => h.position)).toEqual([-1]);
+  });
+
+  it("fails a read at once when the client is closed under it", async () => {
+    const c = await connected({ conversation: "account-never-ends" }, 5000);
+    const read = c.account();
+    await new Promise((r) => setTimeout(r, 50));
+    c.close();
+    await expect(read).rejects.toThrow("IB Gateway's connection closed during the account read");
+  });
+
+  it("never writes an account id in full: not in an answer, an error, or a log line", async () => {
+    const said: string[] = [];
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        said.push(args.map(String).join(" "));
+      }));
+    try {
+      for (const [name, wanted] of [
+        ["account-stocks-and-options", undefined], ["account-paper", undefined],
+        ["account-several", undefined], ["account-several", "U0000001"],
+        ["account-several", "DU0000001"], ["account-never-ends", undefined],
+      ] as const) {
+        const c = await connected({ conversation: name }, 300);
+        said.push(await c.account(wanted).then(JSON.stringify, (e: Error) => e.message));
+        c.close();
+        await gateway!.close();
+        gateway = null;
+      }
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+    expect(said.length).toBeGreaterThanOrEqual(6);
+    for (const id of PLACEHOLDER_ACCOUNTS) {
+      expect(said.filter((line) => line.includes(id)), id).toEqual([]);
+    }
+  });
 });

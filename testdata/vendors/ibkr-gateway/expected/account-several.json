@@ -1,0 +1,62 @@
+{
+  "conversation": "account-several",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [],
+  "expect": {
+    "records": [],
+    "unknown": []
+  },
+  "accountReads": [
+    {
+      "wanted": null,
+      "expect": {
+        "$refused": "several accounts on this login; set IBKR_ACCOUNT to one of •••••000, •••••001"
+      },
+      "sent": []
+    },
+    {
+      "wanted": "U0000001",
+      "expect": {
+        "account": "•••••001",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "11:47",
+        "totals": {
+          "net_liquidation": 25010,
+          "total_cash": 25010,
+          "unrealized_pnl": 0,
+          "realized_pnl": 0
+        },
+        "holdings": []
+      },
+      "sent": [
+        [
+          "6",
+          "2",
+          "1",
+          "U0000001"
+        ],
+        [
+          "6",
+          "2",
+          "0",
+          "U0000001"
+        ]
+      ]
+    },
+    {
+      "wanted": "DU0000001",
+      "expect": {
+        "$refused": "IBKR_ACCOUNT (••••••001) names no account on this login, which has •••••000, •••••001"
+      },
+      "sent": []
+    }
+  ]
+}

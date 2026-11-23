@@ -1,0 +1,64 @@
+{
+  "conversation": "account-stocks-and-options",
+  "summary": "A live account's totals and four holdings: two stocks, one of them in EUR, and two options, one short with realised P&L; then the download end. The unrealised P&L summed in the base (BASE) differs from the USD holdings' alone by the EUR stock's.",
+  "provenance": {
+    "kind": "constructed",
+    "why": "Nothing of the owner's account may be committed (the repository is public), so no account conversation is ever captured into it (ADR 0030).",
+    "built": "Laid out field for field as ibapi 9.81's decoder at server version 157 (decoder.py processPortfolioValueMsg; updateAccountValue, updateAccountTime, accountDownloadEnd and managedAccounts by their EWrapper signatures) and its reqAccountUpdates encoder, read on 2026-11-23: account values, then the portfolio, then the update time, then the download end. Which ACCT_VALUE keys and currency tags arrive is ibapi's documented set, not a capture of this gateway.",
+    "invented": "Every symbol, contract id, quantity, price, value, total, clock time and account id in this file is invented; the accounts are placeholders."
+  },
+  "ask": [],
+  "accountReads": [
+    {"wanted": null}
+  ],
+  "handshake": {
+    "greeting": ["157", "20261123 21:40:12 SGT"],
+    "onStartApi": [
+      ["15", "1", "U0000000"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm.nj"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usopt"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefhk"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqAccountUpdates",
+      "account": "U0000000",
+      "sent": ["6", "2", "1", "U0000000"],
+      "replies": [
+        ["6", "2", "AccountCode", "U0000000", "", "U0000000"],
+        ["6", "2", "AccountReady", "true", "", "U0000000"],
+        ["6", "2", "AccountType", "INDIVIDUAL", "", "U0000000"],
+        ["6", "2", "Currency", "BASE", "BASE", "U0000000"],
+        ["6", "2", "Currency", "USD", "USD", "U0000000"],
+        ["6", "2", "ExchangeRate", "1.00", "BASE", "U0000000"],
+        ["6", "2", "ExchangeRate", "1.00", "USD", "U0000000"],
+        ["6", "2", "CashBalance", "61230.55", "BASE", "U0000000"],
+        ["6", "2", "CashBalance", "61230.55", "USD", "U0000000"],
+        ["6", "2", "NetLiquidation", "184523.17", "USD", "U0000000"],
+        ["6", "2", "NetLiquidationByCurrency", "184523.17", "BASE", "U0000000"],
+        ["6", "2", "NetLiquidationByCurrency", "184523.17", "USD", "U0000000"],
+        ["6", "2", "TotalCashValue", "61230.55", "USD", "U0000000"],
+        ["6", "2", "UnrealizedPnL", "2071.40", "BASE", "U0000000"],
+        ["6", "2", "UnrealizedPnL", "1735.30", "USD", "U0000000"],
+        ["6", "2", "RealizedPnL", "-412.80", "BASE", "U0000000"],
+        ["6", "2", "RealizedPnL", "-412.80", "USD", "U0000000"],
+        ["6", "2", "Currency", "EUR", "EUR", "U0000000"],
+        ["6", "2", "ExchangeRate", "1.0842", "EUR", "U0000000"],
+        ["6", "2", "CashBalance", "0.00", "EUR", "U0000000"],
+        ["6", "2", "NetLiquidationByCurrency", "5420.00", "EUR", "U0000000"],
+        ["6", "2", "UnrealizedPnL", "310.00", "EUR", "U0000000"],
+        ["6", "2", "RealizedPnL", "0.00", "EUR", "U0000000"],
+        ["7", "8", "100000101", "ACME", "STK", "", "0.0", "0", "", "NASDAQ", "USD", "ACME", "NMS", "300", "41.27", "12381.0", "38.115", "946.5", "0.0", "U0000000"],
+        ["7", "8", "100000102", "INITECH", "STK", "", "0.0", "0", "", "IBIS", "EUR", "INI", "XETRA", "50", "108.4", "5420.0", "102.2", "310.0", "0.0", "U0000000"],
+        ["7", "8", "100000201", "ACME", "OPT", "20261218", "45.0", "C", "100", "", "USD", "ACME  261218C00045000", "ACME", "4", "3.85", "1540.0", "262.5", "490.0", "0.0", "U0000000"],
+        ["7", "8", "100000202", "ACME", "OPT", "20261218", "35.0", "P", "100", "", "USD", "ACME  261218P00035000", "ACME", "-6", "0.92", "-552.0", "141.8", "298.8", "-412.8", "U0000000"],
+        ["8", "1", "14:32"],
+        ["54", "1", "U0000000"]
+      ],
+      "atMs": [],
+      "onCancel": []
+    }
+  ]
+}

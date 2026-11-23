@@ -613,6 +613,75 @@ class _Error:
 type _Incoming = _Contract | _ContractEnd | _Price | _GreeksTick | _SnapshotEnd | _DataType | _Error
 
 
+# --- the account's messages (ADR 0030; `messages.ts`), which carry the account and no request id --
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountValue:
+    account: str
+    row: AccountValueRow
+
+
+@dataclass(frozen=True, slots=True)
+class _Portfolio:
+    account: str
+    #: the row's identity: a later row for it replaces the earlier one
+    con_id: str
+    row: PortfolioRow
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountTime:
+    time: str
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountEnd:
+    account: str
+
+
+type _AccountMessage = _AccountValue | _Portfolio | _AccountTime | _AccountEnd
+
+
+def _text(fields: list[str], at: int) -> str:
+    """A field as the text it came as, empty where the message ended before it (`messages.ts`)."""
+    return fields[at] if at < len(fields) else ""
+
+
+def _read_account_value(fields: list[str]) -> _AccountValue:
+    """Message 6, ACCT_VALUE: `id, version, key, value, currency, account`."""
+    return _AccountValue(
+        account=_text(fields, 5),
+        row={"key": _text(fields, 2), "value": _text(fields, 3), "currency": _text(fields, 4)},
+    )
+
+
+def _read_portfolio(fields: list[str]) -> _Portfolio:
+    """Message 7, PORTFOLIO_VALUE, version 8: `id, version, conId, symbol, secType, expiry, strike,
+    right, multiplier, primaryExchange, currency, localSymbol, tradingClass, position, marketPrice,
+    marketValue, averageCost, unrealizedPNL, realizedPNL, account` — every field kept as text, what
+    each MEANS being `holding_from`'s, as it is `fields.ts`' `holdingFrom`'s."""
+    return _Portfolio(
+        account=_text(fields, 19),
+        con_id=_text(fields, 2),
+        row={
+            "sec_type": _text(fields, 4),
+            "symbol": _text(fields, 3),
+            "expiry": _text(fields, 5),
+            "strike": _text(fields, 6),
+            "right": _text(fields, 7),
+            "multiplier": _text(fields, 8),
+            "currency": _text(fields, 10),
+            "position": _text(fields, 13),
+            "market_price": _text(fields, 14),
+            "market_value": _text(fields, 15),
+            "average_cost": _text(fields, 16),
+            "unrealized_pnl": _text(fields, 17),
+            "realized_pnl": _text(fields, 18),
+        },
+    )
+
+
 def _read_price(fields: list[str]) -> _Price:
     """Message 1, tickPrice: `id, version, reqId, tickType, price, size, attrib`."""
     return _Price(req_id=_ident(fields, 2), tick_type=_ident(fields, 3), price=_price(fields, 4))
@@ -647,8 +716,10 @@ class _Reader:
     fails with the gateway's words at once rather than at the timeout.
     """
 
-    def __init__(self, route: Callable[[_Incoming], None], failed: "asyncio.Future[str]") -> None:
+    def __init__(self, route: Callable[[_Incoming | _AccountMessage], None], failed: "asyncio.Future[str]") -> None:
         self._route = route
+        #: MANAGED_ACCTS' one field as the session sent it, with the handshake: the login's accounts
+        self.accounts = ""
         self._failed: asyncio.Future[str] | None = failed
         self.client: Client | None = None
         #: nextValidId has arrived: the session STARTED, which is where the TypeScript stops
@@ -668,7 +739,7 @@ class _Reader:
         if self._failed is not None and not self._failed.done():
             self._failed.set_result(why)
 
-    def _deliver(self, message: _Incoming) -> None:
+    def _deliver(self, message: _Incoming | _AccountMessage) -> None:
         if self._attached:
             self._route(message)
 
@@ -712,6 +783,14 @@ class _Reader:
         """Ticks 1 and 21, read field by field by `_FigureDecoder`."""
         self._deliver(message)
 
+    # the account read's (ADR 0030)
+    def managedAccounts(self, accountsList: str) -> None:
+        self.accounts = accountsList
+
+    def account(self, message: _AccountMessage) -> None:
+        """Messages 6, 7, 8 and 54, read field by field by `_FigureDecoder`."""
+        self._deliver(message)
+
     def __getattr__(self, name: str) -> Callable[..., None]:
         if name.startswith("_"):
             raise AttributeError(name)
@@ -738,7 +817,18 @@ def _transport() -> tuple[Any, Any, Any]:
         raise ImportError(_MISSING) from err
 
     class _FigureDecoder(Decoder):  # type: ignore[misc]
-        """`ib_async`'s decoder, but ticks 1 and 21 are read field by field (see the docstring)."""
+        """`ib_async`'s decoder, but ticks 1 and 21 are read field by field (see the docstring), and
+        so are the account's four messages: its PORTFOLIO_VALUE reader converts every figure with
+        `float()`, so one empty field drops the whole row with a logged traceback where the
+        TypeScript reads it as no figure, and the other three are read here too so that every
+        account message reaches the client one way."""
+
+        def __init__(self, wrapper: Any, server_version: int) -> None:
+            super().__init__(wrapper, server_version)
+            self.handlers[6] = lambda fields: self.wrapper.account(_read_account_value(fields))
+            self.handlers[7] = lambda fields: self.wrapper.account(_read_portfolio(fields))
+            self.handlers[8] = lambda fields: self.wrapper.account(_AccountTime(_text(fields, 2)))
+            self.handlers[54] = lambda fields: self.wrapper.account(_AccountEnd(_text(fields, 2)))
 
         def priceSizeTick(self, fields: list[str]) -> None:
             self.wrapper.figures(_read_price(fields))
@@ -769,6 +859,17 @@ QUIET_MS = 250
 class _Found(NamedTuple):
     con_id: int | None
     silent: bool
+
+
+@dataclass(slots=True)
+class _AccountRead:
+    """The account read running now: whose, over which connection, and how to feed or fail it."""
+
+    client: "Client"
+    account: str
+    answer: "asyncio.Future[IbkrAccount]"
+    read: Callable[[_AccountMessage], None]
+    fail: Callable[[BaseException], None]
 
 
 class IbkrClient:
@@ -831,6 +932,9 @@ class IbkrClient:
         #: that asked, so tearing one down drops only its own listeners
         self._waiting: dict[int, tuple[Client, Callable[[_Incoming], None]]] = {}
         self._next_id = 1
+        #: the account read in flight, which a second caller for the same account joins: IB allows
+        #: one account subscription per client at a time
+        self._reading: _AccountRead | None = None
 
     @property
     def name(self) -> str:
@@ -866,12 +970,94 @@ class IbkrClient:
         raises as `fetch_quotes` does (ConnectionError), and so does a deadline
         (`request_timeout_ms`), in its own words, the unsubscribe sent on that path too. A second caller while a read of the same account
         runs JOINS it: IB allows one account subscription per client at a time."""
-        raise NotImplementedError("IbkrClient.account is not built yet (#469)")
+        client = await self._connected()
+        reader = client.wrapper
+        listed = reader.accounts if isinstance(reader, _Reader) else ""
+        choice = choose_account(managed_accounts(listed), wanted)
+        if "refused" in choice:
+            raise IbkrAccountRefused(choice["refused"])
+        account = choice["account"]
+        while True:
+            running = self._reading
+            if running is None:
+                running = self._read_account(client, account)
+            elif running.client is not client or running.account != account:
+                # another account's read holds the one subscription: it finishes first, whatever it
+                # comes to
+                await asyncio.wait({running.answer})
+                continue
+            # shielded, so one caller giving up does not cancel the read under the others; the read
+            # is bounded by its own deadline
+            return await asyncio.shield(running.answer)
+
+    def _read_account(self, client: "Client", account: str) -> _AccountRead:
+        """Subscribe, collect until the download's end, unsubscribe, answer — or fail at the
+        deadline, unsubscribing all the same (`client.ts`' `readAccount`). The account messages
+        carry no request id, so they reach this by the account they name; one naming another
+        account is not this read's. A value or a holding sent twice is the later one, a holding kept
+        where it first came. Nothing it reads leaves it but `account_answer`'s, whose id is masked."""
+        loop = asyncio.get_running_loop()
+        answer: asyncio.Future[IbkrAccount] = loop.create_future()
+        # retrieved, so a read every caller gave up on does not warn that nobody heard its failure
+        answer.add_done_callback(lambda done: done.cancelled() or done.exception())
+        values: dict[tuple[str, str], AccountValueRow] = {}
+        holdings: dict[str, IbkrHolding] = {}
+        updated_at: str | None = None
+
+        def settle(result: IbkrAccount | None, error: BaseException | None, unsubscribe: bool) -> None:
+            if answer.done():
+                return
+            timer.cancel()
+            if self._reading is entry:
+                self._reading = None
+            if unsubscribe and client.isReady():
+                client.reqAccountUpdates(False, account)
+            if error is not None:
+                answer.set_exception(error)
+            else:
+                answer.set_result(cast(IbkrAccount, result))
+
+        def read(message: _AccountMessage) -> None:
+            nonlocal updated_at
+            match message:
+                case _AccountTime(time=time):
+                    updated_at = time
+                case _AccountValue(account=whose, row=row) if whose == account:
+                    values[(row["key"], row["currency"])] = row
+                case _Portfolio(account=whose, con_id=con_id, row=row) if whose == account:
+                    holdings[con_id] = holding_from(row)
+                case _AccountEnd(account=whose) if whose == account:
+                    settle(
+                        account_answer(account, list(values.values()), list(holdings.values()), updated_at), None, True
+                    )
+
+        def late() -> None:
+            settle(
+                None,
+                ConnectionError(
+                    f"IB Gateway did not finish sending the account within {self.request_timeout_ms}ms — its link "
+                    "to IBKR may be down while its own socket is still open"
+                ),
+                True,
+            )
+
+        timer = loop.call_later(self.request_timeout_ms / 1000, late)
+        entry = _AccountRead(client, account, answer, read, lambda error: settle(None, error, False))
+        self._reading = entry
+        try:
+            _send(client, lambda: client.reqAccountUpdates(True, account))
+        except Exception as err:  # noqa: BLE001 — the read's own failure, told to every caller
+            settle(None, err, False)
+        return entry
 
     def _drop(self, client: "Client") -> None:
         """Hang up ONE connection, and forget what was asked over it. The client's own connection
         is forgotten only if it is this one: an ask that failed on a connection since replaced must
         not close the replacement, nor drop the listeners of the asks running on it."""
+        # an account read on this connection can hear nothing more, and is told so now rather than at
+        # its deadline; there is no connection left to unsubscribe over
+        if self._reading is not None and self._reading.client is client:
+            self._reading.fail(ConnectionError("IB Gateway's connection closed during the account read"))
         _detach(client)
         for req_id in [k for k, (owner, _) in self._waiting.items() if owner is client]:
             del self._waiting[req_id]
@@ -979,7 +1165,12 @@ class IbkrClient:
         reader.handshake_done()
         return client
 
-    def _route(self, message: _Incoming) -> None:
+    def _route(self, message: _Incoming | _AccountMessage) -> None:
+        if isinstance(message, _AccountValue | _Portfolio | _AccountTime | _AccountEnd):
+            # only the attached connection's reader delivers anything (`_Reader.detach`)
+            if self._reading is not None:
+                self._reading.read(message)
+            return
         if message.req_id is None:
             return
         entry = self._waiting.get(message.req_id)

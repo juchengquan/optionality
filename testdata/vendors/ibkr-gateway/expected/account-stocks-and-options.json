@@ -1,0 +1,109 @@
+{
+  "conversation": "account-stocks-and-options",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [],
+  "expect": {
+    "records": [],
+    "unknown": []
+  },
+  "accountReads": [
+    {
+      "wanted": null,
+      "expect": {
+        "account": "•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "14:32",
+        "totals": {
+          "net_liquidation": 184523.17,
+          "total_cash": 61230.55,
+          "unrealized_pnl": 2071.4,
+          "realized_pnl": -412.8
+        },
+        "holdings": [
+          {
+            "sec_type": "STK",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": null,
+            "strike": null,
+            "right": null,
+            "multiplier": null,
+            "position": 300,
+            "market_price": 41.27,
+            "market_value": 12381,
+            "average_cost": 38.115,
+            "unrealized_pnl": 946.5,
+            "realized_pnl": 0
+          },
+          {
+            "sec_type": "STK",
+            "symbol": "INITECH",
+            "currency": "EUR",
+            "expiry": null,
+            "strike": null,
+            "right": null,
+            "multiplier": null,
+            "position": 50,
+            "market_price": 108.4,
+            "market_value": 5420,
+            "average_cost": 102.2,
+            "unrealized_pnl": 310,
+            "realized_pnl": 0
+          },
+          {
+            "sec_type": "OPT",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": "20261218",
+            "strike": 45,
+            "right": "C",
+            "multiplier": 100,
+            "position": 4,
+            "market_price": 3.85,
+            "market_value": 1540,
+            "average_cost": 2.625,
+            "unrealized_pnl": 490,
+            "realized_pnl": 0
+          },
+          {
+            "sec_type": "OPT",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": "20261218",
+            "strike": 35,
+            "right": "P",
+            "multiplier": 100,
+            "position": -6,
+            "market_price": 0.92,
+            "market_value": -552,
+            "average_cost": 1.4180000000000001,
+            "unrealized_pnl": 298.8,
+            "realized_pnl": -412.8
+          }
+        ]
+      },
+      "sent": [
+        [
+          "6",
+          "2",
+          "1",
+          "U0000000"
+        ],
+        [
+          "6",
+          "2",
+          "0",
+          "U0000000"
+        ]
+      ]
+    }
+  ]
+}

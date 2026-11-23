@@ -1,0 +1,64 @@
+{
+  "conversation": "account-paper",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [],
+  "expect": {
+    "records": [],
+    "unknown": []
+  },
+  "accountReads": [
+    {
+      "wanted": null,
+      "expect": {
+        "account": "••••••000",
+        "paper": true,
+        "base_currency": "USD",
+        "updated_at": "09:05",
+        "totals": {
+          "net_liquidation": 1003250,
+          "total_cash": 998100,
+          "unrealized_pnl": 150,
+          "realized_pnl": 0
+        },
+        "holdings": [
+          {
+            "sec_type": "OPT",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": "20261120",
+            "strike": 50,
+            "right": "C",
+            "multiplier": 100,
+            "position": -1,
+            "market_price": 1.15,
+            "market_value": -115,
+            "average_cost": 1.3,
+            "unrealized_pnl": 15,
+            "realized_pnl": 0
+          }
+        ]
+      },
+      "sent": [
+        [
+          "6",
+          "2",
+          "1",
+          "DU0000000"
+        ],
+        [
+          "6",
+          "2",
+          "0",
+          "DU0000000"
+        ]
+      ]
+    }
+  ]
+}

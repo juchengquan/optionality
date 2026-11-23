@@ -24,16 +24,17 @@ parametrization over an empty directory passes by collecting nothing.
 """
 
 import asyncio
+import time
 from typing import Any
 
 import pytest
 from fake_gateway import conversation_names, expectation_names, load_conversation, load_expectation, start_fake_gateway
 from test_cases import same
 
-from optionality.ibkr import IbkrClient
+from optionality.ibkr import IbkrAccountRefused, IbkrClient
 
 #: the conversations there were when this was written; more is fine, fewer is a directory gone
-FLOOR = 12
+FLOOR = 16
 #: a replay that takes longer than this has hung, whatever its waits are configured to
 HUNG = 15.0
 
@@ -46,6 +47,34 @@ async def outcome(client: IbkrClient, codes: list[str], port: int) -> dict[str, 
     except Exception as err:  # noqa: BLE001 — every failure IS the outcome being compared
         return {"$throws": str(err).replace(f"127.0.0.1:{port}", "127.0.0.1:<port>")}
     return {"records": batch.records, "unknown": batch.unknown}
+
+
+def subscriptions(gateway: Any) -> list[list[str]]:
+    """The account subscriptions the stub was sent, whole, in order (ADR 0030)."""
+    return [fields for fields in gateway.received if fields[0] == "6"]
+
+
+async def unsubscribed(gateway: Any) -> None:
+    """Until every subscribe has had its unsubscribe, or a second has passed: the unsubscribe goes
+    as a read settles, and reaches the stub a moment after — `replay.ts`' `unsubscribed`."""
+    until = time.monotonic() + 1
+    while sum(1 if f[2] == "1" else -1 for f in subscriptions(gateway)) > 0 and time.monotonic() < until:
+        await asyncio.sleep(0.005)
+
+
+async def account_read(client: IbkrClient, gateway: Any, wanted: str | None) -> dict[str, Any]:
+    """One account read in the expectation's terms: the answer, `{"$refused": message}` where the
+    client refused to choose, or `{"$throws": message}` — and the subscriptions it sent."""
+    before = len(subscriptions(gateway))
+    got: Any
+    try:
+        got = await client.account(wanted)
+    except IbkrAccountRefused as err:
+        got = {"$refused": str(err)}
+    except Exception as err:  # noqa: BLE001 — every failure IS the outcome being compared
+        got = {"$throws": str(err)}
+    await unsubscribed(gateway)
+    return {"wanted": wanted, "expect": got, "sent": subscriptions(gateway)[before:]}
 
 
 async def replay(name: str) -> dict[str, Any]:
@@ -67,6 +96,10 @@ async def replay(name: str) -> dict[str, Any]:
         if "later" in conversation:
             result["later"] = [
                 {"ask": codes, "expect": await outcome(client, codes, gateway.port)} for codes in conversation["later"]
+            ]
+        if "accountReads" in conversation:
+            result["accountReads"] = [
+                await account_read(client, gateway, read["wanted"]) for read in conversation["accountReads"]
             ]
         result["sent"] = sorted({fields[0] for fields in gateway.received})
         return result
@@ -104,20 +137,33 @@ def test_the_python_client_answers_what_the_typescript_did(name: str, replayed: 
             f"{name}: later[{i}]: the Python client said\n  {mine['expect']!r}\n"
             f"where the TypeScript's said\n  {theirs['expect']!r}"
         )
+    assert ("accountReads" in got) == ("accountReads" in expected), f"{name}: account reads on one side only"
+    for i, (mine, theirs) in enumerate(zip(got.get("accountReads", []), expected.get("accountReads", []), strict=True)):
+        assert mine["wanted"] == theirs["wanted"], f"{name}: accountReads[{i}] asked for another account"
+        assert same(mine["expect"], theirs["expect"]), (
+            f"{name}: accountReads[{i}]: the Python client said\n  {mine['expect']!r}\n"
+            f"where the TypeScript's said\n  {theirs['expect']!r}"
+        )
+        # the messages too: exactly a subscribe and its unsubscribe, or nothing for a refusal
+        assert mine["sent"] == theirs["sent"], (
+            f"{name}: accountReads[{i}]: the Python client sent {mine['sent']} where the TypeScript's sent {theirs['sent']}"
+        )
 
 
 @pytest.mark.parametrize("name", conversation_names())
 def test_the_python_client_sends_only_what_the_typescript_does(name: str, replayed: dict[str, dict[str, Any]]) -> None:
-    """The TypeScript's five messages and startApi, and nothing account-shaped.
+    """The TypeScript's five messages and startApi, and an account subscription only to read one.
 
     `ib_async`'s `IB.connectAsync` asks for positions on every connect whatever its fetch flags
-    say, and orders unless `readonly=True`. ADR 0019's point is that a quote fetch has nothing
-    account-shaped in it, so this client connects through `ib_async`'s `Client` instead and sends
-    what `messages.ts` sends: startApi (71), reqMarketDataType (59), reqContractDetails (9),
-    reqMktData (1) and cancelMktData (2)."""
+    say, and orders unless `readonly=True`. A quote fetch has nothing account-shaped in it, so this
+    client connects through `ib_async`'s `Client` instead and sends what `messages.ts` sends:
+    startApi (71), reqMarketDataType (59), reqContractDetails (9), reqMktData (1) and cancelMktData
+    (2) — and reqAccountUpdates (6) where, and only where, a conversation reads the account (ADR
+    0030), held message for message by the comparison above."""
     got = replayed[name]
     assert "crashed" not in got, got.get("crashed")
-    assert set(got["sent"]) <= {"71", "59", "9", "1", "2"}, f"{name}: the client also sent {got['sent']}"
+    allowed = {"71", "59", "9", "1", "2"} | ({"6"} if "accountReads" in got else set())
+    assert set(got["sent"]) <= allowed, f"{name}: the client also sent {got['sent']}"
 
 
 def test_every_recording_has_its_expectation_and_its_python_result() -> None:

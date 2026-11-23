@@ -1,0 +1,56 @@
+{
+  "conversation": "account-several",
+  "summary": "A login managing two accounts: a read naming neither is refused, one naming the second answers its totals, and one naming an account not on the login is refused.",
+  "provenance": {
+    "kind": "constructed",
+    "why": "Nothing of the owner's account may be committed (the repository is public), so no account conversation is ever captured into it (ADR 0030).",
+    "built": "Laid out as ibapi 9.81's decoder at server version 157 (decoder.py processPortfolioValueMsg; updateAccountValue, updateAccountTime, accountDownloadEnd and managedAccounts by their EWrapper signatures) and its reqAccountUpdates encoder, read on 2026-11-23. The managed accounts are one comma-separated field, as ibapi reads it.",
+    "invented": "Every symbol, contract id, quantity, price, value, total, clock time and account id in this file is invented; the accounts are placeholders."
+  },
+  "ask": [],
+  "accountReads": [
+    {"wanted": null},
+    {"wanted": "U0000001"},
+    {"wanted": "DU0000001"}
+  ],
+  "handshake": {
+    "greeting": ["157", "20261123 21:40:12 SGT"],
+    "onStartApi": [
+      ["15", "1", "U0000000,U0000001"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm.nj"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usopt"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefhk"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqAccountUpdates",
+      "account": "U0000001",
+      "sent": ["6", "2", "1", "U0000001"],
+      "replies": [
+        ["6", "2", "AccountCode", "U0000001", "", "U0000001"],
+        ["6", "2", "AccountReady", "true", "", "U0000001"],
+        ["6", "2", "AccountType", "INDIVIDUAL", "", "U0000001"],
+        ["6", "2", "Currency", "BASE", "BASE", "U0000001"],
+        ["6", "2", "Currency", "USD", "USD", "U0000001"],
+        ["6", "2", "ExchangeRate", "1.00", "BASE", "U0000001"],
+        ["6", "2", "ExchangeRate", "1.00", "USD", "U0000001"],
+        ["6", "2", "CashBalance", "25010.00", "BASE", "U0000001"],
+        ["6", "2", "CashBalance", "25010.00", "USD", "U0000001"],
+        ["6", "2", "NetLiquidation", "25010.00", "USD", "U0000001"],
+        ["6", "2", "NetLiquidationByCurrency", "25010.00", "BASE", "U0000001"],
+        ["6", "2", "NetLiquidationByCurrency", "25010.00", "USD", "U0000001"],
+        ["6", "2", "TotalCashValue", "25010.00", "USD", "U0000001"],
+        ["6", "2", "UnrealizedPnL", "0.00", "BASE", "U0000001"],
+        ["6", "2", "UnrealizedPnL", "0.00", "USD", "U0000001"],
+        ["6", "2", "RealizedPnL", "0.00", "BASE", "U0000001"],
+        ["6", "2", "RealizedPnL", "0.00", "USD", "U0000001"],
+        ["8", "1", "11:47"],
+        ["54", "1", "U0000001"]
+      ],
+      "atMs": [],
+      "onCancel": []
+    }
+  ]
+}

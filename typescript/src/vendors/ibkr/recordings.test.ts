@@ -3,7 +3,9 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { RECORDINGS, conversationNames, loadConversation, parseConversation } from "./recordings.ts";
+import {
+  PLACEHOLDER_ACCOUNTS, RECORDINGS, conversationNames, loadConversation, parseConversation,
+} from "./recordings.ts";
 
 /** The recorded gateway conversations under `testdata/vendors/ibkr-gateway/` (ADR 0021, phase 1d).
  *
@@ -24,7 +26,8 @@ describe("the conversations", () => {
     for (const name of conversationNames()) {
       const conversation = loadConversation(name);
       expect(conversation.conversation, `${name}.json names itself`).toBe(name);
-      expect(conversation.ask.length, `${name} asks for nothing`).toBeGreaterThan(0);
+      expect(conversation.ask.length + (conversation.accountReads?.length ?? 0),
+        `${name} asks for nothing`).toBeGreaterThan(0);
     }
   });
 
@@ -55,6 +58,29 @@ describe("the conversations", () => {
       data.sent = data.sent.slice(0, 17).concat(flag === undefined ? [] : [flag, "0", ""]);
       expect(() => parseConversation("normal-with-greeks", file), String(flag))
         .toThrow(/sent\[17\] must say whether it asked for a snapshot/);
+    }
+  });
+
+  it("reads the account reads, where a file has them (ADR 0030)", () => {
+    expect(loadConversation("account-several").accountReads)
+      .toEqual([{ wanted: null }, { wanted: "U0000001" }, { wanted: "DU0000001" }]);
+    expect(loadConversation("normal-with-greeks").accountReads).toBeUndefined();
+  });
+
+  it("refuses a conversation that neither asks for a quote nor reads the account", () => {
+    const text = readFileSync(join(RECORDINGS, "account-paper.json"), "utf8");
+    const file = { ...JSON.parse(text) as object, accountReads: [] };
+    expect(() => parseConversation("account-paper", file))
+      .toThrow(/must ask for a quote or read the account/);
+  });
+
+  it("refuses an account exchange whose subscribe does not name its account", () => {
+    const text = readFileSync(join(RECORDINGS, "account-paper.json"), "utf8");
+    for (const sent of [["6", "2", "1", "DU0000001"], ["6", "2", "0", "DU0000000"]]) {
+      const file = JSON.parse(text) as { exchanges: { sent: string[] }[] };
+      file.exchanges[0]!.sent = sent;
+      expect(() => parseConversation("account-paper", file), sent.join(","))
+        .toThrow(/must subscribe to DU0000000/);
     }
   });
 
@@ -109,16 +135,57 @@ describe("provenance, which is the point of the files", () => {
 });
 
 describe("nothing of the owner's", () => {
-  it("carries the placeholder account wherever the gateway named one", () => {
-    // managedAccounts is the one reply that names the owner. The number is replaced before a
-    // capture reaches disk, and this is what notices if a new capture forgets.
-    for (const name of conversationNames()) {
-      const c = loadConversation(name);
-      const accounts = c.handshake.onStartApi.filter((m) => m[0] === "15").map((m) => m[2]);
-      for (const a of accounts) expect(a, name).toBe("DU0000000");
-      const raw = readFileSync(join(RECORDINGS, `${name}.json`), "utf8");
-      expect(raw.match(/\b(DU|DF|U)\d{5,8}\b/g)?.filter((a) => a !== "DU0000000") ?? [], name)
-        .toEqual([]);
+  /** Every account id a conversation names, wherever a message carries one: managedAccounts'
+   *  list, an account value's account (and AccountCode's value, which is the id itself), a
+   *  portfolio row's, the download end's, an account exchange's and its subscribe's, and the
+   *  account a read asks for. */
+  function accountsNamed(name: string): string[] {
+    const c = loadConversation(name);
+    const messages = [
+      ...c.handshake.onStartApi,
+      ...c.exchanges.flatMap((e) => [e.sent, ...e.replies, ...(e.onCancel ?? [])]),
+    ];
+    const named: string[] = [];
+    for (const m of messages) {
+      if (m[0] === "15") named.push(...(m[2] ?? "").split(",").filter(Boolean));
+      if (m[0] === "6" && m.length === 6) {          // an account value, not a subscribe
+        named.push(m[5]!);
+        if (m[2] === "AccountCode") named.push(m[3]!);
+      }
+      if (m[0] === "6" && m.length === 4) named.push(m[3]!);  // reqAccountUpdates
+      if (m[0] === "7") named.push(m[19]!);
+      if (m[0] === "54") named.push(m[2]!);
     }
+    for (const e of c.exchanges) if (e.request === "reqAccountUpdates") named.push(e.account);
+    for (const r of c.accountReads ?? []) if (r.wanted !== null) named.push(r.wanted);
+    return named;
+  }
+
+  it("carries only placeholder accounts wherever the gateway, or a read, named one", () => {
+    // managedAccounts used to be the one reply that named the owner; since ADR 0030 every
+    // account message does. The number is never committed, and this is what notices if a
+    // conversation built from a capture forgets.
+    const placeholders = new Set<string>(PLACEHOLDER_ACCOUNTS);
+    for (const name of conversationNames()) {
+      const named = accountsNamed(name);
+      expect(named.filter((a) => !placeholders.has(a)), name).toEqual([]);
+      const raw = readFileSync(join(RECORDINGS, `${name}.json`), "utf8");
+      expect(raw.match(/\b(DU|DF|DI|U|F|I)\d{5,9}\b/g)?.filter((a) => !placeholders.has(a)) ?? [],
+        name).toEqual([]);
+    }
+  });
+
+  it("finds the account in every message that carries one, so the check above has a subject", () => {
+    // read off a conversation that holds each kind, so a reader that stopped looking at one
+    // would be seen here rather than passing everything
+    expect(new Set(accountsNamed("account-several"))).toEqual(new Set(["U0000000", "U0000001",
+      "DU0000001"]));
+    expect(accountsNamed("account-stocks-and-options").length).toBeGreaterThan(20);
+  });
+
+  it("would refuse an account that is not a placeholder", () => {
+    const text = readFileSync(join(RECORDINGS, "account-paper.json"), "utf8");
+    expect(text.replaceAll("DU0000000", "DU1234567").match(/\b(DU|DF|DI|U|F|I)\d{5,9}\b/g))
+      .toContain("DU1234567");
   });
 });

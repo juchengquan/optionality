@@ -29,7 +29,7 @@
  *  and each later outcome is written beside the first. The service holds one connection for days,
  *  and a fault that only a warm cache shows needs a second ask to be seen at all.
  */
-import { IbkrClient, type IbkrConfig } from "./client.ts";
+import { IbkrAccountRefused, IbkrClient, type IbkrConfig } from "./client.ts";
 import { startFakeGateway } from "./fake.ts";
 import { conversationNames, loadConversation } from "./recordings.ts";
 
@@ -58,6 +58,11 @@ export interface Expectation {
   /** each of the recording's `later` asks and what it came to, in order; absent where it has none,
    *  so a conversation of one ask renders exactly as before the field existed */
   later?: { ask: string[]; expect: unknown }[];
+  /** Each of the recording's account reads (ADR 0030), in order after the asks: what it came to —
+   *  the answer, `{ "$refused": message }` where the client refused to choose an account, or
+   *  `{ "$throws": message }` — and every account subscription the stub was sent because of it,
+   *  so the messages are held as well as the answer. Absent where the recording reads none. */
+  accountReads?: { wanted: string | null; expect: unknown; sent: string[][] }[];
 }
 
 /** The stub's port is chosen by the OS, so a message that names it is spelled with `<port>`. */
@@ -78,8 +83,22 @@ export async function replay(name: string): Promise<Expectation> {
       return { $throws: withoutPort(message, gateway.port) };
     }
   };
+  const subscriptions = () => gateway.received.filter((f) => f[0] === "6");
+  const read = async (wanted: string | null) => {
+    const before = subscriptions().length;
+    let got: unknown;
+    try {
+      got = await client.account(wanted ?? undefined);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      got = err instanceof IbkrAccountRefused ? { $refused: message } : { $throws: message };
+    }
+    await unsubscribed(gateway.received);
+    return { wanted, expect: got, sent: subscriptions().slice(before) };
+  };
   let expect: unknown;
   let later: Expectation["later"];
+  let accountReads: Expectation["accountReads"];
   try {
     expect = await outcome(conversation.ask);
     if (conversation.later) {
@@ -87,6 +106,10 @@ export async function replay(name: string): Promise<Expectation> {
       for (const codes of conversation.later) {
         later.push({ ask: codes, expect: await outcome(codes) });
       }
+    }
+    if (conversation.accountReads) {
+      accountReads = [];
+      for (const { wanted } of conversation.accountReads) accountReads.push(await read(wanted));
     }
   } finally {
     client.close();
@@ -96,7 +119,17 @@ export async function replay(name: string): Promise<Expectation> {
     conversation: name, provenance: conversation.provenance.kind,
     client: "typescript/src/vendors/ibkr/client.ts", config: REPLAY_CONFIG,
     ask: conversation.ask, expect, ...(later ? { later } : {}),
+    ...(accountReads ? { accountReads } : {}),
   };
+}
+
+/** Until every account subscription the stub was sent has had its unsubscribe, or a second has
+ *  passed: the unsubscribe goes as a read settles, and reaches the stub a moment after. */
+export async function unsubscribed(received: string[][]): Promise<void> {
+  const open = () => received.filter((f) => f[0] === "6")
+    .reduce((n, f) => n + (f[2] === "1" ? 1 : -1), 0);
+  const until = Date.now() + 1000;
+  while (open() > 0 && Date.now() < until) await new Promise((r) => setTimeout(r, 5));
 }
 
 /** The exact text of one expectation, so a regeneration that changes nothing changes no byte. */

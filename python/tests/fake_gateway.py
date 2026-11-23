@@ -55,7 +55,11 @@ AT = {
 SNAPSHOT_AT = 17
 
 #: the message ids the stub reads; everything else a client sends is accepted and never answered
-START_API, REQ_MKT_DATA, CANCEL_MKT_DATA, REQ_CONTRACT_DATA = "71", "1", "2", "9"
+START_API, REQ_MKT_DATA, CANCEL_MKT_DATA, REQ_CONTRACT_DATA, REQ_ACCT_DATA = "71", "1", "2", "9", "6"
+
+#: where reqAccountUpdates (version 2) says whether it subscribes ("1") or stops ("0"), and which
+#: account it names — `recordings.ts`' `SUBSCRIBE_AT` and `ACCOUNT_AT`
+SUBSCRIBE_AT, ACCOUNT_AT = 2, 3
 
 #: what the client sends before its first frame, raw
 PREFIX = b"API\0"
@@ -324,6 +328,26 @@ class FakeGateway:
             if request == "reqMktData":
                 answered[req_id] = exchange
             reply(exchange, req_id)
+            return
+        if message_id == REQ_ACCT_DATA:
+            # an account's subscription (ADR 0030), matched on the account it names; its replies
+            # carry no request id. Stopping it is answered with what the gateway said to that, and
+            # cuts a paced answer short. Keyed in `pending` by the account, which no id can be
+            account = fields[ACCOUNT_AT] if len(fields) > ACCOUNT_AT else ""
+            exchange = next(
+                (
+                    e
+                    for e in self.conversation["exchanges"]
+                    if e["request"] == "reqAccountUpdates" and e["account"] == account
+                ),
+                None,
+            )
+            key = f"account:{account}"
+            if len(fields) > SUBSCRIBE_AT and fields[SUBSCRIBE_AT] == "1":
+                if exchange is not None:
+                    reply(exchange, key)
+            elif not stop(key):
+                send(exchange.get("onCancel", []) if exchange else [])
             return
         if message_id == CANCEL_MKT_DATA:
             # rule 5: what the gateway said to that cancel, if anything — `onCancel` is what a

@@ -43,8 +43,8 @@
 import { createServer, type Server, type Socket } from "node:net";
 
 import {
-  CONTRACT_KEYS, type ContractKey, type Conversation, type Exchange, SNAPSHOT_AT, fill,
-  loadConversation,
+  ACCOUNT_AT, type AccountExchange, CONTRACT_KEYS, type ContractKey, type Conversation,
+  type Exchange, type QuoteExchange, SNAPSHOT_AT, SUBSCRIBE_AT, fill, loadConversation,
 } from "./recordings.ts";
 import { frame, readFields, readFrames, toFields } from "./wire.ts";
 
@@ -91,7 +91,8 @@ export interface FakeGateway {
 }
 
 /** Message ids the stub reads. Everything else a client sends is accepted and not answered. */
-const START_API = "71", REQ_MKT_DATA = "1", CANCEL_MKT_DATA = "2", REQ_CONTRACT_DATA = "9";
+const START_API = "71", REQ_MKT_DATA = "1", CANCEL_MKT_DATA = "2", REQ_CONTRACT_DATA = "9",
+  REQ_ACCT_DATA = "6";
 
 /** Where both requests carry the contract fields, at the versions this client and `ib_async`
  *  send at protocol 157: reqContractDetails is version 8 and reqMktData version 11, and after
@@ -106,7 +107,7 @@ const AT: Record<ContractKey, number> = {
  *  client and "8100" from another are one double to the gateway — and the rest as exact text. A
  *  market-data request must also ask the way the recording did, a snapshot or a stream, which
  *  both carry at the same field (`SNAPSHOT_AT`). */
-function names(exchange: Exchange, fields: string[]): boolean {
+function names(exchange: QuoteExchange, fields: string[]): boolean {
   if (exchange.request === "reqMktData" && fields[SNAPSHOT_AT] !== exchange.sent[SNAPSHOT_AT]) {
     return false;
   }
@@ -207,13 +208,29 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
           if (f[0] === REQ_CONTRACT_DATA) counts.lookups += 1;
           const request = f[0] === REQ_CONTRACT_DATA ? "reqContractDetails" : "reqMktData";
           const recorded = conversation.exchanges
-            .filter((e) => e.request === request && names(e, f));
+            .filter((e): e is QuoteExchange => e.request === request && names(e as QuoteExchange, f));
           if (recorded.length === 0) continue;         // nobody recorded an answer to this
           const turn = turns.get(recorded[0]!) ?? 0;
           turns.set(recorded[0]!, turn + 1);
           const exchange = recorded[Math.min(turn, recorded.length - 1)]!;
           if (request === "reqMktData") answered.set(reqId, exchange);
           reply(exchange, reqId);
+          continue;
+        }
+        if (f[0] === REQ_ACCT_DATA) {
+          // An account's subscription, matched on the account it names; every reply goes as the
+          // recording has it, account messages carrying no request id. Stopping it is answered
+          // with what the gateway said to that, and cuts a paced answer short. Keyed in `pending`
+          // by the account, which no request id can be
+          const account = f[ACCOUNT_AT] ?? "";
+          const exchange = conversation.exchanges.find(
+            (e): e is AccountExchange => e.request === "reqAccountUpdates" && e.account === account);
+          const key = `account:${account}`;
+          if (f[SUBSCRIBE_AT] === "1") {
+            if (exchange) reply(exchange, key);
+          } else if (!stop(key)) {
+            send(exchange?.onCancel ?? []);
+          }
           continue;
         }
         if (f[0] === CANCEL_MKT_DATA) {

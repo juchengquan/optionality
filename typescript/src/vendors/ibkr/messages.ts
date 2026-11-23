@@ -1,8 +1,14 @@
-/** The five messages this client sends, and the eight it reads.
+/** The six messages this client sends, and the thirteen it reads.
  *
  *  Read-only by construction: there is no order message here, and none is importable, so "this
  *  service cannot trade" is true by absence rather than by discipline. IB Gateway's own Read-Only
  *  API switch is the second, independent lock.
+ *
+ *  Five are a quote fetch's. Since ADR 0030 the sixth, reqAccountUpdates, reads the account: its
+ *  values, its portfolio as IBKR marks it, the time of the last update and the download's end,
+ *  each carrying the account's NAME rather than a request id — and the managed accounts, which
+ *  the gateway sends with every handshake and this client used to ignore. Reading an account is
+ *  not trading it: nothing here can place, change or cancel an order.
  *
  *  `secType` is a field rather than a constant since ADR 0019: an index is `IND` and resolves on
  *  the exchange that calculates it, which is how SPX and VIX are reached at all — moomoo refuses
@@ -19,18 +25,20 @@
  *  gated at protocol 114 or below, and `handshake.ts` refuses anything under 156. That is what
  *  buys the absence of version branches here, and it is the whole reason for the floor.
  */
+import type { AccountValueRow, PortfolioRow } from "./fields.ts";
 import { notComputed, readFields, toFields } from "./wire.ts";
 
 /** Outgoing message ids. */
 const OUT = {
-  REQ_MKT_DATA: 1, CANCEL_MKT_DATA: 2, REQ_CONTRACT_DATA: 9, REQ_MARKET_DATA_TYPE: 59,
+  REQ_MKT_DATA: 1, CANCEL_MKT_DATA: 2, REQ_ACCT_DATA: 6, REQ_CONTRACT_DATA: 9,
+  REQ_MARKET_DATA_TYPE: 59,
 } as const;
 
-/** Incoming message ids — only the ones a read-only quote fetch can receive. */
+/** Incoming message ids — only the ones a read-only quote fetch or account read can receive. */
 const IN = {
-  TICK_PRICE: 1, ERROR: 4, NEXT_VALID_ID: 9, CONTRACT_DATA: 10,
-  TICK_OPTION_COMPUTATION: 21, CONTRACT_DATA_END: 52, TICK_SNAPSHOT_END: 57,
-  MARKET_DATA_TYPE: 58,
+  TICK_PRICE: 1, ERROR: 4, ACCT_VALUE: 6, PORTFOLIO_VALUE: 7, ACCT_UPDATE_TIME: 8,
+  NEXT_VALID_ID: 9, CONTRACT_DATA: 10, MANAGED_ACCTS: 15, TICK_OPTION_COMPUTATION: 21,
+  CONTRACT_DATA_END: 52, ACCT_DOWNLOAD_END: 54, TICK_SNAPSHOT_END: 57, MARKET_DATA_TYPE: 58,
 } as const;
 
 /** One option, named the way IB Gateway names them rather than the way the service does.
@@ -110,6 +118,15 @@ export function cancelMktData(reqId: number): string {
   return toFields([OUT.CANCEL_MKT_DATA, VERSION, reqId]);
 }
 
+/** Subscribe to one account's values and portfolio (`subscribe` true), or stop (`false`): ibapi
+ *  9.81's reqAccountUpdates, version 2, field for field. The account code is sent whatever the
+ *  login manages, because the messages that answer carry the account's name and no request id:
+ *  naming it is the only way to know which answer is the one asked for. */
+export function reqAccountUpdates(subscribe: boolean, account: string): string {
+  const VERSION = 2;
+  return toFields([OUT.REQ_ACCT_DATA, VERSION, subscribe, account]);
+}
+
 export function reqMarketDataType(type: number): string {
   const VERSION = 1;
   return toFields([OUT.REQ_MARKET_DATA_TYPE, VERSION, type]);
@@ -127,6 +144,14 @@ export type Incoming =
   | { kind: "snapshotEnd"; reqId: number }
   | { kind: "dataType"; reqId: number; type: number }
   | { kind: "error"; reqId: number; code: number; message: string }
+  /** MANAGED_ACCTS' one field as sent: the login's account ids, comma-separated */
+  | { kind: "accounts"; list: string }
+  | { kind: "accountValue"; account: string; row: AccountValueRow }
+  /** the contract id is the row's identity: a later row for it replaces the earlier one */
+  | { kind: "portfolio"; account: string; conId: string; row: PortfolioRow }
+  /** ACCT_UPDATE_TIME: a time of day as the gateway wrote it, with no date */
+  | { kind: "accountTime"; time: string }
+  | { kind: "accountEnd"; account: string }
   | { kind: "other"; id: number };
 
 export interface Greeks {
@@ -194,6 +219,11 @@ function figure(fields: string[], at: number, what: string): number | null {
   return notComputed(what, value) ? null : value;
 }
 
+/** A field as the text it came as, empty where the message ended before it. */
+function text(fields: string[], at: number): string {
+  return fields[at] ?? "";
+}
+
 export function readMessage(payload: string): Incoming {
   const f = readFields(payload);
   const id = Number(f[0]);
@@ -238,6 +268,41 @@ export function readMessage(payload: string): Incoming {
 
     case IN.ERROR:
       return { kind: "error", reqId: num(f, 2), code: num(f, 3), message: f[4] ?? "" };
+
+    // The account's messages, every field kept as the text it came as: what a field MEANS is
+    // `fields.ts`' (`holdingFrom`, `accountAnswer`), which the Python port reads the same text
+    // through. Each has a version field after its id, and none of them a request id.
+    case IN.MANAGED_ACCTS:
+      return { kind: "accounts", list: text(f, 2) };
+
+    case IN.ACCT_VALUE:
+      // 0 id, 1 version, 2 key, 3 value, 4 currency, 5 account
+      return {
+        kind: "accountValue", account: text(f, 5),
+        row: { key: text(f, 2), value: text(f, 3), currency: text(f, 4) },
+      };
+
+    case IN.PORTFOLIO_VALUE:
+      // version 8's layout, which ibapi 9.81 reads at every protocol above 101, counted out:
+      //   0 id, 1 version, 2 conId, 3 symbol, 4 secType, 5 expiry, 6 strike, 7 right,
+      //   8 multiplier, 9 primaryExchange, 10 currency, 11 localSymbol, 12 tradingClass,
+      //   13 position, 14 marketPrice, 15 marketValue, 16 averageCost, 17 unrealizedPNL,
+      //   18 realizedPNL, 19 account
+      return {
+        kind: "portfolio", account: text(f, 19), conId: text(f, 2),
+        row: {
+          sec_type: text(f, 4), symbol: text(f, 3), expiry: text(f, 5), strike: text(f, 6),
+          right: text(f, 7), multiplier: text(f, 8), currency: text(f, 10),
+          position: text(f, 13), market_price: text(f, 14), market_value: text(f, 15),
+          average_cost: text(f, 16), unrealized_pnl: text(f, 17), realized_pnl: text(f, 18),
+        },
+      };
+
+    case IN.ACCT_UPDATE_TIME:
+      return { kind: "accountTime", time: text(f, 2) };
+
+    case IN.ACCT_DOWNLOAD_END:
+      return { kind: "accountEnd", account: text(f, 2) };
 
     default:
       return { kind: "other", id };
