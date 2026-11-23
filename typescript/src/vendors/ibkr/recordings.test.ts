@@ -202,6 +202,18 @@ describe("a constructed account that adds up", () => {
     }
   });
 
+  it("keeps the ledger for every currency a holding is in", () => {
+    // otherwise a holding in a currency with no `$LEDGER-` rows would be counted in no total, and
+    // the sums below, which walk the ledger's currencies, would never see it
+    for (const { name, e } of accountExchanges()) {
+      const ledgered = new Set(ledger(e.replies, "Currency").keys());
+      for (const currency of byCurrency(e.replies, 15).keys()) {
+        expect(ledgered.has(currency), `${name}: a holding in ${currency}, no $LEDGER- rows for it`)
+          .toBe(true);
+      }
+    }
+  });
+
   it("states each currency's liquidation value as its cash and its holdings' market value", () => {
     for (const { name, e } of accountExchanges()) {
       const cash = ledger(e.replies, "CashBalance");
