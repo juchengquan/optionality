@@ -24,7 +24,7 @@ import { mcpServer } from "../src/entrypoints/mcp/index.ts";
 import { createDatabase } from "../src/db/open.ts";
 import { type Settings, settingsFor } from "../src/env.ts";
 import { type NotifySender, delivery } from "../src/notify.ts";
-import type { QuoteGradeReading, ReadAccount } from "../src/ports.ts";
+import type { AccountSource, QuoteGradeReading } from "../src/ports.ts";
 import type { Deps } from "../src/entrypoints/http/index.ts";
 import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "optionality/quotes";
 
@@ -140,8 +140,8 @@ export interface HarnessOptions {
   /** What the Provider last read of the account's quote grade (#464): unread by default, as a
    *  service that has just started is; null for a Provider that reports none. */
   quoteGrade?: QuoteGradeReading | null;
-  /** The IBKR account's read (#470); absent, IB Gateway is not configured. */
-  account?: ReadAccount;
+  /** IB Gateway's account, held while asked (#477); absent, IB Gateway is not configured. */
+  account?: AccountSource;
 }
 
 export function harness(options: HarnessOptions = {}): Harness {

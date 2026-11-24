@@ -35,7 +35,7 @@
 import type { Settings } from "../env.ts";
 import { ibkrVendor } from "./ibkr/vendor.ts";
 import { moomooVendor } from "./opend/vendor.ts";
-import type { ProviderClient, ReadAccount, VendorClient } from "../ports.ts";
+import type { AccountSource, ProviderClient, VendorClient } from "../ports.ts";
 import type { QuoteFetcher } from "optionality/quotes";
 import type { Sources } from "../references.ts";
 import { yahooVendor } from "./yahoo/vendor.ts";
@@ -129,16 +129,16 @@ export function openVendors(settings: Settings, vendors = VENDORS): {
   provider: ProviderClient;
   /** Every vendor that opened, by name — the Provider among them. */
   sources: Sources;
-  /** The IBKR account's read (ADR 0030, #470): the opened vendor whose client has one — IB
-   *  Gateway's, the same client its prices come through — or null where none opened. */
-  account: ReadAccount | null;
+  /** IB Gateway's account, held while asked (ADR 0031, #477): the opened vendor whose client has
+   *  one — IB Gateway's, the same client its prices come through — or null where none opened. */
+  account: AccountSource | null;
   /** Hang up everything that opened. One loop, so a vendor cannot be forgotten by growing a
    *  `close` after the fact. */
   close: () => void;
 } {
   const opened: VendorClient[] = [];
   const sources: Record<string, QuoteFetcher> = {};
-  let account: ReadAccount | null = null;
+  let account: AccountSource | null = null;
 
   /** Registered so the call keeps its receiver.
    *
@@ -155,7 +155,7 @@ export function openVendors(settings: Settings, vendors = VENDORS): {
   const register = (client: VendorClient) => {
     opened.push(client);
     sources[client.name] = (codes) => client.fetchQuotes(codes);
-    account ??= client.readAccount ?? null;
+    account ??= client.account ?? null;
   };
 
   const provider = makeProvider(settings, vendors);

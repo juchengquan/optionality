@@ -18,14 +18,14 @@ const stock = (symbol: string, position: number, averageCost: number, mark: numb
 ): AccountHolding => ({
   sec_type: "STK", symbol, currency, expiry: null, strike: null, right: null, multiplier: null,
   position, market_price: mark, market_value: position * mark, average_cost: averageCost,
-  unrealized_pnl: position * (mark - averageCost), realized_pnl: 0,
+  unrealized_pnl: position * (mark - averageCost), realized_pnl: 0, daily_pnl: null,
 });
 
 const option = (symbol: string, expiry: string, right: "C" | "P", strike: number, position: number,
   averageCost: number, mark: number): AccountHolding => ({
   sec_type: "OPT", symbol, currency: "USD", expiry, strike, right, multiplier: 100,
   position, market_price: mark, market_value: position * mark * 100, average_cost: averageCost,
-  unrealized_pnl: position * (mark - averageCost) * 100, realized_pnl: 0,
+  unrealized_pnl: position * (mark - averageCost) * 100, realized_pnl: 0, daily_pnl: null,
 });
 
 export const ACCOUNT: Account = {
@@ -34,7 +34,9 @@ export const ACCOUNT: Account = {
   base_currency: "USD",
   updated_at: "14:32",
   read_at: "2026-11-23 21:04:37+08:00",
-  totals: { net_liquidation: 250_000, total_cash: 40_000.5, unrealized_pnl: 12_500.25, realized_pnl: -1_200 },
+  totals: {
+    net_liquidation: 250_000, total_cash: 40_000.5, unrealized_pnl: 12_500.25, realized_pnl: -1_200, daily_pnl: null,
+  },
   exchange_rates: { USD: 1 },
   // NOT in the page's order: the page sorts them by value
   stocks: [
@@ -51,13 +53,15 @@ export const ACCOUNT: Account = {
     option("SPX", "20261218", "P", 6800, -2, 11.3, 8.45),
   ],
   other: [{ sec_type: "FUT", symbol: "MES", position: 1, market_value: 3_000, currency: "USD" }],
+  // the P&L stream's figures (#477) are not drawn yet: the page that draws them is its own issue
+  live: null,
 };
 
 export const PAPER: Account = { ...ACCOUNT, account: "DU•••••890", paper: true };
 
 export const EMPTY: Account = {
   ...ACCOUNT,
-  totals: { net_liquidation: 40_000.5, total_cash: 40_000.5, unrealized_pnl: 0, realized_pnl: 0 },
+  totals: { net_liquidation: 40_000.5, total_cash: 40_000.5, unrealized_pnl: 0, realized_pnl: 0, daily_pnl: null },
   stocks: [], options: [], other: [],
 };
 

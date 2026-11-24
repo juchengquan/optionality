@@ -96,14 +96,39 @@ class VendorClient(Protocol):
         ...
 
 
-@dataclass(frozen=True)
-class AccountRead:
-    """The library's answer, its id already masked (ADR 0030, #470): `optionality.ibkr.IbkrAccount`,
-    which only the IB vendor's descriptor may import (`tests/test_seams.py`) — so a mapping here, where
-    the TypeScript names the type through the library's fields door, which the Python has no
-    counterpart of."""
+@runtime_checkable
+class AccountWatch(Protocol):
+    """A watch the library keeps on the account (ADR 0031): what the service holds while `GET /account`
+    is asked. The library's `IbkrAccountWatch` is one; stated here by what the service uses of it, so
+    this vocabulary names no client.
 
-    account: Mapping[str, Any]
+    **Where the Python differs, and why.** `picture()` is a mapping — the library's `IbkrLiveAccount`,
+    which only the IB vendor's descriptor may import (`tests/test_seams.py`) — where the TypeScript names
+    the type through the library's fields door, which the Python has no counterpart of. `lost` is the
+    exception the connection closed with."""
+
+    def picture(self) -> Mapping[str, Any]:
+        """The latest picture, a copy the caller may keep: `{account, paper, base_currency, updated_at,
+        totals, exchange_rates, holdings, pnl, pnl_at}`, each holding with its `daily_pnl`."""
+        ...
+
+    @property
+    def lost(self) -> BaseException | None:
+        """Set, once, when the connection closes under the watch; the picture stays the last one."""
+        ...
+
+    def on_lost(self, listener: Callable[[BaseException], None]) -> None: ...
+
+    async def stop(self) -> None:
+        """The cancels, then the unsubscribe; idempotent; returns when sent."""
+        ...
+
+
+@dataclass(frozen=True)
+class AccountWatched:
+    """The watch, its first complete picture in, its id already masked (ADR 0031, #477)."""
+
+    watch: AccountWatch
 
 
 @dataclass(frozen=True)
@@ -125,23 +150,36 @@ class AccountRefused:
 
 @dataclass(frozen=True)
 class AccountFailed:
-    """Connected, and the read did not finish: its deadline passed, or the connection closed during it,
-    in the library's words."""
+    """Connected, and the first picture did not come: its deadline passed, or the connection closed
+    before it, in the library's words."""
 
     words: str
 
 
-#: What one read of the IBKR account came to (ADR 0030, #470), sorted by what the owner must do about it
-#: — which is what tells the route its status.
+#: What starting a watch on the IBKR account came to (ADR 0031, #477), sorted by what the owner must do
+#: about it — which is what tells the route its status.
 #:
-#: **Where the Python differs, and why.** The TypeScript's union of object shapes (`{ account }`,
+#: **Where the Python differs, and why.** The TypeScript's union of object shapes (`{ watch }`,
 #: `{ unreachable }`, ...) is a union of four small classes here, told apart by `isinstance`.
-type AccountReading = AccountRead | AccountUnreachable | AccountRefused | AccountFailed
+type AccountWatching = AccountWatched | AccountUnreachable | AccountRefused | AccountFailed
 
-#: Read the account `wanted` names in full, or the login's only one where it is None. Never raises: every
-#: way it can end is an `AccountReading`. Only IB Gateway's client has one (`VendorClient.read_account`
-#: in the TypeScript, an optional member; a method of `IbkrProvider` here).
-type ReadAccount = Callable[[str | None], Awaitable[AccountReading]]
+
+@runtime_checkable
+class AccountSource(Protocol):
+    """IB Gateway's account, as the service may hold it (ADR 0031, #477). Only IB Gateway's client has
+    one (`VendorClient.account` in the TypeScript, an optional member; `IbkrProvider.account_source`
+    here, since the library's client already has a method named `account`)."""
+
+    async def watch(self, wanted: str | None) -> AccountWatching:
+        """Start a watch on the account `wanted` names in full, or the login's only one where it is None,
+        returning once its first picture is complete. Never raises: every way it can end is an
+        `AccountWatching`."""
+        ...
+
+    def on_answered(self, listener: Callable[[], None]) -> None:
+        """Call `listener` each time the client answers anything else — a price read that worked. While a
+        watch is lost, that is the connection back, and the hold's chance to watch again."""
+        ...
 
 
 @dataclass(frozen=True)

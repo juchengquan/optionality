@@ -30,7 +30,8 @@
       "down": null,
       "refused": "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001",
       "fails": null,
-      "account": null
+      "account": null,
+      "lost": null
     },
     "telegram": "up",
     "sweeps": [],

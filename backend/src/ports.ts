@@ -42,30 +42,55 @@ export interface VendorClient {
   readonly fetchQuotes: QuoteFetcher;
   /** Hang up, so the next call reconnects. Called on the way out of the process. */
   close(): void;
-  /** The vendor's account, read once (ADR 0030, #470): only IB Gateway's client has one. */
-  readonly readAccount?: ReadAccount;
+  /** The vendor's account, held while asked (ADR 0031, #477): only IB Gateway's client has one. */
+  readonly account?: AccountSource;
 }
 
-/** What one read of the IBKR account came to (ADR 0030, #470), sorted by what the owner must do
- *  about it — which is what tells the route its status:
+/** The library's picture of the account as its watch holds it (ADR 0031, #476), and its parts. */
+export type IbkrPnl = ibkrFields.IbkrPnl;
+export type IbkrLiveHolding = ibkrFields.IbkrLiveHolding;
+export type IbkrLiveAccount = ibkrFields.IbkrLiveAccount;
+
+/** A watch the library keeps on the account (ADR 0031): what the service holds while `GET /account`
+ *  is asked. The library's `IbkrAccountWatch` is one; stated here by what the service uses of it, so
+ *  this vocabulary names no client. */
+export interface AccountWatch {
+  /** the latest picture, a copy the caller may keep */
+  picture(): IbkrLiveAccount;
+  /** set, once, when the connection closes under the watch; the picture stays the last one */
+  readonly lost: Error | null;
+  onLost(listener: (err: Error) => void): void;
+  /** the cancels, then the unsubscribe; idempotent; resolves when sent */
+  stop(): Promise<void>;
+}
+
+/** What starting a watch on the IBKR account came to (ADR 0031, #477), sorted by what the owner must
+ *  do about it — which is what tells the route its status:
  *
- *  - `account`: the library's answer, its id already masked;
+ *  - `watch`: the watch, its first complete picture in, its id already masked;
  *  - `unreachable`: no session with IB Gateway at all (the library's `IbkrUnreachable`), in the
  *    connect's own words — a refused connection, a handshake that never finished, or a session the
  *    gateway refused ("IB Gateway refused the session: 326 …", a client id already in use);
  *  - `refused`: the library would not choose an account (`IbkrAccountRefused`) — several on the
  *    login and `IBKR_ACCOUNT` unset, or naming none of them — in its words, every id masked;
- *  - `failed`: connected, and the read did not finish: its deadline passed, or the connection
- *    closed during it, in the library's words. */
-export type AccountReading =
-  | { account: ibkrFields.IbkrAccount }
+ *  - `failed`: connected, and the first picture did not come: its deadline passed, or the
+ *    connection closed before it, in the library's words. */
+export type AccountWatching =
+  | { watch: AccountWatch }
   | { unreachable: string }
   | { refused: string }
   | { failed: string };
 
-/** Read the account `wanted` names in full, or the login's only one where it is null. Never
- *  throws: every way it can end is an `AccountReading`. */
-export type ReadAccount = (wanted: string | null) => Promise<AccountReading>;
+/** IB Gateway's account, as the service may hold it (ADR 0031, #477). */
+export interface AccountSource {
+  /** Start a watch on the account `wanted` names in full, or the login's only one where it is
+   *  null, answering once its first picture is complete. Never throws: every way it can end is an
+   *  `AccountWatching`. */
+  watch(wanted: string | null): Promise<AccountWatching>;
+  /** Call `listener` each time the client answers anything else — a price read that worked. While
+   *  a watch is lost, that is the connection back, and the hold's chance to watch again. */
+  onAnswered(listener: () => void): void;
+}
 
 /** What a Provider last read of the account's quote grade for US options (#464): whether the option
  *  prices it serves are real-time. moomoo grades the ACCOUNT, by level, and never a quote; its

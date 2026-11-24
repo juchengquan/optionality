@@ -300,7 +300,8 @@ export type HcChecks = [
   Checked<Exactly<NonNullable<Ok<Awaited<ReturnType<E["spreadsQuote"]["json"]>>>["spreads"][number]["legs"][number]["last_known"]>["price"],
     number>>,
 
-  // /account (#470): the IBKR account, its id masked, stocks, options and the rest apart --------
+  // /account (#470; held while asked, #477): the IBKR account, its id masked, stocks, options and
+  // the rest apart, with today's P&L and when its stream last spoke ------------------------------
   Checked<Known<Ok<E["account"]>>>,
   Checked<Exactly<Ok<E["account"]>["account"], string>>,
   Checked<Exactly<Ok<E["account"]>["paper"], boolean>>,
@@ -309,9 +310,12 @@ export type HcChecks = [
   Checked<Exactly<Ok<E["account"]>["read_at"], string>>,
   Checked<Exactly<Ok<E["account"]>["totals"], {
     net_liquidation: number | null; total_cash: number | null;
-    unrealized_pnl: number | null; realized_pnl: number | null;
+    unrealized_pnl: number | null; realized_pnl: number | null; daily_pnl: number | null;
   }>>,
   Checked<Exactly<Ok<E["account"]>["exchange_rates"], Record<string, number>>>,
+  Checked<Exactly<Ok<E["account"]>["live"], { updated_at: string } | null>>,
+  Checked<Exactly<Ok<E["account"]>["stocks"][number]["daily_pnl"], number | null>>,
+  Checked<Exactly<Ok<E["account"]>["options"][number]["daily_pnl"], number | null>>,
   Checked<Exactly<Ok<E["account"]>["stocks"][number]["symbol"], string>>,
   Checked<Exactly<Ok<E["account"]>["stocks"][number]["market_value"], number | null>>,
   Checked<Exactly<Ok<E["account"]>["options"][number]["right"], "C" | "P" | null>>,

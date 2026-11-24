@@ -29,24 +29,27 @@ const DOWN = "connect ECONNREFUSED 127.0.0.1:33333";
 /** IB Gateway configured, as `.env` would say it (ADR 0030, #470). */
 const IBKR = { IBKR_HOST: "127.0.0.1" };
 
-/** A holding as the library maps IBKR's PORTFOLIO_VALUE row: a stock unless it says otherwise. */
+/** A holding as the library's watch holds it: a stock unless it says otherwise. */
 const ibkrHolding = (over: Record<string, unknown>) => ({
   sec_type: "STK", symbol: "ACME", currency: "USD", expiry: null, strike: null, right: null,
   multiplier: null, position: 300, market_price: 41.25, market_value: 12375, average_cost: 38.125,
-  unrealized_pnl: 937.5, realized_pnl: 0, ...over,
+  unrealized_pnl: 937.5, realized_pnl: 0, daily_pnl: 112.5, ...over,
 });
 
-/** An account holding stocks and options in two currencies, and three things that are neither. */
+/** An account holding stocks and options in two currencies, and three things that are neither, its
+ *  P&L stream having spoken 3 s before the clock. */
 const WHOLE_ACCOUNT = {
   base_currency: "USD", updated_at: "14:32",
   totals: { net_liquidation: 184523.25, total_cash: 61230.5, unrealized_pnl: 2071.5, realized_pnl: -412.75 },
+  pnl: { daily_pnl: -286.25, unrealized_pnl: 2093.75, realized_pnl: -412.75 },
+  pnl_at: new Date(at(-3)).getTime(),
   // IBKR's own: base units per one unit of each currency, the base 1
   exchange_rates: { USD: 1, EUR: 1.0625 },
   holdings: [
     ibkrHolding({}),
     ibkrHolding({
       sec_type: "OPT", expiry: "20261218", strike: 45, right: "C", multiplier: 100, position: 4,
-      market_price: 3.75, market_value: 1500, average_cost: 2.625, unrealized_pnl: 450,
+      market_price: 3.75, market_value: 1500, average_cost: 2.625, unrealized_pnl: 450, daily_pnl: -150,
     }),
     ibkrHolding({
       symbol: "INITECH", currency: "EUR", position: 50, market_price: 108.5, market_value: 5425,
@@ -59,7 +62,7 @@ const WHOLE_ACCOUNT = {
     ibkrHolding({
       sec_type: "OPT", expiry: "20261218", strike: 35, right: "P", multiplier: 100, position: -6,
       market_price: 0.875, market_value: -525, average_cost: 1.375, unrealized_pnl: 300,
-      realized_pnl: -412.75,
+      realized_pnl: -412.75, daily_pnl: 75,
     }),
     ibkrHolding({
       sec_type: "CASH", symbol: "EUR.USD", position: 1200, market_price: 1.0625, market_value: 1275,
@@ -72,12 +75,39 @@ const WHOLE_ACCOUNT = {
   ],
 };
 
-/** An account holding nothing, its cash alone. */
+/** An account holding nothing, its cash alone, its P&L stream not yet spoken. */
 const CASH_ONLY = {
   base_currency: "USD", updated_at: "11:47",
   totals: { net_liquidation: 25010, total_cash: 25010, unrealized_pnl: 0, realized_pnl: 0 },
   exchange_rates: { USD: 1 },
   holdings: [],
+  pnl: null, pnl_at: null,
+};
+
+/** An account whose P&L streams have not spoken: every figure the account updates'. */
+const NOT_YET_LIVE = {
+  ...WHOLE_ACCOUNT,
+  pnl: null, pnl_at: null,
+  holdings: [
+    ibkrHolding({ daily_pnl: null }),
+    ibkrHolding({
+      sec_type: "OPT", expiry: "20261218", strike: 45, right: "C", multiplier: 100, position: 4,
+      market_price: 3.75, market_value: 1500, average_cost: 2.625, unrealized_pnl: 450, daily_pnl: null,
+    }),
+  ],
+};
+
+/** An account whose streams have spoken with some figures IBKR marks unset and one of 0. */
+const UNSET_FIGURES = {
+  ...WHOLE_ACCOUNT,
+  pnl: { daily_pnl: null, unrealized_pnl: 0, realized_pnl: null },
+  holdings: [
+    ibkrHolding({ daily_pnl: 64.5 }),
+    ibkrHolding({
+      sec_type: "OPT", expiry: "20261218", strike: 35, right: "P", multiplier: 100, position: -2,
+      market_price: 0.625, market_value: -125, average_cost: 1.125, unrealized_pnl: null, daily_pnl: null,
+    }),
+  ],
 };
 
 /** The library's answer for the account `id`: its id masked and `paper` as the library says them, so
@@ -102,6 +132,9 @@ const GATEWAY_DOWN = "could not reach IB Gateway at 127.0.0.1:4001: connect ECON
 /** The library's words for a session the gateway refused: its `client-id-in-use` recording. */
 const SESSION_REFUSED = "IB Gateway refused the session: 326 Unable to connect as the client id is already "
   + "in use. Retry with a unique client id.";
+
+/** Words for a connection that closed under a watch: the service logs them and says its own. */
+const CONNECTION_CLOSED = "IB Gateway's connection closed";
 
 /** The library's words for a read whose deadline passed (`client.ts`). */
 const ACCOUNT_DEADLINE = "IB Gateway did not finish sending the account within 8000ms — its link "
@@ -3351,10 +3384,11 @@ export const HTTP: readonly HttpInput[] = [
     world: world({ settings: { ROOT_PATH: "/opt/api" } }),
     request: request("GET", "/openapi.json", null, { anonymous: true }),
   },
-  // --- the IBKR account (ADR 0030, #470) -----------------------------------------------------
+  // --- the IBKR account (ADR 0030, #470; held while asked, ADR 0031, #477) ------------------
   {
-    // stocks and options apart, each currency its own; a future, a forex balance and a bond under
-    // other with only what the page lists of them, in the order IBKR sent them
+    // the first read starts the watch and answers its picture: stocks and options apart, each
+    // currency its own; a future, a forex balance and a bond under other with only what the page
+    // lists of them, in the order IBKR sent them
     name: "GET /account answers the account, stocks and options apart and the rest under other",
     world: world({
       settings: IBKR, ibkr_account: answered("U0000000", WHOLE_ACCOUNT),
@@ -3429,31 +3463,130 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/account"),
   },
   {
-    // read 9s ago: answered from that read, read_at and all, asking the gateway nothing
-    name: "GET /account answers a second request within 10s from the first read",
+    name: "GET /account takes the totals' P&L from the account updates until the P&L stream has spoken",
+    world: world({ settings: IBKR, ibkr_account: answered("U0000000", NOT_YET_LIVE) }),
+    request: request("GET", "/account"),
+  },
+  {
+    // a total the stream sent unset is the account update's, null only where neither has one (the
+    // account updates carry no daily figure), and a 0 it sent is its own
+    name: "GET /account takes a total IBKR sent unset from the account update and keeps a 0 it sent",
+    world: world({ settings: IBKR, ibkr_account: answered("U0000000", UNSET_FIGURES) }),
+    request: request("GET", "/account"),
+  },
+  {
+    // started 89s ago: answered from the watch's picture, read_at now, asking the gateway nothing
+    name: "GET /account answers a read inside the hold from the watch, starting nothing",
     world: world({
       settings: IBKR, ibkr_account: answered("U0000000", WHOLE_ACCOUNT),
     }),
-    earlier: [{ at: at(-9), request: request("GET", "/account") }],
+    earlier: [{ at: at(-89), request: request("GET", "/account") }],
     request: request("GET", "/account"),
   },
   {
-    // read exactly 10s ago: the page's 15s refresh always reads afresh (the owner's decision on #470)
-    name: "GET /account reads again once 10s have passed",
+    // the hold runs from the LAST read
+    name: "GET /account holds the account 90s from the last read, not the first",
+    world: world({
+      settings: IBKR, ibkr_account: answered("U0000000", WHOLE_ACCOUNT),
+    }),
+    earlier: [
+      { at: at(-150), request: request("GET", "/account") },
+      { at: at(-60), request: request("GET", "/account") },
+    ],
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account lets the account go 90s after the last read, and starts afresh",
     world: world({
       settings: IBKR, ibkr_account: answered("U0000000", CASH_ONLY),
     }),
-    earlier: [{ at: at(-10), request: request("GET", "/account") }],
+    earlier: [{ at: at(-90), request: request("GET", "/account") }],
     request: request("GET", "/account"),
   },
   {
-    // a gateway that is down is asked once per window, however often the page asks
-    name: "GET /account shares a failure for 10s",
+    // remembered for 5s: one try in that time, whoever asks
+    name: "GET /account remembers a failed start for 5s, asking the gateway once",
+    world: world({
+      settings: IBKR,
+      ibkr_account: { down: GATEWAY_DOWN },
+    }),
+    earlier: [{ at: at(-4), request: request("GET", "/account") }],
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account holds nothing after a start that failed, and starts afresh 5s on",
     world: world({
       settings: IBKR,
       ibkr_account: { down: GATEWAY_DOWN },
     }),
     earlier: [{ at: at(-5), request: request("GET", "/account") }],
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account says the connection to IB Gateway was lost, and watches again",
+    world: world({
+      settings: IBKR,
+      ibkr_account: {
+        ...answered("U0000000", WHOLE_ACCOUNT), lost: { at: at(-10), words: CONNECTION_CLOSED, down: null },
+      },
+    }),
+    earlier: [{ at: at(-15), request: request("GET", "/account") }],
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account answers from the watch again once it is back",
+    world: world({
+      settings: IBKR,
+      ibkr_account: {
+        ...answered("U0000000", WHOLE_ACCOUNT), lost: { at: at(-10), words: CONNECTION_CLOSED, down: null },
+      },
+    }),
+    earlier: [
+      { at: at(-15), request: request("GET", "/account") },
+      { at: at(-5), request: request("GET", "/account") },
+    ],
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account says the connection was lost while watching again fails, and tries again",
+    world: world({
+      settings: IBKR,
+      ibkr_account: {
+        ...answered("U0000000", WHOLE_ACCOUNT),
+        lost: { at: at(-10), words: CONNECTION_CLOSED, down: GATEWAY_DOWN },
+      },
+    }),
+    earlier: [
+      { at: at(-15), request: request("GET", "/account") },
+      { at: at(-5), request: request("GET", "/account") },
+    ],
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account says the connection was lost and does not watch again within 5s of a failed try",
+    world: world({
+      settings: IBKR,
+      ibkr_account: {
+        ...answered("U0000000", WHOLE_ACCOUNT),
+        lost: { at: at(-10), words: CONNECTION_CLOSED, down: GATEWAY_DOWN },
+      },
+    }),
+    earlier: [
+      { at: at(-15), request: request("GET", "/account") },
+      { at: at(-3), request: request("GET", "/account") },
+    ],
+    request: request("GET", "/account"),
+  },
+  {
+    // the loss has already ended the watch in the library, so a stop would send nothing
+    name: "GET /account lets a lost watch go 90s after the last read without stopping it",
+    world: world({
+      settings: IBKR,
+      ibkr_account: {
+        ...answered("U0000000", CASH_ONLY), lost: { at: at(-95), words: CONNECTION_CLOSED, down: null },
+      },
+    }),
+    earlier: [{ at: at(-100), request: request("GET", "/account") }],
     request: request("GET", "/account"),
   },
   {

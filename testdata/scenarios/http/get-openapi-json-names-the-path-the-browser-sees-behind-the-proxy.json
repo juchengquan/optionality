@@ -257,7 +257,7 @@
           "/account": {
             "get": {
               "operationId": "getAccount",
-              "summary": "The IBKR account as IBKR marks it: totals, stocks, options and anything else; one read shared for 10s",
+              "summary": "The IBKR account as IBKR marks it: totals, stocks, options and anything else; held while asked, released 90s after the last read; read_at is when the service answered",
               "responses": {
                 "200": {
                   "description": "ok",
@@ -313,13 +313,20 @@
                                   "number",
                                   "null"
                                 ]
+                              },
+                              "daily_pnl": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
                               }
                             },
                             "required": [
                               "net_liquidation",
                               "total_cash",
                               "unrealized_pnl",
-                              "realized_pnl"
+                              "realized_pnl",
+                              "daily_pnl"
                             ]
                           },
                           "exchange_rates": {
@@ -412,6 +419,12 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "daily_pnl": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
                                 }
                               },
                               "required": [
@@ -427,7 +440,8 @@
                                 "market_value",
                                 "average_cost",
                                 "unrealized_pnl",
-                                "realized_pnl"
+                                "realized_pnl",
+                                "daily_pnl"
                               ]
                             }
                           },
@@ -512,6 +526,12 @@
                                     "number",
                                     "null"
                                   ]
+                                },
+                                "daily_pnl": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
                                 }
                               },
                               "required": [
@@ -527,7 +547,8 @@
                                 "market_value",
                                 "average_cost",
                                 "unrealized_pnl",
-                                "realized_pnl"
+                                "realized_pnl",
+                                "daily_pnl"
                               ]
                             }
                           },
@@ -566,6 +587,24 @@
                                 "currency"
                               ]
                             }
+                          },
+                          "live": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "updated_at": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "updated_at"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
                           }
                         },
                         "required": [
@@ -578,7 +617,8 @@
                           "exchange_rates",
                           "stocks",
                           "options",
-                          "other"
+                          "other",
+                          "live"
                         ]
                       }
                     }

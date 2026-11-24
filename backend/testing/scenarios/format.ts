@@ -78,28 +78,35 @@ export interface EarlierSweep {
   down: string | null;
 }
 
-/** IB Gateway's account read (ADR 0030, #470), as a table of what it answers — the library
- *  client's answer, as a vendor's table states its batch: the wire is held by the client's own
- *  recorded conversations, and the choice of account and the masking by the library's cases.
+/** IB Gateway's account watch (ADR 0031, #477), as a table of what it answers — the library
+ *  client's, as a vendor's table states its batch: the wire is held by the client's own recorded
+ *  conversations, and the choice of account and the masking by the library's cases.
  *
- *  A read asks for an account (`IBKR_ACCOUNT`, or none) and gets, in this order: unreachable with
+ *  A start asks for an account (`IBKR_ACCOUNT`, or none) and gets, in this order: unreachable with
+ *  `lost.down`, if the connection has been lost by the clock and that is not null; unreachable with
  *  the words `down`, if it is not null; otherwise a refusal with the words `refused` (the library's,
  *  every id masked), if it is not null; otherwise a failure with the words `fails` (its deadline
- *  passing), if it is not null; otherwise `account`. */
+ *  passing), if it is not null; otherwise a watch holding `account`. */
 export interface IbkrAccountTable {
   /** no session with the gateway: the connect's words (the library's `IbkrUnreachable`) — a
    *  refused session's are shown, anything else is a gateway that did not answer */
   down: string | null;
   /** the library would not choose an account: its words */
   refused: string | null;
-  /** connected, and the read does not finish: its words */
+  /** connected, and the first picture does not come: its words */
   fails: string | null;
-  /** the library's answer, the id masked as the library masks it */
+  /** the picture every watch holds, the library's `IbkrLiveAccount`, the id masked as the library
+   *  masks it */
   account: Record<string, unknown> | null;
+  /** the connection closing: from `at`, every watch started before `at` is lost with `words`, and
+   *  a start is unreachable with `down` where that is not null; null, it never closes */
+  lost: { at: string; words: string; down: string | null } | null;
 }
 
-/** The `calls` key an account read is recorded under, each read as `[wanted]`, or `[]` for none. */
+/** The `calls` key a watch's start is recorded under, each as `[wanted]`, or `[]` for none. */
 export const ACCOUNT_CALLS = "ibkr account";
+/** The `calls` key a watch's stop is recorded under, each as `[]`. */
+export const ACCOUNT_STOPS = "ibkr account stop";
 
 export interface World {
   /** the instant the event happens at, ISO 8601 in UTC */
@@ -109,7 +116,7 @@ export interface World {
   provider: Provider;
   /** vendors a Reference may name beyond the Provider, which is a source under its own name too */
   sources: Record<string, Vendor>;
-  /** IB Gateway's account read; absent where IB Gateway is not configured (`IBKR_HOST` blank) */
+  /** IB Gateway's account watch; absent where IB Gateway is not configured (`IBKR_HOST` blank) */
   ibkr_account?: IbkrAccountTable;
   /** "down": every Telegram send fails */
   telegram: "up" | "down";

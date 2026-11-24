@@ -17,6 +17,7 @@ export const LARGE: Account = {
   totals: {
     net_liquidation: scaled(TWO_CURRENCIES.totals.net_liquidation), total_cash: scaled(TWO_CURRENCIES.totals.total_cash),
     unrealized_pnl: scaled(TWO_CURRENCIES.totals.unrealized_pnl), realized_pnl: scaled(TWO_CURRENCIES.totals.realized_pnl),
+    daily_pnl: null,
   },
   stocks: TWO_CURRENCIES.stocks.map((s) => ({
     ...s, position: scaled(s.position), market_value: scaled(s.market_value), unrealized_pnl: scaled(s.unrealized_pnl),

@@ -1,0 +1,179 @@
+{
+  "name": "GET /account takes a total IBKR sent unset from the account update and keeps a 0 it sent",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "IBKR_HOST": "127.0.0.1",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "quote_grade": {
+        "us_option": null,
+        "realtime": null,
+        "read_at": null,
+        "failure": null
+      },
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "ibkr_account": {
+      "down": null,
+      "refused": null,
+      "fails": null,
+      "account": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "14:32",
+        "totals": {
+          "net_liquidation": 184523.25,
+          "total_cash": 61230.5,
+          "unrealized_pnl": 2071.5,
+          "realized_pnl": -412.75
+        },
+        "pnl": {
+          "daily_pnl": null,
+          "unrealized_pnl": 0,
+          "realized_pnl": null
+        },
+        "pnl_at": 1794236397000,
+        "exchange_rates": {
+          "USD": 1,
+          "EUR": 1.0625
+        },
+        "holdings": [
+          {
+            "sec_type": "STK",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": null,
+            "strike": null,
+            "right": null,
+            "multiplier": null,
+            "position": 300,
+            "market_price": 41.25,
+            "market_value": 12375,
+            "average_cost": 38.125,
+            "unrealized_pnl": 937.5,
+            "realized_pnl": 0,
+            "daily_pnl": 64.5
+          },
+          {
+            "sec_type": "OPT",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": "20261218",
+            "strike": 35,
+            "right": "P",
+            "multiplier": 100,
+            "position": -2,
+            "market_price": 0.625,
+            "market_value": -125,
+            "average_cost": 1.125,
+            "unrealized_pnl": null,
+            "realized_pnl": 0,
+            "daily_pnl": null
+          }
+        ]
+      },
+      "lost": null
+    },
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/account",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "14:32",
+        "read_at": "2026-11-09 23:00:00+08:00",
+        "totals": {
+          "net_liquidation": 184523.25,
+          "total_cash": 61230.5,
+          "unrealized_pnl": 0,
+          "realized_pnl": -412.75,
+          "daily_pnl": null
+        },
+        "exchange_rates": {
+          "USD": 1,
+          "EUR": 1.0625
+        },
+        "stocks": [
+          {
+            "sec_type": "STK",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": null,
+            "strike": null,
+            "right": null,
+            "multiplier": null,
+            "position": 300,
+            "market_price": 41.25,
+            "market_value": 12375,
+            "average_cost": 38.125,
+            "unrealized_pnl": 937.5,
+            "realized_pnl": 0,
+            "daily_pnl": 64.5
+          }
+        ],
+        "options": [
+          {
+            "sec_type": "OPT",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": "20261218",
+            "strike": 35,
+            "right": "P",
+            "multiplier": 100,
+            "position": -2,
+            "market_price": 0.625,
+            "market_value": -125,
+            "average_cost": 1.125,
+            "unrealized_pnl": null,
+            "realized_pnl": 0,
+            "daily_pnl": null
+          }
+        ],
+        "other": [],
+        "live": {
+          "updated_at": "2026-11-09 22:59:57+08:00"
+        }
+      }
+    },
+    "rows": {},
+    "calls": {
+      "ibkr account": [
+        []
+      ]
+    }
+  }
+}

@@ -130,13 +130,13 @@ describe("opening what this build carries", () => {
     open.close();
   });
 
-  it("hands on IB Gateway's account read where IB Gateway is configured, and none where not", () => {
-    // ADR 0030: the account is read over the client the prices come through, opened once
+  it("hands on IB Gateway's account where IB Gateway is configured, and none where not", () => {
+    // ADR 0030, 0031: the account is held over the client the prices come through, opened once
     const off = openVendors(settingsFor({ ibkrHost: "" }));
     expect(off.account).toBeNull();
     off.close();
     const on = quietly(() => openVendors(settingsFor({ ibkrHost: "127.0.0.1", ibkrPort: 1 })));
-    expect(typeof on.account).toBe("function");
+    expect(typeof on.account?.watch).toBe("function");
     on.close();
   });
 

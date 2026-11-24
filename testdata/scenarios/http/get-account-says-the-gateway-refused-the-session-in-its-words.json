@@ -29,7 +29,8 @@
       "down": "IB Gateway refused the session: 326 Unable to connect as the client id is already in use. Retry with a unique client id.",
       "refused": null,
       "fails": null,
-      "account": null
+      "account": null,
+      "lost": null
     },
     "telegram": "up",
     "sweeps": [],

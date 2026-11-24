@@ -1,5 +1,5 @@
 {
-  "name": "GET /account shares a failure for 10s",
+  "name": "GET /account remembers a failed start for 5s, asking the gateway once",
   "world": {
     "clock": "2026-11-09T15:00:00.000Z",
     "settings": {
@@ -29,7 +29,8 @@
       "down": "could not reach IB Gateway at 127.0.0.1:4001: connect ECONNREFUSED 127.0.0.1:4001",
       "refused": null,
       "fails": null,
-      "account": null
+      "account": null,
+      "lost": null
     },
     "telegram": "up",
     "sweeps": [],
@@ -45,7 +46,7 @@
   },
   "earlier": [
     {
-      "at": "2026-11-09T14:59:55.000Z",
+      "at": "2026-11-09T14:59:56.000Z",
       "request": {
         "method": "GET",
         "path": "/account",

@@ -490,19 +490,37 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `SPREAD_QUOTE_CALLS_PER_30S` (12) Provider calls in any 30 seconds whoever asks, then 429 with the
   wait. ONE `SpreadPricer` per app, so the HTTP and MCP doors share both. Each leg carries its last
   stored regular-session close (`last_known`, from `watch_samples`, the one table storing a
-  contract's own mid), never summed. And `account.ts` behind `GET /account` (#470, ADR 0030): the
-  IBKR account as IBKR marks it — the library's `IbkrClient.account`, reached as `openVendors`'
-  `account` (the IB descriptor's `readAccount`, over the client the prices come through, sorting the
-  library's `IbkrUnreachable` from a read that failed once it began) — its totals, IBKR's
-  `exchange_rates` (base units per one unit of each currency), `stocks` (STK), `options` (OPT) and
-  everything else under `other` (symbol, type, quantity, value, currency). `IBKR_ACCOUNT` (`.env`, blank is unset) is the library's `wanted`. ONE read per app
-  (`AccountBook`), shared for `ACCOUNT_SHARED_FOR_MS` (10s) from when it came back, a read in flight
-  joined, a failure shared too; never read by the sweep, never stored. 503 "IB Gateway is not
-  configured" (`IBKR_HOST` blank, the owner's decision), 502 for a gateway that did not answer
-  (the connect's words logged), a session it refused (in the gateway's words) or a read that did not
-  finish (in the library's), 422 for the library's refusal (several accounts, or `IBKR_ACCOUNT` naming none), every id
-  masked by the library. Not an MCP tool and not a bot command (the owner's decision for v1). A door
-  scenario's world states the read as `ibkr_account` (`testdata/scenarios/README.md`).
+  contract's own mid), never summed. And `account.ts` behind `GET /account` (#470, ADR 0030; held
+  while asked since #477, ADR 0031): the IBKR account as IBKR marks it, from the library's WATCH
+  (`IbkrClient.watchAccount`), reached as `openVendors`' `account` — the IB descriptor's
+  `accountSource` (`account_source` in the Python, whose client already has an `account` method),
+  over the client the prices come through, sorting the library's `IbkrUnreachable` from a start
+  that failed once it began, and telling the hold each time that client answers anything else (a
+  price read, a `/health` handshake). ONE hold per app (`AccountBook`): the first read starts the
+  watch and waits for its first picture, readers meanwhile joining it; every read renews it and is
+  answered from the picture in memory, asking IB Gateway nothing; it is released
+  `ACCOUNT_HELD_FOR_MS` (90s) after the LAST read — the watch stopped, nothing kept — by a timer that
+  only wakes it (the injected clock decides; a read that finds the 90s passed releases it too). A
+  start that failed holds nothing and is remembered for `ACCOUNT_FAILED_FOR_MS` (5s, the owner's
+  decision): no start, first or again, is tried in that time whoever asks, and a read meanwhile is
+  told what the last one came to. A watch whose connection closed is a 502 "The connection to IB
+  Gateway was lost" (its words logged) until it is back, watched again at the next read and when the
+  client answers anything else, never stopped (the loss has already ended it in the library, so a
+  stop would send nothing). The answer: its totals (`unrealized_pnl` and `realized_pnl` the account P&L stream's once it
+  has spoken, and the account updates' until then or where the stream left one unset — null only
+  where neither has one, the owner's decision — and the stream's `daily_pnl`), IBKR's
+  `exchange_rates` (base units per one unit of each currency), `stocks` (STK) and `options` (OPT),
+  each with its `daily_pnl`, everything else under `other` (symbol, type, quantity, value, currency),
+  and `live: {updated_at}`, when the P&L stream last spoke in the display zone (null before it has),
+  beside `read_at`, when the service answered (the time of the answer, not of a read from IB; the
+  owner's decision, and the route's summary says so). `IBKR_ACCOUNT` (`.env`, blank is unset) is the
+  library's `wanted`. Never read by the sweep, the bot or the MCP door, never stored. 503 "IB Gateway
+  is not configured" (`IBKR_HOST` blank, the owner's decision), 502 for a gateway that did not answer
+  (the connect's words logged), a session it refused (in the gateway's words), a first picture that
+  did not come (in the library's) or a lost connection, 422 for the library's refusal (several
+  accounts, or `IBKR_ACCOUNT` naming none), every id masked by the library. Not an MCP tool and not a
+  bot command (the owner's decision). A door scenario's world states the watch as `ibkr_account`,
+  its connection's loss by the clock (`testdata/scenarios/README.md`).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
   **One page, the redesign (ADR 0023)**, since the swap of 2026-11-13 (#301) deleted the old one:
   `index.html` loads `src/main.tsx`. ONE page at every hour, with no Live/Review switch (ADR
@@ -786,11 +804,14 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   again at most once every 30 minutes (`GRADE_RETRY_MS`) — never per sweep or poll, never by `/health`
   — under the snapshot's own deadline, and failing nothing when it fails; only the latest read sent
   settles it. `/health`'s `provider.quote_grade` serves what was last read, and beside a grade kept
-  through a failed read, a `reason` saying so. Nor is the IBKR account (`GET /account`, #470, ADR
-  0030), which asks for no market data: ONE bounded read of the account — subscribe, collect to the
-  download's end, unsubscribe, under the client's deadline — made only when the page asks, shared by
-  every caller for 10 seconds (a failure too, a read in flight joined), never by the sweep or on a
-  timer, and stored nowhere. `/references` makes one bounded call per
+  through a failed read, a `reason` saying so. **The IBKR account is the one thing HELD rather than
+  read in a bounded call** (`GET /account`, #470 and #477; ADR 0031, amending ADR 0019's rule and ADR
+  0030's bounded read for the account ALONE), and it asks for no market data: the account's updates
+  and its P&L streams, subscribed on the service's one IB connection only while `GET /account` is
+  asked, answered from memory with no IB call per request, and released 90 seconds after the last
+  ask; a lost connection is watched again while the hold is up. The page is its only reader: never
+  the sweep, the alarms, the bot, the MCP door or the book, never on a timer of the service's own,
+  and stored nowhere. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard's BOOK polls `/quotes` always —
   the one page that does not is the account page at `/opt/account` (#471), which polls only

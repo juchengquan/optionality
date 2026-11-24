@@ -115,3 +115,28 @@ download end, so a P&L that arrives before the download ends is in the corpus to
   apart (`pnl` beside `totals`) rather than estimating one from the other.
 - A holding closed and reopened in one session leaves the picture and comes back at the end of its
   order, with a new stream.
+
+## The service's hold (#477)
+
+Added by #477, which puts the watch behind `GET /account`. The owner's decisions of 2026-11-24:
+
+- **Held only while asked.** The first `GET /account` starts the watch and waits for its first
+  picture, and readers arriving meanwhile join that wait. Every read renews the hold and is answered
+  from the picture in memory, with no IB call. The hold is released `ACCOUNT_HELD_FOR_MS` (90 s) after
+  the LAST read: the watch is stopped and nothing is kept. It is sized for the page's refresh options
+  as #478 sets them, a minute at the slowest, so every refresh keeps it; a slower refresh — main's
+  3 min until #478 lands — starts a fresh watch on each refresh. The page is its only reader; the
+  sweep, the alarms, the bot, the MCP door and the book never read it.
+- **A failed start is remembered for 5 s** (`ACCOUNT_FAILED_FOR_MS`). While IB Gateway is down or
+  logged out, the service tries to start the watch at most once in that time, whoever asks — a first
+  start or a re-subscribe — and a read meanwhile is told what the last try came to.
+- **A lost connection answers 502 at once**, "The connection to IB Gateway was lost", until the watch
+  is back. The read that finds it lost does not wait: the re-subscribe runs in the background, one at
+  a time, at the next read and whenever the client answers anything else. A lost watch is dropped,
+  never stopped: the loss has already ended it here, so a stop would send nothing.
+- **An unset total falls back to the account update's figure.** Once `pnl` has spoken, a total it
+  leaves unset takes the account update's figure where there is one, as a holding's does
+  (`liveHolding`); it is null only where neither has a figure. The account updates carry no daily
+  P&L, so an unset `daily_pnl` is null.
+- **`read_at` is when the service answered**, not when anything was read from IB Gateway; `live`
+  says when `pnl` last spoke.

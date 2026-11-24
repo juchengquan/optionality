@@ -1,0 +1,121 @@
+{
+  "name": "GET /account lets a lost watch go 90s after the last read without stopping it",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "IBKR_HOST": "127.0.0.1",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "quote_grade": {
+        "us_option": null,
+        "realtime": null,
+        "read_at": null,
+        "failure": null
+      },
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "ibkr_account": {
+      "down": null,
+      "refused": null,
+      "fails": null,
+      "account": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "11:47",
+        "totals": {
+          "net_liquidation": 25010,
+          "total_cash": 25010,
+          "unrealized_pnl": 0,
+          "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": [],
+        "pnl": null,
+        "pnl_at": null
+      },
+      "lost": {
+        "at": "2026-11-09T14:58:25.000Z",
+        "words": "IB Gateway's connection closed",
+        "down": null
+      }
+    },
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "earlier": [
+    {
+      "at": "2026-11-09T14:58:20.000Z",
+      "request": {
+        "method": "GET",
+        "path": "/account",
+        "headers": {
+          "Authorization": "Bearer tok"
+        },
+        "body": null
+      }
+    }
+  ],
+  "request": {
+    "method": "GET",
+    "path": "/account",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 200,
+      "body": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "11:47",
+        "read_at": "2026-11-09 23:00:00+08:00",
+        "totals": {
+          "net_liquidation": 25010,
+          "total_cash": 25010,
+          "unrealized_pnl": 0,
+          "realized_pnl": 0,
+          "daily_pnl": null
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "stocks": [],
+        "options": [],
+        "other": [],
+        "live": null
+      }
+    },
+    "rows": {},
+    "calls": {
+      "ibkr account": [
+        []
+      ]
+    }
+  }
+}
