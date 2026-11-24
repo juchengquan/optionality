@@ -124,8 +124,8 @@ Added by #477, which puts the watch behind `GET /account`. The owner's decisions
   picture, and readers arriving meanwhile join that wait. Every read renews the hold and is answered
   from the picture in memory, with no IB call. The hold is released `ACCOUNT_HELD_FOR_MS` (90 s) after
   the LAST read: the watch is stopped and nothing is kept. It is sized for the page's refresh options
-  as #478 sets them, a minute at the slowest, so every refresh keeps it; a slower refresh — main's
-  3 min until #478 lands — starts a fresh watch on each refresh. The page is its only reader; the
+  (#478), a minute at the slowest, so every refresh keeps it; a reader slower than the hold starts a
+  fresh watch on each read. The page is its only reader; the
   sweep, the alarms, the bot, the MCP door and the book never read it.
 - **A failed start is remembered for 5 s** (`ACCOUNT_FAILED_FOR_MS`). While IB Gateway is down or
   logged out, the service tries to start the watch at most once in that time, whoever asks — a first

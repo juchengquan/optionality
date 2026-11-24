@@ -60,8 +60,8 @@ from .schemas.zod import JS_WHITESPACE
 log = logging.getLogger(__name__)
 
 #: How long the account is held after the last read: 90 s, the owner's decision on #477 — sized for the
-#: page's refresh options as #478 sets them, a minute at the slowest, so every refresh keeps it; a slower
-#: refresh (main's 3 min until #478 lands) starts a fresh watch on each refresh.
+#: page's refresh options (#478), a minute at the slowest, so every refresh keeps it; a reader slower than
+#: the hold starts a fresh watch on each read.
 ACCOUNT_HELD_FOR_MS = 90_000
 
 #: How long a start that failed is remembered, from when it came back: 5 s, the owner's decision on #477

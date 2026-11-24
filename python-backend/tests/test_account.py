@@ -37,7 +37,7 @@ from optionality_backend.ports import (
 )
 
 #: The hold, stated rather than imported, so the number itself is held: 90 s, the owner's decision on
-#: #477 — sized for the page's refresh options as #478 sets them, a minute at the slowest.
+#: #477 — sized for the page's refresh options (#478), a minute at the slowest.
 HELD_MS = 90_000
 #: How long a failed start is remembered, stated for the same reason: 5 s, the owner's decision on #477 —
 #: at most one try in that time while IB Gateway is down, whoever asks.
