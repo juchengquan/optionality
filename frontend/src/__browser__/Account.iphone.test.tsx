@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { overflowsSideways } from "./nextBook";
 import { hitBox } from "./targets";
-import { cutShort, foldAll, openCombos, showAccount, STATES, VARIANTS } from "../testing/accountPage";
+import { chevron, cutShort, totalsCut, foldAll, openCombos, showAccount, STATES, VARIANTS } from "../testing/accountPage";
 
 afterEach(() => {
   cleanup();
@@ -28,6 +28,7 @@ describe("the account page on an iPhone", () => {
       expect(overflowsSideways()).toBe(false);
       expect(document.querySelector(".nx-acct table")).toBeNull();
       expect(cutShort()).toEqual([]);
+      expect(totalsCut()).toEqual([]);
       for (const card of document.querySelectorAll<HTMLElement>(".nx-acct-card")) {
         expect(card.scrollWidth, card.dataset.holding).toBeLessThanOrEqual(card.clientWidth);
       }
@@ -78,13 +79,15 @@ describe("the account page on an iPhone", () => {
   it("lays the totals two by two, and a card's figures two by two under its name and quantity", async () => {
     await showAccount(STATES.loaded);
     const totals = [...document.querySelectorAll<HTMLElement>(".nx-acct-total-figs > div")];
-    expect(new Set(totals.map((t) => Math.round(t.getBoundingClientRect().top))).size).toBe(2);
+    // five since #478, daily P&L the last, alone on its row
+    expect(totals).toHaveLength(5);
+    expect(new Set(totals.map((t) => Math.round(t.getBoundingClientRect().top))).size).toBe(3);
     const card = document.querySelector<HTMLElement>('.nx-acct-card[data-holding="AAPL"]')!;
     const head = card.querySelector<HTMLElement>(".nx-acct-card-head")!.getBoundingClientRect();
     const figs = [...card.querySelectorAll<HTMLElement>(".nx-acct-figs > div")].map((d) => d.getBoundingClientRect());
-    expect(figs.length).toBe(6);
+    expect(figs.length).toBe(7);
     for (const f of figs) expect(f.top).toBeGreaterThanOrEqual(head.bottom - 0.5);
-    expect(new Set(figs.map((f) => Math.round(f.top))).size).toBe(3);
+    expect(new Set(figs.map((f) => Math.round(f.top))).size).toBe(4);
   });
 
   it("folds a section at a tap, what is under it moving up, and opens it again", async () => {
@@ -148,5 +151,30 @@ describe("the account page on an iPhone", () => {
       const r = hitBox(b);
       expect(Math.min(r.width, r.height), `${b.textContent!}, folded`).toBeGreaterThanOrEqual(44);
     }
+  });
+
+  // the owner, 2026-11-24 (#478): an opened combined row's arrow was drawn as a corner (⌟), caught
+  // half-turned; it points down from the moment the row opens, as an opened heading's does
+  it("points an opened combined row's arrow down at once, as an opened heading's, and a closed one's right", async () => {
+    expect(document.documentElement.clientWidth).toBe(390);
+    await showAccount(STATES.combos);
+    const row = document.querySelector<HTMLElement>('[data-expiry="20270219"] [data-combo]')!;
+    const button = row.querySelector<HTMLButtonElement>(".nx-acct-combo-toggle")!;
+    expect(chevron(button).points, "closed").toBe("right");
+    const heading = document.querySelector<HTMLElement>('[data-section="options"] .nx-acct-fold')!;
+    expect(heading.getAttribute("aria-expanded")).toBe("true");
+    expect(chevron(heading).points, "an opened heading").toBe("down");
+    await userEvent.click(row.querySelector<HTMLElement>('[data-fig="value"]')!);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    // as soon as it is open, as its legs are, and still a while after
+    for (const when of ["at once", "a moment later"]) {
+      const c = chevron(button);
+      expect(c.points, `${when}: ${c.box}, ${c.transform}`).toBe("down");
+      const m = new DOMMatrix(c.transform);
+      expect([Math.round(m.a), Math.round(m.b)], when).toEqual([0, 1]);
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    await userEvent.click(button);
+    expect(chevron(button).points, "closed again").toBe("right");
   });
 });

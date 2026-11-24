@@ -25,7 +25,7 @@ import { useAccount } from "./useAccount";
 
 /** The cadences as the control says them. */
 const CADENCE_WORDS: Record<(typeof ACCOUNT_REFRESHES)[number], string> = {
-  15: "15 s", 30: "30 s", 60: "1 min", 180: "3 min",
+  1: "1 s", 5: "5 s", 15: "15 s", 30: "30 s", 60: "1 min",
 };
 
 export function Account({ base }: { base: string }) {

@@ -160,12 +160,13 @@ export function writeAccountFolded(folded: Set<string>): void {
 
 /** How often the account page reads the IBKR account (#471): one of `ACCOUNT_REFRESHES`, in
  *  seconds, or null for off — nothing read but on opening and on the page's refresh button. A
- *  minute until chosen. Its own cookie, apart from the book's `ui_refresh`: the book's cadence is
- *  the service's sweep, and IBKR marks the account only every few minutes. Anything else in the
- *  cookie — a hand-edited `1` — is the default, never a read a second. */
-export const ACCOUNT_REFRESHES = [15, 30, 60, 180] as const;
+ *  second until chosen (#478): the service answers from the account it holds while it is asked
+ *  (#477), asking IB Gateway nothing, so a read a second costs the gateway nothing. Its own cookie,
+ *  apart from the book's `ui_refresh`: the book's cadence is the service's sweep. Anything else in
+ *  the cookie — the 3 min offered before #478, `180` — is the default. */
+export const ACCOUNT_REFRESHES = [1, 5, 15, 30, 60] as const;
 export type AccountRefresh = (typeof ACCOUNT_REFRESHES)[number] | null;
-export const ACCOUNT_REFRESH_DEFAULT: AccountRefresh = 60;
+export const ACCOUNT_REFRESH_DEFAULT: AccountRefresh = 1;
 
 export function readAccountRefresh(): AccountRefresh {
   const raw = readCookie("ui_account_refresh");

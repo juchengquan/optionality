@@ -18,7 +18,11 @@
  *  - **Every option on one underlying and expiry is ONE row** (`optionRows`): its legs written as
  *    the book writes a structure, its units, its prices netted per share as IBKR signs them, its
  *    money summed. It starts closed, and opens — a press anywhere on it, or its button — to its legs
- *    underneath, each drawn as a contract alone is. Whether it is open is not remembered. */
+ *    underneath, each drawn as a contract alone is. Whether it is open is not remembered.
+ *
+ *  And the owner's of #478: **today's change, daily P&L**, as a fifth total and on every stock and
+ *  option after its P&L — a combined row's its legs' summed, with no partial sums, and none in a
+ *  folded heading — and the live line under the totals (`Totals`). */
 import { Fragment, useCallback, useId, useState, type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 
@@ -81,6 +85,11 @@ export function AccountView({ account, phone, privacy, stale = false }: {
   const unit = phone ? "card" : "row";
   const summary = (count: number, total: InBase, pnl = true): FoldSummary =>
     ({ count, unit, total, base: base ?? "", privacy, pnl });
+  // today's change (#478), after a row's P&L: signed and coloured as a P&L is, hidden as money is
+  const daily = (n: number | null, currency: string): Cell => ({
+    key: "daily", label: "daily P&L", text: moneyText(n, currency, true, privacy), currency: note(currency),
+    outcome: outcomeOf(n),
+  });
 
   const stockRows: Row[] = stocks.map((h, i) => ({
     id: `${h.symbol}#${i}`,
@@ -93,6 +102,7 @@ export function AccountView({ account, phone, privacy, stale = false }: {
       { key: "pnl", label: "P&L", text: moneyText(h.unrealized_pnl, h.currency, true, privacy), currency: note(h.currency),
         outcome: outcomeOf(h.unrealized_pnl) },
       { key: "pnl-share", label: "P&L %", text: shareText(pnlShare(h), true), outcome: outcomeOf(h.unrealized_pnl) },
+      daily(h.daily_pnl, h.currency),
       { key: "weight", label: "weight", text: shareText(weight(h, account)) },
     ],
   }));
@@ -106,6 +116,7 @@ export function AccountView({ account, phone, privacy, stale = false }: {
       { key: "value", label: "value", text: moneyText(h.market_value, h.currency, false, privacy), currency: note(h.currency) },
       { key: "pnl", label: "P&L", text: moneyText(h.unrealized_pnl, h.currency, true, privacy), currency: note(h.currency),
         outcome: outcomeOf(h.unrealized_pnl) },
+      daily(h.daily_pnl, h.currency),
     ],
   });
   const comboRow = (c: Combo, key: string): Row => ({
@@ -118,6 +129,7 @@ export function AccountView({ account, phone, privacy, stale = false }: {
       { key: "value", label: "value", text: moneyText(c.market_value, c.currency, false, privacy), currency: note(c.currency) },
       { key: "pnl", label: "P&L", text: moneyText(c.unrealized_pnl, c.currency, true, privacy), currency: note(c.currency),
         outcome: outcomeOf(c.unrealized_pnl) },
+      daily(c.daily_pnl, c.currency),
     ],
     legs: c.legs.map(optionRow),
     open: opened.has(key),
@@ -178,7 +190,10 @@ export function AccountView({ account, phone, privacy, stale = false }: {
 
 /** The account's totals, in the base currency, and what the answer says of itself: the account as
  *  served (masked by the service), its base currency, when IBKR last marked it — one time for the
- *  whole account, as IBKR sends one (the owner, 2026-11-23) — and when the service read it. */
+ *  whole account, as IBKR sends one (the owner, 2026-11-23), which net liquidation and cash keep —
+ *  and the live line (#478): when the account's P&L stream last spoke, `live · updated 21:04:36 SGT`,
+ *  dated where it is not today's. Before the stream has spoken (`live` null) the line is when the
+ *  service read it instead. A quiet stream is not stale (the owner, 2026-11-24): nothing dims it. */
 function Totals({ account, privacy }: { account: Account; privacy: boolean }) {
   const base = account.base_currency ?? "";
   const t = account.totals;
@@ -187,6 +202,7 @@ function Totals({ account, privacy }: { account: Account; privacy: boolean }) {
     { label: "cash", text: moneyText(t.total_cash, base, false, privacy) },
     { label: "unrealised P&L", text: moneyText(t.unrealized_pnl, base, true, privacy), outcome: outcomeOf(t.unrealized_pnl) },
     { label: "realised P&L", text: moneyText(t.realized_pnl, base, true, privacy), outcome: outcomeOf(t.realized_pnl) },
+    { label: "daily P&L", text: moneyText(t.daily_pnl, base, true, privacy), outcome: outcomeOf(t.daily_pnl) },
   ];
   return (
     <section className="nx-acct-totals" aria-label="totals">
@@ -202,7 +218,9 @@ function Totals({ account, privacy }: { account: Account; privacy: boolean }) {
         <span className="nx-acct-id">{account.account}</span>
         {account.base_currency ? <span>{`base ${account.base_currency}`}</span> : null}
         <span>{`IBKR marked at ${account.updated_at ?? "—"}`}</span>
-        <span>{`read at ${fetchedWords(account.read_at)}`}</span>
+        {account.live !== null
+          ? <span data-live="">{`live · updated ${fetchedWords(account.live.updated_at)}`}</span>
+          : <span>{`read at ${fetchedWords(account.read_at)}`}</span>}
       </p>
     </section>
   );

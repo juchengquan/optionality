@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Page, pageAt } from "../Page";
 import { readAccountRefresh } from "../shared/prefs";
 import {
-  ACCOUNT, EMPTY, NO_RATE, ODD_OPTIONS, PAPER, REFUSALS, serveAccount, TWO_CURRENCIES, type AccountService,
+  ACCOUNT, EMPTY, NO_RATE, NOT_LIVE, ODD_OPTIONS, PAPER, REFUSALS, serveAccount, TWO_CURRENCIES, type AccountService,
 } from "../testing/account";
 import { servePage } from "../testing/pageService";
 import { until } from "../testing/until";
@@ -56,14 +56,14 @@ async function becomes(state: "visible" | "hidden") {
   await drain();
 }
 
-/** The account page opened on `answer`, its first read landed. */
-async function open(
-  arrangement: Arrangement, answer: AccountService["answer"] = ACCOUNT, { timers = false } = {},
-): Promise<AccountService> {
+/** The account page opened on `answer`, its first read landed. The poll's interval is the test's on
+ *  every open, so nothing is read but where a test moves the clock: at a second's cadence (#478) a
+ *  real one would read on top of what a test counts. */
+async function open(arrangement: Arrangement, answer: AccountService["answer"] = ACCOUNT): Promise<AccountService> {
   const svc = serveAccount(answer);
   // the clock pinned on every open, not only where the poll is driven: a served stamp is written
   // with its date where it is not from today, so an unpinned clock past midnight +08 changed the words
-  vi.useFakeTimers({ toFake: timers ? ["Date", "setInterval", "clearInterval"] : ["Date"], now: NOW });
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now: NOW });
   if (arrangement === "desk") document.cookie = "ui_arrangement=desk;path=/";
   render(<Page path="/opt/account" base="/opt/" />);
   await until(() => expect(svc.reads()).toBe(1));
@@ -134,21 +134,23 @@ describe.each(arrangements)("on the %s, reading the account", (arrangement) => {
     expect(svc.requests).toEqual(["GET /account"]);
   });
 
-  it("reads it every minute until another cadence is chosen", async () => {
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
-    await tick(59_000);
+  it("reads it every second until another cadence is chosen (#478)", async () => {
+    const svc = await open(arrangement);
+    await tick(999);
     expect(svc.reads()).toBe(1);
-    await tick(1_000);
+    await tick(1);
     expect(svc.reads()).toBe(2);
-    await tick(60_000);
+    await tick(1_000);
     expect(svc.reads()).toBe(3);
+    await tick(58_000);
+    expect(svc.reads()).toBe(61);
   });
 
-  it("reads at the cadence chosen on the page, and remembers it", async () => {
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
+  it("offers 1 s, 5 s, 15 s, 30 s, 1 min and off, reads at the cadence chosen on the page, and remembers it", async () => {
+    const svc = await open(arrangement);
     const choice = screen.getByLabelText<HTMLSelectElement>("refresh every");
-    expect([...choice.options].map((o) => o.textContent)).toEqual(["15 s", "30 s", "1 min", "3 min", "off"]);
-    expect(choice.value).toBe("60");
+    expect([...choice.options].map((o) => o.textContent)).toEqual(["1 s", "5 s", "15 s", "30 s", "1 min", "off"]);
+    expect(choice.value).toBe("1");
     fireEvent.change(choice, { target: { value: "15" } });
     expect(readAccountRefresh()).toBe(15);
     expect(document.cookie).toContain("ui_account_refresh=15");
@@ -159,14 +161,27 @@ describe.each(arrangements)("on the %s, reading the account", (arrangement) => {
 
     // and opened again, the page starts at the choice
     cleanup();
-    const again = await open(arrangement, ACCOUNT, { timers: false });
+    const again = await open(arrangement);
     expect(screen.getByLabelText<HTMLSelectElement>("refresh every").value).toBe("15");
     expect(again.reads()).toBe(1);
   });
 
+  it("reads a cadence no longer offered as the default: 3 min, chosen before #478, is a second", async () => {
+    document.cookie = "ui_account_refresh=180;path=/";
+    expect(readAccountRefresh()).toBe(1);
+    const svc = await open(arrangement);
+    expect(screen.getByLabelText<HTMLSelectElement>("refresh every").value).toBe("1");
+    await tick(1_000);
+    expect(svc.reads()).toBe(2);
+    for (const stale of ["3", "120", "0", ""]) {
+      document.cookie = `ui_account_refresh=${stale};path=/`;
+      expect(readAccountRefresh(), stale).toBe(1);
+    }
+  });
+
   it("reads nothing by itself when the cadence is off, and still on the button", async () => {
     document.cookie = "ui_account_refresh=off;path=/";
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
+    const svc = await open(arrangement);
     expect(screen.getByLabelText<HTMLSelectElement>("refresh every").value).toBe("off");
     await tick(600_000);
     expect(svc.reads()).toBe(1);
@@ -179,39 +194,64 @@ describe.each(arrangements)("on the %s, reading the account", (arrangement) => {
   });
 
   it("turned off on the page, stops reading", async () => {
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
+    const svc = await open(arrangement);
     fireEvent.change(screen.getByLabelText("refresh every"), { target: { value: "off" } });
     expect(readAccountRefresh()).toBeNull();
     await tick(600_000);
     expect(svc.reads()).toBe(1);
   });
+});
+
+/** The poll's rules, held at the default of a second (#478) and at a minute, the slowest offered:
+ *  every time below is a share of the cadence, `u`. */
+const CADENCES = [
+  { name: "every second, the default", cookie: null, u: 1_000 },
+  { name: "every minute", cookie: "60", u: 60_000 },
+] as const;
+
+describe.each(arrangements.flatMap((arrangement) => CADENCES.map((c) => ({ arrangement, ...c }))))(
+  "on the $arrangement, reading the account $name", ({ arrangement, cookie, u }) => {
+  const openAt = (answer: AccountService["answer"] = ACCOUNT) => {
+    if (cookie !== null) document.cookie = `ui_account_refresh=${cookie};path=/`;
+    return open(arrangement, answer);
+  };
+
+  it("reads at each tick of the cadence", async () => {
+    const svc = await openAt();
+    await tick(u - 1);
+    expect(svc.reads()).toBe(1);
+    await tick(1);
+    expect(svc.reads()).toBe(2);
+    await tick(u);
+    expect(svc.reads()).toBe(3);
+  });
 
   it("reads nothing while the page is hidden, and reads at once when it is seen again after a missed read", async () => {
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
+    const svc = await openAt();
     await becomes("hidden");
-    await tick(300_000);
+    await tick(5 * u);
     expect(svc.reads(), "read while hidden").toBe(1);
     await becomes("visible");
     await until(() => expect(svc.reads()).toBe(2));
     // and the poll goes on from there
-    await tick(60_000);
+    await tick(u);
     expect(svc.reads()).toBe(3);
   });
 
   it("does not read again on being seen again before a read was due", async () => {
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
-    await tick(10_000);
+    const svc = await openAt();
+    await tick(0.2 * u);
     await becomes("hidden");
-    await tick(5_000);
+    await tick(0.1 * u);
     await becomes("visible");
     expect(svc.reads()).toBe(1);
-    await tick(45_000);
+    await tick(0.7 * u);
     expect(svc.reads()).toBe(2);
   });
 
   it("reads at once on the refresh button, which restarts the clock and stacks nothing", async () => {
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
-    await tick(59_000);
+    const svc = await openAt();
+    await tick(0.9 * u);
     const release = svc.hold();
     fireEvent.click(refreshButton());
     await until(() => expect(svc.reads()).toBe(2));
@@ -220,53 +260,53 @@ describe.each(arrangements)("on the %s, reading the account", (arrangement) => {
     expect(svc.reads()).toBe(2);
     release();
     await waitFor(() => expect(refreshButton().disabled).toBe(false));
-    // the second that remained of the old interval is no longer owed
-    await tick(1_000);
+    // what remained of the old interval is no longer owed
+    await tick(0.1 * u);
     expect(svc.reads(), "the old interval fired on top of the refresh").toBe(2);
-    await tick(59_000);
+    await tick(0.9 * u);
     expect(svc.reads()).toBe(3);
   });
 
   it("stacks no tick's read on the button's while the button's is still out (review of #474)", async () => {
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
-    await tick(58_000);
+    const svc = await openAt();
+    await tick(0.9 * u);
     const release = svc.hold();
     fireEvent.click(refreshButton());
     await until(() => expect(svc.reads()).toBe(2));
-    // the old interval's tick falls due at 60 s, while the button's read is held: it reads nothing
-    await tick(3_000);
+    // the old interval's tick falls due at u, while the button's read is held: it reads nothing
+    await tick(0.2 * u);
     expect(svc.reads(), "a tick read on top of the button's held read").toBe(2);
-    // nor does the restarted cadence's first tick, at 118 s, while the button's read is held still
-    await tick(60_000);
+    // nor does the restarted cadence's first tick, at 1.9u, while the button's read is held still
+    await tick(u);
     expect(svc.reads(), "the restarted cadence read on top of the button's held read").toBe(2);
     release();
     await waitFor(() => expect(refreshButton().disabled).toBe(false));
-    // and the cadence runs on, a minute after that tick
-    await tick(57_000);
+    // and the cadence runs on, a cadence after that tick
+    await tick(0.8 * u);
     expect(svc.reads()).toBe(3);
   });
 
   it("stacks no tick's read on the opening read while it is still out (review of #474)", async () => {
-    document.cookie = "ui_account_refresh=15;path=/";
+    if (cookie !== null) document.cookie = `ui_account_refresh=${cookie};path=/`;
     const svc = serveAccount(ACCOUNT);
     const release = svc.hold();
     vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now: NOW });
     if (arrangement === "desk") document.cookie = "ui_arrangement=desk;path=/";
     render(<Page path="/opt/account" base="/opt/" />);
     await until(() => expect(svc.reads()).toBe(1));
-    // the first tick falls due at 15 s, while the opening read is held: it reads nothing
-    await tick(15_000);
+    // the first tick falls due at u, while the opening read is held: it reads nothing
+    await tick(u);
     expect(svc.reads(), "a tick read on top of the held opening read").toBe(1);
     release();
     await waitFor(() => expect(screen.getByRole("region", { name: "totals" })).toBeTruthy());
-    await tick(15_000);
+    await tick(u);
     expect(svc.reads()).toBe(2);
   });
 
   it("asks afresh on the button while a tick's read is held, rather than waiting on it (review of #474)", async () => {
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
+    const svc = await openAt();
     const release = svc.hold();
-    await tick(60_000);
+    await tick(u);
     expect(svc.reads(), "the tick read").toBe(2);
     // that read is held: the button gives up on it and sends its own
     fireEvent.click(refreshButton());
@@ -275,6 +315,23 @@ describe.each(arrangements)("on the %s, reading the account", (arrangement) => {
     await waitFor(() => expect(refreshButton().disabled).toBe(false));
   });
 
+  it("gives up on a read held for a minute, or two ticks where those are longer, and asks afresh", async () => {
+    const svc = await openAt();
+    const release = svc.hold();
+    await tick(u);
+    expect(svc.reads()).toBe(2);
+    const givenUp = Math.max(2 * u, 60_000);
+    // every tick while it is held, short of the bound, reads nothing
+    await tick(givenUp - u);
+    expect(svc.reads(), "a tick read on top of a held read").toBe(2);
+    // and the first tick past it asks again
+    await tick(u);
+    expect(svc.reads()).toBe(3);
+    release();
+  });
+});
+
+describe.each(arrangements)("on the %s, reading the account and nothing else", (arrangement) => {
   it("writes nothing: no request but the read, and no control but the cadence, the refresh and the folds", async () => {
     const svc = await open(arrangement);
     fireEvent.click(refreshButton());
@@ -295,19 +352,80 @@ describe.each(arrangements)("on the %s, reading the account", (arrangement) => {
 });
 
 describe.each(arrangements)("on the %s, the account drawn", (arrangement) => {
-  it("says the totals, the masked account as served, when IBKR marked it and when it was read", async () => {
+  it("says the totals, daily P&L the fifth, the masked account as served, when IBKR marked it and the live line", async () => {
     await open(arrangement);
     const top = screen.getByRole("region", { name: "totals" });
     expect(within(top).getByText("U•••••567")).toBeTruthy();
-    for (const [label, figure] of [["net liquidation", "$250,000"], ["cash", "$40,001"],
-      ["unrealised P&L", "+$12,500"], ["realised P&L", "−$1,200"]] as const) {
-      const term = within(top).getByText(label);
-      expect(term.nextElementSibling?.textContent, label).toBe(figure);
+    const pairs = [["net liquidation", "$250,000", null], ["cash", "$40,001", null],
+      ["unrealised P&L", "+$12,500", "gain"], ["realised P&L", "−$1,200", "loss"], ["daily P&L", "−$42", "loss"]] as const;
+    expect([...top.querySelectorAll("dt")].map((dt) => dt.textContent)).toEqual(pairs.map(([label]) => label));
+    for (const [label, figure, outcome] of pairs) {
+      const figureOf = within(top).getByText(label).nextElementSibling!;
+      expect(figureOf.textContent, label).toBe(figure);
+      expect(figureOf.getAttribute("data-outcome"), label).toBe(outcome);
     }
+    // net liquidation and cash keep IBKR's time; the P&L stream's is the live line, in place of
+    // "read at": the stream's stamp on its own clock and zone, as every served time is written
     expect(text()).toContain("IBKR marked at 14:32");
-    // the service's stamp, on its own clock and zone, as every served time is written
-    expect(text()).toMatch(/read at 21:04:37 (SGT|GMT\+8)/);
+    const live = top.querySelector<HTMLElement>("[data-live]")!;
+    expect(live.textContent).toMatch(/^live · updated 21:04:36 (SGT|GMT\+8)$/);
+    expect(text()).not.toMatch(/read at/);
     expect(screen.queryByText(/PAPER account/)).toBeNull();
+  });
+
+  it("says when the service read it, in place of the live line, before the P&L stream has spoken", async () => {
+    await open(arrangement, NOT_LIVE);
+    const top = screen.getByRole("region", { name: "totals" });
+    expect(top.querySelector("[data-live]")).toBeNull();
+    expect(text()).not.toMatch(/live · updated/);
+    expect(text()).toContain("IBKR marked at 14:32");
+    expect(text()).toMatch(/read at 21:04:37 (SGT|GMT\+8)/);
+    // no daily P&L anywhere: a dash
+    expect(within(top).getByText("daily P&L").nextElementSibling?.textContent).toBe("—");
+    expect(document.querySelector('[data-holding="AAPL"] [data-fig="daily"]')?.textContent).toBe("—");
+  });
+
+  it("dates the live line when the stream last spoke on an earlier day", async () => {
+    await open(arrangement, { ...ACCOUNT, live: { updated_at: "2026-11-22 23:59:58+08:00" } });
+    expect(document.querySelector("[data-live]")!.textContent).toMatch(/^live · updated Sun 20261122 23:59:58 (SGT|GMT\+8)$/);
+  });
+
+  it("draws each stock's and option's daily P&L beside its P&L, signed and coloured, a dash where it has none", async () => {
+    await open(arrangement);
+    const daily = (holding: string) => document.querySelector<HTMLElement>(`[data-holding="${holding}"] [data-fig="daily"]`)!;
+    expect(daily("AAPL").textContent).toBe("+$260");
+    expect(daily("AAPL").getAttribute("data-outcome")).toBe("gain");
+    expect(daily("MSFT").textContent).toBe("−$415");
+    expect(daily("MSFT").getAttribute("data-outcome")).toBe("loss");
+    // QQQ's put, alone on its expiry
+    expect(daily("P500").textContent).toBe("−$36");
+    // the lone SPX contract's stream has said nothing
+    expect(daily("C7500").textContent).toBe("—");
+    expect(daily("C7500").hasAttribute("data-outcome")).toBe(false);
+    // labelled where the arrangement labels a figure: the desk's column, the phone's line
+    const label = (holding: string) => {
+      const cell = daily(holding).closest<HTMLElement>("td, .nx-acct-figs > div")!;
+      if (cell.tagName === "TD") {
+        const table = cell.closest("table")!;
+        return table.querySelectorAll("thead th")[[...cell.parentElement!.children].indexOf(cell)]!.textContent;
+      }
+      return cell.querySelector("dt")!.textContent;
+    };
+    expect(label("AAPL")).toBe("daily P&L");
+    expect(label("P500")).toBe("daily P&L");
+    // the stocks' after their P&L and its share, the options' after their P&L
+    const order = (holding: string) => [...document.querySelector(`[data-holding="${holding}"]`)!.querySelectorAll("[data-fig]")]
+      .filter((f) => f.closest("[data-holding]")!.getAttribute("data-holding") === holding)
+      .map((f) => f.getAttribute("data-fig"));
+    expect(order("AAPL")).toEqual(["qty", "cost", "mark", "value", "pnl", "pnl-share", "daily", "weight"]);
+    expect(order("P500")).toEqual(["contract", "qty", "cost", "mark", "value", "pnl", "daily"]);
+  });
+
+  it("writes a daily P&L in another currency with its code beside it", async () => {
+    await open(arrangement, TWO_CURRENCIES);
+    const sap = document.querySelector<HTMLElement>('[data-holding="SAP"] [data-fig="daily"]')!;
+    expect(sap.textContent).toBe("+95");
+    expect(sap.parentElement!.querySelector("[data-currency]")?.textContent).toBe("EUR");
   });
 
   it("lists the stocks by value, with cost, mark, value, P&L in money and %, and weight", async () => {
@@ -431,13 +549,15 @@ describe.each(arrangements)("on the %s, the account drawn", (arrangement) => {
     document.cookie = "ui_privacy=on;path=/";
     await open(arrangement, TWO_CURRENCIES);
     const top = screen.getByRole("region", { name: "totals" });
-    for (const label of ["net liquidation", "cash", "unrealised P&L", "realised P&L"]) {
+    for (const label of ["net liquidation", "cash", "unrealised P&L", "realised P&L", "daily P&L"]) {
       expect(within(top).getByText(label).nextElementSibling?.textContent, label).toBe("$•••");
     }
     const fig = (holding: string, k: string) =>
       document.querySelector(`[data-holding="${holding}"] [data-fig="${k}"]`)?.textContent;
     expect(fig("AAPL", "value")).toBe("$•••");
     expect(fig("AAPL", "pnl")).toBe("$•••");
+    expect(fig("AAPL", "daily")).toBe("$•••");
+    expect(fig("SAP", "daily")).toBe("•••");
     expect(fig("AAPL", "qty")).toBe("+•••");
     expect(fig("SAP", "value")).toBe("•••");
     expect(fig("MES", "value")).toBe("$•••");
@@ -450,6 +570,7 @@ describe.each(arrangements)("on the %s, the account drawn", (arrangement) => {
     const short = document.querySelectorAll('[data-underlying="SPX"] [data-expiry="20261218"] [data-leg]')[1]!;
     expect(short.querySelector('[data-fig="qty"]')?.textContent).toBe("−•••");
     expect(short.querySelector('[data-fig="value"]')?.textContent).toBe("$•••");
+    expect(short.querySelector('[data-fig="daily"]')?.textContent).toBe("$•••");
     // no amount anywhere on the page
     expect(text()).not.toMatch(/\$\d|\d,\d{3}/);
   });
@@ -518,17 +639,29 @@ describe.each(arrangements)("on the %s, the account drawn", (arrangement) => {
     expect(alert.compareDocumentPosition(asOf) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(asOf.compareDocumentPosition(view()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // and the next good read draws them afresh, undimmed, with no error
-    svc.answer = { ...ACCOUNT, read_at: "2026-11-23 21:06:00+08:00" };
+    svc.answer = { ...ACCOUNT, read_at: "2026-11-23 21:06:00+08:00", live: { updated_at: "2026-11-23 21:05:59+08:00" } };
     fireEvent.click(refreshButton());
     await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
     expect(view().hasAttribute("data-stale")).toBe(false);
     expect(screen.queryByText(/^as of /)).toBeNull();
-    expect(text()).toMatch(/read at 21:06:00/);
+    expect(text()).toMatch(/live · updated 21:05:59/);
+  });
+
+  it("dims the figures with \"as of\" when a read fails while live: the connection lost is a failed refresh (#478)", async () => {
+    const svc = await open(arrangement);
+    svc.answer = { status: 502, detail: "The connection to IB Gateway was lost" };
+    await tick(1_000);
+    await until(() => expect(screen.getByRole("alert").textContent).toContain("The connection to IB Gateway was lost"));
+    expect(document.querySelector(".nx-acct-view")!.hasAttribute("data-stale")).toBe(true);
+    // the last good figures kept, daily P&L among them, as of when the service last answered
+    const top = screen.getByRole("region", { name: "totals" });
+    expect(within(top).getByText("daily P&L").nextElementSibling?.textContent).toBe("−$42");
+    expect(screen.getByText(/^as of /).textContent).toMatch(/^as of 21:04:37 (SGT|GMT\+8)$/);
   });
 
   it("dates a read from an earlier day, in 'read at' and in 'as of' when a refresh then fails", async () => {
     // a page left open overnight while the gateway is down: yesterday's figures must say so
-    const svc = await open(arrangement, { ...ACCOUNT, read_at: "2026-11-22 21:04:37+08:00" });
+    const svc = await open(arrangement, { ...NOT_LIVE, read_at: "2026-11-22 21:04:37+08:00" });
     expect(text()).toMatch(/read at Sun 20261122 21:04:37 (SGT|GMT\+8)/);
     svc.answer = REFUSALS.notAnswering;
     fireEvent.click(refreshButton());
@@ -537,9 +670,9 @@ describe.each(arrangements)("on the %s, the account drawn", (arrangement) => {
   });
 
   it("keeps them through a failure of the poll's own read too", async () => {
-    const svc = await open(arrangement, ACCOUNT, { timers: true });
+    const svc = await open(arrangement);
     svc.answer = REFUSALS.deadline;
-    await tick(60_000);
+    await tick(1_000);
     await until(() => expect(screen.getByRole("alert")).toBeTruthy());
     expect(screen.getByRole("region", { name: "totals" })).toBeTruthy();
     expect(document.querySelector(".nx-acct-view")!.hasAttribute("data-stale")).toBe(true);

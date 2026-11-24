@@ -176,6 +176,19 @@ describe("the options combined (the owner, 2026-11-24)", () => {
     expect(c.unrealized_pnl).toBeCloseTo(210 - 130, 10);
   });
 
+  it("sum the legs' daily P&L in money (#478)", () => {
+    expect(comboOf("20270115").daily_pnl).toBeCloseTo(-25 + 60, 10);
+    expect(comboOf("20270219").daily_pnl).toBeCloseTo(-80 + 150 + 110 - 95, 10);
+  });
+
+  it("sum no daily P&L where a leg has none: no partial sums (#478)", () => {
+    // its long leg has no daily figure from the stream
+    expect(comboOf("20270319").daily_pnl).toBeNull();
+    const [a, b] = COMBOS.options.slice(1, 3) as [AccountHolding, AccountHolding];
+    expect(combine([a, { ...b, daily_pnl: null }]).daily_pnl).toBeNull();
+    expect(combine([a, b]).market_value).not.toBeNull();
+  });
+
   it("combine four legs, two of each, as two units of one structure", () => {
     const c = comboOf("20270219");
     expect(c.legs).toHaveLength(4);
