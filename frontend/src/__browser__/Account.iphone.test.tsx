@@ -2,14 +2,18 @@
  *  every state it draws — nothing pushed sideways, every figure whole inside its card, a 44pt target
  *  for every control and 16px text in the cadence's box. Runs in the suite's `iphone` instance. */
 import { cleanup, screen, within } from "@testing-library/react";
-import { page } from "@vitest/browser/context";
+import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { overflowsSideways } from "./nextBook";
 import { hitBox } from "./targets";
-import { cutShort, showAccount, STATES, VARIANTS } from "../testing/accountPage";
+import { cutShort, foldAll, openCombos, showAccount, STATES, VARIANTS } from "../testing/accountPage";
 
-afterEach(() => { cleanup(); document.cookie = "ui_privacy=;path=/;max-age=0"; });
+afterEach(() => {
+  cleanup();
+  document.cookie = "ui_privacy=;path=/;max-age=0";
+  document.cookie = "ui_account_folded=;path=/;max-age=0";
+});
 
 describe("the account page on an iPhone", () => {
   it("is a phone to the page: a coarse pointer, 390px wide", () => {
@@ -81,5 +85,68 @@ describe("the account page on an iPhone", () => {
     expect(figs.length).toBe(6);
     for (const f of figs) expect(f.top).toBeGreaterThanOrEqual(head.bottom - 0.5);
     expect(new Set(figs.map((f) => Math.round(f.top))).size).toBe(3);
+  });
+
+  it("folds a section at a tap, what is under it moving up, and opens it again", async () => {
+    await showAccount(STATES.loaded);
+    const fold = screen.getByRole("region", { name: "Stocks" }).querySelector<HTMLButtonElement>(".nx-acct-fold")!;
+    const below = () => screen.getByRole("region", { name: "Options" }).getBoundingClientRect().top;
+    const open = below();
+    await userEvent.click(fold);
+    expect(fold.getAttribute("aria-expanded")).toBe("false");
+    expect(below()).toBeLessThan(open - 100);
+    await userEvent.click(fold);
+    expect(below()).toBe(open);
+  });
+
+  it("opens a combined card at a tap on it, its legs inside it, and closes it again", async () => {
+    await showAccount(STATES.combos);
+    const card = document.querySelector<HTMLElement>('[data-expiry="20270219"] [data-combo]')!;
+    const closed = card.getBoundingClientRect().height;
+    await userEvent.click(card.querySelector<HTMLElement>('[data-fig="value"]')!);
+    const legs = [...card.querySelectorAll<HTMLElement>("[data-leg]")];
+    expect(legs).toHaveLength(4);
+    const box = card.getBoundingClientRect();
+    expect(box.height).toBeGreaterThan(closed + 200);
+    for (const leg of legs) {
+      const r = leg.getBoundingClientRect();
+      expect(r.left).toBeGreaterThanOrEqual(box.left);
+      expect(r.right).toBeLessThanOrEqual(box.right);
+    }
+    await userEvent.click(card.querySelector<HTMLElement>(".nx-acct-combo-toggle")!);
+    expect(card.getBoundingClientRect().height).toBe(closed);
+  });
+
+  it("draws every folded heading and every opened combined card inside 390px, nothing sideways", async () => {
+    await showAccount(STATES["large combos"]);
+    await openCombos();
+    expect(overflowsSideways()).toBe(false);
+    expect(cutShort()).toEqual([]);
+    for (const card of document.querySelectorAll<HTMLElement>(".nx-acct-card")) {
+      expect(card.scrollWidth, card.dataset.holding).toBeLessThanOrEqual(card.clientWidth);
+    }
+    await foldAll();
+    for (const b of document.querySelectorAll<HTMLElement>(".nx-acct-fold")) {
+      expect(b.getAttribute("aria-expanded")).toBe("false");
+      expect(b.getBoundingClientRect().right, b.textContent!).toBeLessThanOrEqual(390);
+      expect(b.scrollWidth).toBeLessThanOrEqual(b.clientWidth);
+    }
+    expect(overflowsSideways()).toBe(false);
+  });
+
+  it("gives every fold and every combined card's button a 44pt target", async () => {
+    await showAccount(STATES.combos);
+    const buttons = [...document.querySelectorAll<HTMLElement>(".nx-acct-fold, .nx-acct-combo-toggle")];
+    expect(buttons.length).toBeGreaterThan(4);
+    for (const b of buttons) {
+      const r = hitBox(b);
+      expect(Math.min(r.width, r.height), b.textContent!).toBeGreaterThanOrEqual(44);
+    }
+    // and with every underlying folded, one heading straight under the next
+    for (const b of document.querySelectorAll<HTMLElement>("[data-underlying] .nx-acct-fold")) await userEvent.click(b);
+    for (const b of document.querySelectorAll<HTMLElement>(".nx-acct-fold")) {
+      const r = hitBox(b);
+      expect(Math.min(r.width, r.height), `${b.textContent!}, folded`).toBeGreaterThanOrEqual(44);
+    }
   });
 });

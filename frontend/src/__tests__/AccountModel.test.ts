@@ -4,10 +4,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  contractLeg, currencyNote, holdsNothing, moneyText, optionGroups, pnlShare, quantityText, shareText,
-  stocksByValue, valueInBase, weight,
+  combine, contractLeg, currencyNote, holdsNothing, moneyText, optionGroups, optionRows, pnlShare, quantityText,
+  shareText, stocksByValue, totalInBase, unitsOf, unitsText, valueInBase, weight, type Combo,
 } from "../account/model";
-import { ACCOUNT, EMPTY, NO_RATE, ODD_OPTIONS, TWO_CURRENCIES } from "../testing/account";
+import type { AccountHolding } from "../shared/api";
+import { legText, shortFirst } from "../shared/format";
+import { ACCOUNT, COMBOS, EMPTY, NO_RATE, ODD_OPTIONS, TWO_CURRENCIES } from "../testing/account";
 
 const stock = (symbol: string) => TWO_CURRENCIES.stocks.find((s) => s.symbol === symbol)!;
 
@@ -135,6 +137,161 @@ describe("the options", () => {
   });
 });
 
+/** The rows of one expiry of COMBOS's SPX. */
+const spxRows = (expiry: string) =>
+  optionRows(optionGroups(COMBOS.options).find((g) => g.underlying === "SPX")!.expiries.find((e) => e.expiry === expiry)!);
+const comboOf = (expiry: string): Combo => {
+  const rows = spxRows(expiry);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]!.kind).toBe("combo");
+  return rows[0] as Combo;
+};
+const written = (c: Combo) => shortFirst(c.written).map((l) => legText(l, "signs")).join(" ");
+
+describe("the options combined (the owner, 2026-11-24)", () => {
+  it("leave a contract alone on its expiry as it is", () => {
+    const rows = spxRows("20261204");
+    expect(rows).toEqual([{ kind: "contract", holding: COMBOS.options[0] }]);
+  });
+
+  it("combine two legs on one expiry into one row, written as the book writes a structure", () => {
+    const c = comboOf("20270115");
+    expect(written(c)).toBe("\u2212P5900 +P5850");
+    // every leg kept, in the ladder's order
+    expect(c.legs.map((l) => `${l.right}${l.strike}`)).toEqual(["P5850", "P5900"]);
+    expect(c.units).toBe(1);
+    expect(c.currency).toBe("USD");
+  });
+
+  it("net the prices per share as IBKR signs them: a credit negative", () => {
+    const c = comboOf("20270115");
+    // −7.20 + 4.60 paid; −5.10 + 3.30 marked
+    expect(c.average_cost).toBeCloseTo(-2.6, 10);
+    expect(c.market_price).toBeCloseTo(-1.8, 10);
+  });
+
+  it("sum the legs' value and P&L in money", () => {
+    const c = comboOf("20270115");
+    expect(c.market_value).toBeCloseTo(-510 + 330, 10);
+    expect(c.unrealized_pnl).toBeCloseTo(210 - 130, 10);
+  });
+
+  it("combine four legs, two of each, as two units of one structure", () => {
+    const c = comboOf("20270219");
+    expect(c.legs).toHaveLength(4);
+    expect(c.units).toBe(2);
+    expect(written(c)).toBe("\u2212P5700 \u2212C6700 +P5650 +C6750");
+    // per unit: −9.10 + 6.30 − 8.20 + 5.50 paid, −7.40 + 5.00 − 6.90 + 4.40 marked
+    expect(c.average_cost).toBeCloseTo(-5.5, 10);
+    expect(c.market_price).toBeCloseTo(-4.9, 10);
+    // and the money summed over every contract, both units
+    expect(c.market_value).toBeCloseTo(-980, 10);
+    expect(c.unrealized_pnl).toBeCloseTo(340 - 260 + 260 - 220, 10);
+  });
+
+  it("write unequal quantities in the legs, over the units they share", () => {
+    const c = comboOf("20270319");
+    expect(c.units).toBe(1);
+    expect(written(c)).toBe("\u22122P5600 +P5650");
+    expect(c.average_cost).toBeCloseTo(-2 * 6 + 8, 10);
+    expect(c.market_price).toBeCloseTo(-2 * 5 + 6.5, 10);
+    // four of one and two of the other share two units, each a 2:1
+    const doubled = combine(c.legs.map((l) => ({ ...l, position: l.position! * 2 })));
+    expect(doubled.units).toBe(2);
+    expect(shortFirst(doubled.written).map((l) => legText(l, "signs")).join(" ")).toBe("\u22122P5600 +P5650");
+    expect(doubled.average_cost).toBeCloseTo(-4, 10);
+  });
+
+  it("never combine one strike over two expiries", () => {
+    const qqq = optionGroups(COMBOS.options).find((g) => g.underlying === "QQQ")!;
+    expect(qqq.expiries.map((e) => optionRows(e).map((r) => r.kind))).toEqual([["contract"], ["contract"]]);
+  });
+
+  it("never combine contracts IBKR sent with no expiry: their expiry is not known to be one", () => {
+    const none = { ...COMBOS.options[1]!, expiry: null };
+    const rows = optionRows({ expiry: null, rows: [none, { ...none, strike: 5900, position: -1 }] });
+    expect(rows.map((r) => r.kind)).toEqual(["contract", "contract"]);
+  });
+
+  it("combine only legs in one currency, each currency its own", () => {
+    const legs = COMBOS.options.slice(1, 3);
+    const rows = optionRows({ expiry: "20270115", rows: [...legs, ...legs.map((l) => ({ ...l, currency: "EUR" }))] });
+    expect(rows.map((r) => (r.kind === "combo" ? `${r.currency} ${r.legs.length}` : r.kind))).toEqual(["USD 2", "EUR 2"]);
+  });
+
+  it("net no price, and sum no money, where a leg's figure is missing: no partial sums", () => {
+    const [a, b] = COMBOS.options.slice(1, 3) as [AccountHolding, AccountHolding];
+    expect(combine([{ ...a, average_cost: null }, b]).average_cost).toBeNull();
+    expect(combine([{ ...a, average_cost: null }, b]).market_price).not.toBeNull();
+    expect(combine([a, { ...b, market_price: null }]).market_price).toBeNull();
+    expect(combine([a, { ...b, market_value: null }]).market_value).toBeNull();
+    expect(combine([a, { ...b, unrealized_pnl: null }]).unrealized_pnl).toBeNull();
+    const unknown = combine([a, { ...b, position: null }]);
+    expect(unknown.units).toBeNull();
+    expect(unknown.average_cost).toBeNull();
+    expect(unknown.market_price).toBeNull();
+  });
+
+  it("net no price per share across legs of different multipliers, and still sum their money", () => {
+    const [a, b] = COMBOS.options.slice(1, 3) as [AccountHolding, AccountHolding];
+    const c = combine([a, { ...b, multiplier: 10 }]);
+    expect(c.average_cost).toBeNull();
+    expect(c.market_price).toBeNull();
+    expect(c.market_value).toBeCloseTo(a.market_value! + b.market_value!, 10);
+  });
+
+  it("count the units as the largest number every leg's quantity divides by", () => {
+    expect(unitsOf([-1, 1])).toBe(1);
+    expect(unitsOf([-2, 2, -2, 2])).toBe(2);
+    expect(unitsOf([-4, 2])).toBe(2);
+    expect(unitsOf([-3, 2])).toBe(1);
+    expect(unitsOf([-6, 9, 3])).toBe(3);
+    expect(unitsOf([1, null])).toBeNull();
+    // a quantity that is not whole is no count of units
+    expect(unitsOf([0.5, 1])).toBeNull();
+  });
+});
+
+describe("a folded heading's totals, in the base currency at IBKR's rates (the owner, 2026-11-24)", () => {
+  it("sum the value and the P&L of holdings in the base", () => {
+    const t = totalInBase(ACCOUNT.stocks, ACCOUNT);
+    expect(t.value).toBeCloseTo(19_000 + 18_000 - 1_240, 10);
+    expect(t.pnl).toBeCloseTo(-1_000 + 3_000 - 40, 10);
+    expect(t.without).toBeNull();
+  });
+
+  it("convert a holding in another currency at IBKR's rate before summing", () => {
+    const t = totalInBase(TWO_CURRENCIES.stocks, TWO_CURRENCIES);
+    expect(t.value).toBeCloseTo(35_760 + 16_800 * 1.0841, 6);
+    expect(t.pnl).toBeCloseTo(1_960 + 1_400 * 1.0841, 6);
+  });
+
+  it("sum nothing where a holding's currency has no rate, and say which", () => {
+    const t = totalInBase(NO_RATE.stocks, NO_RATE);
+    expect(t).toEqual({ value: null, pnl: null, without: "no rate for SEK" });
+    const two = totalInBase([...NO_RATE.stocks, { ...NO_RATE.stocks[0]!, currency: "NOK" }], NO_RATE);
+    expect(two.without).toBe("no rate for NOK, SEK");
+  });
+
+  it("sum nothing where the base itself is unknown, and say so", () => {
+    expect(totalInBase(ACCOUNT.stocks, { ...ACCOUNT, base_currency: null }))
+      .toEqual({ value: null, pnl: null, without: "no base currency" });
+  });
+
+  it("sum no figure that a holding is missing, and still the other", () => {
+    const t = totalInBase([...ACCOUNT.stocks, { ...ACCOUNT.stocks[0]!, market_value: null }], ACCOUNT);
+    expect(t.value).toBeNull();
+    expect(t.pnl).not.toBeNull();
+    expect(t.without).toBeNull();
+  });
+
+  it("sum no P&L for holdings that carry none", () => {
+    const t = totalInBase(TWO_CURRENCIES.other, TWO_CURRENCIES);
+    expect(t.value).toBeCloseTo(3_000 - 1_250 * 1.0841, 6);
+    expect(t.pnl).toBeNull();
+  });
+});
+
 describe("currencies", () => {
   it("name a currency only where it is not the base", () => {
     expect(currencyNote("USD", "USD")).toBeNull();
@@ -177,6 +334,13 @@ describe("the words beside the figures", () => {
     expect(quantityText(200_000)).toBe("+200,000");
     expect(quantityText(-0.5)).toBe("−0.5");
     expect(quantityText(null)).toBe("—");
+  });
+
+  it("write a combined row's units unsigned, and hide them under privacy", () => {
+    expect(unitsText(2)).toBe("2");
+    expect(unitsText(1_000)).toBe("1,000");
+    expect(unitsText(null)).toBe("—");
+    expect(unitsText(2, true)).toBe("•••");
   });
 
   it("write a share to a tenth of a percent, signed where asked", () => {
