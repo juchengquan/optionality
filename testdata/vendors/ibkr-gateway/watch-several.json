@@ -1,0 +1,87 @@
+{
+  "conversation": "watch-several",
+  "summary": "A login managing two accounts: a watch naming neither is refused, one naming an account not on the login is refused, and neither subscribes to anything; one naming the second account holds it, its P&L at the first step, and is stopped.",
+  "provenance": {
+    "kind": "constructed",
+    "why": "Nothing of the owner's account may be committed (the repository is public), so no account conversation is ever captured into it (ADR 0030, ADR 0031).",
+    "built": "The account updates laid out as the account conversations are (account-stocks-and-options' provenance: ibapi 9.81's layout at server version 157, checked against a capture of the live gateway on 2026-11-23, none of whose values is in the repository). The P&L requests and their answers laid out from ib_async 2.1.0's client.py (reqPnL 92, cancelPnL 93, reqPnLSingle 94, cancelPnLSingle 95) and decoder.py (pnl 94: reqId, dailyPnL, unrealizedPnL, realizedPnL; pnlSingle 95: reqId, pos, dailyPnL, unrealizedPnL, realizedPnL, value), read on 2026-11-24: the layouts, not a capture. The figures a stream sends are given as `later` replies, each at a step of the replay, rather than at once.",
+    "invented": "Every symbol, contract id, quantity, price, value, P&L, total, clock time and account id in this file is invented; the accounts are placeholders."
+  },
+  "ask": [],
+  "watches": [
+    {
+      "wanted": null,
+      "steps": 0,
+      "end": "stop"
+    },
+    {
+      "wanted": "DU0000001",
+      "steps": 0,
+      "end": "stop"
+    },
+    {
+      "wanted": "U0000001",
+      "steps": 1,
+      "end": "stop"
+    }
+  ],
+  "handshake": {
+    "greeting": ["157", "20261109 19:13:53 SGT"],
+    "onStartApi": [
+      ["15", "1", "U0000000,U0000001"],
+      ["9", "1", "1"],
+      ["4", "2", "-1", "2104", "Market data farm connection is OK:usfarm"],
+      ["4", "2", "-1", "2106", "HMDS data farm connection is OK:ushmds"],
+      ["4", "2", "-1", "2158", "Sec-def data farm connection is OK:secdefil"]
+    ]
+  },
+  "exchanges": [
+    {
+      "request": "reqAccountUpdates",
+      "account": "U0000001",
+      "sent": ["6", "2", "1", "U0000001"],
+      "replies": [
+        ["6", "2", "AccountCode", "U0000001", "", "U0000001"],
+        ["6", "2", "AccountReady", "true", "", "U0000001"],
+        ["6", "2", "AccountType", "INDIVIDUAL", "", "U0000001"],
+        ["6", "2", "NetLiquidation", "25010.00", "USD", "U0000001"],
+        ["6", "2", "NetLiquidation-S", "25010.00", "USD", "U0000001"],
+        ["6", "2", "TotalCashValue", "25010.00", "USD", "U0000001"],
+        ["6", "2", "TotalCashValue-S", "25010.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-Currency", "BASE", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-CashBalance", "25010.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-ExchangeRate", "1.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-NetLiquidationByCurrency", "25010.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-UnrealizedPnL", "0.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "BASE", "U0000001"],
+        ["6", "2", "$LEDGER-Currency", "USD", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-CashBalance", "25010.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-ExchangeRate", "1.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-NetLiquidationByCurrency", "25010.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-UnrealizedPnL", "0.00", "USD", "U0000001"],
+        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "USD", "U0000001"],
+        ["8", "1", "11:46"],
+        ["54", "1", "U0000001"]
+      ],
+      "atMs": [],
+      "onCancel": [
+        ["4", "2", "-1", "2100", "API client has been unsubscribed from account data."]
+      ]
+    },
+    {
+      "request": "reqPnL",
+      "account": "U0000001",
+      "sent": ["92", "$reqId", "U0000001", ""],
+      "replies": [],
+      "atMs": [],
+      "later": [
+        {
+          "step": 1,
+          "replies": [
+            ["94", "$reqId", "0.00", "0.00", "0.00"]
+          ]
+        }
+      ]
+    }
+  ]
+}

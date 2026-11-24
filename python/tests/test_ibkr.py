@@ -36,6 +36,9 @@ PORTED = {
     "perShareCost": "per_share_cost",
     "holdingFrom": "holding_from",
     "accountAnswer": "account_answer",
+    "pnlFrom": "pnl_from",
+    "pnlSingleFrom": "pnl_single_from",
+    "liveHolding": "live_holding",
 }
 
 

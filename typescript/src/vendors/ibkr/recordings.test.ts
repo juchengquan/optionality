@@ -26,8 +26,8 @@ describe("the conversations", () => {
     for (const name of conversationNames()) {
       const conversation = loadConversation(name);
       expect(conversation.conversation, `${name}.json names itself`).toBe(name);
-      expect(conversation.ask.length + (conversation.accountReads?.length ?? 0),
-        `${name} asks for nothing`).toBeGreaterThan(0);
+      expect(conversation.ask.length + (conversation.accountReads?.length ?? 0)
+        + (conversation.watches?.length ?? 0), `${name} asks for nothing`).toBeGreaterThan(0);
     }
   });
 
@@ -71,7 +71,7 @@ describe("the conversations", () => {
     const text = readFileSync(join(RECORDINGS, "account-paper.json"), "utf8");
     const file = { ...JSON.parse(text) as object, accountReads: [] };
     expect(() => parseConversation("account-paper", file))
-      .toThrow(/must ask for a quote or read the account/);
+      .toThrow(/must ask for a quote, read the account or watch it/);
   });
 
   it("refuses an account exchange whose subscribe does not name its account", () => {
@@ -84,6 +84,72 @@ describe("the conversations", () => {
     }
   });
 
+  it("reads the watches, and the replies that come LATER, at a step (ADR 0031)", () => {
+    const c = loadConversation("watch-holdings-come-and-go");
+    expect(c.watches).toEqual([{ wanted: null, steps: 3, end: "stop" }]);
+    const pnl = c.exchanges.find((e) => e.request === "reqPnL")!;
+    expect(pnl).toMatchObject({ account: "U0000000", replies: [] });
+    expect(pnl.later!.map((l) => l.step)).toEqual([1, 2, 3]);
+    const single = c.exchanges.find((e) => e.request === "reqPnLSingle")!;
+    expect(single).toMatchObject({ account: "U0000000", conId: "100000101" });
+    expect(loadConversation("account-paper").watches).toBeUndefined();
+  });
+
+  /** watch-started-and-stopped, as data, for a refusal to be made of */
+  const watchFile = () => JSON.parse(readFileSync(join(RECORDINGS, "watch-started-and-stopped.json"),
+    "utf8")) as {
+    watches: Record<string, unknown>[];
+    exchanges: { request: string; sent: string[]; replies: string[][];
+      later?: { step: number; replies: string[][] }[] }[];
+  };
+
+  it("refuses a watch that does not say how many steps it takes and how it ends", () => {
+    for (const watch of [{ wanted: null, steps: -1, end: "stop" }, { wanted: null, steps: 1.5,
+      end: "stop" }, { wanted: null, steps: 2, end: "close" }, { wanted: 7, steps: 2, end: "stop" }]) {
+      const file = { ...watchFile(), watches: [watch] };
+      expect(() => parseConversation("watch-started-and-stopped", file), JSON.stringify(watch))
+        .toThrow(/watches\[0\]/);
+    }
+  });
+
+  it("refuses a P&L request whose message does not name its account and holding", () => {
+    for (const [at, sent] of [[1, ["94", "$reqId", "U0000001", "", "100000101"]],
+      [1, ["94", "$reqId", "U0000000", "", "100000999"]], [3, ["92", "$reqId", "U0000001", ""]]] as const) {
+      const file = watchFile();
+      file.exchanges[at]!.sent = [...sent];
+      expect(() => parseConversation("watch-started-and-stopped", file), sent.join(","))
+        .toThrow(/must ask for/);
+    }
+  });
+
+  it("refuses a stream's figures sent at once: a replay sends them at a step", () => {
+    // so the picture a watch starts with is the download's alone, whenever the client looks
+    const file = watchFile();
+    const pnl = file.exchanges.find((e) => e.request === "reqPnL")!;
+    pnl.replies = [["94", "$reqId", "1.00", "2.00", "3.00"]];
+    expect(() => parseConversation("watch-started-and-stopped", file))
+      .toThrow(/a stream's figures come later/);
+  });
+
+  it("refuses a step whose last message is not the account's P&L, or past the last step", () => {
+    // the replay knows a step has been read when the client has read its last P&L
+    const noPnl = watchFile();
+    noPnl.exchanges.find((e) => e.request === "reqPnL")!.later!.pop();
+    expect(() => parseConversation("watch-started-and-stopped", noPnl))
+      .toThrow(/step 2 must end with the account's P&L/);
+    const after = watchFile();
+    const pnl = after.exchanges.findIndex((e) => e.request === "reqPnL");
+    after.exchanges.push(after.exchanges.splice(pnl, 1)[0]!, {
+      ...after.exchanges[1]!, later: [{ step: 1, replies: [["95", "$reqId", "1", "", "", "", ""]] }],
+    });
+    expect(() => parseConversation("watch-started-and-stopped", after))
+      .toThrow(/step 1 must end with the account's P&L/);
+    const beyond = watchFile();
+    beyond.exchanges[1]!.later!.push({ step: 3, replies: [["95", "$reqId", "1", "", "", "", ""]] });
+    expect(() => parseConversation("watch-started-and-stopped", beyond))
+      .toThrow(/step 3, and the watches take 2/);
+  });
+
   it("keeps every field as the text the wire carried, never a number", () => {
     // "4.10" and 4.1 are different bytes, and so are "2.1E-4" and 0.00021. A recording that let
     // JSON reformat a field would replay something the gateway never sent.
@@ -91,7 +157,8 @@ describe("the conversations", () => {
       const c = loadConversation(name);
       const messages = [
         c.handshake.greeting, ...c.handshake.onStartApi,
-        ...c.exchanges.flatMap((e) => [e.sent, ...e.replies, ...(e.onCancel ?? [])]),
+        ...c.exchanges.flatMap((e) => [e.sent, ...e.replies, ...(e.onCancel ?? []),
+          ...(e.later ?? []).flatMap((l) => l.replies)]),
       ];
       for (const m of messages) {
         expect(m.every((f) => typeof f === "string"), `${name}: ${JSON.stringify(m)}`).toBe(true);
@@ -130,8 +197,9 @@ describe("provenance, which is the point of the files", () => {
     // and deleted, never committed, so a file that reads the account and says it was recorded is
     // either mislabelled or the thing ADR 0030 forbids
     const touches = conversationNames().map(loadConversation).filter((c) =>
-      c.accountReads !== undefined || c.exchanges.some((e) => e.request === "reqAccountUpdates"));
-    expect(touches.length).toBeGreaterThanOrEqual(4);
+      c.accountReads !== undefined || c.watches !== undefined
+      || c.exchanges.some((e) => e.request !== "reqContractDetails" && e.request !== "reqMktData"));
+    expect(touches.length).toBeGreaterThanOrEqual(10);
     for (const c of touches) expect(c.provenance.kind, c.conversation).toBe("constructed");
   });
 
@@ -145,6 +213,18 @@ describe("provenance, which is the point of the files", () => {
     // an account exchange alone is enough: the quote asks around it change nothing
     const exchangeOnly = { ...withReads, accountReads: undefined, ask: ["US.SPXW261218C8100000"] };
     expect(() => parseConversation("account-paper", exchangeOnly))
+      .toThrow(/reads the account, so it must be constructed/);
+    // and so does a watch, or a P&L request alone (ADR 0031)
+    const watch = JSON.parse(readFileSync(join(RECORDINGS, "watch-lost.json"), "utf8")) as {
+      exchanges: { request: string }[];
+    };
+    expect(() => parseConversation("watch-lost", { ...watch, provenance: recorded }))
+      .toThrow(/reads the account, so it must be constructed/);
+    const pnlOnly = { ...watch, provenance: recorded, watches: undefined,
+      ask: ["US.SPXW261218C8100000"],
+      exchanges: watch.exchanges.filter((e) => e.request === "reqPnL")
+        .map((e) => ({ ...e, later: undefined })) };
+    expect(() => parseConversation("watch-lost", pnlOnly))
       .toThrow(/reads the account, so it must be constructed/);
   });
 
@@ -176,8 +256,9 @@ describe("a constructed account that adds up", () => {
   };
 
   it("has the account conversations to check", () => {
+    // the five the account reads hold, and the six the watches do (ADR 0031)
     expect(accountExchanges().filter(({ e }) => ledger(e.replies, "CashBalance").has("BASE")))
-      .toHaveLength(5);
+      .toHaveLength(11);
   });
 
   it("states each BASE figure as the currencies' at their rates", () => {
@@ -246,9 +327,13 @@ describe("nothing of the owner's", () => {
    *  account a read asks for. */
   function accountsNamed(name: string): string[] {
     const c = loadConversation(name);
+    const accountExchanges = c.exchanges.filter((e) => e.request === "reqAccountUpdates");
     const messages = [
       ...c.handshake.onStartApi,
-      ...c.exchanges.flatMap((e) => [e.sent, ...e.replies, ...(e.onCancel ?? [])]),
+      ...accountExchanges.flatMap((e) => [e.sent, ...e.replies, ...(e.onCancel ?? []),
+        ...(e.later ?? []).flatMap((l) => l.replies)]),
+      ...c.exchanges.filter((e) => e.request === "reqContractDetails" || e.request === "reqMktData")
+        .flatMap((e) => [e.sent, ...e.replies, ...(e.onCancel ?? [])]),
     ];
     const named: string[] = [];
     for (const m of messages) {
@@ -261,8 +346,13 @@ describe("nothing of the owner's", () => {
       if (m[0] === "7") named.push(m[19]!);
       if (m[0] === "54") named.push(m[2]!);
     }
-    for (const e of c.exchanges) if (e.request === "reqAccountUpdates") named.push(e.account);
+    for (const e of c.exchanges) {
+      if (e.request === "reqAccountUpdates") named.push(e.account);
+      // a P&L request names its account at field 2, and its answers name none (ADR 0031)
+      if (e.request === "reqPnL" || e.request === "reqPnLSingle") named.push(e.account, e.sent[2]!);
+    }
     for (const r of c.accountReads ?? []) if (r.wanted !== null) named.push(r.wanted);
+    for (const w of c.watches ?? []) if (w.wanted !== null) named.push(w.wanted);
     return named;
   }
 
@@ -286,6 +376,11 @@ describe("nothing of the owner's", () => {
     expect(new Set(accountsNamed("account-several"))).toEqual(new Set(["U0000000", "U0000001",
       "DU0000001"]));
     expect(accountsNamed("account-stocks-and-options").length).toBeGreaterThan(20);
+    expect(new Set(accountsNamed("watch-several"))).toEqual(new Set(["U0000000", "U0000001",
+      "DU0000001"]));
+    // the accounts a later reply names are read too: a portfolio row that arrives mid-watch
+    const named = accountsNamed("watch-holdings-come-and-go");
+    expect(named.length).toBeGreaterThan(accountsNamed("watch-started-and-stopped").length);
   });
 
   it("would refuse an account that is not a placeholder", () => {

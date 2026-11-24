@@ -13,7 +13,9 @@ What it adds to the TypeScript's: `received`, every message the client sent afte
 range. `ib_async` is a general-purpose client that asks for positions, orders and the account when
 it connects through `IB.connectAsync`, and the TypeScript sends none of that; recording what
 arrives is how a test holds the Python to the same five messages rather than trusting it to — and
-to reqAccountUpdates, a subscribe and its unsubscribe, only where a conversation reads the account.
+to reqAccountUpdates, a subscribe and its unsubscribe, only where a conversation reads the account
+— and to the P&L requests and their cancels only where it watches it (ADR 0031). It records what it
+WRITES too (`written`), which is how a replay counts the P&L it sent.
 
 Not a test module, so pytest collects nothing here.
 """
@@ -21,6 +23,7 @@ Not a test module, so pytest collects nothing here.
 import asyncio
 import json
 import struct
+import time
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +60,12 @@ SNAPSHOT_AT = 17
 
 #: the message ids the stub reads; everything else a client sends is accepted and never answered
 START_API, REQ_MKT_DATA, CANCEL_MKT_DATA, REQ_CONTRACT_DATA, REQ_ACCT_DATA = "71", "1", "2", "9", "6"
+#: the P&L subscriptions and their cancels (ADR 0031)
+REQ_PNL, CANCEL_PNL, REQ_PNL_SINGLE, CANCEL_PNL_SINGLE = "92", "93", "94", "95"
+
+#: where reqPnL and reqPnLSingle name the account, and reqPnLSingle the holding — `recordings.ts`'
+#: `PNL_ACCOUNT_AT` and `PNL_CONID_AT`
+PNL_ACCOUNT_AT, PNL_CONID_AT = 2, 4
 
 #: where reqAccountUpdates (version 2) says whether it subscribes ("1") or stops ("0"), and which
 #: account it names — `recordings.ts`' `SUBSCRIBE_AT` and `ACCOUNT_AT`
@@ -153,6 +162,11 @@ class FakeGateway:
     with nothing, as the gateway answered a snapshot cancelled before its end. The corpus is
     replayed at once; pacing is for a client test whose claim is WHEN.
 
+    A P&L subscription (ADR 0031) is matched on its account, and a holding's on its conId too; what a
+    subscription sends LATER — a stream's figures, an account's updates — goes only at a step
+    (`step`), to whichever connection holds its request, with that request's id. A cancel, an
+    unsubscribe or a lost connection ends a request, and nothing later is sent for it.
+
     `one_session_per_client_id` refuses a startApi whose client id another open connection already
     holds, with `client-id-in-use`'s refusal — the TypeScript stub's `oneSessionPerClientId`. Off
     by default, because whether the real gateway refuses or DISPLACES the first in silence is
@@ -182,6 +196,13 @@ class FakeGateway:
         self.lookups = 0
         #: every message a client sent after its version range, in order, over the stub's life
         self.received: list[Message] = []
+        #: every message it wrote to a client, in order, over its life, each as the client got it
+        self.written: list[Message] = []
+        #: every exchange whose request has ever arrived, by its index, so a step knows whom it waits for
+        self._asked: set[int] = set()
+        #: the request standing for each exchange now, by its index: its connection's `send`, its
+        #: connection, and its request id (None for an account subscription)
+        self._standing: dict[int, tuple[Any, asyncio.StreamWriter, str | None]] = {}
         #: how many requests each request-and-contract has had, keyed by the first exchange naming it
         self._turns: dict[int, int] = {}
         self._open: set[asyncio.StreamWriter] = set()
@@ -203,6 +224,28 @@ class FakeGateway:
         for writer in list(self._open):
             writer.transport.abort()
 
+    async def step(self, n: int) -> None:
+        """Send every exchange's replies for step `n` (ADR 0031), in the file's order, to whichever
+        connection holds its request — `fake.ts`' `step`. An exchange with replies at this step whose
+        request has never arrived is waited for, a second at most; one whose request ended sends
+        nothing."""
+        due = [
+            i
+            for i, e in enumerate(self.conversation["exchanges"])
+            if any(later["step"] == n for later in e.get("later", []))
+        ]
+        until = time.monotonic() + 1
+        while not all(i in self._asked for i in due) and time.monotonic() < until:
+            await asyncio.sleep(0.005)
+        for i in due:
+            request = self._standing.get(i)
+            if request is None:
+                continue
+            send, _, req_id = request
+            for later in self.conversation["exchanges"][i]["later"]:
+                if later["step"] == n:
+                    send(later["replies"], req_id)
+
     async def close(self) -> None:
         """Aborted, not just closed: a client still holding its end would otherwise keep
         `wait_closed` waiting — the TypeScript's stub hung on exactly that, as a hook timeout."""
@@ -218,13 +261,17 @@ class FakeGateway:
         greeted = False
         #: market-data requests answered on THIS connection, by id, for what a cancel is told
         answered: dict[str, dict[str, Any]] = {}
+        #: P&L requests standing on THIS connection, by id, as exchange indices, for what a cancel ends
+        streams: dict[str, int] = {}
         #: replies still to be sent, by request id, when pacing: the timers, and how many are left
         pending: dict[str, tuple[list[asyncio.TimerHandle], list[int]]] = {}
         loop = asyncio.get_running_loop()
 
         def write(message: Message, req_id: str | None = None) -> None:
             if not writer.is_closing():
-                writer.write(frame(message if req_id is None else fill(message, req_id)))
+                filled = message if req_id is None else fill(message, req_id)
+                self.written.append(filled)
+                writer.write(frame(filled))
 
         def send(messages: list[Message], req_id: str | None = None) -> None:
             for message in messages:
@@ -272,13 +319,15 @@ class FakeGateway:
                         send([[self.server_version or version, *clock]])
                         continue
                     self.received.append(fields)
-                    self._answer(fields, answered, send, reply, stop, writer)
+                    self._answer(fields, answered, streams, send, reply, stop, writer)
                 await writer.drain()
         except (ConnectionError, asyncio.IncompleteReadError):
             pass  # a client closing its end is not a fault
         finally:
             stop()
             self._open.discard(writer)
+            for index in [i for i, (_, w, _) in self._standing.items() if w is writer]:
+                del self._standing[index]
             for client_id in [k for k, w in self._holders.items() if w is writer]:
                 del self._holders[client_id]
             writer.close()
@@ -287,6 +336,7 @@ class FakeGateway:
         self,
         fields: Message,
         answered: dict[str, dict[str, Any]],
+        streams: dict[str, int],
         send: Any,
         reply: Any,
         stop: Any,
@@ -335,23 +385,62 @@ class FakeGateway:
             # carry no request id. Stopping it is answered with what the gateway said to that, and
             # cuts a paced answer short. Keyed in `pending` by the account, which no id can be
             account = fields[ACCOUNT_AT] if len(fields) > ACCOUNT_AT else ""
-            exchange = next(
+            index = next(
                 (
-                    e
-                    for e in self.conversation["exchanges"]
+                    i
+                    for i, e in enumerate(self.conversation["exchanges"])
                     if e["request"] == "reqAccountUpdates" and e["account"] == account
                 ),
                 None,
             )
+            exchange = None if index is None else self.conversation["exchanges"][index]
             key = f"account:{account}"
             if len(fields) > SUBSCRIBE_AT and fields[SUBSCRIBE_AT] == "1":
-                if exchange is not None:
+                if index is not None:
+                    self._asked.add(index)
+                    self._standing[index] = (send, writer, None)
                     reply(exchange, key)
             else:
                 # answered ALWAYS, unlike a cancelled snapshot: the live gateway sent exactly one 2100
                 # after every unsubscribe (2026-11-23), whether or not the answer was all sent
                 stop(key)
+                if index is not None:
+                    self._standing.pop(index, None)
                 send(exchange.get("onCancel", []) if exchange else [])
+            return
+        if message_id in (REQ_PNL, REQ_PNL_SINGLE):
+            # a P&L subscription (ADR 0031), its id at field 1 rather than 2
+            stream_id = fields[1] if len(fields) > 1 else ""
+            account = fields[PNL_ACCOUNT_AT] if len(fields) > PNL_ACCOUNT_AT else ""
+            con_id = fields[PNL_CONID_AT] if len(fields) > PNL_CONID_AT else ""
+            index = next(
+                (
+                    i
+                    for i, e in enumerate(self.conversation["exchanges"])
+                    if (
+                        e["request"] == "reqPnL"
+                        if message_id == REQ_PNL
+                        else e["request"] == "reqPnLSingle" and e["conId"] == con_id
+                    )
+                    and e["account"] == account
+                ),
+                None,
+            )
+            if index is None:
+                return
+            self._asked.add(index)
+            self._standing[index] = (send, writer, stream_id)
+            streams[stream_id] = index
+            send(self.conversation["exchanges"][index]["replies"], stream_id)
+            return
+        if message_id in (CANCEL_PNL, CANCEL_PNL_SINGLE):
+            stream_id = fields[1] if len(fields) > 1 else ""
+            index = streams.pop(stream_id, None)
+            if index is not None:
+                standing = self._standing.get(index)
+                if standing is not None and standing[2] == stream_id:
+                    del self._standing[index]
+                send(self.conversation["exchanges"][index].get("onCancel", []), stream_id)
             return
         if message_id == CANCEL_MKT_DATA:
             # rule 5: what the gateway said to that cancel, if anything — `onCancel` is what a

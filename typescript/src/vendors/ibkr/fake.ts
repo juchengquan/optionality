@@ -34,6 +34,13 @@
  *  the account it names, and stopping it that exchange's `onCancel`; every account conversation is
  *  constructed, because nothing of the owner's account is committed.
  *
+ *  A P&L subscription (ADR 0031) is matched on its account, and a holding's on its conId too; it
+ *  gets its at-once replies, which the corpus leaves empty, and its cancel gets its `onCancel`. What
+ *  a subscription sends LATER — a stream's figures, an account's updates — goes only when the
+ *  replay says so, at a step (`step`): each exchange's replies for that step, in the file's order,
+ *  to whichever connection holds its request, with that request's id. A cancel, an unsubscribe or a
+ *  lost connection ends a request, and nothing later is sent for it.
+ *
  *  Every reply goes at once, unless `pace` says otherwise: then each is sent at its recorded
  *  `atMs` times `pace` after the request, and a cancel that comes before the last of them stops
  *  the rest and is answered with nothing, as the gateway answered a snapshot cancelled before its
@@ -46,7 +53,8 @@ import { createServer, type Server, type Socket } from "node:net";
 
 import {
   ACCOUNT_AT, type AccountExchange, CONTRACT_KEYS, type ContractKey, type Conversation,
-  type Exchange, type QuoteExchange, SNAPSHOT_AT, SUBSCRIBE_AT, fill, loadConversation,
+  type Exchange, type Message, PNL_ACCOUNT_AT, PNL_CONID_AT, type QuoteExchange, SNAPSHOT_AT,
+  SUBSCRIBE_AT, fill, loadConversation,
 } from "./recordings.ts";
 import { frame, readFields, readFrames, toFields } from "./wire.ts";
 
@@ -86,6 +94,13 @@ export interface FakeGateway {
   readonly connections: number;
   /** startApi messages it has been sent, over the stub's life: one per session a client tried. */
   readonly sessionsAsked: number;
+  /** Every message it wrote to a client, in order, over its life, each as the client got it. */
+  written: string[][];
+  /** Send every exchange's replies for step `n` (ADR 0031), in the file's order, to whichever
+   *  connection holds its request. An exchange with replies at this step whose request has never
+   *  arrived is waited for, a second at most: a client sends a holding's request as it reads, and
+   *  the stub may not have read it yet. One whose request ended sends nothing. */
+  step: (n: number) => Promise<void>;
   /** Abort every connection open now and stay listening — a dropped network's effect on a
    *  client, without the gateway going. The Python stub's `drop_connections`. */
   dropConnections: () => void;
@@ -94,7 +109,8 @@ export interface FakeGateway {
 
 /** Message ids the stub reads. Everything else a client sends is accepted and not answered. */
 const START_API = "71", REQ_MKT_DATA = "1", CANCEL_MKT_DATA = "2", REQ_CONTRACT_DATA = "9",
-  REQ_ACCT_DATA = "6";
+  REQ_ACCT_DATA = "6", REQ_PNL = "92", CANCEL_PNL = "93", REQ_PNL_SINGLE = "94",
+  CANCEL_PNL_SINGLE = "95";
 
 /** Where both requests carry the contract fields, at the versions this client and `ib_async`
  *  send at protocol 157: reqContractDetails is version 8 and reqMktData version 11, and after
@@ -131,11 +147,18 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
   let sessionsAsked = 0;
   /** how many requests each request-and-contract has had, keyed by the first exchange naming it */
   const turns = new Map<Exchange, number>();
+  const written: string[][] = [];
+  /** every exchange whose request has ever arrived, so a step knows whom it is waiting for */
+  const asked = new Set<Exchange>();
+  /** the request that stands for each exchange now: where its later replies go, and with what id */
+  const standing = new Map<Exchange, { socket: Socket; send: (m: Message[], reqId?: string) => void;
+    reqId?: string }>();
 
   const server = createServer((socket) => {
     open.add(socket);
     socket.on("close", () => {
       open.delete(socket);
+      for (const [e, r] of standing) if (r.socket === socket) standing.delete(e);
       for (const [id, holder] of holders) if (holder === socket) holders.delete(id);
     });
     let buffer: Buffer = Buffer.alloc(0);
@@ -144,8 +167,13 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
     const answered = new Map<string, Exchange>();
     /** replies still to be sent, by request id, when pacing */
     const pending = new Map<string, { timers: ReturnType<typeof setTimeout>[]; left: number }>();
+    /** P&L requests standing on this connection, by id, for what a cancel ends */
+    const streams = new Map<string, Exchange>();
     const write = (m: string[], reqId?: string) => {
-      if (!socket.destroyed) socket.write(frame(toFields(reqId === undefined ? m : fill(m, reqId))));
+      if (socket.destroyed) return;
+      const filled = reqId === undefined ? m : fill(m, reqId);
+      written.push(filled);
+      socket.write(frame(toFields(filled)));
     };
     const send = (messages: string[][], reqId?: string) => {
       for (const m of messages) write(m, reqId);
@@ -230,10 +258,39 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
             (e): e is AccountExchange => e.request === "reqAccountUpdates" && e.account === account);
           const key = `account:${account}`;
           if (f[SUBSCRIBE_AT] === "1") {
-            if (exchange) reply(exchange, key);
+            if (exchange) {
+              asked.add(exchange);
+              standing.set(exchange, { socket, send });
+              reply(exchange, key);
+            }
           } else {
             stop(key);
+            if (exchange) standing.delete(exchange);
             send(exchange?.onCancel ?? []);
+          }
+          continue;
+        }
+        if (f[0] === REQ_PNL || f[0] === REQ_PNL_SINGLE) {
+          // a P&L subscription (ADR 0031), its id at field 1 rather than 2
+          const id = f[1] ?? "";
+          const exchange = conversation.exchanges.find((e) => f[0] === REQ_PNL
+            ? e.request === "reqPnL" && e.account === f[PNL_ACCOUNT_AT]
+            : e.request === "reqPnLSingle" && e.account === f[PNL_ACCOUNT_AT]
+              && e.conId === f[PNL_CONID_AT]);
+          if (!exchange) continue;
+          asked.add(exchange);
+          standing.set(exchange, { socket, send, reqId: id });
+          streams.set(id, exchange);
+          send(exchange.replies, id);
+          continue;
+        }
+        if (f[0] === CANCEL_PNL || f[0] === CANCEL_PNL_SINGLE) {
+          const id = f[1] ?? "";
+          const exchange = streams.get(id);
+          streams.delete(id);
+          if (exchange) {
+            if (standing.get(exchange)?.reqId === id) standing.delete(exchange);
+            send(exchange.onCancel ?? [], id);
           }
           continue;
         }
@@ -260,6 +317,19 @@ export function startFakeGateway(port = 0, options: FakeOptions = {}): Promise<F
         conversation,
         get lookups() { return counts.lookups; },
         received,
+        written,
+        step: async (n: number) => {
+          const due = conversation.exchanges.filter((e) => e.later?.some((l) => l.step === n));
+          const until = Date.now() + 1000;
+          while (!due.every((e) => asked.has(e)) && Date.now() < until) {
+            await new Promise((r) => setTimeout(r, 5));
+          }
+          for (const e of due) {
+            const request = standing.get(e);
+            if (!request) continue;
+            for (const l of e.later!) if (l.step === n) request.send(l.replies, request.reqId);
+          }
+        },
         get connections() { return open.size; },
         get sessionsAsked() { return sessionsAsked; },
         dropConnections: () => { for (const socket of open) socket.destroy(); },

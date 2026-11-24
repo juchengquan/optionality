@@ -418,3 +418,82 @@ export function accountAnswer(
     totals, exchange_rates: exchangeRates, holdings,
   };
 }
+
+// --- the account watch (ADR 0031) ----------------------------------------------------------------
+
+/** What IB sends for a figure it has not set: Java's `Double.MAX_VALUE`, written out in full
+ *  (`1.7976931348623157E308`) — `ib_async`'s `UNSET_DOUBLE`. Read as a number it would be a P&L of
+ *  1.8e308, so a P&L stream's figure equal to it is none (ADR 0031). */
+export const UNSET_DOUBLE = Number.MAX_VALUE;
+
+/** One PNL message's figures, as the wire carried them (`messages.ts`). */
+export interface PnlRow {
+  daily_pnl: string;
+  unrealized_pnl: string;
+  realized_pnl: string;
+}
+
+/** One PNL_SINGLE message's figures, as the wire carried them. */
+export interface PnlSingleRow {
+  position: string;
+  daily_pnl: string;
+  unrealized_pnl: string;
+  realized_pnl: string;
+  value: string;
+}
+
+/** One holding's P&L stream, read: in the holding's own currency, null where unset or empty. */
+export interface IbkrPnlSingle {
+  position: number | null;
+  daily_pnl: number | null;
+  unrealized_pnl: number | null;
+  realized_pnl: number | null;
+  value: number | null;
+}
+
+/** A stream's figure: none where the field is empty, not a number, or IB's unset. */
+function streamFigure(text: string): number | null {
+  const value = figureOf(text);
+  return value === UNSET_DOUBLE ? null : value;
+}
+
+/** reqPnL's message as the account's P&L. */
+export function pnlFrom(row: PnlRow): IbkrPnl {
+  return {
+    daily_pnl: streamFigure(row.daily_pnl),
+    unrealized_pnl: streamFigure(row.unrealized_pnl),
+    realized_pnl: streamFigure(row.realized_pnl),
+  };
+}
+
+/** reqPnLSingle's message as one holding's stream reading. */
+export function pnlSingleFrom(row: PnlSingleRow): IbkrPnlSingle {
+  return {
+    position: streamFigure(row.position),
+    daily_pnl: streamFigure(row.daily_pnl),
+    unrealized_pnl: streamFigure(row.unrealized_pnl),
+    realized_pnl: streamFigure(row.realized_pnl),
+    value: streamFigure(row.value),
+  };
+}
+
+/** A holding as the watch holds it: the account update's row, with its value, unrealised P&L and
+ *  mark the stream's where the stream has a figure for each, and the stream's daily P&L.
+ *
+ *  The mark is DERIVED, per share: the stream's value over the position times the multiplier (none,
+ *  as for a stock, is 1) — the position the stream sent with that value, or the row's where it sent
+ *  none. A figure the stream left unset leaves the row's, so a stream that has said nothing yet
+ *  changes nothing but adding a daily P&L of none. */
+export function liveHolding(holding: IbkrHolding, single: IbkrPnlSingle | null): IbkrLiveHolding {
+  if (single === null) return { ...holding, daily_pnl: null };
+  const position = single.position ?? holding.position;
+  const multiplier = holding.multiplier !== null && holding.multiplier > 0 ? holding.multiplier : 1;
+  const size = position === null ? 0 : position * multiplier;
+  return {
+    ...holding,
+    market_price: single.value !== null && size !== 0 ? single.value / size : holding.market_price,
+    market_value: single.value ?? holding.market_value,
+    unrealized_pnl: single.unrealized_pnl ?? holding.unrealized_pnl,
+    daily_pnl: single.daily_pnl,
+  };
+}

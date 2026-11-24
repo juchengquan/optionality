@@ -8,6 +8,10 @@ Accepted. Decided with the owner in the design session of 2026-11-23 (#469). Iss
 library read, built in both IB Gateway clients (#469). The endpoint (#470) and the page follow, and
 say what they add.
 
+**Amended by ADR 0031** (2026-11-24): beside this record's one bounded read, the account may be HELD
+while asked — a watch that keeps the account updates subscribed and adds the account's and each
+holding's P&L streams. The bounded read is unchanged.
+
 **Supersedes ADR 0019's "nothing account-shaped"**: the IB Gateway client ADR 0019 built asked for
 prices and nothing else, and the documents built on it said so in those words — the corpus README,
 `messages.ts`, the Python port's docstring and its gateway test: "a quote fetch has nothing
