@@ -1193,3 +1193,379 @@ def test_the_account_messages_are_read_field_by_field_an_empty_figure_kept_as_no
     assert ibkr.holding_from(portfolio.row)["market_price"] is None
     assert ibkr.holding_from(portfolio.row)["average_cost"] == 2.625
     assert (when.time, end.account) == ("14:32", "U0000000")
+
+
+# --- the account watch (ADR 0031) ----------------------------------------------------------------
+#
+# `client.test.ts`' watch claims that a replay of the corpus cannot show, ported. Every conversation
+# is CONSTRUCTED: invented figures, placeholder accounts. A stream's figures come at the replay's
+# steps (`gateway.step`), and every step ends with the account's P&L.
+
+#: the messages a watch sends: reqAccountUpdates, reqPnL, cancelPnL, reqPnLSingle, cancelPnLSingle
+WATCH_MESSAGES = {"6", "92", "93", "94", "95"}
+LOST = "IB Gateway's connection closed under the account watch"
+
+
+def watching(
+    conversation: str | dict[str, Any],
+    test: Callable[[IbkrClient, FakeGateway, Callable[[int], Awaitable[None]]], Awaitable[Any]],
+    *,
+    request_timeout_ms: int = 1500,
+) -> Any:
+    """Run `test` against a stub replaying `conversation`, the client's clock a counter read once per
+    P&L message, and a `step(n)` that sends step `n` and waits until the client has read it."""
+
+    async def run() -> Any:
+        gateway = await start_fake_gateway(conversation)
+        clock = [0]
+
+        def now() -> int:
+            clock[0] += 1
+            return clock[0]
+
+        client = IbkrClient(
+            port=gateway.port, client_id=31419, connect_timeout_ms=1000, request_timeout_ms=request_timeout_ms, now=now
+        )
+
+        async def step(n: int) -> None:
+            await gateway.step(n)
+            until = time.monotonic() + 2
+            while clock[0] < sum(1 for m in gateway.written if m[0] == "94") and time.monotonic() < until:
+                await asyncio.sleep(0.005)
+
+        try:
+            return await test(client, gateway, step)
+        finally:
+            client.close()
+            await gateway.close()
+
+    return asyncio.run(run())
+
+
+def watch_messages(gateway: FakeGateway) -> list[list[str]]:
+    return [f for f in gateway.received if f[0] in WATCH_MESSAGES]
+
+
+async def waited(done: Callable[[], bool]) -> None:
+    until = time.monotonic() + 2
+    while not done() and time.monotonic() < until:
+        await asyncio.sleep(0.005)
+
+
+def test_a_watch_hands_out_a_copy_the_caller_may_keep_and_change() -> None:
+    async def test(client: IbkrClient, _: FakeGateway, step: Any) -> Any:
+        watch = await client.watch_account()
+        await step(1)
+        kept = watch.picture()
+        kept["holdings"][0]["market_value"] = 0
+        assert kept["pnl"] is not None
+        kept["pnl"]["daily_pnl"] = 0
+        kept["totals"]["net_liquidation"] = 0
+        again = watch.picture()
+        return again["holdings"][0]["market_value"], again["pnl"], again["totals"]["net_liquidation"]
+
+    assert watching("watch-started-and-stopped", test) == (
+        12381,
+        {"daily_pnl": 152.4, "unrealized_pnl": 1436.5, "realized_pnl": 120},
+        67431.55,
+    )
+
+
+def test_a_watch_stops_once_however_often_asked_and_hears_nothing_after() -> None:
+    async def test(client: IbkrClient, gateway: FakeGateway, step: Any) -> Any:
+        watch = await client.watch_account()
+        await step(1)
+        await watch.stop()
+        await watch.stop()
+        await waited(lambda: any(f[0] == "6" and f[2] == "0" for f in gateway.received))
+        await gateway.step(2)
+        await asyncio.sleep(0.05)
+        again = await client.watch_account()
+        return watch_messages(gateway)[4:8], watch.lost, watch.picture()["pnl_at"], again.picture()["pnl"]
+
+    assert watching("watch-started-and-stopped", test) == (
+        [["95", "2"], ["95", "3"], ["93", "1"], ["6", "2", "0", "U0000000"]],
+        None,
+        1,
+        None,
+    )
+
+
+def test_a_lost_watch_tells_every_listener_once_and_a_late_one_at_once() -> None:
+    async def test(client: IbkrClient, gateway: FakeGateway, step: Any) -> Any:
+        watch = await client.watch_account()
+        await step(1)
+        told: list[str] = []
+        watch.on_lost(lambda err: told.append(str(err)))
+        sent = len(gateway.received)
+        gateway.drop_connections()
+        await waited(lambda: watch.lost is not None)
+        late: list[str] = []
+        watch.on_lost(lambda err: late.append(str(err)))
+        await watch.stop()
+        return told, late, watch.picture()["pnl"], len(gateway.received) - sent
+
+    assert watching("watch-lost", test) == (
+        [LOST],
+        [LOST],
+        {"daily_pnl": -33, "unrealized_pnl": 946.5, "realized_pnl": 0},
+        0,
+    )
+
+
+def test_a_watch_is_lost_at_once_when_the_client_is_closed() -> None:
+    async def test(client: IbkrClient, _: FakeGateway, __: Any) -> Any:
+        watch = await client.watch_account()
+        told: list[str] = []
+        watch.on_lost(lambda err: told.append(str(err)))
+        client.close()
+        return told
+
+    assert watching("watch-lost", test) == [LOST]
+
+
+def test_a_watch_is_lost_when_a_price_read_fails_and_drops_the_connection() -> None:
+    async def test(client: IbkrClient, _: FakeGateway, __: Any) -> Any:
+        watch = await client.watch_account()
+        with pytest.raises(ConnectionError, match="answered none"):
+            await client.fetch_quotes([OPTION])
+        return str(watch.lost)
+
+    assert watching("watch-lost", test, request_timeout_ms=300) == LOST
+
+
+def test_a_watch_whose_connection_closes_before_its_first_picture_fails_in_the_reads_words() -> None:
+    async def test(client: IbkrClient, gateway: FakeGateway, _: Any) -> Any:
+        start = asyncio.ensure_future(client.watch_account())
+        await waited(lambda: len(watch_messages(gateway)) >= 2)
+        gateway.drop_connections()
+        with pytest.raises(ConnectionError) as raised:
+            await start
+        return str(raised.value)
+
+    assert watching("watch-never-ends", test, request_timeout_ms=5000) == (
+        "IB Gateway's connection closed during the account read"
+    )
+
+
+def test_a_watch_that_cannot_connect_raises_ibkr_unreachable() -> None:
+    async def test(client: IbkrClient, _: FakeGateway, __: Any) -> Any:
+        with pytest.raises(IbkrUnreachable) as raised:
+            await client.watch_account()
+        return str(raised.value)
+
+    assert watching("client-id-in-use", test).startswith("IB Gateway refused the session: 326 ")
+
+
+def test_a_watch_waits_for_a_running_bounded_read() -> None:
+    async def test(client: IbkrClient, gateway: FakeGateway, _: Any) -> Any:
+        read, watch = await asyncio.gather(client.account(), client.watch_account())
+        return read["account"], watch.picture()["account"], watch_messages(gateway)[:3]
+
+    assert watching("watch-started-and-stopped", test) == (
+        "U•••••000",
+        "U•••••000",
+        [["6", "2", "1", "U0000000"], ["6", "2", "0", "U0000000"], ["6", "2", "1", "U0000000"]],
+    )
+
+
+def test_a_bounded_read_of_the_watched_account_is_answered_from_the_watch_sending_nothing() -> None:
+    async def test(client: IbkrClient, gateway: FakeGateway, step: Any) -> Any:
+        watch = await client.watch_account()
+        await step(1)
+        before = len(watch_messages(gateway))
+        read = await client.account()
+        return (
+            len(watch_messages(gateway)) - before,
+            "pnl" in read,
+            "daily_pnl" in read["holdings"][0],
+            read["totals"] == watch.picture()["totals"],
+        )
+
+    assert watching("watch-started-and-stopped", test) == (0, False, False, True)
+
+
+def test_a_second_watch_and_a_read_of_another_account_are_refused_while_one_is_held() -> None:
+    async def test(client: IbkrClient, _: FakeGateway, __: Any) -> Any:
+        await client.watch_account("U0000001")
+        with pytest.raises(RuntimeError) as second:
+            await client.watch_account("U0000001")
+        with pytest.raises(RuntimeError) as other:
+            await client.account("U0000000")
+        return str(second.value), str(other.value)
+
+    assert watching("watch-several", test) == (
+        "this client already holds a watch of U•••••001; stop it first",
+        "IB Gateway's one account subscription is held by a watch of U•••••001; stop it first",
+    )
+
+
+def test_the_pnl_messages_are_read_field_by_field_an_empty_figure_kept_as_none() -> None:
+    """`ib_async`'s readers for messages 94 and 95 convert with `float(field or 0)`, so an empty
+    figure would be a P&L of 0; this one delivers the text, and the mapping reads it as none."""
+    pytest.importorskip("ib_async")
+    from optionality import ibkr
+
+    delivered: list[Any] = []
+
+    class Wrapper:
+        def figures(self, message: Any) -> None:
+            delivered.append(message)
+
+    _, decoder_class, _ = ibkr._transport()
+    decoder = decoder_class(Wrapper(), 157)
+    decoder.interpret(["94", "7", "", "1436.50", "1.7976931348623157E308"])
+    decoder.interpret(["95", "8", "-6", "43.20", "", "0.00", "-552.00"])
+    pnl, single = delivered
+    assert (pnl.req_id, ibkr.pnl_from(pnl.row)) == (
+        7,
+        {"daily_pnl": None, "unrealized_pnl": 1436.5, "realized_pnl": None},
+    )
+    assert (single.req_id, ibkr.pnl_single_from(single.row)) == (
+        8,
+        {"position": -6, "daily_pnl": 43.2, "unrealized_pnl": None, "realized_pnl": 0, "value": -552},
+    )
+
+
+def test_no_account_id_is_written_in_full_by_a_watch(
+    caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+) -> None:
+    caplog.set_level(logging.INFO)
+    caplog.set_level(logging.DEBUG, logger="optionality")
+    said: list[str] = []
+    for name, wanted in (
+        ("watch-started-and-stopped", None),
+        ("watch-several", None),
+        ("watch-several", "DU0000001"),
+        ("watch-several", "U0000001"),
+        ("watch-never-ends", None),
+        ("watch-lost", None),
+    ):
+
+        async def test(client: IbkrClient, gateway: FakeGateway, _: Any, wanted: str | None = wanted) -> str:
+            try:
+                watch = await client.watch_account(wanted)
+            except Exception as err:  # noqa: BLE001 — the words are what is searched
+                return str(err)
+            await gateway.step(1)
+            gateway.drop_connections()
+            await waited(lambda: watch.lost is not None)
+            return repr(watch.picture()) + str(watch.lost)
+
+        said.append(watching(name, test, request_timeout_ms=300))
+    out = capsys.readouterr()
+    said += [record.getMessage() for record in caplog.records] + [out.out, out.err]
+    for account in ("DU0000000", "DU0000001", "U0000000", "U0000001"):
+        assert [line for line in said if account in line] == [], account
+
+
+def test_a_watch_whose_caller_gives_up_during_the_start_unsubscribes_and_leaves_room_for_the_next() -> None:
+    """Review round 1 of #479: a caller cancelled during the start (`wait_for`, an HTTP handler whose
+    client went away) left the start running for nobody — it succeeded, held the one subscription,
+    and refused every later watch until the connection dropped. Given up on, the start cancels the
+    account's P&L and unsubscribes, and the next watch starts."""
+    conversation = copy.deepcopy(load_conversation("watch-started-and-stopped"))
+    for exchange in conversation["exchanges"]:
+        if exchange["request"] == "reqAccountUpdates":
+            exchange["atMs"] = [300] * len(exchange["replies"])
+
+    async def run() -> Any:
+        gateway = await start_fake_gateway(conversation, pace=1.0)
+        client = IbkrClient(port=gateway.port, client_id=31419, connect_timeout_ms=1000, request_timeout_ms=3000)
+        try:
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(client.watch_account(), 0.1)
+            await waited(lambda: any(f[0] == "6" and f[2] == "0" for f in gateway.received))
+            given_up = watch_messages(gateway)
+            # the next start is not refused as "already holds a watch", and gets its picture
+            watch = await client.watch_account()
+            return given_up, watch.picture()["account"]
+        finally:
+            client.close()
+            await gateway.close()
+
+    assert asyncio.run(run()) == (
+        [["6", "2", "1", "U0000000"], ["92", "1", "U0000000", ""], ["93", "1"], ["6", "2", "0", "U0000000"]],
+        "U•••••000",
+    )
+
+
+def test_a_bounded_read_begun_during_a_watchs_start_waits_for_it_and_sends_nothing_of_its_own() -> None:
+    """Review round 1 of #479: answered before the download ended, it would be an empty account."""
+
+    async def test(client: IbkrClient, gateway: FakeGateway, _: Any) -> Any:
+        watch, read = await asyncio.gather(client.watch_account(), client.account())
+        return (
+            [h["symbol"] for h in read["holdings"]],
+            read["totals"] == watch.picture()["totals"],
+            [f for f in watch_messages(gateway) if f[0] == "6"],
+        )
+
+    assert watching("watch-started-and-stopped", test) == (["ACME", "ACME"], True, [["6", "2", "1", "U0000000"]])
+
+
+def test_a_lost_listener_that_raises_is_logged_and_the_others_are_still_told(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.ERROR, logger="optionality")
+
+    def raises(_: ConnectionError) -> None:
+        raise ValueError("a listener's own fault")
+
+    async def test(client: IbkrClient, _: FakeGateway, __: Any) -> Any:
+        watch = await client.watch_account()
+        told: list[str] = []
+        watch.on_lost(raises)
+        watch.on_lost(lambda err: told.append(str(err)))
+        client.close()
+        return told
+
+    assert watching("watch-lost", test) == [LOST]
+    (record,) = [r for r in caplog.records if r.name == "optionality.ibkr"]
+    assert record.exc_info is not None and str(record.exc_info[1]) == "a listener's own fault"
+
+
+def test_a_watch_whose_caller_is_cancelled_as_the_start_resolves_is_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review round 2 of #479: a cancel that lands once the start has resolved but before its caller
+    resumes found a watch nobody would hold — it held the one subscription for nobody. Given up on
+    then, the watch is stopped: each holding's stream cancelled, the P&L, then the unsubscribe."""
+    from optionality import ibkr
+
+    begin = ibkr._AccountWatch.begin
+    caller: dict[str, asyncio.Task[Any]] = {}
+
+    def cancel_as_it_resolves(self: Any) -> None:
+        begin(self)
+        # registered after the caller's shield: it runs once the start has resolved, before the
+        # caller is woken, and cancels it there
+        loop = asyncio.get_running_loop()
+        loop.call_soon(lambda: self.ready.add_done_callback(lambda _: caller["task"].cancel()))
+
+    async def run() -> Any:
+        gateway = await start_fake_gateway("watch-started-and-stopped")
+        client = IbkrClient(port=gateway.port, client_id=31419, connect_timeout_ms=1000, request_timeout_ms=3000)
+        try:
+            monkeypatch.setattr(ibkr._AccountWatch, "begin", cancel_as_it_resolves)
+            caller["task"] = asyncio.ensure_future(client.watch_account())
+            with pytest.raises(asyncio.CancelledError):
+                await caller["task"]
+            monkeypatch.setattr(ibkr._AccountWatch, "begin", begin)
+            await waited(lambda: any(f[0] == "6" and f[2] == "0" for f in gateway.received))
+            stopped = watch_messages(gateway)
+            watch = await client.watch_account()
+            return stopped, watch.picture()["account"]
+        finally:
+            client.close()
+            await gateway.close()
+
+    assert asyncio.run(run()) == (
+        [
+            ["6", "2", "1", "U0000000"],
+            ["92", "1", "U0000000", ""],
+            ["94", "2", "U0000000", "", "100000101"],
+            ["94", "3", "U0000000", "", "100000201"],
+            ["95", "2"],
+            ["95", "3"],
+            ["93", "1"],
+            ["6", "2", "0", "U0000000"],
+        ],
+        "U•••••000",
+    )

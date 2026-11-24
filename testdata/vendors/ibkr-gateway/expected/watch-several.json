@@ -1,0 +1,125 @@
+{
+  "conversation": "watch-several",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [],
+  "expect": {
+    "records": [],
+    "unknown": []
+  },
+  "watches": [
+    {
+      "wanted": null,
+      "start": {
+        "$refused": "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001"
+      },
+      "sent": []
+    },
+    {
+      "wanted": "DU0000001",
+      "start": {
+        "$refused": "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001"
+      },
+      "sent": []
+    },
+    {
+      "wanted": "U0000001",
+      "start": {
+        "account": "U•••••001",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "11:46",
+        "totals": {
+          "net_liquidation": 25010,
+          "total_cash": 25010,
+          "unrealized_pnl": 0,
+          "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": [],
+        "pnl": null,
+        "pnl_at": null
+      },
+      "steps": [
+        {
+          "account": "U•••••001",
+          "paper": false,
+          "base_currency": "USD",
+          "updated_at": "11:46",
+          "totals": {
+            "net_liquidation": 25010,
+            "total_cash": 25010,
+            "unrealized_pnl": 0,
+            "realized_pnl": 0
+          },
+          "exchange_rates": {
+            "USD": 1
+          },
+          "holdings": [],
+          "pnl": {
+            "daily_pnl": 0,
+            "unrealized_pnl": 0,
+            "realized_pnl": 0
+          },
+          "pnl_at": 1
+        }
+      ],
+      "end": "stop",
+      "lost": null,
+      "last": {
+        "account": "U•••••001",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "11:46",
+        "totals": {
+          "net_liquidation": 25010,
+          "total_cash": 25010,
+          "unrealized_pnl": 0,
+          "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": [],
+        "pnl": {
+          "daily_pnl": 0,
+          "unrealized_pnl": 0,
+          "realized_pnl": 0
+        },
+        "pnl_at": 1
+      },
+      "sent": [
+        [
+          "6",
+          "2",
+          "1",
+          "U0000001"
+        ],
+        [
+          "92",
+          "1",
+          "U0000001",
+          ""
+        ],
+        [
+          "93",
+          "1"
+        ],
+        [
+          "6",
+          "2",
+          "0",
+          "U0000001"
+        ]
+      ]
+    }
+  ]
+}

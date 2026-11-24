@@ -723,3 +723,323 @@ describe("the account read (ADR 0030)", () => {
     }
   });
 });
+
+describe("the account watch (ADR 0031)", () => {
+  // Every conversation here is CONSTRUCTED: the account updates in ibapi 9.81's layout, the P&L
+  // streams in ib_async 2.1.0's, every figure invented and every account a placeholder. A stream's
+  // figures come at the replay's steps (`gateway.step`), so a picture can be taken between them.
+
+  /** The client's clock in a watch test: its n-th reading is n, so `pnl_at` counts P&L messages. */
+  let readings = 0;
+
+  async function watching(conversation: string | Conversation, requestTimeoutMs = 1500) {
+    gateway = await startFakeGateway(0, { conversation });
+    readings = 0;
+    client = new IbkrClient({
+      host: "127.0.0.1", port: gateway.port, clientId: 31419, requestTimeoutMs,
+      now: () => ++readings,
+    });
+    return client;
+  }
+
+  /** Send step `n`, and wait until the client has read it: every step ends with the account's P&L,
+   *  and the client reads its clock once for each. */
+  async function step(n: number): Promise<void> {
+    await gateway!.step(n);
+    await waitFor(() => readings >= gateway!.written.filter((m) => m[0] === "94").length);
+  }
+
+  /** What the client sent that is a watch's: the account subscription and the P&L requests. */
+  const watchMessages = (g: FakeGateway) =>
+    g.received.filter((f) => ["6", "92", "93", "94", "95"].includes(f[0]!));
+
+  it("starts on the download's picture: the account masked, its P&L not yet spoken", async () => {
+    const c = await watching("watch-started-and-stopped");
+    const watch = await c.watchAccount();
+    const first = watch.picture();
+    expect(first).toMatchObject({
+      account: "U•••••000", paper: false, base_currency: "USD", updated_at: "14:32",
+      totals: { net_liquidation: 67431.55, total_cash: 53510.55 }, pnl: null, pnl_at: null,
+    });
+    // the call the download carries at a position of zero, closed today, is left out (review round
+    // 1 of #479): a holding at zero leaves the picture, at the first download as at any update
+    expect(first.holdings.map((h) => [h.symbol, h.sec_type, h.market_value, h.daily_pnl]))
+      .toEqual([["ACME", "STK", 12381, null], ["ACME", "OPT", 1540, null]]);
+    expect(watch.lost).toBeNull();
+  });
+
+  it("subscribes to the account and its P&L, then to each holding's by its conId", async () => {
+    const c = await watching("watch-started-and-stopped");
+    await c.watchAccount();
+    await waitFor(() => watchMessages(gateway!).length >= 4);
+    expect(watchMessages(gateway!)).toEqual([
+      ["6", "2", "1", "U0000000"], ["92", "1", "U0000000", ""],
+      ["94", "2", "U0000000", "", "100000101"], ["94", "3", "U0000000", "", "100000201"],
+    ]);
+  });
+
+  it("holds the latest picture: the account's P&L and each holding's, its value and mark", async () => {
+    const c = await watching("watch-started-and-stopped");
+    const watch = await c.watchAccount();
+    await step(1);
+    expect(watch.picture()).toMatchObject({
+      pnl: { daily_pnl: 152.4, unrealized_pnl: 1436.5, realized_pnl: 120 }, pnl_at: 1,
+      // the totals stay the account updates': IBKR pushes those on its own clock
+      totals: { net_liquidation: 67431.55, unrealized_pnl: 1436.5 },
+    });
+    await step(2);
+    const [stock, call] = watch.picture().holdings;
+    // the stock's mark is its stream's value over its position: 12396 / 300
+    expect(stock).toMatchObject({ market_value: 12396, market_price: 41.32, unrealized_pnl: 961.5,
+      daily_pnl: 111 });
+    // the call's stream spoke once, at the first step: its mark per share, the multiplier out
+    expect(call).toMatchObject({ market_value: 1540, market_price: 3.85, daily_pnl: 56.4 });
+    expect(watch.picture()).toMatchObject({ pnl: { daily_pnl: 167.4 }, pnl_at: 2 });
+  });
+
+  it("hands out a copy, which the caller may keep and change", async () => {
+    const c = await watching("watch-started-and-stopped");
+    const watch = await c.watchAccount();
+    await step(1);
+    const kept = watch.picture();
+    kept.holdings[0]!.market_value = 0;
+    kept.pnl!.daily_pnl = 0;
+    kept.totals.net_liquidation = 0;
+    expect(watch.picture()).toMatchObject({
+      pnl: { daily_pnl: 152.4 }, totals: { net_liquidation: 67431.55 },
+    });
+    expect(watch.picture().holdings[0]!.market_value).toBe(12381);
+  });
+
+  it("follows a holding that appears, and stops one whose position goes to zero", async () => {
+    const c = await watching("watch-holdings-come-and-go");
+    const watch = await c.watchAccount();
+    const held = () => watch.picture().holdings.map((h) => [h.symbol, h.sec_type, h.position]);
+    expect(held()).toEqual([["ACME", "STK", 300], ["ACME", "OPT", -6]]);
+    await step(1);
+    expect(held()).toEqual([["ACME", "STK", 300], ["ACME", "OPT", -6], ["GLOBEX", "STK", 120]]);
+    expect(watch.picture().updated_at).toBe("14:35");
+    await step(2);
+    expect(held()).toEqual([["ACME", "STK", 300], ["GLOBEX", "STK", 120]]);
+    expect(watch.picture().holdings[1]).toMatchObject({ market_value: 10446, daily_pnl: -12 });
+    await step(3);
+    await watch.stop();
+    await waitFor(() => watchMessages(gateway!).some((f) => f[0] === "6" && f[2] === "0"));
+    expect(watchMessages(gateway!)).toEqual([
+      ["6", "2", "1", "U0000000"], ["92", "1", "U0000000", ""],
+      ["94", "2", "U0000000", "", "100000101"], ["94", "3", "U0000000", "", "100000202"],
+      ["94", "4", "U0000000", "", "100000102"], ["95", "3"],
+      ["95", "2"], ["95", "4"], ["93", "1"], ["6", "2", "0", "U0000000"],
+    ]);
+  });
+
+  it("stops with the cancels, then the unsubscribe, once however often it is asked", async () => {
+    const c = await watching("watch-started-and-stopped");
+    const watch = await c.watchAccount();
+    await step(1);
+    await watch.stop();
+    await watch.stop();
+    await waitFor(() => watchMessages(gateway!).some((f) => f[0] === "6" && f[2] === "0"));
+    expect(watchMessages(gateway!).slice(4)).toEqual([
+      ["95", "2"], ["95", "3"], ["93", "1"], ["6", "2", "0", "U0000000"],
+    ]);
+    // stopped is not lost, and the picture is the last one
+    expect(watch.lost).toBeNull();
+    expect(watch.picture()).toMatchObject({ pnl: { daily_pnl: 152.4 } });
+  });
+
+  it("hears nothing more once stopped, and a new watch may start", async () => {
+    const c = await watching("watch-started-and-stopped");
+    const watch = await c.watchAccount();
+    await step(1);
+    await watch.stop();
+    await gateway!.step(2);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(watch.picture()).toMatchObject({ pnl: { daily_pnl: 152.4 }, pnl_at: 1 });
+    const again = await c.watchAccount();
+    expect(again.picture()).toMatchObject({ account: "U•••••000", pnl: null });
+  });
+
+  it("says at once that it is lost when the gateway's connection drops, and keeps its picture", async () => {
+    const c = await watching("watch-lost");
+    const watch = await c.watchAccount();
+    await step(1);
+    const told: Error[] = [];
+    watch.onLost((err) => told.push(err));
+    const sentBefore = gateway!.received.length;
+    gateway!.dropConnections();
+    await waitFor(() => watch.lost !== null);
+    expect(watch.lost!.message).toBe("IB Gateway's connection closed under the account watch");
+    expect(told).toEqual([watch.lost]);
+    expect(watch.picture()).toMatchObject({ pnl: { daily_pnl: -33 }, pnl_at: 1 });
+    // a listener added once it is lost is told at once; stopping it sends nothing
+    const late: Error[] = [];
+    watch.onLost((err) => late.push(err));
+    expect(late).toEqual([watch.lost]);
+    await watch.stop();
+    expect(gateway!.received.length).toBe(sentBefore);
+  });
+
+  it("is lost when the client is closed under it", async () => {
+    const c = await watching("watch-lost");
+    const watch = await c.watchAccount();
+    const told: Error[] = [];
+    watch.onLost((err) => told.push(err));
+    c.close();
+    expect(told.map((e) => e.message)).toEqual(["IB Gateway's connection closed under the account watch"]);
+  });
+
+  it("is lost when a price read fails and drops the connection it shares", async () => {
+    // the price read tears its connection down so the next one reconnects; the watch was on it
+    const c = await watching("watch-lost", 300);
+    const watch = await c.watchAccount();
+    await expect(c.fetchQuotes([OPTION])).rejects.toThrow(/answered none/);
+    expect(watch.lost?.message).toBe("IB Gateway's connection closed under the account watch");
+  });
+
+  it("reads a figure IB has not set, and an empty one, as none — keeping the row's", async () => {
+    const c = await watching("watch-unset-figures");
+    const watch = await c.watchAccount();
+    await step(1);
+    const one = watch.picture();
+    expect(one.pnl).toEqual({ daily_pnl: null, unrealized_pnl: 1436.5, realized_pnl: 0 });
+    expect(one.holdings[0]).toMatchObject({ daily_pnl: null, market_value: 12381 });
+    // the call's value and unrealised P&L unset: the account update's stand
+    expect(one.holdings[1]).toMatchObject({ market_value: 1540, market_price: 3.85,
+      unrealized_pnl: 490, daily_pnl: null });
+    await step(2);
+    expect(watch.picture().pnl).toEqual({ daily_pnl: null, unrealized_pnl: 1436.5, realized_pnl: null });
+  });
+
+  it("refuses as the account read does, every id masked, and subscribes to nothing", async () => {
+    const c = await watching("watch-several");
+    const err = await c.watchAccount().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(IbkrAccountRefused);
+    expect((err as Error).message)
+      .toBe("several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001");
+    await expect(c.watchAccount("DU0000001")).rejects.toThrow(new IbkrAccountRefused(
+      "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001"));
+    expect(watchMessages(gateway!)).toEqual([]);
+    expect(await c.watchAccount("U0000001").then((w) => w.picture().account)).toBe("U•••••001");
+  });
+
+  it("fails at the read's deadline, in its words, and cancels and unsubscribes on the way out", async () => {
+    const c = await watching("watch-never-ends", 300);
+    await expect(c.watchAccount()).rejects.toThrow(
+      "IB Gateway did not finish sending the account within 300ms — its link to IBKR may be "
+      + "down while its own socket is still open");
+    await waitFor(() => watchMessages(gateway!).length >= 4);
+    expect(watchMessages(gateway!)).toEqual([
+      ["6", "2", "1", "U0000000"], ["92", "1", "U0000000", ""], ["93", "1"],
+      ["6", "2", "0", "U0000000"],
+    ]);
+  });
+
+  it("fails in the read's words where the connection closes before the first picture", async () => {
+    const c = await watching("watch-never-ends", 5000);
+    const start = c.watchAccount();
+    await waitFor(() => watchMessages(gateway!).length >= 2);
+    gateway!.dropConnections();
+    await expect(start).rejects.toThrow("IB Gateway's connection closed during the account read");
+  });
+
+  it("throws IbkrUnreachable, in the connect's own words, where the session is refused", async () => {
+    const c = await watching("client-id-in-use");
+    const err = await c.watchAccount().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(IbkrUnreachable);
+    expect((err as Error).message).toMatch(/^IB Gateway refused the session: 326 /);
+  });
+
+  it("waits for a bounded read that is running: IB allows one account subscription", async () => {
+    const c = await watching("watch-started-and-stopped");
+    const [read, watch] = await Promise.all([c.account(), c.watchAccount()]);
+    expect(read.account).toBe("U•••••000");
+    expect(watch.picture().account).toBe("U•••••000");
+    expect(watchMessages(gateway!).slice(0, 3)).toEqual([
+      ["6", "2", "1", "U0000000"], ["6", "2", "0", "U0000000"], ["6", "2", "1", "U0000000"],
+    ]);
+  });
+
+  it("answers a bounded read of the watched account from the watch, sending nothing", async () => {
+    // a subscribe and an unsubscribe of its own would end the watch's subscription
+    const c = await watching("watch-started-and-stopped");
+    const watch = await c.watchAccount();
+    await step(1);
+    const before = watchMessages(gateway!).length;
+    const read = await c.account();
+    expect(watchMessages(gateway!).length).toBe(before);
+    expect(read).not.toHaveProperty("pnl");
+    expect(read.holdings[0]).not.toHaveProperty("daily_pnl");
+    expect(read.holdings[0]).toMatchObject({ market_value: 12381 });
+    expect(read.totals).toEqual(watch.picture().totals);
+  });
+
+  it("holds a bounded read begun during a watch's start until the start, and sends nothing of its own", async () => {
+    // review round 1 of #479: answered before the download ended, it would be an empty account
+    const c = await watching("watch-started-and-stopped");
+    const [watch, read] = await Promise.all([c.watchAccount(), c.account()]);
+    expect(read.holdings.map((h) => h.symbol)).toEqual(["ACME", "ACME"]);
+    expect(read.totals).toEqual(watch.picture().totals);
+    expect(watchMessages(gateway!).filter((f) => f[0] === "6")).toEqual([["6", "2", "1", "U0000000"]]);
+  });
+
+  it("logs a lost listener that throws, and still tells the others", async () => {
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+    try {
+      const c = await watching("watch-lost");
+      const watch = await c.watchAccount();
+      const told: string[] = [];
+      watch.onLost(() => { throw new Error("a listener's own fault"); });
+      watch.onLost((err) => told.push(err.message));
+      c.close();
+      expect(told).toEqual(["IB Gateway's connection closed under the account watch"]);
+      expect(errors).toEqual([expect.stringContaining("a listener's own fault")]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("refuses a second watch, and a bounded read of another account, while one is held", async () => {
+    const c = await watching("watch-several");
+    await c.watchAccount("U0000001");
+    await expect(c.watchAccount("U0000001")).rejects
+      .toThrow("this client already holds a watch of U•••••001; stop it first");
+    await expect(c.account("U0000000")).rejects
+      .toThrow("IB Gateway's one account subscription is held by a watch of U•••••001; stop it first");
+  });
+
+  it("never writes an account id in full: not in a picture, an error, or a log line", async () => {
+    const said: string[] = [];
+    const spies = (["log", "info", "warn", "error", "debug"] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+        said.push(args.map(String).join(" "));
+      }));
+    try {
+      for (const [name, wanted] of [
+        ["watch-started-and-stopped", undefined], ["watch-several", undefined],
+        ["watch-several", "DU0000001"], ["watch-several", "U0000001"], ["watch-never-ends", undefined],
+        ["watch-lost", undefined],
+      ] as const) {
+        const c = await watching(name, 300);
+        said.push(await c.watchAccount(wanted).then(async (w) => {
+          await gateway!.step(1);
+          gateway!.dropConnections();
+          await waitFor(() => w.lost !== null);
+          return JSON.stringify(w.picture()) + w.lost!.message;
+        }, (e: Error) => e.message));
+        c.close();
+        await gateway!.close();
+        gateway = null;
+      }
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+    expect(said.length).toBeGreaterThanOrEqual(6);
+    for (const id of PLACEHOLDER_ACCOUNTS) {
+      expect(said.filter((line) => line.includes(id)), id).toEqual([]);
+    }
+  });
+});

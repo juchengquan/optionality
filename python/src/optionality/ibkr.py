@@ -6,12 +6,15 @@
 
     records, unknown = quotes([...], port=4002, client_id=9301)   # one-shot, from a script
     account = await client.account()                  # the account's totals and holdings (ADR 0030)
+    watch = await client.watch_account()              # the account HELD while asked (ADR 0031)
+    watch.picture(); await watch.stop()
 
 A PORT of `typescript/src/vendors/ibkr/`, in three parts, and each is held to the TypeScript:
 
 * the MAPPING (`fields.ts`) — tick ids to the service's names, the four data grades as the two
   facts they are, the 100x on implied volatility; and the account's (ADR 0030): which account,
-  the id masked, a portfolio row as a holding with its cost per share, the totals in the base. `tests/test_ibkr.py` holds it to
+  the id masked, a portfolio row as a holding with its cost per share, the totals in the base; and
+  the account watch's (ADR 0031): a P&L stream's figures, IB's unset read as none, and a holding live. `tests/test_ibkr.py` holds it to
   `testdata/vendors/ibkr-fields.json`, what the TypeScript computes for every recorded case.
 * the NAMING (`contract.ts`) — a service code as the contract IB Gateway wants: an option by
   parsing it, an index by the exchange that calculates it. `tests/test_ibkr_client.py` mirrors
@@ -53,12 +56,15 @@ answer; `readonly=True` turns off only the open- and completed-order fetches. Ne
 connects `ib_async`'s `Client` directly, which performs the handshake and sends nothing else,
 and the Python sends exactly what `messages.ts` sends: startApi, reqMarketDataType,
 reqContractDetails, reqMktData, cancelMktData — and, only when the account is read (ADR 0030),
-reqAccountUpdates, a subscribe and its unsubscribe. `tests/test_ibkr_gateway.py` holds it to that.
+reqAccountUpdates, a subscribe and its unsubscribe; and only when it is watched (ADR 0031), reqPnL,
+reqPnLSingle and their two cancels. `tests/test_ibkr_gateway.py` holds it to that.
 
 The account's four messages are read field by field too (`_FigureDecoder`), at `ibapi` 9.81's
 positions: `ib_async`'s PORTFOLIO_VALUE reader converts every figure with `float()`, so one empty
 field would drop a whole holding where the TypeScript reads it as no figure. MANAGED_ACCTS, which
-arrives with the handshake, reaches `_Reader.managedAccounts` and is read by `managed_accounts`.
+arrives with the handshake, reaches `_Reader.managedAccounts` and is read by `managed_accounts`. The P&L
+streams' two messages (94 and 95, ADR 0031) are read field by field as well: `ib_async`'s readers
+convert with `float(field or 0)`, so an empty figure would be a P&L of 0.
 
 Two differences `ib_async` forces, neither in a recording: it calls a session started once BOTH
 nextValidId and managedAccounts have arrived (the TypeScript, on nextValidId), so a gateway that
@@ -76,11 +82,14 @@ Read-Only API switch is the lock that holds against intent.
 
 import asyncio
 import functools
+import logging
 import math
 import re
+import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Protocol, TypedDict, cast
 
 from optionality.contract import parse_spx_code
 
@@ -92,6 +101,8 @@ from optionality.quote import Batch, Quote, mid_price
 
 if TYPE_CHECKING:
     from ib_async.client import Client
+
+_log = logging.getLogger(__name__)
 
 #: IB Gateway's tick ids, mapped to the service's names. The delayed ids carry the same figures
 #: from the delayed feed, so they map to the same names: WHICH tier answered is reported once per
@@ -273,6 +284,41 @@ class IbkrAccount(TypedDict):
     #: out, the base currency is always 1, and a rate that is not a positive number is left out.
     exchange_rates: dict[str, float]
     holdings: list[IbkrHolding]
+
+
+class IbkrPnl(TypedDict):
+    """reqPnL's figures for the account, in the BASE currency; None where IB sent it unset (ADR 0031)."""
+
+    daily_pnl: float | None
+    unrealized_pnl: float | None
+    realized_pnl: float | None
+
+
+class IbkrLiveHolding(IbkrHolding):
+    """A holding as the account watch holds it (ADR 0031; `fields.ts`' `IbkrLiveHolding`): an
+    `IbkrHolding`, where `market_value`, `unrealized_pnl` and `market_price` (value / (position x
+    multiplier)) are the holding's own P&L stream's once it has spoken for it — in the holding's own
+    currency — and the rest the account updates'."""
+
+    #: the stream's daily P&L, in the holding's currency; None before it speaks, or where unset
+    daily_pnl: float | None
+
+
+class IbkrLiveAccount(TypedDict):
+    """The account as the watch holds it: the account read's answer, its holdings live, and the
+    account's P&L apart from the totals, which stay the account updates' (ADR 0031)."""
+
+    account: str
+    paper: bool
+    base_currency: str | None
+    updated_at: str | None
+    totals: IbkrTotals
+    exchange_rates: dict[str, float]
+    holdings: list[IbkrLiveHolding]
+    #: reqPnL's last figures; None before it first speaks
+    pnl: IbkrPnl | None
+    #: when reqPnL last spoke, ms since the epoch by the client's `now`; None before
+    pnl_at: float | None
 
 
 #: ACCT_VALUE's keys the answer's totals are read from, and the name each takes (`fields.ts`).
@@ -457,6 +503,93 @@ def account_answer(
         "exchange_rates": exchange_rates,
         "holdings": holdings,
     }
+
+
+# --- the account watch (ADR 0031; `fields.ts`) ----------------------------------------------------
+
+#: what IB sends for a figure it has not set: Java's `Double.MAX_VALUE`, written out in full
+#: (`1.7976931348623157E308`); read as a number it would be a P&L of 1.8e308
+UNSET_DOUBLE = sys.float_info.max
+
+
+class PnlRow(TypedDict):
+    """One PNL message's figures, as the wire carried them."""
+
+    daily_pnl: str
+    unrealized_pnl: str
+    realized_pnl: str
+
+
+class PnlSingleRow(TypedDict):
+    """One PNL_SINGLE message's figures, as the wire carried them."""
+
+    position: str
+    daily_pnl: str
+    unrealized_pnl: str
+    realized_pnl: str
+    value: str
+
+
+class IbkrPnlSingle(TypedDict):
+    """One holding's P&L stream, read: in the holding's own currency, None where unset or empty."""
+
+    position: float | None
+    daily_pnl: float | None
+    unrealized_pnl: float | None
+    realized_pnl: float | None
+    value: float | None
+
+
+def _stream_figure(text: str) -> float | None:
+    """A stream's figure: none where the field is empty, not a number, or IB's unset."""
+    value = _figure_of(text)
+    return None if value == UNSET_DOUBLE else value
+
+
+def pnl_from(row: PnlRow) -> IbkrPnl:
+    """reqPnL's message as the account's P&L (`fields.ts`' `pnlFrom`)."""
+    return {
+        "daily_pnl": _stream_figure(row["daily_pnl"]),
+        "unrealized_pnl": _stream_figure(row["unrealized_pnl"]),
+        "realized_pnl": _stream_figure(row["realized_pnl"]),
+    }
+
+
+def pnl_single_from(row: PnlSingleRow) -> IbkrPnlSingle:
+    """reqPnLSingle's message as one holding's stream reading (`fields.ts`' `pnlSingleFrom`)."""
+    return {
+        "position": _stream_figure(row["position"]),
+        "daily_pnl": _stream_figure(row["daily_pnl"]),
+        "unrealized_pnl": _stream_figure(row["unrealized_pnl"]),
+        "realized_pnl": _stream_figure(row["realized_pnl"]),
+        "value": _stream_figure(row["value"]),
+    }
+
+
+def live_holding(holding: IbkrHolding, single: IbkrPnlSingle | None) -> IbkrLiveHolding:
+    """A holding as the watch holds it (`fields.ts`' `liveHolding`): the account update's row, with
+    its value, unrealised P&L and mark the stream's where the stream has a figure for each, and the
+    stream's daily P&L. The mark is the stream's value over the position (the stream's, or the row's
+    where it sent none) times the multiplier (none is 1); a figure the stream left unset leaves the
+    row's."""
+    if single is None:
+        return cast(IbkrLiveHolding, {**holding, "daily_pnl": None})
+    position = single["position"] if single["position"] is not None else holding["position"]
+    multiplier = holding["multiplier"] if holding["multiplier"] is not None and holding["multiplier"] > 0 else 1
+    size = 0 if position is None else position * multiplier
+    value = single["value"]
+    return cast(
+        IbkrLiveHolding,
+        {
+            **holding,
+            "market_price": value / size if value is not None and size != 0 else holding["market_price"],
+            "market_value": value if value is not None else holding["market_value"],
+            "unrealized_pnl": single["unrealized_pnl"]
+            if single["unrealized_pnl"] is not None
+            else holding["unrealized_pnl"],
+            "daily_pnl": single["daily_pnl"],
+        },
+    )
 
 
 # --- the naming: a service code as the contract IB Gateway wants (`contract.ts`) ---------------
@@ -673,7 +806,23 @@ class _Error:
     message: str
 
 
-type _Incoming = _Contract | _ContractEnd | _Price | _GreeksTick | _SnapshotEnd | _DataType | _Error
+@dataclass(frozen=True, slots=True)
+class _Pnl:
+    """Message 94, PNL: the account's P&L stream (ADR 0031), its figures as sent."""
+
+    req_id: int | None
+    row: PnlRow
+
+
+@dataclass(frozen=True, slots=True)
+class _PnlSingle:
+    """Message 95, PNL_SINGLE: one holding's, as sent."""
+
+    req_id: int | None
+    row: PnlSingleRow
+
+
+type _Incoming = _Contract | _ContractEnd | _Price | _GreeksTick | _SnapshotEnd | _DataType | _Error | _Pnl | _PnlSingle
 
 
 # --- the account's messages (ADR 0030; `messages.ts`), which carry the account and no request id --
@@ -749,6 +898,30 @@ def _read_portfolio(fields: list[str]) -> _Portfolio:
             "average_cost": _text(fields, 16),
             "unrealized_pnl": _text(fields, 17),
             "realized_pnl": _text(fields, 18),
+        },
+    )
+
+
+def _read_pnl(fields: list[str]) -> _Pnl:
+    """Message 94, PNL, with no version field: `id, reqId, dailyPnL, unrealizedPnL, realizedPnL`
+    (`messages.ts`). Read here rather than by `ib_async`, whose reader turns an empty figure into 0."""
+    return _Pnl(
+        req_id=_ident(fields, 1),
+        row={"daily_pnl": _text(fields, 2), "unrealized_pnl": _text(fields, 3), "realized_pnl": _text(fields, 4)},
+    )
+
+
+def _read_pnl_single(fields: list[str]) -> _PnlSingle:
+    """Message 95, PNL_SINGLE, with no version field: `id, reqId, pos, dailyPnL, unrealizedPnL,
+    realizedPnL, value`."""
+    return _PnlSingle(
+        req_id=_ident(fields, 1),
+        row={
+            "position": _text(fields, 2),
+            "daily_pnl": _text(fields, 3),
+            "unrealized_pnl": _text(fields, 4),
+            "realized_pnl": _text(fields, 5),
+            "value": _text(fields, 6),
         },
     )
 
@@ -856,8 +1029,9 @@ class _Reader:
     def tickSnapshotEnd(self, reqId: int) -> None:
         self._deliver(_SnapshotEnd(reqId))
 
-    def figures(self, message: _Price | _GreeksTick) -> None:
-        """Ticks 1 and 21, read field by field by `_FigureDecoder`."""
+    def figures(self, message: _Price | _GreeksTick | _Pnl | _PnlSingle) -> None:
+        """Ticks 1 and 21, and the P&L streams' 94 and 95 (ADR 0031), read field by field by
+        `_FigureDecoder`."""
         self._deliver(message)
 
     # the account read's (ADR 0030)
@@ -895,7 +1069,7 @@ def _transport() -> tuple[Any, Any, Any]:
 
     class _FigureDecoder(Decoder):  # type: ignore[misc]
         """`ib_async`'s decoder, but ticks 1 and 21 are read field by field (see the docstring), and
-        so are the account's four messages: its PORTFOLIO_VALUE reader converts every figure with
+        so are the P&L streams' two (ADR 0031) and the account's four messages: its PORTFOLIO_VALUE reader converts every figure with
         `float()`, so one empty field drops the whole row with a logged traceback where the
         TypeScript reads it as no figure, and the other three are read here too so that every
         account message reaches the client one way."""
@@ -906,6 +1080,9 @@ def _transport() -> tuple[Any, Any, Any]:
             self.handlers[7] = lambda fields: self.wrapper.account(_read_portfolio(fields))
             self.handlers[8] = lambda fields: self.wrapper.account(_AccountTime(_text(fields, 2)))
             self.handlers[54] = lambda fields: self.wrapper.account(_AccountEnd(_text(fields, 2)))
+            # the P&L streams (ADR 0031): `ib_async`'s readers turn an empty figure into 0
+            self.handlers[94] = lambda fields: self.wrapper.figures(_read_pnl(fields))
+            self.handlers[95] = lambda fields: self.wrapper.figures(_read_pnl_single(fields))
 
         def priceSizeTick(self, fields: list[str]) -> None:
             self.wrapper.figures(_read_price(fields))
@@ -933,6 +1110,28 @@ REQUEST_TIMEOUT_MS = 8_000
 QUIET_MS = 250
 
 
+class IbkrAccountWatch(Protocol):
+    """The account held while asked (ADR 0031; `client.ts`' `IbkrAccountWatch`): the subscriptions
+    `IbkrClient.watch_account` started, and the latest picture they make."""
+
+    def picture(self) -> IbkrLiveAccount:
+        """The latest picture, a copy the caller may keep."""
+        ...
+
+    @property
+    def lost(self) -> ConnectionError | None:
+        """Set, once, when the connection closes under the watch; the picture stays the last one."""
+        ...
+
+    def on_lost(self, listener: Callable[[ConnectionError], None]) -> None:
+        """Called once, at once, when the connection closes under the watch — or now, if it has."""
+        ...
+
+    async def stop(self) -> None:
+        """The cancels, then the unsubscribe; idempotent; returns when sent."""
+        ...
+
+
 class _Found(NamedTuple):
     con_id: int | None
     silent: bool
@@ -947,6 +1146,215 @@ class _AccountRead:
     answer: "asyncio.Future[IbkrAccount]"
     read: Callable[[_AccountMessage], None]
     fail: Callable[[BaseException], None]
+
+
+@dataclass(slots=True)
+class _Stream:
+    """One followed holding's P&L stream: its request id and its last reading."""
+
+    req_id: int
+    single: IbkrPnlSingle | None = None
+
+
+class _AccountWatch:
+    """The watch's whole life (ADR 0031; `client.ts`' `startWatch`). Its messages reach it two ways:
+    the account's, which carry no request id, by the account they name (`IbkrClient._route`), and the
+    P&L streams' by their request ids (`_waiting`)."""
+
+    def __init__(self, owner: "IbkrClient", client: "Client", account: str) -> None:
+        self._owner = owner
+        self.client = client
+        self.account = account
+        loop = asyncio.get_running_loop()
+        #: the start: this watch on the first complete picture, or why not
+        self.ready: asyncio.Future[_AccountWatch] = loop.create_future()
+        # retrieved, so a start every caller gave up on does not warn that nobody heard its failure
+        self.ready.add_done_callback(lambda done: done.cancelled() or done.exception())
+        self._values: dict[tuple[str, str], AccountValueRow] = {}
+        #: by conId, in the order each first came
+        self._holdings: dict[str, IbkrHolding] = {}
+        #: each followed holding's stream, by conId
+        self._streams: dict[str, _Stream] = {}
+        self._updated_at: str | None = None
+        self._pnl: IbkrPnl | None = None
+        self._pnl_at: float | None = None
+        self._started = False
+        #: stopped, failed or lost: nothing more is heard
+        self._ended = False
+        self._lost: ConnectionError | None = None
+        self._listeners: list[Callable[[ConnectionError], None]] = []
+        self._pnl_id = owner._id()
+        self._timer: asyncio.TimerHandle | None = None
+
+    def begin(self) -> None:
+        loop = asyncio.get_running_loop()
+        self._timer = loop.call_later(self._owner.request_timeout_ms / 1000, self._late)
+        self._owner._waiting[self._pnl_id] = (self.client, self._read_pnl)
+        try:
+            _send(self.client, lambda: self.client.reqAccountUpdates(True, self.account))
+            _send(self.client, lambda: self.client.reqPnL(self._pnl_id, self.account, ""))
+        except Exception as err:  # noqa: BLE001 — the start's own failure, told to its caller
+            self._fail(err, cancel=False)
+
+    # --- the handle (`IbkrAccountWatch`) ---
+
+    def picture(self) -> IbkrLiveAccount:
+        answer = account_answer(self.account, list(self._values.values()), [], self._updated_at)
+        holdings = [
+            live_holding(h, stream.single if (stream := self._streams.get(con_id)) is not None else None)
+            for con_id, h in self._holdings.items()
+        ]
+        return cast(
+            IbkrLiveAccount,
+            {
+                **answer,
+                "holdings": holdings,
+                "pnl": None if self._pnl is None else dict(self._pnl),
+                "pnl_at": self._pnl_at,
+            },
+        )
+
+    @property
+    def lost(self) -> ConnectionError | None:
+        return self._lost
+
+    def on_lost(self, listener: Callable[[ConnectionError], None]) -> None:
+        if self._lost is not None:
+            listener(self._lost)
+        elif not self._ended:
+            self._listeners.append(listener)
+
+    async def stop(self) -> None:
+        if self._ended:
+            return
+        singles = [stream.req_id for stream in self._streams.values()]
+        self._end()
+        if not self.client.isReady():
+            return
+        for req_id in singles:
+            self.client.cancelPnLSingle(req_id)
+        self.client.cancelPnL(self._pnl_id)
+        self.client.reqAccountUpdates(False, self.account)
+
+    async def abandon(self) -> None:
+        """The caller gave up on the start: fail it, cancelling and unsubscribing, if it is still
+        running; stop the watch if it already resolved."""
+        if not self.ready.done():
+            self._end()
+            if self.client.isReady():
+                self.client.cancelPnL(self._pnl_id)
+                self.client.reqAccountUpdates(False, self.account)
+            self.ready.cancel()
+        else:
+            await self.stop()
+
+    # --- what the client calls ---
+
+    def answer(self) -> IbkrAccount:
+        """The picture as the account read answers it, for a bounded read of the watched account."""
+        picture: dict[str, Any] = dict(self.picture())
+        del picture["pnl"], picture["pnl_at"]
+        picture["holdings"] = [{k: v for k, v in h.items() if k != "daily_pnl"} for h in picture["holdings"]]
+        return cast(IbkrAccount, picture)
+
+    def read(self, message: _AccountMessage) -> None:
+        if self._ended:
+            return
+        match message:
+            case _AccountTime(time=time_of_day):
+                self._updated_at = time_of_day
+            case _AccountValue(account=whose, row=row) if whose == self.account:
+                self._values[(row["key"], row["currency"])] = row
+            case _Portfolio(account=whose, con_id=con_id, row=row) if whose == self.account:
+                holding = holding_from(row)
+                if holding["position"] == 0:
+                    # closed: out of the picture, and its stream stopped
+                    self._holdings.pop(con_id, None)
+                    self._unfollow(con_id)
+                else:
+                    self._holdings[con_id] = holding
+                    if self._started:
+                        self._follow(con_id)
+            case _AccountEnd(account=whose) if whose == self.account and not self._started:
+                self._started = True
+                if self._timer is not None:
+                    self._timer.cancel()
+                for con_id in list(self._holdings):
+                    self._follow(con_id)
+                self.ready.set_result(self)
+
+    def closed(self) -> None:
+        """The connection went: before the first picture the start fails, after it the watch is lost."""
+        if self._ended:
+            return
+        if not self._started:
+            self._fail(ConnectionError("IB Gateway's connection closed during the account read"), cancel=False)
+            return
+        self._end()
+        lost = self._lost = ConnectionError("IB Gateway's connection closed under the account watch")
+        listeners, self._listeners = self._listeners, []
+        for listener in listeners:
+            try:
+                listener(lost)
+            except Exception:  # noqa: BLE001 — a listener's fault is its own, and the rest are told
+                _log.exception("an account watch's on_lost listener raised")
+
+    # --- its own ---
+
+    def _read_pnl(self, message: _Incoming) -> None:
+        if isinstance(message, _Pnl) and not self._ended:
+            self._pnl = pnl_from(message.row)
+            self._pnl_at = self._owner.now()
+
+    def _follow(self, con_id: str) -> None:
+        if con_id in self._streams:
+            return
+        stream = _Stream(self._owner._id())
+        self._streams[con_id] = stream
+
+        def read(message: _Incoming) -> None:
+            if isinstance(message, _PnlSingle) and not self._ended:
+                stream.single = pnl_single_from(message.row)
+
+        self._owner._waiting[stream.req_id] = (self.client, read)
+        self.client.reqPnLSingle(stream.req_id, self.account, "", con_id)
+
+    def _unfollow(self, con_id: str) -> None:
+        stream = self._streams.pop(con_id, None)
+        if stream is None:
+            return
+        self._owner._waiting.pop(stream.req_id, None)
+        self.client.cancelPnLSingle(stream.req_id)
+
+    def _end(self) -> None:
+        """Forgets every route to the watch; what is sent on the way out is the caller's."""
+        self._ended = True
+        if self._timer is not None:
+            self._timer.cancel()
+        if self._owner._watching is self:
+            self._owner._watching = None
+        self._owner._waiting.pop(self._pnl_id, None)
+        for stream in self._streams.values():
+            self._owner._waiting.pop(stream.req_id, None)
+
+    def _fail(self, error: BaseException, *, cancel: bool) -> None:
+        self._end()
+        if cancel and self.client.isReady():
+            self.client.cancelPnL(self._pnl_id)
+            self.client.reqAccountUpdates(False, self.account)
+        if not self.ready.done():
+            self.ready.set_exception(error)
+
+    def _late(self) -> None:
+        if self._ended or self._started:
+            return
+        self._fail(
+            ConnectionError(
+                f"IB Gateway did not finish sending the account within {self._owner.request_timeout_ms}ms — its link "
+                "to IBKR may be down while its own socket is still open"
+            ),
+            cancel=True,
+        )
 
 
 class IbkrClient:
@@ -985,6 +1393,7 @@ class IbkrClient:
         connect_timeout_ms: int = CONNECT_TIMEOUT_MS,
         request_timeout_ms: int = REQUEST_TIMEOUT_MS,
         quiet_ms: int = QUIET_MS,
+        now: Callable[[], float] | None = None,
     ) -> None:
         # IB Gateway permits ONE connection per client id, and a second user of the same number
         # displaces the first in silence; the service's is its own port, 31415
@@ -992,6 +1401,10 @@ class IbkrClient:
         self.connect_timeout_ms = connect_timeout_ms
         self.request_timeout_ms = request_timeout_ms
         self.quiet_ms = quiet_ms
+        #: the clock an account watch stamps reqPnL's figures with (`pnl_at`), in ms since the epoch:
+        #: read once for each P&L message the watch reads, and nowhere else (`client.ts`' `now`); a
+        #: replay pins it, so the corpus carries no wall time
+        self.now: Callable[[], float] = now if now is not None else _epoch_ms
         self._client: Client | None = None
         #: the connect in flight, shared by every caller who arrives while it runs (`client.ts`'s
         #: `connecting`): IB Gateway allows one connection per client id, and the sweep, the
@@ -1012,6 +1425,8 @@ class IbkrClient:
         #: the account read in flight, which a second caller for the same account joins: IB allows
         #: a single account subscription per client at a time
         self._reading: _AccountRead | None = None
+        #: the account watch held, if any (ADR 0031): it holds the one account subscription too
+        self._watching: _AccountWatch | None = None
 
     @property
     def name(self) -> str:
@@ -1061,6 +1476,19 @@ class IbkrClient:
             if "refused" in choice:
                 raise IbkrAccountRefused(choice["refused"])
             account = choice["account"]
+            held = self._watching
+            if held is not None:
+                # a watch holds the one subscription: a subscribe and an unsubscribe of this read's
+                # own would end it, so a read of the watched account is answered from the watch
+                if held.account != account:
+                    raise RuntimeError(
+                        f"IB Gateway's one account subscription is held by a watch of {mask_account(held.account)}; "
+                        "stop it first"
+                    )
+                await asyncio.wait({held.ready})
+                if self._watching is held:
+                    return held.answer()
+                continue
             running = self._reading
             if running is None:
                 running = self._read_account(client, account)
@@ -1072,6 +1500,53 @@ class IbkrClient:
             # shielded, so one caller giving up does not cancel the read under the others; the read
             # is bounded by its own deadline
             return await asyncio.shield(running.answer)
+
+    async def watch_account(self, wanted: str | None = None) -> IbkrAccountWatch:
+        """The account HELD while asked (ADR 0031; `client.ts`' `watchAccount`): subscribe to its
+        updates and to its P&L and keep both, and once the first download ends follow each holding's
+        own P&L stream by its conId. Returns the handle on that first complete picture.
+
+        The start is the account read's: the same account chosen, the same refusals
+        (`IbkrAccountRefused`, every id masked; `IbkrUnreachable` in the connect's words), and the
+        same deadline in the same words, the cancel and the unsubscribe sent on that path too; a
+        connection that closes before the first picture fails it in the read's words. It waits for a
+        bounded read that is running, since IB allows one account subscription per client at a time,
+        and refuses while this client already holds a watch.
+
+        While held: a holding a portfolio update names for the first time starts its stream, and one
+        whose position goes to zero stops it and leaves the picture. If the connection closes — the
+        gateway goes, a price read drops it, or the client is closed — the handle says so at once
+        (`lost`, `on_lost`) and keeps its last picture; nothing re-subscribes: that is the caller's."""
+        while True:
+            try:
+                client = await self._connected()
+            except ConnectionError as err:
+                raise IbkrUnreachable(str(err)) from err
+            reader = client.wrapper
+            listed = reader.accounts if isinstance(reader, _Reader) else ""
+            choice = choose_account(managed_accounts(listed), wanted)
+            if "refused" in choice:
+                raise IbkrAccountRefused(choice["refused"])
+            if self._reading is not None:
+                # the one subscription is a bounded read's: it finishes first, whatever it comes to
+                await asyncio.wait({self._reading.answer})
+                continue
+            if self._watching is not None:
+                raise RuntimeError(
+                    f"this client already holds a watch of {mask_account(self._watching.account)}; stop it first"
+                )
+            watch = _AccountWatch(self, client, choice["account"])
+            self._watching = watch
+            watch.begin()
+            try:
+                return await asyncio.shield(watch.ready)
+            except asyncio.CancelledError:
+                # the caller gave up (review round 1 of #479): a start left running would hold the
+                # one subscription for nobody, and refuse every later watch. Abandoned, it cancels and
+                # unsubscribes as a start that fails at its deadline does — or, if it had already
+                # resolved, the watch nobody will hold is stopped
+                await watch.abandon()
+                raise
 
     def _read_account(self, client: "Client", account: str) -> _AccountRead:
         """Subscribe, collect until the download's end, unsubscribe, answer — or fail at the
@@ -1141,6 +1616,9 @@ class IbkrClient:
         # its deadline; there is no connection left to unsubscribe over
         if self._reading is not None and self._reading.client is client:
             self._reading.fail(ConnectionError("IB Gateway's connection closed during the account read"))
+        # and a watch on it is lost, or its start fails, now
+        if self._watching is not None and self._watching.client is client:
+            self._watching.closed()
         _detach(client)
         for req_id in [k for k, (owner, _) in self._waiting.items() if owner is client]:
             del self._waiting[req_id]
@@ -1253,11 +1731,15 @@ class IbkrClient:
             # only the account read: the price asks judge a silence themselves, as they always have
             if self._reading is not None and self._reading.client is message.client:
                 self._reading.fail(ConnectionError("IB Gateway's connection closed during the account read"))
+            if self._watching is not None and self._watching.client is message.client:
+                self._watching.closed()
             return
         if isinstance(message, _AccountValue | _Portfolio | _AccountTime | _AccountEnd):
             # only the attached connection's reader delivers anything (`_Reader.detach`)
             if self._reading is not None:
                 self._reading.read(message)
+            elif self._watching is not None:
+                self._watching.read(message)
             return
         if message.req_id is None:
             return
@@ -1446,6 +1928,11 @@ class IbkrClient:
             self._waiting.pop(req_id, None)
             raise
         return await answer
+
+
+def _epoch_ms() -> float:
+    """Now, in whole ms since the epoch, as JavaScript's `Date.now()`."""
+    return time.time_ns() // 1_000_000
 
 
 def _send(client: "Client", send: Callable[[], None]) -> None:

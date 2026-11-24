@@ -1,4 +1,4 @@
-/** The six messages this client sends, and the thirteen it reads.
+/** The ten messages this client sends, and the fifteen it reads.
  *
  *  Read-only by construction: there is no order message here, and none is importable, so "this
  *  service cannot trade" is true by absence rather than by discipline. IB Gateway's own Read-Only
@@ -7,8 +7,10 @@
  *  Five are a quote fetch's. Since ADR 0030 the sixth, reqAccountUpdates, reads the account: its
  *  values, its portfolio as IBKR marks it, the time of the last update and the download's end,
  *  each carrying the account's NAME rather than a request id — and the managed accounts, which
- *  the gateway sends with every handshake and this client used to ignore. Reading an account is
- *  not trading it: nothing here can place, change or cancel an order.
+ *  the gateway sends with every handshake and this client used to ignore. Since ADR 0031 four more
+ *  hold the account while asked: reqPnL and reqPnLSingle subscribe to the account's P&L and to one
+ *  holding's, each by a request id, and their two cancels stop them; PNL and PNL_SINGLE answer.
+ *  Reading an account is not trading it: nothing here can place, change or cancel an order.
  *
  *  `secType` is a field rather than a constant since ADR 0019: an index is `IND` and resolves on
  *  the exchange that calculates it, which is how SPX and VIX are reached at all — moomoo refuses
@@ -25,13 +27,13 @@
  *  gated at protocol 114 or below, and `handshake.ts` refuses anything under 156. That is what
  *  buys the absence of version branches here, and it is the whole reason for the floor.
  */
-import type { AccountValueRow, PortfolioRow } from "./fields.ts";
+import type { AccountValueRow, PnlRow, PnlSingleRow, PortfolioRow } from "./fields.ts";
 import { notComputed, readFields, toFields } from "./wire.ts";
 
 /** Outgoing message ids. */
 const OUT = {
   REQ_MKT_DATA: 1, CANCEL_MKT_DATA: 2, REQ_ACCT_DATA: 6, REQ_CONTRACT_DATA: 9,
-  REQ_MARKET_DATA_TYPE: 59,
+  REQ_MARKET_DATA_TYPE: 59, REQ_PNL: 92, CANCEL_PNL: 93, REQ_PNL_SINGLE: 94, CANCEL_PNL_SINGLE: 95,
 } as const;
 
 /** Incoming message ids — only the ones a read-only quote fetch or account read can receive. */
@@ -39,6 +41,7 @@ const IN = {
   TICK_PRICE: 1, ERROR: 4, ACCT_VALUE: 6, PORTFOLIO_VALUE: 7, ACCT_UPDATE_TIME: 8,
   NEXT_VALID_ID: 9, CONTRACT_DATA: 10, MANAGED_ACCTS: 15, TICK_OPTION_COMPUTATION: 21,
   CONTRACT_DATA_END: 52, ACCT_DOWNLOAD_END: 54, TICK_SNAPSHOT_END: 57, MARKET_DATA_TYPE: 58,
+  PNL: 94, PNL_SINGLE: 95,
 } as const;
 
 /** One option, named the way IB Gateway names them rather than the way the service does.
@@ -127,6 +130,27 @@ export function reqAccountUpdates(subscribe: boolean, account: string): string {
   return toFields([OUT.REQ_ACCT_DATA, VERSION, subscribe, account]);
 }
 
+/** Subscribe to an account's P&L (ADR 0031): its daily, unrealised and realised P&L in the base
+ *  currency, pushed about once a second while it stands. No version field, as in ibapi 9.81 and
+ *  `ib_async`; the model code is blank, which is the whole account. */
+export function reqPnL(reqId: number, account: string): string {
+  return toFields([OUT.REQ_PNL, reqId, account, ""]);
+}
+
+export function cancelPnL(reqId: number): string {
+  return toFields([OUT.CANCEL_PNL, reqId]);
+}
+
+/** Subscribe to one holding's P&L and value, in its own currency, pushed when they change. The
+ *  conId is the portfolio row's, sent as the text the gateway wrote it in. */
+export function reqPnLSingle(reqId: number, account: string, conId: string): string {
+  return toFields([OUT.REQ_PNL_SINGLE, reqId, account, "", conId]);
+}
+
+export function cancelPnLSingle(reqId: number): string {
+  return toFields([OUT.CANCEL_PNL_SINGLE, reqId]);
+}
+
 export function reqMarketDataType(type: number): string {
   const VERSION = 1;
   return toFields([OUT.REQ_MARKET_DATA_TYPE, VERSION, type]);
@@ -152,6 +176,10 @@ export type Incoming =
   /** ACCT_UPDATE_TIME: a time of day as the gateway wrote it, with no date */
   | { kind: "accountTime"; time: string }
   | { kind: "accountEnd"; account: string }
+  /** PNL: the account's P&L stream, its figures as sent (`fields.ts`' `pnlFrom` reads them) */
+  | { kind: "pnl"; reqId: number; row: PnlRow }
+  /** PNL_SINGLE: one holding's, as sent (`pnlSingleFrom`) */
+  | { kind: "pnlSingle"; reqId: number; row: PnlSingleRow }
   | { kind: "other"; id: number };
 
 export interface Greeks {
@@ -303,6 +331,25 @@ export function readMessage(payload: string): Incoming {
 
     case IN.ACCT_DOWNLOAD_END:
       return { kind: "accountEnd", account: text(f, 2) };
+
+    // The P&L streams' (ADR 0031), with no version field, every figure kept as the text it came
+    // as: what an unset or empty one MEANS is `fields.ts`', which the Python port reads alike.
+    case IN.PNL:
+      // 0 id, 1 reqId, 2 dailyPnL, 3 unrealizedPnL, 4 realizedPnL
+      return {
+        kind: "pnl", reqId: num(f, 1),
+        row: { daily_pnl: text(f, 2), unrealized_pnl: text(f, 3), realized_pnl: text(f, 4) },
+      };
+
+    case IN.PNL_SINGLE:
+      // 0 id, 1 reqId, 2 pos, 3 dailyPnL, 4 unrealizedPnL, 5 realizedPnL, 6 value
+      return {
+        kind: "pnlSingle", reqId: num(f, 1),
+        row: {
+          position: text(f, 2), daily_pnl: text(f, 3), unrealized_pnl: text(f, 4),
+          realized_pnl: text(f, 5), value: text(f, 6),
+        },
+      };
 
     default:
       return { kind: "other", id };

@@ -96,4 +96,39 @@ describe("testdata/vendors/ibkr-gateway/expected/", () => {
       ["account", "totals", "holdings"]), ["$refused"]]);
     expect(several.map((r) => r.sent)).toEqual([[], subscribed("U0000001"), []]);
   });
+
+  it("records the watches: each picture, how each ended, and every message (ADR 0031)", () => {
+    type Picture = { pnl: unknown; pnl_at: number | null; holdings: { daily_pnl: unknown }[] };
+    type Watch = { start: Picture & Record<string, unknown>; steps?: Picture[];
+      lost?: string | null; sent: string[][] };
+    const watchesOf = (name: string) => (JSON.parse(built[name]!) as { watches: Watch[] }).watches;
+    // started on the download alone, then the P&L at each step, counted by the replay's clock
+    const [plain] = watchesOf("watch-started-and-stopped");
+    expect(plain!.start).toMatchObject({ pnl: null, pnl_at: null });
+    expect(plain!.start.holdings.every((h) => h.daily_pnl === null)).toBe(true);
+    expect(plain!.steps!.map((p) => p.pnl_at)).toEqual([1, 2]);
+    // stopped: each holding's stream, then the account's P&L, then the account updates
+    expect(plain!.sent.slice(-4)).toEqual([["95", "2"], ["95", "3"], ["93", "1"],
+      ["6", "2", "0", "U0000000"]]);
+    // a holding that appears is followed, and one whose position goes to zero is let go
+    const [moving] = watchesOf("watch-holdings-come-and-go");
+    expect(moving!.steps!.map((p) => p.holdings.length)).toEqual([3, 2, 2]);
+    expect(moving!.sent).toContainEqual(["94", "4", "U0000000", "", "100000102"]);
+    // lost, said in its own words, and the stop after it sends nothing
+    const [lost] = watchesOf("watch-lost");
+    expect(lost!.lost).toBe("IB Gateway's connection closed under the account watch");
+    expect(lost!.sent.map((f) => f[0])).toEqual(["6", "92", "94"]);
+    // unset is none, in the account's P&L and a holding's
+    const [unset] = watchesOf("watch-unset-figures");
+    expect(unset!.steps![0]!.pnl).toMatchObject({ daily_pnl: null });
+    // refused as the read refuses, sending nothing; and failed at the read's deadline
+    expect(watchesOf("watch-several").map((w) => Object.keys(w.start)[0])).toEqual(
+      ["$refused", "$refused", "account"]);
+    // a P&L that comes before the download ends is in the picture the watch starts on
+    const [early] = watchesOf("watch-pnl-before-download-end");
+    expect(early!.start).toMatchObject({ pnl: { daily_pnl: 15 }, pnl_at: 1 });
+    const [never] = watchesOf("watch-never-ends");
+    expect(never!.start).toEqual({ $throws: expect.stringMatching(/did not finish sending/) });
+    expect(never!.sent.map((f) => f[0])).toEqual(["6", "92", "93", "6"]);
+  });
 });

@@ -53,6 +53,14 @@
  *  2026-11-08 — asked for delayed, it granted live. So the answer is read and carried on the
  *  record, where a configured guess would be a label that says what we hoped for.
  *
+ *  ## The account, read once or held (ADR 0030, ADR 0031)
+ *
+ *  `account()` is one bounded read: subscribe, collect until the download's end, unsubscribe.
+ *  `watchAccount()` HOLDS the account while asked — the one standing subscription this client
+ *  makes: the account updates kept, the account's P&L stream, and each holding's, followed as
+ *  holdings come and go. Both run on the price reads' connection, and when it goes the watch is
+ *  told at once and keeps its last picture; re-subscribing is the caller's.
+ *
  *  ## What is NOT here
  *
  *  Nothing that trades. `messages.ts` carries no order message and none is importable, and IB
@@ -60,20 +68,35 @@
  */
 import { contractFor } from "./contract.ts";
 import {
-  type AccountValueRow, GREEK_TICKS, type IbkrAccount, type IbkrHolding,
-  MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS, accountAnswer, chooseAccount, grade, greekFields,
-  hasFigures, holdingFrom, managedAccounts, withMid,
+  type AccountValueRow, GREEK_TICKS, type IbkrAccount, type IbkrHolding, type IbkrLiveAccount,
+  type IbkrPnl, type IbkrPnlSingle, MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS, accountAnswer,
+  chooseAccount, grade, greekFields, hasFigures, holdingFrom, liveHolding, managedAccounts,
+  maskAccount, pnlFrom, pnlSingleFrom, withMid,
 } from "./fields.ts";
 import {
-  type Incoming, cancelMktData, reqAccountUpdates, reqContractDetails,
-  reqMarketDataType,
-  reqMktData,
+  type Incoming, cancelMktData, cancelPnL, cancelPnLSingle, reqAccountUpdates, reqContractDetails,
+  reqMarketDataType, reqMktData, reqPnL, reqPnLSingle,
 } from "./messages.ts";
 import { TwsSocket, type TwsSocketConfig } from "./socket.ts";
 import type { Quote } from "../../domain/quote.ts";
 import type { QuoteBatch } from "../../quotes.ts";
 
-export type { IbkrAccount, IbkrHolding, IbkrTotals } from "./fields.ts";
+export type {
+  IbkrAccount, IbkrHolding, IbkrLiveAccount, IbkrLiveHolding, IbkrPnl, IbkrTotals,
+} from "./fields.ts";
+
+/** The account held while asked (ADR 0031): the subscriptions `watchAccount` started, and the
+ *  latest picture they make. */
+export interface IbkrAccountWatch {
+  /** the latest picture, a copy the caller may keep */
+  picture(): IbkrLiveAccount;
+  /** set, once, when the connection closes under the watch; the picture stays the last one */
+  readonly lost: Error | null;
+  /** called once, at once, when the connection closes under the watch — or now, if it has */
+  onLost(listener: (err: Error) => void): void;
+  /** the cancels, then the unsubscribe; idempotent; resolves when sent */
+  stop(): Promise<void>;
+}
 
 /** The account read could not reach IB Gateway at all: the connect failed, in its own words — a
  *  refused session ("IB Gateway refused the session: 326 …"), a refused connection ("could not
@@ -109,6 +132,10 @@ export interface IbkrConfig extends TwsSocketConfig {
    *  this number exists at all: the gateway's own end marker comes about eleven seconds late, so
    *  SOMETHING sooner has to say "that was all of them". Restarted by every new figure. */
   quietMs?: number;
+  /** The clock an account watch stamps reqPnL's figures with (`pnl_at`), in ms since the epoch.
+   *  Read once for each P&L message the watch reads, and nowhere else; a replay pins it, so the
+   *  corpus carries no wall time. */
+  now?: () => number;
 }
 
 /** A conid, once resolved. Kept for the life of the connection: a contract's identity does not
@@ -126,6 +153,19 @@ interface AccountRead {
   answer: Promise<IbkrAccount>;
   read: (message: AccountMessage) => void;
   fail: (err: Error) => void;
+}
+
+/** The account watch held now (ADR 0031): whose, over which socket, and how the client reaches it. */
+interface AccountWatch {
+  socket: TwsSocket;
+  account: string;
+  /** settles when the start does, either way */
+  started: Promise<void>;
+  /** the picture as the account read answers it, for a bounded read of the watched account */
+  answer: () => IbkrAccount;
+  read: (message: AccountMessage) => void;
+  /** the connection went: before the first picture the start fails, after it the watch is lost */
+  closed: () => void;
 }
 
 export class IbkrClient {
@@ -150,6 +190,8 @@ export class IbkrClient {
   /** The account read in flight, which a second caller for the same account joins: IB allows one
    *  account subscription per client at a time. */
   private reading: AccountRead | null = null;
+  /** The account watch held, if any (ADR 0031): it holds the one account subscription too. */
+  private watching: AccountWatch | null = null;
 
   constructor(config: IbkrConfig) {
     this.config = config;
@@ -185,6 +227,8 @@ export class IbkrClient {
     if (this.reading?.socket === socket) {
       this.reading.fail(new Error("IB Gateway's connection closed during the account read"));
     }
+    // and a watch on it is lost, or its start fails, now
+    if (this.watching?.socket === socket) this.watching.closed();
     socket.close();
     for (const [id, entry] of this.waiting) if (entry.socket === socket) this.waiting.delete(id);
     if (this.socket !== socket) return;
@@ -231,6 +275,7 @@ export class IbkrClient {
       if (this.reading?.socket === socket) {
         this.reading.fail(new Error("IB Gateway's connection closed during the account read"));
       }
+      if (this.watching?.socket === socket) this.watching.closed();
     });
     if (generation !== this.generation) {
       socket.close();
@@ -249,6 +294,7 @@ export class IbkrClient {
     if (message.kind === "accountValue" || message.kind === "portfolio"
       || message.kind === "accountTime" || message.kind === "accountEnd") {
       if (this.reading?.socket === socket) this.reading.read(message);
+      else if (this.watching?.socket === socket) this.watching.read(message);
       return;
     }
     if (!("reqId" in message)) return;
@@ -347,12 +393,206 @@ export class IbkrClient {
       }
       const choice = chooseAccount(managedAccounts(this.managed.get(socket) ?? ""), wanted ?? null);
       if ("refused" in choice) throw new IbkrAccountRefused(choice.refused);
+      const held = this.watching;
+      if (held !== null) {
+        // a watch holds the one subscription: a subscribe and an unsubscribe of this read's own
+        // would end it, so a read of the watched account is answered from the watch
+        if (held.account !== choice.account) {
+          throw new Error(`IB Gateway's one account subscription is held by a watch of `
+            + `${maskAccount(held.account)}; stop it first`);
+        }
+        await held.started;
+        if (this.watching === held) return held.answer();
+        continue;
+      }
       const running = this.reading;
       if (running === null) return this.readAccount(socket, choice.account);
       if (running.socket === socket && running.account === choice.account) return running.answer;
       // another account's read holds the one subscription: it finishes first, whatever it comes to
       await running.answer.catch(() => undefined);
     }
+  }
+
+  /** The account HELD while asked (ADR 0031): subscribe to its updates and to its P&L and keep
+   *  both, and once the first download ends follow each holding's own P&L stream by its conId.
+   *  Resolves with the handle on that first complete picture.
+   *
+   *  The start is the account read's: the same account chosen, the same refusals
+   *  (`IbkrAccountRefused`, every id masked; `IbkrUnreachable` in the connect's words), and the same
+   *  deadline (`requestTimeoutMs`) in the same words, the cancel and the unsubscribe sent on that
+   *  path too; a connection that closes before the first picture fails it in the read's words. It
+   *  waits for a bounded read that is running, since IB allows one account subscription per client
+   *  at a time, and refuses while this client already holds a watch.
+   *
+   *  While held: a holding a portfolio update names for the first time starts its stream, and one
+   *  whose position goes to zero stops it and leaves the picture. If the connection closes — the
+   *  gateway goes, a price read drops it, or the client is closed — the handle says so at once
+   *  (`lost`, `onLost`) and keeps its last picture; nothing re-subscribes: that is the caller's. */
+  async watchAccount(wanted?: string): Promise<IbkrAccountWatch> {
+    for (;;) {
+      let socket: TwsSocket;
+      try {
+        socket = await this.connected();
+      } catch (err) {
+        throw new IbkrUnreachable(err instanceof Error ? err.message : String(err));
+      }
+      const choice = chooseAccount(managedAccounts(this.managed.get(socket) ?? ""), wanted ?? null);
+      if ("refused" in choice) throw new IbkrAccountRefused(choice.refused);
+      if (this.reading !== null) {
+        // the one subscription is a bounded read's: it finishes first, whatever it comes to
+        await this.reading.answer.catch(() => undefined);
+        continue;
+      }
+      if (this.watching !== null) {
+        throw new Error(`this client already holds a watch of ${maskAccount(this.watching.account)}; `
+          + "stop it first");
+      }
+      return this.startWatch(socket, choice.account);
+    }
+  }
+
+  /** The watch's whole life. Its messages reach it two ways: the account's, which carry no request
+   *  id, by the account they name (`route`), and the P&L streams' by their request ids (`waiting`). */
+  private startWatch(socket: TwsSocket, account: string): Promise<IbkrAccountWatch> {
+    const { requestTimeoutMs = 8_000, now = Date.now } = this.config;
+    const values = new Map<string, AccountValueRow>();
+    /** by conId, in the order each first came */
+    const holdings = new Map<string, IbkrHolding>();
+    /** each followed holding's stream, by conId: its request id and its last reading */
+    const streams = new Map<string, { reqId: number; single: IbkrPnlSingle | null }>();
+    let updatedAt: string | null = null;
+    let pnl: IbkrPnl | null = null;
+    let pnlAt: number | null = null;
+    let started = false;
+    let ended = false;                          // stopped, failed or lost: nothing more is heard
+    let lost: Error | null = null;
+    const listeners: ((err: Error) => void)[] = [];
+    const pnlId = this.nextId++;
+    let resolve!: (watch: IbkrAccountWatch) => void;
+    let reject!: (err: Error) => void;
+    const ready = new Promise<IbkrAccountWatch>((yes, no) => { resolve = yes; reject = no; });
+
+    const picture = (): IbkrLiveAccount => ({
+      ...accountAnswer(account, [...values.values()], [], updatedAt),
+      holdings: [...holdings].map(([conId, h]) => liveHolding(h, streams.get(conId)?.single ?? null)),
+      pnl: pnl === null ? null : { ...pnl },
+      pnl_at: pnlAt,
+    });
+    /** forgets every route to the watch; what is sent on the way out is the caller's */
+    const end = () => {
+      ended = true;
+      clearTimeout(timer);
+      if (this.watching === entry) this.watching = null;
+      this.waiting.delete(pnlId);
+      for (const { reqId } of streams.values()) this.waiting.delete(reqId);
+    };
+    const follow = (conId: string) => {
+      if (streams.has(conId)) return;
+      const stream = { reqId: this.nextId++, single: null as IbkrPnlSingle | null };
+      streams.set(conId, stream);
+      this.waiting.set(stream.reqId, {
+        socket, read: (m) => { if (m.kind === "pnlSingle" && !ended) stream.single = pnlSingleFrom(m.row); },
+      });
+      socket.send(reqPnLSingle(stream.reqId, account, conId));
+    };
+    const unfollow = (conId: string) => {
+      const stream = streams.get(conId);
+      if (!stream) return;
+      streams.delete(conId);
+      this.waiting.delete(stream.reqId);
+      socket.send(cancelPnLSingle(stream.reqId));
+    };
+    const fail = (err: Error, cancel: boolean) => {
+      end();
+      if (cancel && socket.connected) {
+        socket.send(cancelPnL(pnlId));
+        socket.send(reqAccountUpdates(false, account));
+      }
+      reject(err);
+    };
+    const timer = setTimeout(() => fail(new Error(
+      `IB Gateway did not finish sending the account within ${requestTimeoutMs}ms — its link `
+      + "to IBKR may be down while its own socket is still open"), true), requestTimeoutMs);
+
+    const watch: IbkrAccountWatch = {
+      picture,
+      get lost() { return lost; },
+      onLost: (listener) => {
+        if (lost !== null) listener(lost);
+        else if (!ended) listeners.push(listener);
+      },
+      stop: async () => {
+        if (ended) return;
+        const singles = [...streams.values()].map((s) => s.reqId);
+        end();
+        if (!socket.connected) return;
+        for (const reqId of singles) socket.send(cancelPnLSingle(reqId));
+        socket.send(cancelPnL(pnlId));
+        socket.send(reqAccountUpdates(false, account));
+      },
+    };
+    const entry: AccountWatch = {
+      socket, account,
+      started: ready.then(() => undefined, () => undefined),
+      answer: () => {
+        const { pnl: _pnl, pnl_at: _at, holdings: live, ...rest } = picture();
+        return { ...rest, holdings: live.map(({ daily_pnl: _daily, ...holding }) => holding) };
+      },
+      read: (message) => {
+        if (ended) return;
+        if (message.kind === "accountTime") {
+          updatedAt = message.time;
+          return;
+        }
+        if (message.account !== account) return;
+        if (message.kind === "accountValue") {
+          values.set(`${message.row.key}\0${message.row.currency}`, message.row);
+        } else if (message.kind === "portfolio") {
+          const holding = holdingFrom(message.row);
+          if (holding.position === 0) {
+            // closed: out of the picture, and its stream stopped
+            holdings.delete(message.conId);
+            unfollow(message.conId);
+          } else {
+            holdings.set(message.conId, holding);
+            if (started) follow(message.conId);
+          }
+        } else if (!started) {
+          started = true;
+          clearTimeout(timer);
+          for (const conId of holdings.keys()) follow(conId);
+          resolve(watch);
+        }
+      },
+      closed: () => {
+        if (ended) return;
+        if (!started) return fail(new Error("IB Gateway's connection closed during the account read"), false);
+        end();
+        lost = new Error("IB Gateway's connection closed under the account watch");
+        for (const listener of listeners.splice(0)) {
+          try {
+            listener(lost);
+          } catch (err) {
+            console.error("an account watch's onLost listener threw:", err);
+          }
+        }
+      },
+    };
+    this.watching = entry;
+    this.waiting.set(pnlId, {
+      socket, read: (m) => {
+        if (m.kind !== "pnl" || ended) return;
+        pnl = pnlFrom(m.row);
+        pnlAt = now();
+      },
+    });
+    try {
+      socket.send(reqAccountUpdates(true, account));
+      socket.send(reqPnL(pnlId, account));
+    } catch (err) {
+      fail(err instanceof Error ? err : new Error(String(err)), false);
+    }
+    return ready;
   }
 
   /** Subscribe, collect until the download's end, unsubscribe, answer — or fail at the deadline,

@@ -176,6 +176,32 @@ export interface IbkrAccount {
   holdings: IbkrHolding[];
 }
 
+/** reqPnL's figures for the account, in the BASE currency; null where IB sent it unset (ADR 0031). */
+export interface IbkrPnl {
+  daily_pnl: number | null;
+  unrealized_pnl: number | null;
+  realized_pnl: number | null;
+}
+
+/** A holding as the account watch holds it (ADR 0031): `IbkrHolding`, where `market_value`,
+ *  `unrealized_pnl` and `market_price` (value / (position × multiplier)) are the holding's own P&L
+ *  stream's once it has spoken for it — in the holding's own currency, as the account read's are —
+ *  and the rest the account updates'. */
+export interface IbkrLiveHolding extends IbkrHolding {
+  /** the stream's daily P&L, in the holding's currency; null before it speaks, or where unset */
+  daily_pnl: number | null;
+}
+
+/** The account as the watch holds it: the account read's answer, its holdings live, and the
+ *  account's P&L apart from the totals, which stay the account updates' (ADR 0031). */
+export interface IbkrLiveAccount extends Omit<IbkrAccount, "holdings"> {
+  holdings: IbkrLiveHolding[];
+  /** reqPnL's last figures; null before it first speaks */
+  pnl: IbkrPnl | null;
+  /** when reqPnL last spoke, ms since the epoch by the client's `now`; null before */
+  pnl_at: number | null;
+}
+
 /** The account's totals from ACCT_VALUE, in the base currency; null where the gateway sent none. */
 export interface IbkrTotals {
   /** NetLiquidation */
@@ -390,5 +416,84 @@ export function accountAnswer(
   return {
     account: maskAccount(id), paper: isPaper(id), base_currency: base, updated_at: updatedAt,
     totals, exchange_rates: exchangeRates, holdings,
+  };
+}
+
+// --- the account watch (ADR 0031) ----------------------------------------------------------------
+
+/** What IB sends for a figure it has not set: Java's `Double.MAX_VALUE`, written out in full
+ *  (`1.7976931348623157E308`) — `ib_async`'s `UNSET_DOUBLE`. Read as a number it would be a P&L of
+ *  1.8e308, so a P&L stream's figure equal to it is none (ADR 0031). */
+export const UNSET_DOUBLE = Number.MAX_VALUE;
+
+/** One PNL message's figures, as the wire carried them (`messages.ts`). */
+export interface PnlRow {
+  daily_pnl: string;
+  unrealized_pnl: string;
+  realized_pnl: string;
+}
+
+/** One PNL_SINGLE message's figures, as the wire carried them. */
+export interface PnlSingleRow {
+  position: string;
+  daily_pnl: string;
+  unrealized_pnl: string;
+  realized_pnl: string;
+  value: string;
+}
+
+/** One holding's P&L stream, read: in the holding's own currency, null where unset or empty. */
+export interface IbkrPnlSingle {
+  position: number | null;
+  daily_pnl: number | null;
+  unrealized_pnl: number | null;
+  realized_pnl: number | null;
+  value: number | null;
+}
+
+/** A stream's figure: none where the field is empty, not a number, or IB's unset. */
+function streamFigure(text: string): number | null {
+  const value = figureOf(text);
+  return value === UNSET_DOUBLE ? null : value;
+}
+
+/** reqPnL's message as the account's P&L. */
+export function pnlFrom(row: PnlRow): IbkrPnl {
+  return {
+    daily_pnl: streamFigure(row.daily_pnl),
+    unrealized_pnl: streamFigure(row.unrealized_pnl),
+    realized_pnl: streamFigure(row.realized_pnl),
+  };
+}
+
+/** reqPnLSingle's message as one holding's stream reading. */
+export function pnlSingleFrom(row: PnlSingleRow): IbkrPnlSingle {
+  return {
+    position: streamFigure(row.position),
+    daily_pnl: streamFigure(row.daily_pnl),
+    unrealized_pnl: streamFigure(row.unrealized_pnl),
+    realized_pnl: streamFigure(row.realized_pnl),
+    value: streamFigure(row.value),
+  };
+}
+
+/** A holding as the watch holds it: the account update's row, with its value, unrealised P&L and
+ *  mark the stream's where the stream has a figure for each, and the stream's daily P&L.
+ *
+ *  The mark is DERIVED, per share: the stream's value over the position times the multiplier (none,
+ *  as for a stock, is 1) — the position the stream sent with that value, or the row's where it sent
+ *  none. A figure the stream left unset leaves the row's, so a stream that has said nothing yet
+ *  changes nothing but adding a daily P&L of none. */
+export function liveHolding(holding: IbkrHolding, single: IbkrPnlSingle | null): IbkrLiveHolding {
+  if (single === null) return { ...holding, daily_pnl: null };
+  const position = single.position ?? holding.position;
+  const multiplier = holding.multiplier !== null && holding.multiplier > 0 ? holding.multiplier : 1;
+  const size = position === null ? 0 : position * multiplier;
+  return {
+    ...holding,
+    market_price: single.value !== null && size !== 0 ? single.value / size : holding.market_price,
+    market_value: single.value ?? holding.market_value,
+    unrealized_pnl: single.unrealized_pnl ?? holding.unrealized_pnl,
+    daily_pnl: single.daily_pnl,
   };
 }

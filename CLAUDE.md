@@ -186,15 +186,23 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   conversations (ADR 0030) are CONSTRUCTED and only ever will be (a recorded one is refused) —
   the repository is public; a capture of the live account stays on the owner's machine and is
   deleted once read — and replay
-  `accountReads` beside the asks. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
+  `accountReads` beside the asks, and since ADR 0031 `watches`: a watch is replayed STEP BY STEP, an
+  exchange's `later` replies sent at a numbered step (`fake.ts`' `step`), a picture recorded after
+  each, and each step ending with the account's P&L (or, for a watch's `before` steps sent while its
+  start waits, the last with the download end, the start resolving), so the replay knows the client
+  has read it once the client's clock — a counter, read once per P&L message — has been read once
+  for every P&L the stub wrote: a condition, not a timer, and `pnl_at` in `expected/` a count, never
+  a wall time. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
   replayed through the fake by `ibkr/replay.ts`, every reply at once. `make check-cases` and
   `cases/gateway.test.ts` fail when one is stale, missing, or has no recording; outside the
   fingerprint for the vendor corpus' reason. Its README is written for the Python stub's author,
   and that stub is `python/tests/fake_gateway.py`: `tests/test_ibkr_gateway.py` replays EVERY
   recording through it to the Python client and compares the batch, or the exact words raised, to
   `expected/` with `test_cases.same` — and each account read's answer, refusal or words raised, and
-  the account subscriptions it sent, message for message. Parametrized from the directory, so a new recording is
-  replayed there too and fails until the Python answers what the TypeScript did.
+  the account subscriptions it sent, message for message; and each watch's every picture, how it
+  ended, and the subscriptions, P&L requests and cancels it sent. Parametrized from the directory,
+  so a new recording is replayed there too and fails until the Python answers what the TypeScript
+  did.
 - **Door scenarios** (ADR 0021, phase 1c): `testdata/scenarios/{http,bot,sweep}/` — a stated world
   (rows, `.env` lines, what each vendor answers, the clock), ONE request, Telegram update or sweep
   tick, and exactly what the service did: the response or reply, the rows it changed, the messages
@@ -310,7 +318,21 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   most its last three (`U•••••567`) — nothing stored, never asked by the sweep; a read of another
   account waits for the running one, and the 2100 answering each unsubscribe is ignored. The P&L
   is read from `$LEDGER-…` BASE rows and the exchange rates from `$LEDGER-ExchangeRate`, as the
-  live gateway sends them (measured 2026-11-23); the answer's mapping is `fields.ts`', cased;
+  live gateway sends them (measured 2026-11-23); the answer's mapping is `fields.ts`', cased.
+  Since ADR 0031 it also HOLDS the account while asked: `IbkrClient.watchAccount(wanted?)`, the
+  one standing subscription the client makes, keeps the account updates subscribed, subscribes
+  to the account's P&L (reqPnL 92) and, once the first download ends, to each holding's by its
+  conId (reqPnLSingle 94), following holdings as portfolio updates add them or take one to zero;
+  it starts under the read's deadline, refusals and words, and resolves with an `IbkrAccountWatch`
+  — `picture()` (an `IbkrLiveAccount`: the read's answer, its holdings' value, unrealised P&L and
+  mark the streams' where they have a figure, each holding's `daily_pnl`, and the account's `pnl`
+  and `pnl_at` apart from the totals), `lost` and `onLost` (told at once when the connection goes —
+  the gateway, a failed price read, a close — the picture kept, nothing re-subscribed), and
+  `stop()` (each holding's cancel 95, cancelPnL 93, then the unsubscribe). IB's unset figure,
+  `Double.MAX_VALUE`, is none (`UNSET_DOUBLE`, `pnlFrom`, `pnlSingleFrom`, `liveHolding`, cased).
+  While one is held a bounded read of that account is answered from it, sending nothing, and
+  another account's read, or a second watch, is refused; the client's optional `now` stamps
+  `pnl_at`;
   `yahoo/` wraps
   `yahoo-finance2`. Each vendor's pure `fields.ts` is re-exported by `vendors/fields.ts`, a door
   of its own so `testdata/vendors/` can record one truth for two languages: it imports nothing but
@@ -596,7 +618,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   0030) reads the account's four messages field by field in the same decoder subclass, since
   `ib_async`'s PORTFOLIO_VALUE reader drops a whole row over one empty figure, and its mapping
   (`managed_accounts`, `mask_account`, `is_paper`, `choose_account`, `per_share_cost`,
-  `holding_from`, `account_answer`) is held to `ibkr-fields.json`. One module rather than a
+  `holding_from`, `account_answer`) is held to `ibkr-fields.json`. Its `watch_account()` (ADR 0031)
+  is `watchAccount`'s port, its handle the same four (`picture()`, `lost`, `on_lost`, `async
+  stop()`), and the P&L streams' two messages (94, 95) are read field by field in the same subclass
+  because `ib_async`'s readers turn an empty figure into 0; `pnl_from`, `pnl_single_from` and
+  `live_holding` are held to `ibkr-fields.json` too. One module rather than a
   subpackage, like its two siblings: the TypeScript splits `ibkr/` by layer because it owns the
   wire, which `ib_async` owns here. The stub answers `managedAccounts` because `ib_async` will not
   report a connection until the accounts list is populated — recorded in SHAPE (one

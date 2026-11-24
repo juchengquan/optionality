@@ -5,7 +5,10 @@ import { createConnection } from "node:net";
 import { type FakeGateway, startFakeGateway } from "./fake.ts";
 import { greeting, startApi } from "./handshake.ts";
 import type { Incoming } from "./messages.ts";
-import { cancelMktData, reqAccountUpdates, reqContractDetails, reqMktData } from "./messages.ts";
+import {
+  cancelMktData, cancelPnLSingle, reqAccountUpdates, reqContractDetails, reqMktData, reqPnL,
+  reqPnLSingle,
+} from "./messages.ts";
 import { loadConversation } from "./recordings.ts";
 import { TwsSocket } from "./socket.ts";
 import { frame, readFields, readFrames } from "./wire.ts";
@@ -202,6 +205,62 @@ describe("replaying a recording", () => {
     socket.send(reqAccountUpdates(false, "DU0000000"));
     await waitFor(() => seen.some((m) => m.kind === "error" && m.code === 2100));
     expect(seen.filter((m) => m.kind === "accountValue")).toHaveLength(1);
+  });
+
+  it("answers a P&L request with nothing at once, and its figures at each step (ADR 0031)", async () => {
+    const { socket, seen } = await connected("watch-started-and-stopped");
+    socket.send(reqAccountUpdates(true, "U0000000"));
+    socket.send(reqPnL(11, "U0000000"));
+    socket.send(reqPnLSingle(12, "U0000000", "100000101"));
+    await waitFor(() => seen.some((m) => m.kind === "accountEnd"));
+    await waitFor(() => gateway!.received.some((m) => m[0] === "94"));
+    expect(seen.filter((m) => m.kind === "pnl" || m.kind === "pnlSingle")).toEqual([]);
+    await gateway!.step(1);
+    await waitFor(() => seen.some((m) => m.kind === "pnl"));
+    // in the file's order, each with the id its request was sent with; the call's stream was never
+    // asked for, so its step-1 figures go nowhere
+    expect(seen.filter((m) => m.kind === "pnl" || m.kind === "pnlSingle")
+      .map((m) => [m.kind, "reqId" in m ? m.reqId : null])).toEqual([["pnlSingle", 12], ["pnl", 11]]);
+    expect(gateway!.written.at(-1)).toEqual(["94", "11", "152.40", "1436.50", "120.00"]);
+  });
+
+  it("sends a stream's later figures no more once it is cancelled", async () => {
+    const { socket, seen } = await connected("watch-started-and-stopped");
+    socket.send(reqPnL(11, "U0000000"));
+    socket.send(reqPnLSingle(12, "U0000000", "100000101"));
+    await waitFor(() => gateway!.received.some((m) => m[0] === "94"));
+    await gateway!.step(1);
+    await waitFor(() => seen.some((m) => m.kind === "pnl"));
+    socket.send(cancelPnLSingle(12));
+    await waitFor(() => gateway!.received.some((m) => m[0] === "95"));
+    await gateway!.step(2);
+    await waitFor(() => seen.filter((m) => m.kind === "pnl").length === 2);
+    expect(seen.filter((m) => m.kind === "pnlSingle")).toHaveLength(1);
+  });
+
+  it("sends an account's later updates at their step, while it is subscribed", async () => {
+    const { socket, seen } = await connected("watch-holdings-come-and-go");
+    socket.send(reqAccountUpdates(true, "U0000000"));
+    socket.send(reqPnL(11, "U0000000"));
+    await waitFor(() => seen.some((m) => m.kind === "accountEnd"));
+    const before = seen.filter((m) => m.kind === "portfolio").length;
+    await gateway!.step(1);
+    await waitFor(() => seen.some((m) => m.kind === "pnl"));
+    expect(seen.filter((m) => m.kind === "portfolio").length).toBe(before + 1);
+  });
+
+  it("waits, at a step, for a request it has later replies for, if it comes within a second", async () => {
+    // a client sends a holding's request as it reads the download, and the stub may not have read
+    // it yet when the replay moves on: the step must not race it
+    const { socket, seen } = await connected("watch-started-and-stopped");
+    socket.send(reqPnL(11, "U0000000"));
+    socket.send(reqPnLSingle(12, "U0000000", "100000101"));
+    const stepping = gateway!.step(1);
+    setTimeout(() => socket.send(reqPnLSingle(13, "U0000000", "100000201")), 50);
+    await stepping;
+    await waitFor(() => seen.some((m) => m.kind === "pnl"));
+    expect(seen.filter((m) => m.kind === "pnlSingle").map((m) => "reqId" in m && m.reqId))
+      .toEqual([12, 13]);
   });
 
   it("replays a conversation given as data, not only by name", async () => {

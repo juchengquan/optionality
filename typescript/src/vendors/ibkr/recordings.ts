@@ -45,6 +45,16 @@ export type ContractKey = (typeof CONTRACT_KEYS)[number];
  *  snapshot of SPX carries no price at all, and its stream does (`index-in-the-session`). */
 export const SNAPSHOT_AT = 17;
 
+/** Replies an exchange sends LATER than its request: at a step of the replay (ADR 0031). A watch is
+ *  a subscription the gateway keeps answering, and a picture can only be taken BETWEEN its answers
+ *  if a replay sends them in turns; so the replay advances step by step, and at each sends the
+ *  replies every exchange has for that step, if its request has been made by then. */
+export interface Later {
+  /** 1 is the first step; the watches number them in turn */
+  step: number;
+  replies: Message[];
+}
+
 /** One request and everything the gateway sent because of it.
  *
  *  Several exchanges for the same request and contract answer in TURN, the last one every request
@@ -63,6 +73,7 @@ export interface QuoteExchange {
   atMs: number[];
   /** what the gateway said to cancelMktData for this request, if anything */
   onCancel?: Message[];
+  later?: Later[];
 }
 
 /** An account subscription and everything the gateway sent because of it (ADR 0030). Matched on
@@ -75,9 +86,58 @@ export interface AccountExchange {
   replies: Message[];
   atMs: number[];
   onCancel?: Message[];
+  /** account updates pushed while the subscription stands: a portfolio row as a holding trades */
+  later?: Later[];
 }
 
-export type Exchange = QuoteExchange | AccountExchange;
+/** A P&L subscription (ADR 0031): the account's (`reqPnL`), matched on the account it names, or one
+ *  holding's (`reqPnLSingle`), on the account and the conId. Its answers carry its request id, so
+ *  `$reqId` stands for it. Every figure a stream sends is `later`: `replies` are empty, so the
+ *  picture a watch starts with is the download's alone, whenever the client looks at it. */
+export interface PnlExchange {
+  request: "reqPnL";
+  account: string;
+  sent: Message;
+  replies: Message[];
+  atMs: number[];
+  onCancel?: Message[];
+  later?: Later[];
+}
+
+export interface PnlSingleExchange {
+  request: "reqPnLSingle";
+  account: string;
+  conId: string;
+  sent: Message;
+  replies: Message[];
+  atMs: number[];
+  onCancel?: Message[];
+  later?: Later[];
+}
+
+export type Exchange = QuoteExchange | AccountExchange | PnlExchange | PnlSingleExchange;
+
+/** Where reqPnL and reqPnLSingle name the account, and reqPnLSingle the holding: field 2 and field
+ *  4, after the message id and the request id, from this client and `ib_async` alike. */
+export const PNL_ACCOUNT_AT = 2;
+export const PNL_CONID_AT = 4;
+
+/** How a watch's replay ends: the caller stops it, or the gateway's connection drops under it. */
+export type WatchEnd = "stop" | "drop";
+
+/** One account watch a replay makes (ADR 0031): start it naming `wanted` (or none), advance
+ *  `steps` steps, a picture after each, then end it.
+ *
+ *  `before`, where a file has it, is steps sent while the start is still WAITING for the download
+ *  to end: the last of them carries the download end, so whatever comes ahead of it in that step —
+ *  the account's P&L — is in the picture the watch starts on. The start resolving is how the replay
+ *  knows that step has been read. */
+export interface Watch {
+  wanted: string | null;
+  before?: number;
+  steps: number;
+  end: WatchEnd;
+}
 
 /** Where reqAccountUpdates says whether it subscribes ("1") or stops ("0"), and which account it
  *  names: version 2, from this client and `ib_async` alike. */
@@ -119,6 +179,9 @@ export interface Conversation {
   /** Account reads made after the asks by the SAME client, in order, each naming the account it
    *  wants or none (ADR 0030). Absent for a quote fetch's conversation. */
   accountReads?: { wanted: string | null }[];
+  /** Account watches made after the reads by the SAME client, in order (ADR 0031). Their steps are
+   *  numbered in turn across them: the first watch's are 1 to its `steps`, the next's after. */
+  watches?: Watch[];
   handshake: {
     /** the gateway's answer to the version range: its protocol version, then its clock */
     greeting: Message;
@@ -201,8 +264,30 @@ export function parseConversation(name: string, value: unknown): Conversation {
       return { wanted: read.wanted as string | null };
     })
     : fail("accountReads must be a list");
-  if (ask.length === 0 && (reads === undefined || reads.length === 0)) {
-    fail("a conversation must ask for a quote or read the account");
+  const watches = c.watches === undefined ? undefined : Array.isArray(c.watches)
+    ? c.watches.map((w, i): Watch => {
+      const watch = object(w, `watches[${i}]`);
+      if (watch.wanted !== null && typeof watch.wanted !== "string") {
+        fail(`watches[${i}].wanted must be an account or null`);
+      }
+      if (!Number.isInteger(watch.steps) || (watch.steps as number) < 0) {
+        fail(`watches[${i}].steps must be a whole number of steps`);
+      }
+      if (watch.end !== "stop" && watch.end !== "drop") fail(`watches[${i}].end must be "stop" or "drop"`);
+      if (watch.before !== undefined
+        && (!Number.isInteger(watch.before) || (watch.before as number) < 1)) {
+        fail(`watches[${i}].before must be a whole number of steps, 1 or more`);
+      }
+      return {
+        wanted: watch.wanted as string | null,
+        ...(watch.before === undefined ? {} : { before: watch.before as number }),
+        steps: watch.steps as number, end: watch.end as WatchEnd,
+      };
+    })
+    : fail("watches must be a list");
+  if (ask.length === 0 && (reads === undefined || reads.length === 0)
+    && (watches === undefined || watches.length === 0)) {
+    fail("a conversation must ask for a quote, read the account or watch it");
   }
 
   const exchanges = Array.isArray(c.exchanges)
@@ -218,15 +303,42 @@ export function parseConversation(name: string, value: unknown): Conversation {
       const sent = message(x.sent, `${where}.sent`);
       const onCancel = x.onCancel === undefined
         ? {} : { onCancel: messages(x.onCancel, `${where}.onCancel`) };
+      const later = x.later === undefined ? {} : {
+        later: Array.isArray(x.later) ? x.later.map((l, j): Later => {
+          const at = object(l, `${where}.later[${j}]`);
+          if (!Number.isInteger(at.step) || (at.step as number) < 1) {
+            fail(`${where}.later[${j}].step must be a step, 1 or more`);
+          }
+          return { step: at.step as number, replies: messages(at.replies, `${where}.later[${j}].replies`) };
+        }) : fail(`${where}.later must be a list`),
+      };
       if (x.request === "reqAccountUpdates") {
         const account = text(x.account, `${where}.account`);
         if (sent[0] !== "6" || sent[SUBSCRIBE_AT] !== "1" || sent[ACCOUNT_AT] !== account) {
           fail(`${where}.sent must subscribe to ${account}, as reqAccountUpdates does`);
         }
-        return { request: "reqAccountUpdates", account, sent, replies, atMs, ...onCancel };
+        return { request: "reqAccountUpdates", account, sent, replies, atMs, ...onCancel, ...later };
+      }
+      if (x.request === "reqPnL" || x.request === "reqPnLSingle") {
+        const account = text(x.account, `${where}.account`);
+        if (replies.length > 0) {
+          fail(`${where}.replies must be empty: a stream's figures come later, at a step`);
+        }
+        if (x.request === "reqPnL") {
+          if (sent[0] !== "92" || sent[PNL_ACCOUNT_AT] !== account) {
+            fail(`${where}.sent must ask for ${account}'s P&L, as reqPnL does`);
+          }
+          return { request: "reqPnL", account, sent, replies, atMs, ...onCancel, ...later };
+        }
+        const conId = text(x.conId, `${where}.conId`);
+        if (sent[0] !== "94" || sent[PNL_ACCOUNT_AT] !== account || sent[PNL_CONID_AT] !== conId) {
+          fail(`${where}.sent must ask for ${account}'s ${conId}, as reqPnLSingle does`);
+        }
+        return { request: "reqPnLSingle", account, conId, sent, replies, atMs, ...onCancel, ...later };
       }
       if (x.request !== "reqContractDetails" && x.request !== "reqMktData") {
-        fail(`${where}.request must be reqContractDetails, reqMktData or reqAccountUpdates`);
+        fail(`${where}.request must be reqContractDetails, reqMktData, reqAccountUpdates, reqPnL `
+          + "or reqPnLSingle");
       }
       const contract = object(x.contract, `${where}.contract`);
       for (const key of CONTRACT_KEYS) {
@@ -240,14 +352,63 @@ export function parseConversation(name: string, value: unknown): Conversation {
         contract: contract as Record<ContractKey, string>,
         sent,
         replies, atMs,
-        ...onCancel,
+        ...onCancel, ...later,
       };
     })
     : fail("exchanges must be a list");
 
+  // ADR 0031: a replay knows the client has read a step when it has read the step's last P&L,
+  // so each step ends with the account's: its reqPnL exchange is the last that answers at it —
+  // but for the step a watch's download ends at (its last `before` step), which ends with that
+  // download end, the start resolving being how the replay knows it has been read
+  const steps = (watches ?? []).reduce((n, w) => n + (w.before ?? 0) + w.steps, 0);
+  const opening = new Set<number>();
+  /** every step sent while a watch's start still waits */
+  const waiting = new Set<number>();
+  (watches ?? []).reduce((first, w) => {
+    for (let step = first; step < first + (w.before ?? 0); step++) waiting.add(step);
+    if (w.before) opening.add(first + w.before - 1);
+    return first + (w.before ?? 0) + w.steps;
+  }, 1);
+  // a holding's stream is asked for only once the download ends: at a step before that, its
+  // reply would be sent to nobody (review round 2 of #479)
+  for (const e of exchanges) {
+    if (e.request !== "reqPnLSingle") continue;
+    for (const l of e.later ?? []) {
+      if (waiting.has(l.step)) {
+        fail(`a holding's stream cannot answer at step ${l.step}, before its watch has started`);
+      }
+    }
+  }
+  for (const e of exchanges) {
+    for (const l of e.later ?? []) {
+      if (l.step > steps) fail(`a later reply comes at step ${l.step}, and the watches take ${steps}`);
+    }
+  }
+  for (let step = 1; step <= steps; step++) {
+    const last = exchanges.filter((e) => e.later?.some((l) => l.step === step)).at(-1);
+    const replies = last?.later?.filter((l) => l.step === step).flatMap((l) => l.replies) ?? [];
+    if (opening.has(step)) {
+      if (last?.request !== "reqAccountUpdates" || replies.at(-1)?.[0] !== "54") {
+        fail(`step ${step} must end with the download end a watch starts on, from a `
+          + "reqAccountUpdates exchange");
+      }
+      // and that download does not ALSO end at once, which both clients would start on first,
+      // before the step's P&L (review round 2 of #479)
+      if (last?.request === "reqAccountUpdates" && last.replies.some((m) => m[0] === "54")) {
+        fail(`${last.account}'s account exchange must not end the download at once: its watch `
+          + `starts at step ${step}`);
+      }
+      continue;
+    }
+    if (last?.request !== "reqPnL" || replies.at(-1)?.[0] !== "94") {
+      fail(`step ${step} must end with the account's P&L, a PNL message from a reqPnL exchange`);
+    }
+  }
+
   // ADR 0030: the owner's account is never committed, so nothing that reads one can be a capture
-  if (p.kind !== "constructed"
-    && (reads !== undefined || exchanges.some((e) => e.request === "reqAccountUpdates"))) {
+  if (p.kind !== "constructed" && (reads !== undefined || watches !== undefined
+    || exchanges.some((e) => e.request !== "reqContractDetails" && e.request !== "reqMktData"))) {
     fail("reads the account, so it must be constructed: no capture of an account is committed");
   }
 
@@ -258,6 +419,7 @@ export function parseConversation(name: string, value: unknown): Conversation {
     ask,
     ...(later === undefined ? {} : { later }),
     ...(reads === undefined ? {} : { accountReads: reads }),
+    ...(watches === undefined ? {} : { watches }),
     handshake: { greeting, onStartApi: messages(h.onStartApi, "handshake.onStartApi") },
     exchanges,
   };
