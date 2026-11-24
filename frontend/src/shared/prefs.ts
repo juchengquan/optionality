@@ -1,8 +1,8 @@
 /** What the browser remembers for this viewer, and nothing else.
  *
- *  Eight preferences: how often the screen polls, which columns the desk's book hides, which way is
- *  up, how a fired entry rule looks, privacy, the arrangement, the desk's price map and which of the
- *  book's expiry groups are folded. The old page at `/opt` had five more — the signal and its band
+ *  Nine preferences: how often the screen polls, which columns the desk's book hides, which way is
+ *  up, how a fired entry rule looks, privacy, the arrangement, the desk's price map, which of the
+ *  book's expiry groups are folded, and how often the account page reads the account (#471). The old page at `/opt` had five more — the signal and its band
  *  (the near-firing highlight), the grouping and the single-leg table's columns — and they went
  *  with it (#301, ADR 0023); their cookies are simply never read again. The ones kept keep their
  *  names, so a choice made on either page before the swap is still the choice after it.
@@ -139,4 +139,23 @@ export function readFolded(): Set<string> {
 
 export function writeFolded(folded: Set<string>): void {
   writeCookie("ui_folded", [...folded].filter((k) => FOLDED.test(k)).sort().join("."));
+}
+
+/** How often the account page reads the IBKR account (#471): one of `ACCOUNT_REFRESHES`, in
+ *  seconds, or null for off — nothing read but on opening and on the page's refresh button. A
+ *  minute until chosen. Its own cookie, apart from the book's `ui_refresh`: the book's cadence is
+ *  the service's sweep, and IBKR marks the account only every few minutes. Anything else in the
+ *  cookie — a hand-edited `1` — is the default, never a read a second. */
+export const ACCOUNT_REFRESHES = [15, 30, 60, 180] as const;
+export type AccountRefresh = (typeof ACCOUNT_REFRESHES)[number] | null;
+export const ACCOUNT_REFRESH_DEFAULT: AccountRefresh = 60;
+
+export function readAccountRefresh(): AccountRefresh {
+  const raw = readCookie("ui_account_refresh");
+  if (raw === "off") return null;
+  return ACCOUNT_REFRESHES.find((s) => String(s) === raw) ?? ACCOUNT_REFRESH_DEFAULT;
+}
+
+export function writeAccountRefresh(seconds: AccountRefresh): void {
+  writeCookie("ui_account_refresh", seconds === null ? "off" : String(seconds));
 }

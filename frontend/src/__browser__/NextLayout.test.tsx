@@ -71,7 +71,8 @@ describe("the arrangement is chosen by the measured width", () => {
 });
 
 /** The desk's header with no switch in it (#375): "optionality", the spacer, and the buttons on one
- *  row at the right — no gap where the Live/Review switch stood, in session and out of it. */
+ *  row at the right — no gap where the Live/Review switch stood, in session and out of it. Among
+ *  them since #471 the account page's link, a plain `a` drawn as the buttons are. */
 describe("the header, with no switch", () => {
   const SUNDAY = new Date("2026-11-15T17:00:00Z"); // 12:00 ET, outside the session
   for (const width of [900, 1280, 2560]) for (const outside of [false, true]) {
@@ -83,14 +84,18 @@ describe("the header, with no switch", () => {
       const head = document.querySelector<HTMLElement>(".nx-head")!;
       const kids = [...head.children] as HTMLElement[];
       const [title, spacer, ...buttons] = kids;
+      const box = (el: Element) => el.getBoundingClientRect();
       expect(kids.map((k) => k.tagName.toLowerCase() + (k.className.includes("nx-spacer") ? ".spacer" : "")))
-        .toEqual(["h1", "span.spacer", "button", "button", "button", "button", "button", "button"]);
+        .toEqual(["h1", "span.spacer", "button", "button", "button", "button", "a", "button", "button"]);
       expect(buttons.map((b) => b.getAttribute("aria-label")!.replace(/ \(.*\)$/, "")))
-        .toEqual(["save as image", "copy as text", "refresh now", "find and act", "add", "settings"]);
+        .toEqual(["save as image", "copy as text", "refresh now", "find and act", "account", "add", "settings"]);
+      // drawn as its neighbours are: the same height, centred on their row
+      const link = buttons[4]!;
+      expect(box(link).height).toBeCloseTo(box(buttons[3]!).height, 0);
+      expect(box(link).top).toBeCloseTo(box(buttons[3]!).top, 0);
       expect(within(head).queryByRole("group")).toBeNull();
       expect(head.textContent).not.toMatch(/live|review|by the clock|your choice/i);
       const gap = parseFloat(getComputedStyle(head).columnGap);
-      const box = (el: Element) => el.getBoundingClientRect();
       // no gap left where the switch stood: the spacer starts one flex gap after the title
       expect(box(spacer!).left - box(title!).right).toBeCloseTo(gap, 0);
       // the buttons on one row, one flex gap apart, the last at the header's own right edge

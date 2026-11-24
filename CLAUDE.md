@@ -508,6 +508,24 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   for a rename of its own. The cookies kept their
   names through the swap, so a viewer's choices carried over; the old page's signal, band and
   grouping cookies are simply never read.
+  **A second page, the IBKR account (#471)**, at `/opt/account`: `main.tsx` mounts `src/Page.tsx`,
+  which draws `src/account/` when the path after `UI_BASE` is `account` (`src/pages.ts`) and the
+  book otherwise — no router, still the one entry, since Caddy sends every unknown path to
+  `index.html`. The book's header links to it ("account") and it links back, both PLAIN links, so
+  moving between them loads the other page afresh and neither polls while the other is shown. It
+  reads `GET /account` (#470) and nothing else: on opening, on its refresh button, and at its own
+  cadence while `document.visibilityState` is not hidden — 15 s, 30 s, 1 min (the default), 3 min
+  or off, the cookie `ui_account_refresh`, chosen on the page and not in the book's Settings;
+  never by New York's session. Read-only: totals in the base currency, the masked account as
+  served, one "IBKR marked at" time, then stocks by the SIZE of their value IN THE BASE
+  CURRENCY, largest first whatever its sign (IBKR's `exchange_rates`; a currency with no rate has
+  no weight and is listed after every one that converts), options by underlying then expiry, and the rest — each a table on the desk and a card
+  on the phone, every figure shown in its own currency with its code beside it where that is not
+  the base. The book's privacy setting (`ui_privacy`) hides its money and counts as the book's. A
+  first read that fails says the service's words and no figure; a refresh that fails after a good
+  read keeps that read's figures, dimmed, under the error and "as of" its time. On the phone the
+  BOOK's header drops its title "optionality" (kept for a screen reader) so its six controls fit
+  at 320px; the account page keeps its own.
 - `entrypoints/http/hc.types.ts` — `hc<AppType>` against a hand-written call for every endpoint (ADR 0009, phase 5),
   so a route whose shape changed is a compile error in the frontend rather than a blank cell at the
   end of a sweep. Nothing imports it; `make typecheck` is what runs it. Its COVERAGE is the whole
@@ -748,7 +766,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   every caller for 10 seconds (a failure too, a read in flight joined), never by the sweep or on a
   timer, and stored nowhere. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
-  nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
+  nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard's BOOK polls `/quotes` always —
+  the one page that does not is the account page at `/opt/account` (#471), which polls only
+  `/account`, at its own cadence while in view, and nothing of the book's: the two are separate
+  pages, so neither polls while the other is shown.
   By New York's session (09:30–16:15, weekdays; `frontend/src/session.ts`) and by nothing
   else — the page has no mode (#371, #375): in session it polls `/positions/values` and `/references` with it — three calls
   per poll per open tab, where the old page made two — and in the Curb (16:15–17:00) and overnight
