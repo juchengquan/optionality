@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ...env import Settings
-from ...ports import ProviderClient, SweeperPort
+from ...ports import ProviderClient, ReadAccount, SweeperPort
 from ...references import Sources
 
 
@@ -40,6 +40,9 @@ class Deps:
     #: vendor door assembles this, which is also what guarantees the Provider's own Reference rows are
     #: served by the same client the alarms read from.
     sources: Sources
+    #: The IBKR account's one read (ADR 0030, #470), or None where IB Gateway is not configured
+    #: (`IBKR_HOST` blank). From the same client the prices are read through: the vendor door.
+    account: ReadAccount | None
     #: The id a write mints, injectable for the same reason as `now`: a door scenario (ADR 0021)
     #: records the rows a request wrote, and a random id there could only be scrubbed after the fact.
     #: None, as it is in `__main__`, mints a uuid (`db.values.new_id`).

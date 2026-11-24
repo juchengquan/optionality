@@ -10,6 +10,7 @@ import { Hono } from "hono";
 import type { Read, Write } from "../../ports.ts";
 import type { Deps } from "./deps.ts";
 import { mountDocs } from "./openapi.ts";
+import { accountRoutes } from "./routes/account.ts";
 import { healthRoutes } from "./routes/health.ts";
 import { monitorRoutes, quoteRoutes } from "./routes/monitors.ts";
 import { positionRoutes } from "./routes/positions.ts";
@@ -103,6 +104,7 @@ export function createApp(deps: Deps, surfaces: Surfaces = {}) {
     // /health's queue and last run) until phase 10 (ADR 0014). Two runs in the service's life,
     // both by hand on 2026-08-10, zero schedules ever. Do not put any of it back without asking.
     .route("/", healthRoutes(deps))
+    .route("/account", accountRoutes(deps))
     .route("/", quoteRoutes(deps))
     .route("/monitors", monitorRoutes(deps))
     .route("/positions", positionRoutes(deps))

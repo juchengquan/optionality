@@ -22,7 +22,7 @@ library's `quotes.ts`, and the Python library's takes the synchronous fetcher. I
 cased verdicts, `unverifiable_verdict` and `verify_verdict`, around one awaited fetch.
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal, Protocol, runtime_checkable
@@ -94,6 +94,54 @@ class VendorClient(Protocol):
     def close(self) -> None:
         """Hang up, so the next call reconnects. Called on the way out of the process."""
         ...
+
+
+@dataclass(frozen=True)
+class AccountRead:
+    """The library's answer, its id already masked (ADR 0030, #470): `optionality.ibkr.IbkrAccount`,
+    which only the IB vendor's descriptor may import (`tests/test_seams.py`) — so a mapping here, where
+    the TypeScript names the type through the library's fields door, which the Python has no
+    counterpart of."""
+
+    account: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
+class AccountUnreachable:
+    """No session with IB Gateway at all (the library's `IbkrUnreachable`), in the connect's own words —
+    a refused connection, a handshake that never finished, or a session the gateway refused ("IB Gateway
+    refused the session: 326 …", a client id already in use)."""
+
+    words: str
+
+
+@dataclass(frozen=True)
+class AccountRefused:
+    """The library would not choose an account (`IbkrAccountRefused`) — several on the login and
+    `IBKR_ACCOUNT` unset, or naming none of them — in its words, every id masked."""
+
+    words: str
+
+
+@dataclass(frozen=True)
+class AccountFailed:
+    """Connected, and the read did not finish: its deadline passed, or the connection closed during it,
+    in the library's words."""
+
+    words: str
+
+
+#: What one read of the IBKR account came to (ADR 0030, #470), sorted by what the owner must do about it
+#: — which is what tells the route its status.
+#:
+#: **Where the Python differs, and why.** The TypeScript's union of object shapes (`{ account }`,
+#: `{ unreachable }`, ...) is a union of four small classes here, told apart by `isinstance`.
+type AccountReading = AccountRead | AccountUnreachable | AccountRefused | AccountFailed
+
+#: Read the account `wanted` names in full, or the login's only one where it is None. Never raises: every
+#: way it can end is an `AccountReading`. Only IB Gateway's client has one (`VendorClient.read_account`
+#: in the TypeScript, an optional member; a method of `IbkrProvider` here).
+type ReadAccount = Callable[[str | None], Awaitable[AccountReading]]
 
 
 @dataclass(frozen=True)

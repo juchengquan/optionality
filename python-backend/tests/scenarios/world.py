@@ -32,7 +32,16 @@ from optionality.quotes import QuoteFetcher
 
 from optionality_backend.db.migrate import DIRECTORY
 from optionality_backend.db.open import create_database
-from optionality_backend.ports import GradeRead, QuoteGradeReading
+from optionality_backend.ports import (
+    AccountFailed,
+    AccountRead,
+    AccountReading,
+    AccountRefused,
+    AccountUnreachable,
+    GradeRead,
+    QuoteGradeReading,
+    ReadAccount,
+)
 
 from .compare import same
 
@@ -236,6 +245,29 @@ def fake_vendor(name: str, table: dict[str, Any], calls: Calls, outage: Callable
     return fetch
 
 
+#: The `calls` key an account read is recorded under (`format.ts`' `ACCOUNT_CALLS`).
+ACCOUNT_CALLS = "ibkr account"
+
+
+def fake_account(table: dict[str, Any], calls: Calls) -> ReadAccount:
+    """IB Gateway's account read answering from its table, recording every read: `world.ts`'s
+    `fakeAccount`, and the README's "IB Gateway's account read"."""
+
+    async def read(wanted: str | None) -> AccountReading:
+        calls.setdefault(ACCOUNT_CALLS, []).append([] if wanted is None else [wanted])
+        if table["down"] is not None:
+            return AccountUnreachable(table["down"])
+        if table["refused"] is not None:
+            return AccountRefused(table["refused"])
+        if table["fails"] is not None:
+            return AccountFailed(table["fails"])
+        if table["account"] is None:
+            raise WorldError("the world's account read answers nothing at all")
+        return AccountRead(table["account"])
+
+    return read
+
+
 @dataclass
 class Clock:
     """What the clock says now; moved by `doors.py` for each earlier sweep."""
@@ -286,6 +318,8 @@ class OpenWorld:
     provider: Provider
     #: every vendor by name, the Provider among them under its own, as `openVendors` assembles
     sources: dict[str, QuoteFetcher]
+    #: the IBKR account's read, or None where IB Gateway is not configured
+    account: ReadAccount | None
     outage: Outage
     #: the sweep's Telegram transport, and what it delivered, in order
     send: Callable[[str], None]
@@ -356,6 +390,7 @@ def open_world(world: dict[str, Any]) -> OpenWorld:
         new_id=new_id,
         provider=provider,
         sources=sources,
+        account=None if "ibkr_account" not in world else fake_account(world["ibkr_account"], calls),
         outage=outage,
         send=send,
         sent=sent,

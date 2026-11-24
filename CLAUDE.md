@@ -468,7 +468,19 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `SPREAD_QUOTE_CALLS_PER_30S` (12) Provider calls in any 30 seconds whoever asks, then 429 with the
   wait. ONE `SpreadPricer` per app, so the HTTP and MCP doors share both. Each leg carries its last
   stored regular-session close (`last_known`, from `watch_samples`, the one table storing a
-  contract's own mid), never summed.
+  contract's own mid), never summed. And `account.ts` behind `GET /account` (#470, ADR 0030): the
+  IBKR account as IBKR marks it — the library's `IbkrClient.account`, reached as `openVendors`'
+  `account` (the IB descriptor's `readAccount`, over the client the prices come through, sorting the
+  library's `IbkrUnreachable` from a read that failed once it began) — its totals, IBKR's
+  `exchange_rates` (base units per one unit of each currency), `stocks` (STK), `options` (OPT) and
+  everything else under `other` (symbol, type, quantity, value, currency). `IBKR_ACCOUNT` (`.env`, blank is unset) is the library's `wanted`. ONE read per app
+  (`AccountBook`), shared for `ACCOUNT_SHARED_FOR_MS` (10s) from when it came back, a read in flight
+  joined, a failure shared too; never read by the sweep, never stored. 503 "IB Gateway is not
+  configured" (`IBKR_HOST` blank, the owner's decision), 502 for a gateway that did not answer
+  (the connect's words logged), a session it refused (in the gateway's words) or a read that did not
+  finish (in the library's), 422 for the library's refusal (several accounts, or `IBKR_ACCOUNT` naming none), every id
+  masked by the library. Not an MCP tool and not a bot command (the owner's decision for v1). A door
+  scenario's world states the read as `ibkr_account` (`testdata/scenarios/README.md`).
 - `frontend/` — Vite + React + TS, the dashboard at `/opt`. `frontend/dist` is committed.
   **One page, the redesign (ADR 0023)**, since the swap of 2026-11-13 (#301) deleted the old one:
   `index.html` loads `src/main.tsx`. ONE page at every hour, with no Live/Review switch (ADR
@@ -730,7 +742,11 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   again at most once every 30 minutes (`GRADE_RETRY_MS`) — never per sweep or poll, never by `/health`
   — under the snapshot's own deadline, and failing nothing when it fails; only the latest read sent
   settles it. `/health`'s `provider.quote_grade` serves what was last read, and beside a grade kept
-  through a failed read, a `reason` saying so. `/references` makes one bounded call per
+  through a failed read, a `reason` saying so. Nor is the IBKR account (`GET /account`, #470, ADR
+  0030), which asks for no market data: ONE bounded read of the account — subscribe, collect to the
+  download's end, unsubscribe, under the client's deadline — made only when the page asks, shared by
+  every caller for 10 seconds (a failure too, a read in flight joined), never by the sweep or on a
+  timer, and stored nowhere. `/references` makes one bounded call per
   SOURCE in use, not per Reference, and a dead vendor dashes its own rows and nobody else's. (`/spx/quote` was a sixth until #199 dropped it:
   nothing called it, and the bot's `/snapshot` answers the same question in-process.) (The dashboard polls `/quotes` always.
   By New York's session (09:30–16:15, weekdays; `frontend/src/session.ts`) and by nothing

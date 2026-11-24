@@ -7,6 +7,7 @@
  *  dead port and a missing fake looks like a hung suite (CLAUDE.md).
  */
 import type { QuoteFetcher } from "optionality/quotes";
+import type { ibkrFields } from "optionality/vendors/fields";
 
 /** The alarm engine's account of its own health, as /health reports it.
  *
@@ -41,7 +42,30 @@ export interface VendorClient {
   readonly fetchQuotes: QuoteFetcher;
   /** Hang up, so the next call reconnects. Called on the way out of the process. */
   close(): void;
+  /** The vendor's account, read once (ADR 0030, #470): only IB Gateway's client has one. */
+  readonly readAccount?: ReadAccount;
 }
+
+/** What one read of the IBKR account came to (ADR 0030, #470), sorted by what the owner must do
+ *  about it — which is what tells the route its status:
+ *
+ *  - `account`: the library's answer, its id already masked;
+ *  - `unreachable`: no session with IB Gateway at all (the library's `IbkrUnreachable`), in the
+ *    connect's own words — a refused connection, a handshake that never finished, or a session the
+ *    gateway refused ("IB Gateway refused the session: 326 …", a client id already in use);
+ *  - `refused`: the library would not choose an account (`IbkrAccountRefused`) — several on the
+ *    login and `IBKR_ACCOUNT` unset, or naming none of them — in its words, every id masked;
+ *  - `failed`: connected, and the read did not finish: its deadline passed, or the connection
+ *    closed during it, in the library's words. */
+export type AccountReading =
+  | { account: ibkrFields.IbkrAccount }
+  | { unreachable: string }
+  | { refused: string }
+  | { failed: string };
+
+/** Read the account `wanted` names in full, or the login's only one where it is null. Never
+ *  throws: every way it can end is an `AccountReading`. */
+export type ReadAccount = (wanted: string | null) => Promise<AccountReading>;
 
 /** What a Provider last read of the account's quote grade for US options (#464): whether the option
  *  prices it serves are real-time. moomoo grades the ACCOUNT, by level, and never a quote; its

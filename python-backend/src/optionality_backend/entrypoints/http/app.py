@@ -45,6 +45,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from ...ports import Read, Write
 from .deps import Deps
 from .openapi import mount_docs
+from .routes.account import account_routes
 from .routes.health import health_routes
 from .routes.monitors import monitor_routes, quote_routes
 from .routes.positions import position_routes
@@ -171,6 +172,7 @@ def create_app(deps: Deps, surfaces: Surfaces | None = None) -> FastAPI:
     # TypeScript until #118, and its machinery until phase 10 (ADR 0014). Do not put any of it back
     # without asking.
     app.include_router(health_routes(deps))
+    app.include_router(account_routes(deps), prefix="/account")
     app.include_router(quote_routes(deps))
     app.include_router(monitor_routes(deps), prefix="/monitors")
     app.include_router(position_routes(deps), prefix="/positions")

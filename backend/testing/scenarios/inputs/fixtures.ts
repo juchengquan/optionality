@@ -8,7 +8,7 @@
 import { buildSpxCode } from "optionality/domain/contract";
 import { opendFields } from "optionality/vendors/fields";
 import type {
-  EarlierSweep, HttpRequest, Provider, QuoteGrade, Row, Tables, Update, Vendor, World,
+  EarlierSweep, HttpRequest, IbkrAccountTable, Provider, QuoteGrade, Row, Tables, Update, Vendor, World,
 } from "../format.ts";
 
 /** Monday 9 November 2026, 10:00 in New York: a trading morning, so the market day and the UTC
@@ -75,6 +75,8 @@ export interface WorldOver {
   settings?: Record<string, string>;
   provider?: Partial<Provider>;
   sources?: Record<string, Partial<Vendor>>;
+  /** IB Gateway's account read; absent, IB Gateway is not configured */
+  ibkr_account?: Partial<IbkrAccountTable>;
   telegram?: "up" | "down";
   sweeps?: EarlierSweep[];
   tables?: Partial<Tables>;
@@ -88,6 +90,9 @@ export function world(over: WorldOver = {}): World {
     sources: Object.fromEntries(
       Object.entries(over.sources ?? {}).map(([name, v]) => [name, vendor(v)]),
     ),
+    ...(over.ibkr_account === undefined ? {} : {
+      ibkr_account: { down: null, refused: null, fails: null, account: null, ...over.ibkr_account },
+    }),
     telegram: over.telegram ?? "up",
     sweeps: over.sweeps ?? [],
     tables: { ...EMPTY, ...over.tables },

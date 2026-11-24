@@ -189,6 +189,8 @@ describe("the bearer token", () => {
       "DELETE /monitors/:id",
       "DELETE /positions/:id",
       "DELETE /references/:id",
+      // the IBKR account (ADR 0030, #470), for the account page
+      "GET /account",
       "GET /docs",
       "GET /health",
       // the MCP door (ADR 0026): a POST per message, and the GET that says it offers no stream
@@ -245,7 +247,7 @@ describe("the bearer token", () => {
         return [`${r.method} ${path}`, { method: r.method, path }] as const;
       })).entries()];
     // the real number of doors, which the route list above enumerates one by one
-    expect(doors.length).toBe(26);
+    expect(doors.length).toBe(27);
     for (const [door, { method, path }] of doors) {
       expect((await h.call(path, { anonymous: true, method })).status, door).toBe(401);
     }

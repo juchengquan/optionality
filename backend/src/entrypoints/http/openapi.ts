@@ -42,7 +42,8 @@ const FAILURES = {
   409: "would duplicate an existing record",
   422: "the request is well-formed but refused",
   429: "too many calls of this kind: the detail says when the next is allowed",
-  502: "the OpenD call failed",
+  502: "a vendor's call failed",
+  503: "a vendor this route reads is not configured",
 } as const;
 
 type Ok = Partial<Record<200 | 201 | 204, ZodType | null>>;

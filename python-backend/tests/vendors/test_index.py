@@ -142,6 +142,15 @@ class TestOpeningWhatThisBuildCarries:
         assert sorted(opened.sources) == ["ibkr", "moomoo", "yahoo"]
         opened.close()
 
+    def test_hands_on_ib_gateways_account_read_where_it_is_configured_and_none_where_not(self):
+        # ADR 0030: the account is read over the client the prices come through, opened once
+        off = open_vendors(settings_for(ibkr_host=""))
+        assert off.account is None
+        off.close()
+        on = open_vendors(settings_for(ibkr_host="127.0.0.1", ibkr_port=1))
+        assert callable(on.account)
+        on.close()
+
     async def test_opens_no_connection_while_opening_a_vendor(self):
         # A client that connected when it was built could not be named in a test at all, and a dead
         # port blocks indefinitely — which is why `open` must only construct. Proven against a port

@@ -158,6 +158,7 @@ class _Backend:
             sweeper=self._sweeper.health,
             provider=provider,
             sources=fetchers,
+            account=world.account,
         )
         # the MCP door mounted as `__main__` mounts it (ADR 0026), so `/mcp` is a request like any other
         app = create_app(

@@ -111,6 +111,7 @@ export async function runHttp(
         sweeper: sweeper.health,
         provider: { ...w.provider, close: () => { /* nothing to hang up */ } },
         sources: w.sources,
+        account: w.account,
       };
       // the MCP door mounted as `main.ts` mounts it (ADR 0026), so `/mcp` is a request like any other
       return createApp(deps, {

@@ -253,6 +253,396 @@
               "security": []
             }
           },
+          "/account": {
+            "get": {
+              "operationId": "getAccount",
+              "summary": "The IBKR account as IBKR marks it: totals, stocks, options and anything else; one read shared for 10s",
+              "responses": {
+                "200": {
+                  "description": "ok",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "account": {
+                            "type": "string"
+                          },
+                          "paper": {
+                            "type": "boolean"
+                          },
+                          "base_currency": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "updated_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "read_at": {
+                            "type": "string"
+                          },
+                          "totals": {
+                            "type": "object",
+                            "properties": {
+                              "net_liquidation": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "total_cash": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "unrealized_pnl": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "realized_pnl": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "net_liquidation",
+                              "total_cash",
+                              "unrealized_pnl",
+                              "realized_pnl"
+                            ]
+                          },
+                          "exchange_rates": {
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "number"
+                            }
+                          },
+                          "stocks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "sec_type": {
+                                  "type": "string"
+                                },
+                                "symbol": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "expiry": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "strike": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "right": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "C",
+                                        "P"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "multiplier": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "position": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "market_price": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "market_value": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "average_cost": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "unrealized_pnl": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "realized_pnl": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "sec_type",
+                                "symbol",
+                                "currency",
+                                "expiry",
+                                "strike",
+                                "right",
+                                "multiplier",
+                                "position",
+                                "market_price",
+                                "market_value",
+                                "average_cost",
+                                "unrealized_pnl",
+                                "realized_pnl"
+                              ]
+                            }
+                          },
+                          "options": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "sec_type": {
+                                  "type": "string"
+                                },
+                                "symbol": {
+                                  "type": "string"
+                                },
+                                "currency": {
+                                  "type": "string"
+                                },
+                                "expiry": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "strike": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "right": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "C",
+                                        "P"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "multiplier": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "position": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "market_price": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "market_value": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "average_cost": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "unrealized_pnl": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "realized_pnl": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "sec_type",
+                                "symbol",
+                                "currency",
+                                "expiry",
+                                "strike",
+                                "right",
+                                "multiplier",
+                                "position",
+                                "market_price",
+                                "market_value",
+                                "average_cost",
+                                "unrealized_pnl",
+                                "realized_pnl"
+                              ]
+                            }
+                          },
+                          "other": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "sec_type": {
+                                  "type": "string"
+                                },
+                                "symbol": {
+                                  "type": "string"
+                                },
+                                "position": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "market_value": {
+                                  "type": [
+                                    "number",
+                                    "null"
+                                  ]
+                                },
+                                "currency": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "sec_type",
+                                "symbol",
+                                "position",
+                                "market_value",
+                                "currency"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "account",
+                          "paper",
+                          "base_currency",
+                          "updated_at",
+                          "read_at",
+                          "totals",
+                          "exchange_rates",
+                          "stocks",
+                          "options",
+                          "other"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "422": {
+                  "description": "the request is well-formed but refused",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "502": {
+                  "description": "a vendor's call failed",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "503": {
+                  "description": "a vendor this route reads is not configured",
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "detail": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "detail"
+                        ]
+                      }
+                    }
+                  }
+                }
+              },
+              "tags": [
+                "account"
+              ]
+            }
+          },
           "/quotes": {
             "get": {
               "operationId": "getQuotes",
@@ -689,7 +1079,7 @@
                   }
                 },
                 "502": {
-                  "description": "the OpenD call failed",
+                  "description": "a vendor's call failed",
                   "content": {
                     "application/json": {
                       "schema": {
@@ -2638,7 +3028,7 @@
                   }
                 },
                 "502": {
-                  "description": "the OpenD call failed",
+                  "description": "a vendor's call failed",
                   "content": {
                     "application/json": {
                       "schema": {
@@ -5253,7 +5643,7 @@
                   }
                 },
                 "502": {
-                  "description": "the OpenD call failed",
+                  "description": "a vendor's call failed",
                   "content": {
                     "application/json": {
                       "schema": {

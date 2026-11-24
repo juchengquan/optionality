@@ -24,7 +24,7 @@ import { mcpServer } from "../src/entrypoints/mcp/index.ts";
 import { createDatabase } from "../src/db/open.ts";
 import { type Settings, settingsFor } from "../src/env.ts";
 import { type NotifySender, delivery } from "../src/notify.ts";
-import type { QuoteGradeReading } from "../src/ports.ts";
+import type { QuoteGradeReading, ReadAccount } from "../src/ports.ts";
 import type { Deps } from "../src/entrypoints/http/index.ts";
 import type { QuoteBatch, QuoteFetcher, QuoteRecord } from "optionality/quotes";
 
@@ -140,6 +140,8 @@ export interface HarnessOptions {
   /** What the Provider last read of the account's quote grade (#464): unread by default, as a
    *  service that has just started is; null for a Provider that reports none. */
   quoteGrade?: QuoteGradeReading | null;
+  /** The IBKR account's read (#470); absent, IB Gateway is not configured. */
+  account?: ReadAccount;
 }
 
 export function harness(options: HarnessOptions = {}): Harness {
@@ -173,6 +175,7 @@ export function harness(options: HarnessOptions = {}): Harness {
     // among them under its own. A test that names extra ones is testing that a Reference's source
     // decides which vendor is asked.
     sources: { [provider.name]: provider.fetchQuotes, ...options.referenceSources },
+    account: options.account ?? null,
   };
 
   // with the MCP door mounted as `main.ts` mounts it (ADR 0026), so the app a test drives is the

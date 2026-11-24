@@ -26,6 +26,10 @@ export interface Settings {
    *  displaces the first in silence. The ids are the owning process's port so a refusal names
    *  the culprit: 31415 the service, 31417 `make serve`, 31419 a harness. */
   ibkrClientId: number;
+  /** Which of the login's IBKR accounts `GET /account` reads (ADR 0030, #470), in full; blank is
+   *  unset, which reads the login's only account and refuses where it has several. Never written
+   *  anywhere but here: every answer, error and log line carries it masked. */
+  ibkrAccount: string;
   /** OpenD's WEBSOCKET port. The npm client speaks nothing else — the SDK's TCP protocol has no
    *  JavaScript implementation (ADR 0009, phase 6). */
   moomooWsPort: number;
@@ -102,6 +106,7 @@ export const DEFAULTS: Settings = {
   ibkrHost: "",
   ibkrPort: 4001,
   ibkrClientId: 31415,
+  ibkrAccount: "",
   moomooWsPort: 33333,
   moomooWsKey: "",
   apiToken: "",
@@ -141,6 +146,7 @@ const FROM_ENV = {
   ibkrHost: "IBKR_HOST",
   ibkrPort: "IBKR_PORT",
   ibkrClientId: "IBKR_CLIENT_ID",
+  ibkrAccount: "IBKR_ACCOUNT",
   moomooWsPort: "MOOMOO_WS_PORT",
   moomooWsKey: "MOOMOO_WS_KEY",
   apiToken: "API_TOKEN",

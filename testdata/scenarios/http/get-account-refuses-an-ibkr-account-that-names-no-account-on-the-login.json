@@ -1,0 +1,71 @@
+{
+  "name": "GET /account refuses an IBKR_ACCOUNT that names no account on the login",
+  "world": {
+    "clock": "2026-11-09T15:00:00.000Z",
+    "settings": {
+      "API_TOKEN": "tok",
+      "DISPLAY_TZ": "Asia/Singapore",
+      "IBKR_ACCOUNT": "DU0000001",
+      "IBKR_HOST": "127.0.0.1",
+      "MONITOR_INTERVAL_SECONDS": "15",
+      "TELEGRAM_BOT_TOKEN": "t",
+      "TELEGRAM_CHAT_ID": "42"
+    },
+    "provider": {
+      "name": "moomoo",
+      "reachable": true,
+      "quote_grade": {
+        "us_option": null,
+        "realtime": null,
+        "read_at": null,
+        "failure": null
+      },
+      "down": null,
+      "rejects": {},
+      "unknown": [],
+      "quotes": {}
+    },
+    "sources": {},
+    "ibkr_account": {
+      "down": null,
+      "refused": "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001",
+      "fails": null,
+      "account": null
+    },
+    "telegram": "up",
+    "sweeps": [],
+    "tables": {
+      "positions": [],
+      "monitors": [],
+      "monitor_positions": [],
+      "position_samples": [],
+      "watch_samples": [],
+      "reference_securities": [],
+      "sweep_interval": []
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/account",
+    "headers": {
+      "Authorization": "Bearer tok"
+    },
+    "body": null
+  },
+  "expect": {
+    "response": {
+      "status": 422,
+      "body": {
+        "detail": "IBKR_ACCOUNT (DU•••••001) names no account on this login, which has U•••••000, U•••••001"
+      }
+    },
+    "rows": {},
+    "calls": {
+      "ibkr account": [
+        [
+          "DU0000001"
+        ]
+      ]
+    }
+  }
+}
