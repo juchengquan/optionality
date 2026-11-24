@@ -78,9 +78,10 @@ import asyncio
 import functools
 import math
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypedDict, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Protocol, TypedDict, cast
 
 from optionality.contract import parse_spx_code
 
@@ -273,6 +274,41 @@ class IbkrAccount(TypedDict):
     #: out, the base currency is always 1, and a rate that is not a positive number is left out.
     exchange_rates: dict[str, float]
     holdings: list[IbkrHolding]
+
+
+class IbkrPnl(TypedDict):
+    """reqPnL's figures for the account, in the BASE currency; None where IB sent it unset (ADR 0031)."""
+
+    daily_pnl: float | None
+    unrealized_pnl: float | None
+    realized_pnl: float | None
+
+
+class IbkrLiveHolding(IbkrHolding):
+    """A holding as the account watch holds it (ADR 0031; `fields.ts`' `IbkrLiveHolding`): an
+    `IbkrHolding`, where `market_value`, `unrealized_pnl` and `market_price` (value / (position x
+    multiplier)) are the holding's own P&L stream's once it has spoken for it — in the holding's own
+    currency — and the rest the account updates'."""
+
+    #: the stream's daily P&L, in the holding's currency; None before it speaks, or where unset
+    daily_pnl: float | None
+
+
+class IbkrLiveAccount(TypedDict):
+    """The account as the watch holds it: the account read's answer, its holdings live, and the
+    account's P&L apart from the totals, which stay the account updates' (ADR 0031)."""
+
+    account: str
+    paper: bool
+    base_currency: str | None
+    updated_at: str | None
+    totals: IbkrTotals
+    exchange_rates: dict[str, float]
+    holdings: list[IbkrLiveHolding]
+    #: reqPnL's last figures; None before it first speaks
+    pnl: IbkrPnl | None
+    #: when reqPnL last spoke, ms since the epoch by the client's `now`; None before
+    pnl_at: float | None
 
 
 #: ACCT_VALUE's keys the answer's totals are read from, and the name each takes (`fields.ts`).
@@ -933,6 +969,28 @@ REQUEST_TIMEOUT_MS = 8_000
 QUIET_MS = 250
 
 
+class IbkrAccountWatch(Protocol):
+    """The account held while asked (ADR 0031; `client.ts`' `IbkrAccountWatch`): the subscriptions
+    `IbkrClient.watch_account` started, and the latest picture they make."""
+
+    def picture(self) -> IbkrLiveAccount:
+        """The latest picture, a copy the caller may keep."""
+        ...
+
+    @property
+    def lost(self) -> ConnectionError | None:
+        """Set, once, when the connection closes under the watch; the picture stays the last one."""
+        ...
+
+    def on_lost(self, listener: Callable[[ConnectionError], None]) -> None:
+        """Called once, at once, when the connection closes under the watch — or now, if it has."""
+        ...
+
+    async def stop(self) -> None:
+        """The cancels, then the unsubscribe; idempotent; returns when sent."""
+        ...
+
+
 class _Found(NamedTuple):
     con_id: int | None
     silent: bool
@@ -985,6 +1043,7 @@ class IbkrClient:
         connect_timeout_ms: int = CONNECT_TIMEOUT_MS,
         request_timeout_ms: int = REQUEST_TIMEOUT_MS,
         quiet_ms: int = QUIET_MS,
+        now: Callable[[], float] | None = None,
     ) -> None:
         # IB Gateway permits ONE connection per client id, and a second user of the same number
         # displaces the first in silence; the service's is its own port, 31415
@@ -992,6 +1051,10 @@ class IbkrClient:
         self.connect_timeout_ms = connect_timeout_ms
         self.request_timeout_ms = request_timeout_ms
         self.quiet_ms = quiet_ms
+        #: the clock an account watch stamps reqPnL's figures with (`pnl_at`), in ms since the epoch:
+        #: read once for each P&L message the watch reads, and nowhere else (`client.ts`' `now`); a
+        #: replay pins it, so the corpus carries no wall time
+        self.now: Callable[[], float] = now if now is not None else _epoch_ms
         self._client: Client | None = None
         #: the connect in flight, shared by every caller who arrives while it runs (`client.ts`'s
         #: `connecting`): IB Gateway allows one connection per client id, and the sweep, the
@@ -1072,6 +1135,13 @@ class IbkrClient:
             # shielded, so one caller giving up does not cancel the read under the others; the read
             # is bounded by its own deadline
             return await asyncio.shield(running.answer)
+
+    async def watch_account(self, wanted: str | None = None) -> IbkrAccountWatch:
+        """The account HELD while asked (ADR 0031; `client.ts`' `watchAccount`): subscribe to its
+        updates and its P&L and keep both, and once the first download ends follow each holding's own
+        P&L stream. Returns the handle on the first complete picture, under the account read's
+        deadline and refusals, in its words (`IbkrAccountRefused`, `IbkrUnreachable`)."""
+        raise NotImplementedError("watch_account is not built yet (#476)")
 
     def _read_account(self, client: "Client", account: str) -> _AccountRead:
         """Subscribe, collect until the download's end, unsubscribe, answer — or fail at the
@@ -1446,6 +1516,11 @@ class IbkrClient:
             self._waiting.pop(req_id, None)
             raise
         return await answer
+
+
+def _epoch_ms() -> float:
+    """Now, in whole ms since the epoch, as JavaScript's `Date.now()`."""
+    return time.time_ns() // 1_000_000
 
 
 def _send(client: "Client", send: Callable[[], None]) -> None:
