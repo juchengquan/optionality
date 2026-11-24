@@ -21,6 +21,13 @@ Parametrized from the DIRECTORY, so a recording added tomorrow is replayed tomor
 until the TypeScript has generated its expectation and this client reproduces it. The recordings
 and the expectations are also held to each other by name, both ways, and to a floor, because a
 parametrization over an empty directory passes by collecting nothing.
+
+## A watch, step by step (ADR 0031)
+
+As `replay.ts` replays one: start it, take its picture, and at each step tell the stub to send that
+step's replies and wait until the client has READ them — the client's clock is a counter read once
+per P&L message, and every step ends with the account's P&L, so the step has been read when the
+clock has been read once for every P&L the stub wrote. A condition, not a timer.
 """
 
 import asyncio
@@ -31,10 +38,12 @@ import pytest
 from fake_gateway import conversation_names, expectation_names, load_conversation, load_expectation, start_fake_gateway
 from test_cases import same
 
-from optionality.ibkr import IbkrAccountRefused, IbkrClient
+from optionality.ibkr import IbkrAccountRefused, IbkrAccountWatch, IbkrClient
 
 #: the conversations there were when this was written; more is fine, fewer is a directory gone
-FLOOR = 16
+FLOOR = 22
+#: the messages a watch sends: reqAccountUpdates, reqPnL, cancelPnL, reqPnLSingle, cancelPnLSingle
+WATCH_MESSAGES = {"6", "92", "93", "94", "95"}
 #: a replay that takes longer than this has hung, whatever its waits are configured to
 HUNG = 15.0
 
@@ -77,18 +86,74 @@ async def account_read(client: IbkrClient, gateway: Any, wanted: str | None) -> 
     return {"wanted": wanted, "expect": got, "sent": subscriptions(gateway)[before:]}
 
 
+async def until(done: Any) -> None:
+    """Until `done()`, or a second has passed — `replay.ts`' `until`."""
+    limit = time.monotonic() + 1
+    while not done() and time.monotonic() < limit:
+        await asyncio.sleep(0.005)
+
+
+async def watched(
+    client: IbkrClient, gateway: Any, clock: list[int], wanted: str | None, steps: int, first: int, end: str
+) -> dict[str, Any]:
+    """One watch in the expectation's terms, replayed as `replay.ts`' `watched` replays it."""
+    before = len(gateway.received)
+
+    def sent() -> list[list[str]]:
+        return [f for f in gateway.received[before:] if f[0] in WATCH_MESSAGES]
+
+    watch: IbkrAccountWatch
+    try:
+        watch = await client.watch_account(wanted)
+    except IbkrAccountRefused as err:
+        await unsubscribed(gateway)
+        return {"wanted": wanted, "start": {"$refused": str(err)}, "sent": sent()}
+    except Exception as err:  # noqa: BLE001 — every failure IS the outcome being compared
+        await unsubscribed(gateway)
+        return {"wanted": wanted, "start": {"$throws": str(err)}, "sent": sent()}
+    start = watch.picture()
+    pictures = []
+    for n in range(first, first + steps):
+        await gateway.step(n)
+        await until(lambda: clock[0] >= sum(1 for m in gateway.written if m[0] == "94"))
+        pictures.append(watch.picture())
+    if end == "drop":
+        gateway.drop_connections()
+        await until(lambda: watch.lost is not None)
+    await watch.stop()
+    await unsubscribed(gateway)
+    lost = watch.lost
+    return {
+        "wanted": wanted,
+        "start": start,
+        "steps": pictures,
+        "end": end,
+        "lost": None if lost is None else str(lost),
+        "last": watch.picture(),
+        "sent": sent(),
+    }
+
+
 async def replay(name: str) -> dict[str, Any]:
     """One conversation, asked as `replay.ts` asks it: `ask`, then each of `later` in turn on the
     SAME client, so the connection and the conid cache carry over."""
     conversation = load_conversation(name)
     config = load_expectation(name)["config"]
     gateway = await start_fake_gateway(name)
+    # the client's clock counts its readings, once per P&L message a watch reads
+    clock = [0]
+
+    def now() -> int:
+        clock[0] += 1
+        return clock[0]
+
     client = IbkrClient(
         port=gateway.port,
         client_id=config["clientId"],
         connect_timeout_ms=config["connectTimeoutMs"],
         request_timeout_ms=config["requestTimeoutMs"],
         quiet_ms=config["quietMs"],
+        now=now,
     )
     try:
         result: dict[str, Any] = {"ask": conversation["ask"]}
@@ -101,6 +166,14 @@ async def replay(name: str) -> dict[str, Any]:
             result["accountReads"] = [
                 await account_read(client, gateway, read["wanted"]) for read in conversation["accountReads"]
             ]
+        if "watches" in conversation:
+            result["watches"] = []
+            first = 1
+            for spec in conversation["watches"]:
+                result["watches"].append(
+                    await watched(client, gateway, clock, spec["wanted"], spec["steps"], first, spec["end"])
+                )
+                first += spec["steps"]
         result["sent"] = sorted({fields[0] for fields in gateway.received})
         return result
     finally:
@@ -148,6 +221,14 @@ def test_the_python_client_answers_what_the_typescript_did(name: str, replayed: 
         assert mine["sent"] == theirs["sent"], (
             f"{name}: accountReads[{i}]: the Python client sent {mine['sent']} where the TypeScript's sent {theirs['sent']}"
         )
+    assert ("watches" in got) == ("watches" in expected), f"{name}: watches on one side only"
+    for i, (mine, theirs) in enumerate(zip(got.get("watches", []), expected.get("watches", []), strict=True)):
+        assert mine.keys() == theirs.keys(), f"{name}: watches[{i}] came to {sorted(mine)} where {sorted(theirs)}"
+        for key in theirs:
+            assert same(mine[key], theirs[key]), (
+                f"{name}: watches[{i}].{key}: the Python client said\n  {mine[key]!r}\n"
+                f"where the TypeScript's said\n  {theirs[key]!r}"
+            )
 
 
 @pytest.mark.parametrize("name", conversation_names())
@@ -159,10 +240,12 @@ def test_the_python_client_sends_only_what_the_typescript_does(name: str, replay
     client connects through `ib_async`'s `Client` instead and sends what `messages.ts` sends:
     startApi (71), reqMarketDataType (59), reqContractDetails (9), reqMktData (1) and cancelMktData
     (2) — and reqAccountUpdates (6) where, and only where, a conversation reads the account (ADR
-    0030), held message for message by the comparison above."""
+    0030), and the P&L requests and their cancels (92 to 95) only where it watches it (ADR 0031),
+    held message for message by the comparison above."""
     got = replayed[name]
     assert "crashed" not in got, got.get("crashed")
     allowed = {"71", "59", "9", "1", "2"} | ({"6"} if "accountReads" in got else set())
+    allowed |= WATCH_MESSAGES if "watches" in got else set()
     assert set(got["sent"]) <= allowed, f"{name}: the client also sent {got['sent']}"
 
 

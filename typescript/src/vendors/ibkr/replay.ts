@@ -28,10 +28,23 @@
  *  what the client holds between asks (the connection, the conids) is part of what is recorded,
  *  and each later outcome is written beside the first. The service holds one connection for days,
  *  and a fault that only a warm cache shows needs a second ask to be seen at all.
+ *
+ *  ## A watch, step by step (ADR 0031)
+ *
+ *  A watch is a subscription the gateway keeps answering, so its expectation is a SEQUENCE of
+ *  pictures rather than one answer: the picture it starts on, one after each of its steps, and the
+ *  one it keeps when it ends. A picture is only worth recording at a moment the client has read
+ *  exactly what was sent, so the stub sends a stream's figures only at a step (`fake.ts`' `step`),
+ *  every step ends with the account's P&L (`parseConversation` holds that), and the client's clock
+ *  is a COUNTER read once per P&L message (`now`): the replay waits until the clock has been read
+ *  once for every P&L the stub wrote, and that is when the step has been read. A condition, not a
+ *  timer. So `pnl_at` in `expected/` is the count of P&L messages read, never a wall time.
  */
-import { IbkrAccountRefused, IbkrClient, type IbkrConfig } from "./client.ts";
+import {
+  IbkrAccountRefused, type IbkrAccountWatch, IbkrClient, type IbkrConfig,
+} from "./client.ts";
 import { startFakeGateway } from "./fake.ts";
-import { conversationNames, loadConversation } from "./recordings.ts";
+import { type WatchEnd, conversationNames, loadConversation } from "./recordings.ts";
 
 export { conversationNames };
 
@@ -63,7 +76,29 @@ export interface Expectation {
    *  `{ "$throws": message }` — and every account subscription the stub was sent because of it,
    *  so the messages are held as well as the answer. Absent where the recording reads none. */
   accountReads?: { wanted: string | null; expect: unknown; sent: string[][] }[];
+  /** Each of the recording's account watches (ADR 0031), in order after the reads. */
+  watches?: WatchExpectation[];
 }
+
+/** One watch: where it started, each step's picture, how it ended, and what it sent. */
+export interface WatchExpectation {
+  wanted: string | null;
+  /** the picture it started on, or `{ "$refused": … }` / `{ "$throws": … }` */
+  start: unknown;
+  /** the picture after each step; absent where the start failed */
+  steps?: unknown[];
+  end?: WatchEnd;
+  /** what `lost` said once it ended: null for one stopped, the words for one dropped */
+  lost?: string | null;
+  /** the picture it kept once it ended */
+  last?: unknown;
+  /** every message the client sent because of it: the account subscription, the P&L requests and
+   *  their cancels — a stop after a loss included, which sends nothing */
+  sent: string[][];
+}
+
+/** The messages a watch sends: reqAccountUpdates, reqPnL, cancelPnL, reqPnLSingle, cancelPnLSingle. */
+export const WATCH_MESSAGES = new Set(["6", "92", "93", "94", "95"]);
 
 /** The stub's port is chosen by the OS, so a message that names it is spelled with `<port>`. */
 function withoutPort(message: string, port: number): string {
@@ -74,7 +109,11 @@ function withoutPort(message: string, port: number): string {
 export async function replay(name: string): Promise<Expectation> {
   const conversation = loadConversation(name);
   const gateway = await startFakeGateway(0, { conversation });
-  const client = new IbkrClient({ host: "127.0.0.1", port: gateway.port, ...REPLAY_CONFIG });
+  // the client's clock counts its readings, once per P&L message a watch reads: see the top
+  let readings = 0;
+  const client = new IbkrClient({
+    host: "127.0.0.1", port: gateway.port, ...REPLAY_CONFIG, now: () => ++readings,
+  });
   const outcome = async (codes: string[]): Promise<unknown> => {
     try {
       return await client.fetchQuotes(codes);
@@ -96,9 +135,44 @@ export async function replay(name: string): Promise<Expectation> {
     await unsubscribed(gateway.received);
     return { wanted, expect: got, sent: subscriptions().slice(before) };
   };
+  const watched = async (
+    wanted: string | null, steps: number, first: number, end: WatchEnd,
+  ): Promise<WatchExpectation> => {
+    const before = gateway.received.length;
+    const sent = () => gateway.received.slice(before).filter((f) => WATCH_MESSAGES.has(f[0]!));
+    let watch: IbkrAccountWatch;
+    try {
+      watch = await client.watchAccount(wanted ?? undefined);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await unsubscribed(gateway.received);
+      return {
+        wanted, start: err instanceof IbkrAccountRefused ? { $refused: message } : { $throws: message },
+        sent: sent(),
+      };
+    }
+    const start = watch.picture();
+    const pictures: unknown[] = [];
+    for (let n = first; n < first + steps; n++) {
+      await gateway.step(n);
+      await until(() => readings >= gateway.written.filter((m) => m[0] === "94").length);
+      pictures.push(watch.picture());
+    }
+    if (end === "drop") {
+      gateway.dropConnections();
+      await until(() => watch.lost !== null);
+    }
+    await watch.stop();
+    await unsubscribed(gateway.received);
+    return {
+      wanted, start, steps: pictures, end, lost: watch.lost?.message ?? null, last: watch.picture(),
+      sent: sent(),
+    };
+  };
   let expect: unknown;
   let later: Expectation["later"];
   let accountReads: Expectation["accountReads"];
+  let watches: Expectation["watches"];
   try {
     expect = await outcome(conversation.ask);
     if (conversation.later) {
@@ -111,6 +185,14 @@ export async function replay(name: string): Promise<Expectation> {
       accountReads = [];
       for (const { wanted } of conversation.accountReads) accountReads.push(await read(wanted));
     }
+    if (conversation.watches) {
+      watches = [];
+      let first = 1;
+      for (const { wanted, steps, end } of conversation.watches) {
+        watches.push(await watched(wanted, steps, first, end));
+        first += steps;
+      }
+    }
   } finally {
     client.close();
     await gateway.close();
@@ -120,7 +202,15 @@ export async function replay(name: string): Promise<Expectation> {
     client: "typescript/src/vendors/ibkr/client.ts", config: REPLAY_CONFIG,
     ask: conversation.ask, expect, ...(later ? { later } : {}),
     ...(accountReads ? { accountReads } : {}),
+    ...(watches ? { watches } : {}),
   };
+}
+
+/** Until `done`, or a second has passed: what was waited for arrives over loopback in
+ *  microseconds, and a client that never does it is a difference the expectation will show. */
+async function until(done: () => boolean): Promise<void> {
+  const limit = Date.now() + 1000;
+  while (!done() && Date.now() < limit) await new Promise((r) => setTimeout(r, 5));
 }
 
 /** Until every account subscription the stub was sent has had its unsubscribe, or a second has

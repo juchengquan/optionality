@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  type TwsContract, cancelMktData, readMessage, reqAccountUpdates,
-  reqContractDetails,
+  type TwsContract, cancelMktData, cancelPnL, cancelPnLSingle, readMessage, reqAccountUpdates,
+  reqContractDetails, reqPnL, reqPnLSingle,
   reqMarketDataType, reqMktData,
 } from "./messages.ts";
 import { MARKET_DATA_DELAYED_FROZEN } from "./fields.ts";
@@ -260,5 +260,38 @@ describe("the account (ADR 0030)", () => {
   it("reads the update time as the clock time it is, and the download's end", () => {
     expect(readMessage(msg(8, 1, "14:32"))).toEqual({ kind: "accountTime", time: "14:32" });
     expect(readMessage(msg(54, 1, "U0000000"))).toEqual({ kind: "accountEnd", account: "U0000000" });
+  });
+});
+
+describe("the account's P&L streams (ADR 0031)", () => {
+  // Every layout here is ib_async 2.1.0's (client.py's reqPnL, cancelPnL, reqPnLSingle and
+  // cancelPnLSingle; decoder.py's pnl and pnlSingle), which agrees with ibapi 9.81's at protocol
+  // 157: no version field in any of them, every field present above 134. Figures invented.
+  it("asks for the account's P&L by request id, account and a blank model code, and cancels it", () => {
+    expect(readFields(reqPnL(7, "U0000000"))).toEqual(["92", "7", "U0000000", ""]);
+    expect(readFields(cancelPnL(7))).toEqual(["93", "7"]);
+  });
+
+  it("asks for one holding's P&L by its conId, as the portfolio row sent it, and cancels it", () => {
+    expect(readFields(reqPnLSingle(8, "U0000000", "100000101")))
+      .toEqual(["94", "8", "U0000000", "", "100000101"]);
+    expect(readFields(cancelPnLSingle(8))).toEqual(["95", "8"]);
+  });
+
+  it("reads the account's P&L as its request id and three figures, as sent", () => {
+    // 0 id, 1 reqId, 2 dailyPnL, 3 unrealizedPnL, 4 realizedPnL
+    expect(readMessage(msg(94, 7, "152.40", "1436.50", "1.7976931348623157E308"))).toEqual({
+      kind: "pnl", reqId: 7,
+      row: { daily_pnl: "152.40", unrealized_pnl: "1436.50", realized_pnl: "1.7976931348623157E308" },
+    });
+  });
+
+  it("reads a holding's P&L as its request id, position, three figures and value, as sent", () => {
+    // 0 id, 1 reqId, 2 pos, 3 dailyPnL, 4 unrealizedPnL, 5 realizedPnL, 6 value
+    expect(readMessage(msg(95, 8, "-6", "43.20", "", "0.00", "-552.00"))).toEqual({
+      kind: "pnlSingle", reqId: 8,
+      row: { position: "-6", daily_pnl: "43.20", unrealized_pnl: "", realized_pnl: "0.00",
+        value: "-552.00" },
+    });
   });
 });

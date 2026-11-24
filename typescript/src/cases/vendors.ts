@@ -54,6 +54,19 @@ const VIX = {
   bid: 0, ask: 0, exchangeDataDelayedBy: 15, marketState: "CLOSED",
 };
 
+/** Two holdings as `holdingFrom` reads them, for the account watch's cases (ADR 0031): constructed,
+ *  every figure invented. */
+const STOCK_HOLDING = {
+  sec_type: "STK", symbol: "ACME", currency: "USD", expiry: null, strike: null, right: null,
+  multiplier: null, position: 300, market_price: 41.27, market_value: 12381, average_cost: 38.115,
+  unrealized_pnl: 946.5, realized_pnl: 0,
+};
+const PUT_HOLDING = {
+  sec_type: "OPT", symbol: "ACME", currency: "USD", expiry: "20261218", strike: 35, right: "P",
+  multiplier: 100, position: -6, market_price: 0.92, market_value: -552, average_cost: 1.418,
+  unrealized_pnl: 298.8, realized_pnl: 0,
+};
+
 export const VENDOR_INPUTS: Record<
   string, readonly { fn: string; name: string; args: unknown[] }[]
 > = {
@@ -284,6 +297,37 @@ export const VENDOR_INPUTS: Record<
       ],
       [], null] },
     { fn: "accountAnswer", name: "nothing said is nothing claimed", args: ["U0000001", [], [], null] },
+    // the account watch (ADR 0031): the P&L streams' figures, constructed in ib_async 2.1.0's
+    // layout; IB writes a figure it has not set as Java's Double.MAX_VALUE, in full
+    { fn: "pnlFrom", name: "the account's P&L, each figure as sent", args: [
+      { daily_pnl: "152.40", unrealized_pnl: "1436.50", realized_pnl: "-412.80" }] },
+    { fn: "pnlFrom", name: "a figure IB has not set is none, never 1.8e308", args: [
+      { daily_pnl: "1.7976931348623157E308", unrealized_pnl: "1436.50", realized_pnl: "0.00" }] },
+    { fn: "pnlFrom", name: "an empty figure is none, never 0", args: [
+      { daily_pnl: "", unrealized_pnl: "1436.50", realized_pnl: "﻿" }] },
+    { fn: "pnlSingleFrom", name: "a holding's stream, its position signed", args: [
+      { position: "-6", daily_pnl: "43.20", unrealized_pnl: "298.80", realized_pnl: "0.00",
+        value: "-552.00" }] },
+    { fn: "pnlSingleFrom", name: "unset and empty figures are none", args: [
+      { position: "4", daily_pnl: "1.7976931348623157E308", unrealized_pnl: "",
+        realized_pnl: "0.00", value: "1.7976931348623157E308" }] },
+    { fn: "liveHolding", name: "before its stream speaks: the row, and no daily P&L", args: [
+      STOCK_HOLDING, null] },
+    { fn: "liveHolding", name: "a stock's value, mark and P&L from its stream", args: [
+      STOCK_HOLDING, { position: 300, daily_pnl: 111, unrealized_pnl: 961.5, realized_pnl: 0,
+        value: 12396 }] },
+    { fn: "liveHolding", name: "an option's mark per share, its multiplier divided out", args: [
+      PUT_HOLDING, { position: -6, daily_pnl: 43.2, unrealized_pnl: 298.8, realized_pnl: 0,
+        value: -552 }] },
+    { fn: "liveHolding", name: "the stream's own position, where it sent one with its value", args: [
+      PUT_HOLDING, { position: -4, daily_pnl: 12, unrealized_pnl: 200, realized_pnl: 0,
+        value: -360 }] },
+    { fn: "liveHolding", name: "a figure the stream left unset keeps the row's", args: [
+      PUT_HOLDING, { position: null, daily_pnl: null, unrealized_pnl: null, realized_pnl: null,
+        value: null }] },
+    { fn: "liveHolding", name: "a value at a position of zero keeps the row's mark", args: [
+      PUT_HOLDING, { position: 0, daily_pnl: 77.4, unrealized_pnl: 0, realized_pnl: 520.8,
+        value: 0 }] },
   ],
   // the record's fields are a list, which the Python's SDK-frame reader is held to
   // (`vendors/opend/fields.ts` says why it cannot be logic); the quote grade is logic (#464)
