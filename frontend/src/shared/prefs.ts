@@ -1,8 +1,9 @@
 /** What the browser remembers for this viewer, and nothing else.
  *
- *  Nine preferences: how often the screen polls, which columns the desk's book hides, which way is
+ *  Ten preferences: how often the screen polls, which columns the desk's book hides, which way is
  *  up, how a fired entry rule looks, privacy, the arrangement, the desk's price map, which of the
- *  book's expiry groups are folded, and how often the account page reads the account (#471). The old page at `/opt` had five more — the signal and its band
+ *  book's expiry groups are folded, how often the account page reads the account (#471), and what
+ *  the account page has folded. The old page at `/opt` had five more — the signal and its band
  *  (the near-firing highlight), the grouping and the single-leg table's columns — and they went
  *  with it (#301, ADR 0023); their cookies are simply never read again. The ones kept keep their
  *  names, so a choice made on either page before the swap is still the choice after it.
@@ -139,6 +140,22 @@ export function readFolded(): Set<string> {
 
 export function writeFolded(folded: Set<string>): void {
   writeCookie("ui_folded", [...folded].filter((k) => FOLDED.test(k)).sort().join("."));
+}
+
+/** What the account page has folded (the owner, 2026-11-24): `stocks`, `options` and `other`, its
+ *  sections, and `options:SPX`, an underlying inside Options. Its own cookie, apart from the book's
+ *  `ui_folded`, and like it storing what is FOLDED, so everything starts open. An underlying is IBKR's
+ *  symbol, which may carry a space, so the list is written encoded, "," between entries; read
+ *  tolerantly (`decoded`), and any entry that is not a section or a printable symbol under Options
+ *  is dropped here, and so from the cookie at its next write. */
+const ACCOUNT_FOLDED = /^(stocks|options|other)$|^options:[\x21-\x7e](?:[\x20-\x7e]{0,30}[\x21-\x7e])?$/;
+
+export function readAccountFolded(): Set<string> {
+  return new Set(readCookie("ui_account_folded").split(",").filter((k) => ACCOUNT_FOLDED.test(k)));
+}
+
+export function writeAccountFolded(folded: Set<string>): void {
+  writeCookie("ui_account_folded", encodeURIComponent([...folded].filter((k) => ACCOUNT_FOLDED.test(k)).sort().join(",")));
 }
 
 /** How often the account page reads the IBKR account (#471): one of `ACCOUNT_REFRESHES`, in
