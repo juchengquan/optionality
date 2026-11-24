@@ -363,10 +363,23 @@ export function parseConversation(name: string, value: unknown): Conversation {
   // download end, the start resolving being how the replay knows it has been read
   const steps = (watches ?? []).reduce((n, w) => n + (w.before ?? 0) + w.steps, 0);
   const opening = new Set<number>();
+  /** every step sent while a watch's start still waits */
+  const waiting = new Set<number>();
   (watches ?? []).reduce((first, w) => {
+    for (let step = first; step < first + (w.before ?? 0); step++) waiting.add(step);
     if (w.before) opening.add(first + w.before - 1);
     return first + (w.before ?? 0) + w.steps;
   }, 1);
+  // a holding's stream is asked for only once the download ends: at a step before that, its
+  // reply would be sent to nobody (review round 2 of #479)
+  for (const e of exchanges) {
+    if (e.request !== "reqPnLSingle") continue;
+    for (const l of e.later ?? []) {
+      if (waiting.has(l.step)) {
+        fail(`a holding's stream cannot answer at step ${l.step}, before its watch has started`);
+      }
+    }
+  }
   for (const e of exchanges) {
     for (const l of e.later ?? []) {
       if (l.step > steps) fail(`a later reply comes at step ${l.step}, and the watches take ${steps}`);
@@ -379,6 +392,12 @@ export function parseConversation(name: string, value: unknown): Conversation {
       if (last?.request !== "reqAccountUpdates" || replies.at(-1)?.[0] !== "54") {
         fail(`step ${step} must end with the download end a watch starts on, from a `
           + "reqAccountUpdates exchange");
+      }
+      // and that download does not ALSO end at once, which both clients would start on first,
+      // before the step's P&L (review round 2 of #479)
+      if (last?.request === "reqAccountUpdates" && last.replies.some((m) => m[0] === "54")) {
+        fail(`${last.account}'s account exchange must not end the download at once: its watch `
+          + `starts at step ${step}`);
       }
       continue;
     }
