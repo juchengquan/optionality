@@ -186,13 +186,13 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   conversations (ADR 0030) are CONSTRUCTED and only ever will be (a recorded one is refused) —
   the repository is public; a capture of the live account stays on the owner's machine and is
   deleted once read — and replay
-  `accountReads` beside the asks, and since ADR 0031 `watches`: a watch is replayed STEP BY STEP,
-  an exchange's `later` replies sent at a numbered step (`fake.ts`' `step`), a picture recorded
-  after each, and each step ending with the account's P&L (or, for a watch's `before` steps sent
-  while its start waits, the last with the download end, the start resolving), so the replay knows
-  the client has read it once the client's clock — a counter, read once per P&L message — has been read once for every
-  P&L the stub wrote: a condition, not a timer, and `pnl_at` in `expected/` a count, never a wall
-  time. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
+  `accountReads` beside the asks, and since ADR 0031 `watches`: a watch is replayed STEP BY STEP, an
+  exchange's `later` replies sent at a numbered step (`fake.ts`' `step`), a picture recorded after
+  each, and each step ending with the account's P&L (or, for a watch's `before` steps sent while its
+  start waits, the last with the download end, the start resolving), so the replay knows the client
+  has read it once the client's clock — a counter, read once per P&L message — has been read once
+  for every P&L the stub wrote: a condition, not a timer, and `pnl_at` in `expected/` a count, never
+  a wall time. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
   replayed through the fake by `ibkr/replay.ts`, every reply at once. `make check-cases` and
   `cases/gateway.test.ts` fail when one is stale, missing, or has no recording; outside the
   fingerprint for the vendor corpus' reason. Its README is written for the Python stub's author,
@@ -200,8 +200,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   recording through it to the Python client and compares the batch, or the exact words raised, to
   `expected/` with `test_cases.same` — and each account read's answer, refusal or words raised, and
   the account subscriptions it sent, message for message; and each watch's every picture, how it
-  ended, and the subscriptions, P&L requests and cancels it sent. Parametrized from the directory, so a new recording is
-  replayed there too and fails until the Python answers what the TypeScript did.
+  ended, and the subscriptions, P&L requests and cancels it sent. Parametrized from the directory,
+  so a new recording is replayed there too and fails until the Python answers what the TypeScript
+  did.
 - **Door scenarios** (ADR 0021, phase 1c): `testdata/scenarios/{http,bot,sweep}/` — a stated world
   (rows, `.env` lines, what each vendor answers, the clock), ONE request, Telegram update or sweep
   tick, and exactly what the service did: the response or reply, the rows it changed, the messages

@@ -170,6 +170,25 @@ describe("the conversations", () => {
       .toThrow(/step 1 must end with the download end a watch starts on/);
   });
 
+  it("refuses a download that also ends at once, where its watch starts at a later step", () => {
+    // review round 2 of #479: both clients would start on the at-once end, before the step's P&L
+    const file = JSON.parse(readFileSync(join(RECORDINGS, "watch-pnl-before-download-end.json"),
+      "utf8")) as { exchanges: { request: string; replies: string[][] }[] };
+    file.exchanges.find((e) => e.request === "reqAccountUpdates")!.replies.push(["54", "1", "U0000000"]);
+    expect(() => parseConversation("watch-pnl-before-download-end", file))
+      .toThrow(/must not end the download at once: its watch starts at step 1/);
+  });
+
+  it("refuses a holding's stream answering at a step before its watch has started", () => {
+    // a holding's stream is asked for only once the download ends, so such a reply never arrives
+    const file = JSON.parse(readFileSync(join(RECORDINGS, "watch-pnl-before-download-end.json"),
+      "utf8")) as { exchanges: { request: string; later?: { step: number; replies: string[][] }[] }[] };
+    file.exchanges.find((e) => e.request === "reqPnLSingle")!.later!
+      .unshift({ step: 1, replies: [["95", "$reqId", "300", "1.00", "1.00", "0.00", "1.00"]] });
+    expect(() => parseConversation("watch-pnl-before-download-end", file))
+      .toThrow(/a holding's stream cannot answer at step 1, before its watch has started/);
+  });
+
   it("keeps every field as the text the wire carried, never a number", () => {
     // "4.10" and 4.1 are different bytes, and so are "2.1E-4" and 0.00021. A recording that let
     // JSON reformat a field would replay something the gateway never sent.

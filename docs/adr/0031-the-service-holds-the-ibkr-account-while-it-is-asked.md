@@ -41,12 +41,12 @@ The owner's decisions of 2026-11-24:
 **A watch, beside the bounded read**, in both clients: `IbkrClient.watchAccount(wanted?)` in
 TypeScript, `async IbkrClient.watch_account(wanted=None)` in Python. It subscribes to the account's
 updates (`REQ_ACCT_DATA`, subscribe true) and keeps the subscription, subscribes to `reqPnL` for the
-account, and once the first download ends subscribes to `reqPnLSingle` for every holding by its conId.
-It resolves with a handle on that first complete picture — under the bounded read's deadline and in
-its words, its refusals included (`IbkrAccountRefused` for several accounts and none named, or one
-named that is not on the login; `IbkrUnreachable` for a gateway it cannot reach). A start that fails
-at the deadline cancels the P&L and unsubscribes on its way out; one whose connection closes before
-the first picture fails in the read's words.
+account, and once the first download ends subscribes to `reqPnLSingle` for every holding by its
+conId. It resolves with a handle on that first complete picture — under the bounded read's deadline
+and in its words, its refusals included (`IbkrAccountRefused` for several accounts and none named,
+or one named that is not on the login; `IbkrUnreachable` for a gateway it cannot reach). A start
+that fails at the deadline cancels the P&L and unsubscribes on its way out; one whose connection
+closes before the first picture fails in the read's words.
 
 **The handle** (`IbkrAccountWatch`): `picture()`, the latest picture, a copy the caller may keep;
 `lost`, set once when the connection closes under it; `onLost` / `on_lost`, told at once (or now, if
@@ -67,8 +67,8 @@ download as at any later update.
 
 **Unset is none.** IB writes a figure it has not set as Java's `Double.MAX_VALUE`
 (`1.7976931348623157E308`); it reads as no figure, as an empty field does — never as a number. The
-mapping is pure, in `ibkr/fields.ts` (`pnlFrom`, `pnlSingleFrom`, `liveHolding`, `UNSET_DOUBLE`), ported
-to `ibkr.py` and held in both directions by the vendor corpus.
+mapping is pure, in `ibkr/fields.ts` (`pnlFrom`, `pnlSingleFrom`, `liveHolding`, `UNSET_DOUBLE`),
+ported to `ibkr.py` and held in both directions by the vendor corpus.
 
 **Lost, not repaired.** If the connection closes — the gateway goes, a price read fails and drops it,
 or the client is closed — the handle says so at once and keeps its last picture. The client does not
@@ -87,12 +87,12 @@ the account unsubscribed, or the watch stopped if it had already started.
 
 **The wire**, at protocol 157 and above, where every field is present, as `ib_async` 2.1.0's
 `client.py` and `decoder.py` and `ibapi` 9.81 have it, with no version field in any of them: out,
-`REQ_PNL` 92 (reqId, account, a blank model code), `CANCEL_PNL` 93 (reqId), `REQ_PNL_SINGLE` 94 (reqId,
-account, a blank model code, conId), `CANCEL_PNL_SINGLE` 95 (reqId); in, `PNL` 94 (reqId, daily,
-unrealised, realised) and `PNL_SINGLE` 95 (reqId, position, daily, unrealised, realised, value). The
-Python reads both incoming messages field by field in its own decoder subclass, because `ib_async`'s
-turns an empty figure into 0. Neither client gains anything that could place, change or cancel an
-order: `messages.ts` has none, and `no_trading.py`'s list is unchanged.
+`REQ_PNL` 92 (reqId, account, a blank model code), `CANCEL_PNL` 93 (reqId), `REQ_PNL_SINGLE` 94
+(reqId, account, a blank model code, conId), `CANCEL_PNL_SINGLE` 95 (reqId); in, `PNL` 94 (reqId,
+daily, unrealised, realised) and `PNL_SINGLE` 95 (reqId, position, daily, unrealised, realised,
+value). The Python reads both incoming messages field by field in its own decoder subclass, because
+`ib_async`'s turns an empty figure into 0. Neither client gains anything that could place, change or
+cancel an order: `messages.ts` has none, and `no_trading.py`'s list is unchanged.
 
 **Recordings constructed.** The conversations in `testdata/vendors/ibkr-gateway/` that watch the
 account (`watch-*`) are built from the layouts above with invented figures and placeholder accounts,

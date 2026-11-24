@@ -1521,3 +1521,51 @@ def test_a_lost_listener_that_raises_is_logged_and_the_others_are_still_told(cap
     assert watching("watch-lost", test) == [LOST]
     (record,) = [r for r in caplog.records if r.name == "optionality.ibkr"]
     assert record.exc_info is not None and str(record.exc_info[1]) == "a listener's own fault"
+
+
+def test_a_watch_whose_caller_is_cancelled_as_the_start_resolves_is_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review round 2 of #479: a cancel that lands once the start has resolved but before its caller
+    resumes found a watch nobody would hold — it held the one subscription for nobody. Given up on
+    then, the watch is stopped: each holding's stream cancelled, the P&L, then the unsubscribe."""
+    from optionality import ibkr
+
+    begin = ibkr._AccountWatch.begin
+    caller: dict[str, asyncio.Task[Any]] = {}
+
+    def cancel_as_it_resolves(self: Any) -> None:
+        begin(self)
+        # registered after the caller's shield: it runs once the start has resolved, before the
+        # caller is woken, and cancels it there
+        loop = asyncio.get_running_loop()
+        loop.call_soon(lambda: self.ready.add_done_callback(lambda _: caller["task"].cancel()))
+
+    async def run() -> Any:
+        gateway = await start_fake_gateway("watch-started-and-stopped")
+        client = IbkrClient(port=gateway.port, client_id=31419, connect_timeout_ms=1000, request_timeout_ms=3000)
+        try:
+            monkeypatch.setattr(ibkr._AccountWatch, "begin", cancel_as_it_resolves)
+            caller["task"] = asyncio.ensure_future(client.watch_account())
+            with pytest.raises(asyncio.CancelledError):
+                await caller["task"]
+            monkeypatch.setattr(ibkr._AccountWatch, "begin", begin)
+            await waited(lambda: any(f[0] == "6" and f[2] == "0" for f in gateway.received))
+            stopped = watch_messages(gateway)
+            watch = await client.watch_account()
+            return stopped, watch.picture()["account"]
+        finally:
+            client.close()
+            await gateway.close()
+
+    assert asyncio.run(run()) == (
+        [
+            ["6", "2", "1", "U0000000"],
+            ["92", "1", "U0000000", ""],
+            ["94", "2", "U0000000", "", "100000101"],
+            ["94", "3", "U0000000", "", "100000201"],
+            ["95", "2"],
+            ["95", "3"],
+            ["93", "1"],
+            ["6", "2", "0", "U0000000"],
+        ],
+        "U•••••000",
+    )

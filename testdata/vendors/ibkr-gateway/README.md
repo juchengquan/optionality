@@ -1,11 +1,11 @@
 # IB Gateway conversations
 
 What IB Gateway says to a read-only quote fetch, since ADR 0030 to a read of the account, and since
-ADR 0031 to a watch of it, one conversation per file, written down once so that two clients can be held to the same answers (ADR
-0021, Decision 7): the TypeScript's own socket client, and the Python's, built on `ib_async`. Each
-client is handed the same recording through a stub gateway and asked for the same codes, or the
-same account; each must produce the same quote batch, the same account answer, or the same
-sequence of pictures of a watched account.
+ADR 0031 to a watch of it, one conversation per file, written down once so that two clients can be
+held to the same answers (ADR 0021, Decision 7): the TypeScript's own socket client, and the
+Python's, built on `ib_async`. Each client is handed the same recording through a stub gateway and
+asked for the same codes, or the same account; each must produce the same quote batch, the same
+account answer, or the same sequence of pictures of a watched account.
 
 - `*.json` here are the **recordings**. They are inputs, assembled from captures or constructed
   by hand, and `make cases` never writes them.
@@ -55,25 +55,25 @@ client read, which is why `ib_async` could not decode it.
 | `watch-pnl-before-download-end` | constructed | a watch whose download does not end at once: the account's P&L at step 1, sent while the start still waits, then the download end, so the picture it starts on carries the P&L; the stock's stream and the P&L at step 2; then stopped |
 | `watch-never-ends` | constructed | a watch whose download never ends: failed at the read's deadline, in its words, the P&L cancelled and the account unsubscribed on the way out |
 
-The account and watch conversations are CONSTRUCTED, and every one always will be: the repository
-is public, and nothing of the owner's account is committed (ADR 0030, ADR 0031). `recordings.ts`
+The account and watch conversations are CONSTRUCTED, and every one always will be: the repository is
+public, and nothing of the owner's account is committed (ADR 0030, ADR 0031). `recordings.ts`
 refuses a conversation with `accountReads`, `watches`, or a `reqAccountUpdates`, `reqPnL` or
-`reqPnLSingle` exchange whose provenance says `recorded`. They are laid out field for field as `ibapi` 9.81 encodes reqAccountUpdates and reads
-its five answers at protocol 157, and that layout was CHECKED against a capture of the live gateway
-on 2026-11-23, run with the owner's go-ahead on a client id that is not the service's; the capture
-stayed on the owner's machine and none of its values is here. The LAYOUT it settled, which the
-files follow: the greeting, then managedAccounts, nextValidId and notices 2104, 2106 and 2158;
-every account value (NetLiquidation and TotalCashValue plain in the base code beside their `-S`
-rows; the P&L only as `$LEDGER-UnrealizedPnL` and `$LEDGER-RealizedPnL` and the rates as
-`$LEDGER-ExchangeRate`, for BASE and each currency), then the portfolio with the update time
-(`HH:MM`) between its rows, then the download end; a stock's row with strike `0`, right `0`,
-expiry and multiplier empty, an option's with a whole-number strike, multiplier `100` and the
-exchange field filled; and exactly one message after each unsubscribe, error 2100 against -1, kept
-as the exchange's `onCancel`. The symbols, contract ids,
-quantities, prices, totals, exchange rates and clock times are invented, and the accounts
-placeholders. The watch conversations' P&L requests and answers are laid out from `ib_async`
-2.1.0's `client.py` and `decoder.py`, which agree with `ibapi` 9.81 at protocol 157 — the layouts,
-not a capture, and their figures invented too.
+`reqPnLSingle` exchange whose provenance says `recorded`. They are laid out field for field as
+`ibapi` 9.81 encodes reqAccountUpdates and reads its five answers at protocol 157, and that layout
+was CHECKED against a capture of the live gateway on 2026-11-23, run with the owner's go-ahead on a
+client id that is not the service's; the capture stayed on the owner's machine and none of its
+values is here. The LAYOUT it settled, which the files follow: the greeting, then managedAccounts,
+nextValidId and notices 2104, 2106 and 2158; every account value (NetLiquidation and TotalCashValue
+plain in the base code beside their `-S` rows; the P&L only as `$LEDGER-UnrealizedPnL` and
+`$LEDGER-RealizedPnL` and the rates as `$LEDGER-ExchangeRate`, for BASE and each currency), then the
+portfolio with the update time (`HH:MM`) between its rows, then the download end; a stock's row with
+strike `0`, right `0`, expiry and multiplier empty, an option's with a whole-number strike,
+multiplier `100` and the exchange field filled; and exactly one message after each unsubscribe,
+error 2100 against -1, kept as the exchange's `onCancel`. The symbols, contract ids, quantities,
+prices, totals, exchange rates and clock times are invented, and the accounts placeholders. The
+watch conversations' P&L requests and answers are laid out from `ib_async` 2.1.0's `client.py` and
+`decoder.py`, which agree with `ibapi` 9.81 at protocol 157 — the layouts, not a capture, and their
+figures invented too.
 
 ## The format
 
@@ -90,7 +90,7 @@ as a 4-byte big-endian integer.
   "ask": ["US.SPXW261218C8100000", "US.SPXW261218C8101000"],   // the service codes to fetch
   // "later": [["US.SPXW261218C8100000"]],      // optional: asks made after it, on one connection
   // "accountReads": [{"wanted": null}],         // optional: account reads after the asks (ADR 0030)
-  // "watches": [{"wanted": null, "steps": 2, "end": "stop"}],  // optional: watches after them (ADR 0031)
+  // "watches": [{"wanted": null, "steps": 2, "end": "stop"}],  // optional (ADR 0031)
   "handshake": {
     "greeting": ["157", "20261109 19:21:23 SGT"],  // the answer to the client's version range
     "onStartApi": [                                // sent, in order, when startApi arrives
@@ -142,35 +142,38 @@ as a 4-byte big-endian integer.
   AccountCode's value, a portfolio row's, the download end's, an exchange's and its subscribe's or
   P&L request's, its later replies', and the account a read or a watch asks for) and anywhere in
   the file's text.
-- `watches` (optional, ADR 0031) is account watches, made in turn by the SAME client after the reads,
-  each naming the account it `wanted` or `null`, how many `steps` it is held through, and how it
-  `end`s: `"stop"`, the caller stops it, or `"drop"`, the stub drops every connection under it.
+- `watches` (optional, ADR 0031) is account watches, made in turn by the SAME client after the
+  reads, each naming the account it `wanted` or `null`, how many `steps` it is held through, and how
+  it `end`s: `"stop"`, the caller stops it, or `"drop"`, the stub drops every connection under it.
   `before` (optional) is how many steps go while its START is still waiting for the download to end:
   the last of them must end with that download end (`54`, from the account exchange's `later`), and
   whatever comes ahead of it in that step — the account's P&L — is in the picture the watch starts
   on (`watch-pnl-before-download-end`); the start resolving is how a replay knows that step has been
-  read. The steps are numbered in turn across the watches, each watch's `before` steps first: the
-  first's are 1 to its `before` plus `steps`, the next's after. Its exchanges are `"request": "reqPnL"`, with the `account` it names (`sent`
-  `["92", "$reqId", <account>, ""]`), and `"request": "reqPnLSingle"`, with the `account` and the
-  holding's `conId` (`sent` `["94", "$reqId", <account>, "", <conId>]`); `$reqId` in their replies is
-  the request's own id, which their answers carry at field 1. Their `replies` are EMPTY: a stream's
-  figures come `later`, so the picture a watch starts with is the download's alone, whenever the
-  client looks at it.
-- `later` (optional, on any exchange) is replies that come LATER than the request that started
-  them, each `{"step": n, "replies": [...]}`: sent at step `n` of the replay, to whichever
-  connection holds the request then, with its id (rule 8). An account exchange's are the updates
-  pushed while the subscription stands — a portfolio row as a holding trades, the update time with
-  it. Every step must END with the account's P&L: of the exchanges with replies at that step, the
-  last is a `reqPnL` one and its last reply is a PNL message (`94`) — except the step a watch's
-  download ends at (its last `before` step), which ends with that download end instead. That is how a replay knows the
-  client has read the step (see "What an expectation says"), and `recordings.ts` refuses a file
+  read. Its account exchange must not ALSO end the download at once, which a client would start on
+  first, and no holding's stream may answer at a `before` step: a holding's stream is asked for only
+  once the download has ended. The steps are numbered in turn across the watches, each watch's
+  `before` steps first: the first's are 1 to its `before` plus `steps`, the next's after. Its
+  exchanges are `"request": "reqPnL"`, with the `account` it names (`sent` `["92", "$reqId",
+  <account>, ""]`), and `"request": "reqPnLSingle"`, with the `account` and the holding's `conId`
+  (`sent` `["94", "$reqId", <account>, "", <conId>]`); `$reqId` in their replies is the request's
+  own id, which their answers carry at field 1. Their `replies` are EMPTY: a stream's figures come
+  `later`, at a step, so what the picture a watch starts on holds is the file's to say — the
+  download's alone, or with what its `before` steps sent — whenever the client looks at it.
+- `later` (optional, on any exchange) is replies that come LATER than the request that started them,
+  each `{"step": n, "replies": [...]}`: sent at step `n` of the replay, to whichever connection
+  holds the request then, with its id (rule 8). An account exchange's are the updates pushed while
+  the subscription stands — a portfolio row as a holding trades, the update time with it. Every step
+  must END with the account's P&L: of the exchanges with replies at that step, the last is a
+  `reqPnL` one and its last reply is a PNL message (`94`) — except the step a watch's download ends
+  at (its last `before` step), which ends with that download end instead. That is how a replay knows
+  the client has read the step (see "What an expectation says"), and `recordings.ts` refuses a file
   that breaks it, or that sends at a step no watch takes.
-- `later` (optional, at the top level) is further asks, each a list of codes, made in turn by the SAME client after
-  `ask`, so the connection and whatever the client cached on earlier asks carry over. Absent, the
-  conversation is one ask, as most are. It exists for a fault only a warm cache shows: the
-  service holds its session for days, so a link that drops is met on a later ask, behind contract
-  ids resolved before it dropped (`link-down-between-asks`). A file says what changes between asks
-  by holding more than one exchange for a request (rule 3).
+- `later` (optional, at the top level) is further asks, each a list of codes, made in turn by the
+  SAME client after `ask`, so the connection and whatever the client cached on earlier asks carry
+  over. Absent, the conversation is one ask, as most are. It exists for a fault only a warm cache
+  shows: the service holds its session for days, so a link that drops is met on a later ask, behind
+  contract ids resolved before it dropped (`link-down-between-asks`). A file says what changes
+  between asks by holding more than one exchange for a request (rule 3).
 
 ## How a stub replays a file
 
