@@ -29,7 +29,7 @@ answered, as the TypeScript's closures do.
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Protocol, cast
+from typing import Protocol
 
 from optionality.ibkr import (
     CONNECT_TIMEOUT_MS,
@@ -126,8 +126,7 @@ class IbkrProvider(IbkrClient):
             quiet_ms=quiet_ms,
         )
         #: over the same client, so the account is held on the session the prices are read on
-        # TEMPORARY SEAM until #476 is merged in: the library's client then has `watch_account`
-        self.account_source = IbkrAccountSource(cast(Any, self))
+        self.account_source = IbkrAccountSource(self)
 
     async def fetch_quotes(self, codes: list[str]) -> Batch:
         """The library's, each answer a chance for a lost account watch to come back (ADR 0031): an empty

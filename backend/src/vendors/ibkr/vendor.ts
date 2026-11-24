@@ -17,13 +17,12 @@
  */
 import { IbkrAccountRefused, IbkrClient, IbkrUnreachable } from "optionality/vendors/ibkr/client";
 import type { Settings } from "../../env.ts";
-import type { AccountSource, AccountWatch } from "../../ports.ts";
+import type { AccountSource } from "../../ports.ts";
 import type { ProviderVendor } from "../index.ts";
 
-/** What the account's source needs of the library's client: its watch (#476). */
-interface Watching {
-  watchAccount(wanted?: string): Promise<AccountWatch>;
-}
+/** What the account's source needs of the library's client: its watch (#476). Stated by what is
+ *  used, so a test can hand it a stand-in. */
+type Watching = Pick<IbkrClient, "watchAccount">;
 
 /** The account's watch over `client` (ADR 0031, #477), every way a start ends sorted for the route:
  *  the library's `IbkrUnreachable` — no session at all, in the connect's own words — apart from a
@@ -79,8 +78,7 @@ export const ibkrVendor: ProviderVendor = {
       port: settings.ibkrPort,
       clientId: settings.ibkrClientId,
     });
-    // TEMPORARY SEAM until #476 is merged in: the library's client then has `watchAccount`
-    const account = accountSource(client as unknown as Watching);
+    const account = accountSource(client);
     // A plain object of closures, as moomoo's descriptor hands back, and never the instance:
     // `main.ts` and every route pass `provider.fetchQuotes` on DETACHED, and a class method
     // extracted from its instance has no `this` — every ask then failed with "this.close is not a

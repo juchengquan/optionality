@@ -46,24 +46,10 @@ export interface VendorClient {
   readonly account?: AccountSource;
 }
 
-// --- the library's watch on the account (#476), stated here until its branch lands -------------
-// TEMPORARY SEAM: these three are `ibkrFields.IbkrPnl`, `IbkrLiveHolding` and `IbkrLiveAccount`, as
-// the interface agreed on #477 states them; swapped for the library's own when #476 is merged in.
-
-/** reqPnL's figures for the account, in the base currency; null where IB sent it unset */
-export interface IbkrPnl { daily_pnl: number | null; unrealized_pnl: number | null; realized_pnl: number | null }
-
-/** a holding as the watch holds it: the account read's, where market_value, unrealized_pnl and
- *  market_price are the holding's PnL stream's once it has spoken for it */
-export interface IbkrLiveHolding extends ibkrFields.IbkrHolding { daily_pnl: number | null }
-
-export interface IbkrLiveAccount extends Omit<ibkrFields.IbkrAccount, "holdings"> {
-  holdings: IbkrLiveHolding[];
-  /** reqPnL's last figures; null before it first speaks */
-  pnl: IbkrPnl | null;
-  /** when reqPnL last spoke, ms since the epoch by the client's `now`; null before */
-  pnl_at: number | null;
-}
+/** The library's picture of the account as its watch holds it (ADR 0031, #476), and its parts. */
+export type IbkrPnl = ibkrFields.IbkrPnl;
+export type IbkrLiveHolding = ibkrFields.IbkrLiveHolding;
+export type IbkrLiveAccount = ibkrFields.IbkrLiveAccount;
 
 /** A watch the library keeps on the account (ADR 0031): what the service holds while `GET /account`
  *  is asked. The library's `IbkrAccountWatch` is one; stated here by what the service uses of it, so
