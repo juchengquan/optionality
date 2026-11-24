@@ -12,7 +12,8 @@ here is the rest:
   — the watch stopped and nothing kept — and a read after that starts afresh. A read is answered from
   the picture in memory, asking IB Gateway nothing. Never started by the service and never read by the
   sweep, the bot or the MCP door: a request is the only thing that holds it. A start that fails holds
-  nothing;
+  nothing, and is remembered for `ACCOUNT_FAILED_FOR_MS`: no start is tried in that time, whoever asks,
+  and a read is told what the last one came to;
 - **a lost connection**: while held, a watch whose connection closed is a 502 in words until it is
   back. It is watched again at the next read, and whenever the client answers anything else (its
   connection back), never at the moment it is lost; a lost watch is dropped, never stopped, because its
@@ -60,6 +61,11 @@ log = logging.getLogger(__name__)
 #: How long the account is held after the last read: 90 s, the owner's decision on #477 — the page's
 #: slowest refresh is a minute, so every refresh keeps it.
 ACCOUNT_HELD_FOR_MS = 90_000
+
+#: How long a start that failed is remembered, from when it came back: 5 s, the owner's decision on #477
+#: — while IB Gateway is down or logged out the service tries to start the watch at most once in that
+#: time, whoever asks, and every read meanwhile is told what the last try came to.
+ACCOUNT_FAILED_FOR_MS = 5_000
 
 #: The words for a build with no IB Gateway (`IBKR_HOST` blank).
 NOT_CONFIGURED = "IB Gateway is not configured"
@@ -160,18 +166,24 @@ def account_answer(picture: Mapping[str, Any], at: datetime, display_tz: str) ->
 
 
 def _fault_of(started: AccountWatching) -> AccountFault:
-    """What a start that is not a watch says, and with which status. Where no session was had, the
-    connect's own words are logged, once per start; the page is told a refused session in the gateway's
-    words and anything else as a gateway that did not answer. Neither carries an account id: none is
-    known before a session."""
+    """What a start that is not a watch says, and with which status: the page is told a refused session
+    in the gateway's words and anything else unreachable as a gateway that did not answer — the
+    connect's own words are the log's. Neither carries an account id: none is known before a session."""
     if isinstance(started, AccountUnreachable):
-        log.error("IBKR account: %s", started.words)
         refused = started.words.startswith(REFUSED_SESSION)
         return AccountFault(502, started.words if refused else NOT_ANSWERING)
     if isinstance(started, AccountRefused):
         return AccountFault(422, started.words)
     assert isinstance(started, AccountFailed)
     return AccountFault(502, started.words)
+
+
+@dataclass(frozen=True)
+class _Failed:
+    """The last start that failed — a first start or a watch again — and when it came back."""
+
+    fault: AccountFault
+    at: int
 
 
 @dataclass
@@ -199,6 +211,7 @@ class AccountBook:
 
     deps: AccountDeps
     _hold: _Hold | None = field(default=None)
+    _failed: _Failed | None = field(default=None)
     #: stops and watches again still running, kept so the loop does not lose them
     _tasks: set["asyncio.Task[None]"] = field(default_factory=set)
 
@@ -216,6 +229,9 @@ class AccountBook:
             self._release(hold)
             hold = None
         if hold is None:
+            remembered = self._recently_failed(t)
+            if remembered is not None:
+                return AccountResult(fault=remembered)
             hold = self._begin(deps.source, t)
         else:
             hold.last_read = t
@@ -234,6 +250,26 @@ class AccountBook:
 
     def _wanted(self) -> str | None:
         return self.deps.wanted.strip(JS_WHITESPACE) or None
+
+    def _recently_failed(self, t: int) -> AccountFault | None:
+        """What the last start that failed came to, while it is under `ACCOUNT_FAILED_FOR_MS` old; a clock
+        that went back trusts nothing old."""
+        failed = self._failed
+        if failed is None:
+            return None
+        age = t - failed.at
+        if 0 <= age < ACCOUNT_FAILED_FOR_MS:
+            return failed.fault
+        self._failed = None
+        return None
+
+    def _remember(self, started: AccountWatching, prefix: str) -> AccountFault:
+        """A start that failed, remembered from now; the connect's own words to the log."""
+        assert not isinstance(started, AccountWatched)
+        log.error("IBKR account: %s%s", prefix, started.words)
+        fault = _fault_of(started)
+        self._failed = _Failed(fault, _ms(self.deps.now()))
+        return fault
 
     @staticmethod
     def _expired(hold: _Hold, t: int) -> bool:
@@ -255,9 +291,11 @@ class AccountBook:
                 self._drop(hold)
                 raise
             if not isinstance(started, AccountWatched):
-                # a start that failed holds nothing: the next read starts afresh
+                # a start that failed holds nothing, and is remembered: the next read after
+                # `ACCOUNT_FAILED_FOR_MS` starts afresh
                 self._drop(hold)
-                return _fault_of(started)
+                return self._remember(started, "")
+            self._failed = None
             self._took(hold, started.watch)
             return started.watch
 
@@ -276,9 +314,10 @@ class AccountBook:
         watch.on_lost(lambda err: log.error("IBKR account: the watch was lost: %s", err))
 
     def _watch_again(self, hold: _Hold) -> None:
-        """Start the watch again, under a hold whose watch was lost; one at a time."""
+        """Start the watch again, under a hold whose watch was lost: one at a time, and not within
+        `ACCOUNT_FAILED_FOR_MS` of a start that failed."""
         source = self.deps.source
-        if hold.again or source is None:
+        if hold.again or source is None or self._recently_failed(_ms(self.deps.now())) is not None:
             return
         hold.again = True
 
@@ -290,10 +329,11 @@ class AccountBook:
                 return
             finally:
                 hold.again = False
-            if isinstance(started, AccountWatched):
-                self._took(hold, started.watch)
-            else:
-                log.error("IBKR account: watching again failed: %s", started.words)
+            if not isinstance(started, AccountWatched):
+                self._remember(started, "watching again failed: ")
+                return
+            self._failed = None
+            self._took(hold, started.watch)
 
         self._keep(_eager(again()))
 

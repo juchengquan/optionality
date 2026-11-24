@@ -478,8 +478,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   watch and waits for its first picture, readers meanwhile joining it; every read renews it and is
   answered from the picture in memory, asking IB Gateway nothing; it is released
   `ACCOUNT_HELD_FOR_MS` (90s) after the LAST read — the watch stopped, nothing kept — by a timer that
-  only wakes it (the injected clock decides; a read that finds the 90s passed releases it too), and a
-  start that failed holds nothing. A watch whose connection closed is a 502 "The connection to IB
+  only wakes it (the injected clock decides; a read that finds the 90s passed releases it too). A
+  start that failed holds nothing and is remembered for `ACCOUNT_FAILED_FOR_MS` (5s, the owner's
+  decision): no start, first or again, is tried in that time whoever asks, and a read meanwhile is
+  told what the last one came to. A watch whose connection closed is a 502 "The connection to IB
   Gateway was lost" (its words logged) until it is back, watched again at the next read and when the
   client answers anything else, never stopped (its connection is gone; a stop would go down the
   next). The answer: its totals (`unrealized_pnl` and `realized_pnl` the account P&L stream's once it

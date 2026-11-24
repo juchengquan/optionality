@@ -4,7 +4,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ibkrFields } from "optionality/vendors/fields";
 
-import { ACCOUNT_HELD_FOR_MS, AccountBook, LOST, NOT_ANSWERING, NOT_CONFIGURED } from "./account.ts";
+import {
+  ACCOUNT_FAILED_FOR_MS, ACCOUNT_HELD_FOR_MS, AccountBook, LOST, NOT_ANSWERING, NOT_CONFIGURED,
+} from "./account.ts";
 import type {
   AccountSource, AccountWatch, AccountWatching, IbkrLiveAccount, IbkrLiveHolding, IbkrPnl,
 } from "./ports.ts";
@@ -12,6 +14,9 @@ import type {
 /** The hold, stated rather than imported, so the number itself is held: 90 s, the owner's decision
  *  on #477 — the page's slowest refresh is a minute, so every refresh keeps it. */
 const HELD_MS = 90_000;
+/** How long a failed start is remembered, stated for the same reason: 5 s, the owner's decision on
+ *  #477 — at most one try in that time while IB Gateway is down, whoever asks. */
+const FAILED_MS = 5_000;
 
 const NOW = new Date("2026-11-23T15:00:00.000Z");
 
@@ -236,11 +241,63 @@ describe("what a start comes to", () => {
       .toEqual({ fault: { status: 422, message: words } });
   });
 
-  it("holds nothing after a start that failed: the next read starts afresh", async () => {
+  it("holds nothing after a start that failed: the first read 5 s on starts afresh", async () => {
+    hush();
     const s = source({ failed: "did not finish" }, LIVE);
-    const { book: b, timers: t } = book(s.source);
+    const { book: b, clock, timers: t } = book(s.source);
     await b.read();
     expect(t.live()).toEqual([]);
+    clock.now = at(FAILED_MS);
+    expect(await b.read()).toHaveProperty("answer");
+    expect(s.asked).toHaveLength(2);
+  });
+
+  it("remembers a failed start for 5 s: every read inside them is told the same, nothing started", async () => {
+    hush();
+    const s = source({ unreachable: "connect ECONNREFUSED" }, LIVE);
+    const { book: b, clock } = book(s.source);
+    const first = await b.read();
+    expect(first).toEqual({ fault: { status: 502, message: NOT_ANSWERING } });
+    clock.now = at(FAILED_MS - 1);
+    expect(await b.read()).toEqual(first);
+    expect(s.asked).toHaveLength(1);
+    expect(ACCOUNT_FAILED_FOR_MS).toBe(FAILED_MS);
+  });
+
+  it("counts the 5 s from when the failed start came back, not from when it was asked", async () => {
+    hush();
+    const s = source({ failed: "did not finish" }, LIVE);
+    s.holding();
+    const { book: b, clock } = book(s.source);
+    const first = b.read();
+    clock.now = at(3000);
+    s.release();
+    await first;
+    clock.now = at(3000 + FAILED_MS - 1);
+    await b.read();
+    expect(s.asked).toHaveLength(1);
+    clock.now = at(3000 + FAILED_MS);
+    expect(await b.read()).toHaveProperty("answer");
+    expect(s.asked).toHaveLength(2);
+  });
+
+  it("remembers a refusal the same way, in its words", async () => {
+    hush();
+    const words = "several accounts on this login; set IBKR_ACCOUNT to one of <the masked ids>";
+    const s = source({ refused: words });
+    const { book: b, clock } = book(s.source);
+    await b.read();
+    clock.now = at(1000);
+    expect(await b.read()).toEqual({ fault: { status: 422, message: words } });
+    expect(s.asked).toHaveLength(1);
+  });
+
+  it("trusts no failure it remembers when the clock has gone back", async () => {
+    hush();
+    const s = source({ failed: "did not finish" }, LIVE);
+    const { book: b, clock } = book(s.source);
+    await b.read();
+    clock.now = at(-1);
     expect(await b.read()).toHaveProperty("answer");
     expect(s.asked).toHaveLength(2);
   });
@@ -410,15 +467,22 @@ describe("a lost connection", () => {
   it("is the same 502 after a watch again that failed, and the next read tries again", async () => {
     const log = hush();
     const s = source(LIVE, { unreachable: "connect ECONNREFUSED" }, { unreachable: "connect ECONNREFUSED" }, LIVE);
-    const { book: b } = book(s.source);
+    const { book: b, clock } = book(s.source);
     await b.read();
     s.watches[0]!.lose();
     expect(await b.read()).toEqual({ fault: { status: 502, message: LOST } });
     await settle();
     expect(log).toHaveBeenCalledWith("IBKR account: watching again failed: connect ECONNREFUSED");
+    // not again inside the 5 s, at a read or when the client answers
+    clock.now = at(FAILED_MS - 1);
+    expect(await b.read()).toEqual({ fault: { status: 502, message: LOST } });
+    s.answered();
+    expect(s.asked).toHaveLength(2);
+    clock.now = at(FAILED_MS);
     expect(await b.read()).toEqual({ fault: { status: 502, message: LOST } });
     await settle();
     expect(s.asked).toHaveLength(3);
+    clock.now = at(2 * FAILED_MS);
     expect(await b.read()).toEqual({ fault: { status: 502, message: LOST } });
     await settle();
     expect(await b.read()).toHaveProperty("answer");

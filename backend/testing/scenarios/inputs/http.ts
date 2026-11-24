@@ -3502,7 +3502,17 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/account"),
   },
   {
-    name: "GET /account holds nothing after a start that failed, and starts afresh",
+    // remembered for 5s: one try in that time, whoever asks
+    name: "GET /account remembers a failed start for 5s, asking the gateway once",
+    world: world({
+      settings: IBKR,
+      ibkr_account: { down: GATEWAY_DOWN },
+    }),
+    earlier: [{ at: at(-4), request: request("GET", "/account") }],
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account holds nothing after a start that failed, and starts afresh 5s on",
     world: world({
       settings: IBKR,
       ibkr_account: { down: GATEWAY_DOWN },
@@ -3547,6 +3557,21 @@ export const HTTP: readonly HttpInput[] = [
     earlier: [
       { at: at(-15), request: request("GET", "/account") },
       { at: at(-5), request: request("GET", "/account") },
+    ],
+    request: request("GET", "/account"),
+  },
+  {
+    name: "GET /account says the connection was lost and does not watch again within 5s of a failed try",
+    world: world({
+      settings: IBKR,
+      ibkr_account: {
+        ...answered("U0000000", WHOLE_ACCOUNT),
+        lost: { at: at(-10), words: CONNECTION_CLOSED, down: GATEWAY_DOWN },
+      },
+    }),
+    earlier: [
+      { at: at(-15), request: request("GET", "/account") },
+      { at: at(-3), request: request("GET", "/account") },
     ],
     request: request("GET", "/account"),
   },

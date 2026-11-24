@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from optionality_backend.account import (
+    ACCOUNT_FAILED_FOR_MS,
     ACCOUNT_HELD_FOR_MS,
     LOST,
     NOT_ANSWERING,
@@ -38,6 +39,9 @@ from optionality_backend.ports import (
 #: The hold, stated rather than imported, so the number itself is held: 90 s, the owner's decision on
 #: #477 — the page's slowest refresh is a minute, so every refresh keeps it.
 HELD_MS = 90_000
+#: How long a failed start is remembered, stated for the same reason: 5 s, the owner's decision on #477 —
+#: at most one try in that time while IB Gateway is down, whoever asks.
+FAILED_MS = 5_000
 
 NOW = datetime(2026, 11, 23, 15, 0, tzinfo=UTC)
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
@@ -344,11 +348,59 @@ async def test_is_a_422_in_the_librarys_words_where_it_would_not_choose_an_accou
     assert await book(Source(AccountRefused(words)))[0].read() == AccountResult(fault=AccountFault(422, words))
 
 
-async def test_holds_nothing_after_a_start_that_failed_the_next_read_starts_afresh() -> None:
+async def test_holds_nothing_after_a_start_that_failed_the_first_read_5s_on_starts_afresh() -> None:
     s = Source(AccountFailed("did not finish"), LIVE)
-    b, _, timers = book(s)
+    b, clock, timers = book(s)
     await b.read()
     assert timers.live() == []
+    clock.now = at(FAILED_MS)
+    assert (await b.read()).answer is not None
+    assert len(s.asked) == 2
+
+
+async def test_remembers_a_failed_start_for_5s_every_read_inside_them_told_the_same_nothing_started() -> None:
+    s = Source(AccountUnreachable("connect ECONNREFUSED"), LIVE)
+    b, clock, _ = book(s)
+    first = await b.read()
+    assert first == AccountResult(fault=AccountFault(502, NOT_ANSWERING))
+    clock.now = at(FAILED_MS - 1)
+    assert await b.read() == first
+    assert len(s.asked) == 1
+    assert ACCOUNT_FAILED_FOR_MS == FAILED_MS
+
+
+async def test_counts_the_5s_from_when_the_failed_start_came_back_not_from_when_it_was_asked() -> None:
+    s = Source(AccountFailed("did not finish"), LIVE)
+    s.holding()
+    b, clock, _ = book(s)
+    first = asyncio.ensure_future(b.read())
+    await asyncio.sleep(0)
+    clock.now = at(3000)
+    s.release()
+    await first
+    clock.now = at(3000 + FAILED_MS - 1)
+    await b.read()
+    assert len(s.asked) == 1
+    clock.now = at(3000 + FAILED_MS)
+    assert (await b.read()).answer is not None
+    assert len(s.asked) == 2
+
+
+async def test_remembers_a_refusal_the_same_way_in_its_words() -> None:
+    words = "several accounts on this login; set IBKR_ACCOUNT to one of <the masked ids>"
+    s = Source(AccountRefused(words))
+    b, clock, _ = book(s)
+    await b.read()
+    clock.now = at(1000)
+    assert await b.read() == AccountResult(fault=AccountFault(422, words))
+    assert len(s.asked) == 1
+
+
+async def test_trusts_no_failure_it_remembers_when_the_clock_has_gone_back() -> None:
+    s = Source(AccountFailed("did not finish"), LIVE)
+    b, clock, _ = book(s)
+    await b.read()
+    clock.now = at(-1)
     assert (await b.read()).answer is not None
     assert len(s.asked) == 2
 
@@ -537,16 +589,23 @@ async def test_is_the_same_502_after_a_watch_again_that_failed_and_the_next_read
 ) -> None:
     unreachable = AccountUnreachable("connect ECONNREFUSED")
     s = Source(LIVE, unreachable, unreachable, LIVE)
-    b, _, _ = book(s)
+    b, clock, _ = book(s)
     await b.read()
     s.watches[0].lose()
     with caplog.at_level(logging.ERROR, logger="optionality_backend.account"):
         assert await b.read() == AccountResult(fault=AccountFault(502, LOST))
         await settle()
     assert "IBKR account: watching again failed: connect ECONNREFUSED" in [r.getMessage() for r in caplog.records]
+    # not again inside the 5 s, at a read or when the client answers
+    clock.now = at(FAILED_MS - 1)
+    assert await b.read() == AccountResult(fault=AccountFault(502, LOST))
+    s.answered()
+    assert len(s.asked) == 2
+    clock.now = at(FAILED_MS)
     assert await b.read() == AccountResult(fault=AccountFault(502, LOST))
     await settle()
     assert len(s.asked) == 3
+    clock.now = at(2 * FAILED_MS)
     assert await b.read() == AccountResult(fault=AccountFault(502, LOST))
     await settle()
     assert (await b.read()).answer is not None

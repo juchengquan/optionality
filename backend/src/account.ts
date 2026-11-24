@@ -12,7 +12,9 @@
  *      `ACCOUNT_HELD_FOR_MS` after the last — the watch stopped and nothing kept — and a read after
  *      that starts afresh. A read is answered from the picture in memory, asking IB Gateway nothing.
  *      Never started by the service and never read by the sweep, the bot or the MCP door: a request
- *      is the only thing that holds it. A start that fails holds nothing;
+ *      is the only thing that holds it. A start that fails holds nothing, and is remembered for
+ *      `ACCOUNT_FAILED_FOR_MS`: no start is tried in that time, whoever asks, and a read is told
+ *      what the last one came to;
  *    - **a lost connection**: while held, a watch whose connection closed is a 502 in words until
  *      it is back. It is watched again at the next read, and whenever the client answers anything
  *      else (its connection back), never at the moment it is lost; a lost watch is dropped, never
@@ -34,6 +36,11 @@ import type { AccountSource, AccountWatch, AccountWatching, IbkrLiveAccount, Ibk
 /** How long the account is held after the last read: 90 s, the owner's decision on #477 — the page's
  *  slowest refresh is a minute, so every refresh keeps it. */
 export const ACCOUNT_HELD_FOR_MS = 90_000;
+
+/** How long a start that failed is remembered, from when it came back: 5 s, the owner's decision on
+ *  #477 — while IB Gateway is down or logged out the service tries to start the watch at most once
+ *  in that time, whoever asks, and every read meanwhile is told what the last try came to. */
+export const ACCOUNT_FAILED_FOR_MS = 5_000;
 
 /** The words for a build with no IB Gateway (`IBKR_HOST` blank). */
 export const NOT_CONFIGURED = "IB Gateway is not configured";
@@ -131,13 +138,12 @@ export function accountAnswer(picture: IbkrLiveAccount, at: Date, displayTz: str
   };
 }
 
-/** What a start that is not a watch says, and with which status. Where no session was had, the
- *  connect's own words are logged, once per start; the page is told a refused session in the
- *  gateway's words and anything else as a gateway that did not answer. Neither carries an account
- *  id: none is known before a session. */
+/** What a start that is not a watch says, and with which status: the page is told a refused session
+ *  in the gateway's words and anything else unreachable as a gateway that did not answer — the
+ *  connect's own words are the log's. Neither carries an account id: none is known before a
+ *  session. */
 function faultOf(started: Exclude<AccountWatching, { watch: unknown }>): AccountFault {
   if ("unreachable" in started) {
-    console.error(`IBKR account: ${started.unreachable}`);
     const refused = started.unreachable.startsWith(REFUSED_SESSION);
     return { status: 502, message: refused ? started.unreachable : NOT_ANSWERING };
   }
@@ -166,6 +172,8 @@ interface Hold {
 export class AccountBook {
   private readonly deps: AccountDeps;
   private hold: Hold | null = null;
+  /** the last start that failed — a first start or a watch again — and when it came back */
+  private failed: { fault: AccountFault; at: number } | null = null;
 
   constructor(deps: AccountDeps) {
     this.deps = deps;
@@ -181,8 +189,13 @@ export class AccountBook {
       this.release(hold);
       hold = null;
     }
-    if (hold === null) hold = this.begin(source, t);
-    else hold.lastRead = t;
+    if (hold === null) {
+      const remembered = this.recentlyFailed(t);
+      if (remembered !== null) return { fault: remembered };
+      hold = this.begin(source, t);
+    } else {
+      hold.lastRead = t;
+    }
 
     let watch = hold.watch;
     if (watch === null) {
@@ -201,6 +214,25 @@ export class AccountBook {
     return this.deps.wanted.trim() || null;
   }
 
+  /** What the last start that failed came to, while it is under `ACCOUNT_FAILED_FOR_MS` old; a
+   *  clock that went back trusts nothing old. */
+  private recentlyFailed(t: number): AccountFault | null {
+    const failed = this.failed;
+    if (failed === null) return null;
+    const age = t - failed.at;
+    if (age >= 0 && age < ACCOUNT_FAILED_FOR_MS) return failed.fault;
+    this.failed = null;
+    return null;
+  }
+
+  /** A start that failed, remembered from now; the connect's own words to the log. */
+  private remember(started: Exclude<AccountWatching, { watch: unknown }>, log: string): AccountFault {
+    console.error(`IBKR account: ${log}${wordsOf(started)}`);
+    const fault = faultOf(started);
+    this.failed = { fault, at: this.deps.now().getTime() };
+    return fault;
+  }
+
   /** 90 s since the last read; a clock that went back is a read now, never a hold expired. */
   private expired(hold: Hold, t: number): boolean {
     return t - hold.lastRead >= ACCOUNT_HELD_FOR_MS;
@@ -211,10 +243,12 @@ export class AccountBook {
     let hold: Hold;
     const first = source.watch(this.wanted()).then((started): { watch: AccountWatch } | { fault: AccountFault } => {
       if (!("watch" in started)) {
-        // a start that failed holds nothing: the next read starts afresh
+        // a start that failed holds nothing, and is remembered: the next read after
+        // `ACCOUNT_FAILED_FOR_MS` starts afresh
         this.drop(hold);
-        return { fault: faultOf(started) };
+        return { fault: this.remember(started, "") };
       }
+      this.failed = null;
       this.took(hold, started.watch);
       return started;
     }, (err: unknown) => {
@@ -239,15 +273,20 @@ export class AccountBook {
     watch.onLost((err) => console.error(`IBKR account: the watch was lost: ${err.message}`));
   }
 
-  /** Start the watch again, under a hold whose watch was lost; one at a time. */
+  /** Start the watch again, under a hold whose watch was lost: one at a time, and not within
+   *  `ACCOUNT_FAILED_FOR_MS` of a start that failed. */
   private watchAgain(hold: Hold): void {
-    const { source } = this.deps;
-    if (hold.again || source === null) return;
+    const { source, now } = this.deps;
+    if (hold.again || source === null || this.recentlyFailed(now().getTime()) !== null) return;
     hold.again = true;
     source.watch(this.wanted()).then((started) => {
       hold.again = false;
-      if ("watch" in started) this.took(hold, started.watch);
-      else console.error(`IBKR account: watching again failed: ${wordsOf(started)}`);
+      if (!("watch" in started)) {
+        this.remember(started, "watching again failed: ");
+        return;
+      }
+      this.failed = null;
+      this.took(hold, started.watch);
     }, (err: unknown) => {
       hold.again = false;
       console.error(`IBKR account: watching again failed: ${err instanceof Error ? err.message : String(err)}`);
