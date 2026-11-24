@@ -1,7 +1,10 @@
 /** Made-up IBKR accounts for the account page's suites (#471), as `GET /account` answers them
- *  (#470): every holding, figure and id here is invented, the id masked as the service masks one.
+ *  (#470, held while asked since #477): every holding, figure and id here is invented, the id masked
+ *  as the service masks one.
  *
- *  - `ACCOUNT`: a USD account holding stocks, SPX and QQQ options over three expiries, and a future;
+ *  - `ACCOUNT`: a USD account holding stocks, SPX and QQQ options over three expiries, and a future,
+ *    its P&L stream speaking (`live`), so its totals and most holdings carry a daily P&L;
+ *  - `NOT_LIVE`: the same before its P&L stream has spoken: no daily P&L anywhere;
  *  - `PAPER`: the same, as a paper account;
  *  - `EMPTY`: cash and nothing held;
  *  - `TWO_CURRENCIES`: a USD account that also holds a stock and a future in EUR, at a made-up rate;
@@ -14,18 +17,18 @@
  *  what the test sets — an account, or a refusal in the service's words with its status. */
 import type { Account, AccountHolding } from "../shared/api";
 
-const stock = (symbol: string, position: number, averageCost: number, mark: number, currency = "USD",
-): AccountHolding => ({
+const stock = (symbol: string, position: number, averageCost: number, mark: number, daily: number | null,
+  currency = "USD"): AccountHolding => ({
   sec_type: "STK", symbol, currency, expiry: null, strike: null, right: null, multiplier: null,
   position, market_price: mark, market_value: position * mark, average_cost: averageCost,
-  unrealized_pnl: position * (mark - averageCost), realized_pnl: 0, daily_pnl: null,
+  unrealized_pnl: position * (mark - averageCost), realized_pnl: 0, daily_pnl: daily,
 });
 
 const option = (symbol: string, expiry: string, right: "C" | "P", strike: number, position: number,
-  averageCost: number, mark: number): AccountHolding => ({
+  averageCost: number, mark: number, daily: number | null): AccountHolding => ({
   sec_type: "OPT", symbol, currency: "USD", expiry, strike, right, multiplier: 100,
   position, market_price: mark, market_value: position * mark * 100, average_cost: averageCost,
-  unrealized_pnl: position * (mark - averageCost) * 100, realized_pnl: 0, daily_pnl: null,
+  unrealized_pnl: position * (mark - averageCost) * 100, realized_pnl: 0, daily_pnl: daily,
 });
 
 export const ACCOUNT: Account = {
@@ -35,25 +38,35 @@ export const ACCOUNT: Account = {
   updated_at: "14:32",
   read_at: "2026-11-23 21:04:37+08:00",
   totals: {
-    net_liquidation: 250_000, total_cash: 40_000.5, unrealized_pnl: 12_500.25, realized_pnl: -1_200, daily_pnl: null,
+    net_liquidation: 250_000, total_cash: 40_000.5, unrealized_pnl: 12_500.25, realized_pnl: -1_200, daily_pnl: -42.4,
   },
   exchange_rates: { USD: 1 },
   // NOT in the page's order: the page sorts them by value
   stocks: [
-    stock("KO", -20, 60, 62),
-    stock("AAPL", 100, 150, 180),
-    stock("MSFT", 50, 400, 380),
+    stock("KO", -20, 60, 62, 14),
+    stock("AAPL", 100, 150, 180, 260),
+    stock("MSFT", 50, 400, 380, -415),
   ],
   // NOT in the page's order either: the page groups them by underlying, then expiry
   options: [
-    option("SPX", "20261218", "C", 7300, -1, 12.4, 8.1),
-    option("QQQ", "20261218", "P", 500, 3, 4.2, 3.95),
-    option("SPX", "20261218", "P", 6750, 2, 9.05, 6.2),
-    option("SPX", "20261204", "C", 7500, 1, 2.35, 1.1),
-    option("SPX", "20261218", "P", 6800, -2, 11.3, 8.45),
+    option("SPX", "20261218", "C", 7300, -1, 12.4, 8.1, 85),
+    option("QQQ", "20261218", "P", 500, 3, 4.2, 3.95, -36),
+    option("SPX", "20261218", "P", 6750, 2, 9.05, 6.2, -120),
+    // no daily figure from the stream: a dash
+    option("SPX", "20261204", "C", 7500, 1, 2.35, 1.1, null),
+    option("SPX", "20261218", "P", 6800, -2, 11.3, 8.45, 170),
   ],
   other: [{ sec_type: "FUT", symbol: "MES", position: 1, market_value: 3_000, currency: "USD" }],
-  // the P&L stream's figures (#477) are not drawn yet: the page that draws them is its own issue
+  // when the P&L stream last spoke, a second before the service answered
+  live: { updated_at: "2026-11-23 21:04:36+08:00" },
+};
+
+/** ACCOUNT before its P&L stream has spoken: no daily P&L, in the totals or on any holding. */
+export const NOT_LIVE: Account = {
+  ...ACCOUNT,
+  totals: { ...ACCOUNT.totals, daily_pnl: null },
+  stocks: ACCOUNT.stocks.map((h) => ({ ...h, daily_pnl: null })),
+  options: ACCOUNT.options.map((h) => ({ ...h, daily_pnl: null })),
   live: null,
 };
 
@@ -61,7 +74,7 @@ export const PAPER: Account = { ...ACCOUNT, account: "DU•••••890", pap
 
 export const EMPTY: Account = {
   ...ACCOUNT,
-  totals: { net_liquidation: 40_000.5, total_cash: 40_000.5, unrealized_pnl: 0, realized_pnl: 0, daily_pnl: null },
+  totals: { net_liquidation: 40_000.5, total_cash: 40_000.5, unrealized_pnl: 0, realized_pnl: 0, daily_pnl: 0 },
   stocks: [], options: [], other: [],
 };
 
@@ -70,13 +83,13 @@ export const TWO_CURRENCIES: Account = {
   // base units per one EUR: an invented SAP on IBIS, 16,800 EUR, is 18,212.88 USD — above AAPL's
   // 18,000, though 16,800 is the smaller number
   exchange_rates: { USD: 1, EUR: 1.0841 },
-  stocks: [...ACCOUNT.stocks, stock("SAP", 70, 220, 240, "EUR")],
+  stocks: [...ACCOUNT.stocks, stock("SAP", 70, 220, 240, 95, "EUR")],
   other: [...ACCOUNT.other, { sec_type: "FUT", symbol: "FESX", position: -1, market_value: -1_250, currency: "EUR" }],
 };
 
 export const NO_RATE: Account = {
   ...TWO_CURRENCIES,
-  stocks: [...TWO_CURRENCIES.stocks, stock("VOLV.B", 300, 250, 260, "SEK")],
+  stocks: [...TWO_CURRENCIES.stocks, stock("VOLV.B", 300, 250, 260, -150, "SEK")],
 };
 
 /** SPX options that test the order within the options: an invented call and put at one strike,
@@ -84,9 +97,9 @@ export const NO_RATE: Account = {
 export const ODD_OPTIONS: Account = {
   ...ACCOUNT,
   options: [
-    { ...option("SPX", "20261218", "P", 7000, 1, 5, 4), expiry: null },
-    option("SPX", "20261218", "C", 7000, -1, 6.1, 5.2),
-    option("SPX", "20261218", "P", 7000, 1, 7.4, 6.6),
+    { ...option("SPX", "20261218", "P", 7000, 1, 5, 4, -10), expiry: null },
+    option("SPX", "20261218", "C", 7000, -1, 6.1, 5.2, 20),
+    option("SPX", "20261218", "P", 7000, 1, 7.4, 6.6, -15),
     ...ACCOUNT.options,
   ],
 };
@@ -97,21 +110,21 @@ export const COMBOS: Account = {
   stocks: [], other: [],
   options: [
     // alone on its expiry
-    option("SPX", "20261204", "C", 7500, 1, 2.35, 1.1),
+    option("SPX", "20261204", "C", 7500, 1, 2.35, 1.1, 40),
     // two legs, one of each
-    option("SPX", "20270115", "P", 5850, 1, 4.6, 3.3),
-    option("SPX", "20270115", "P", 5900, -1, 7.2, 5.1),
+    option("SPX", "20270115", "P", 5850, 1, 4.6, 3.3, -25),
+    option("SPX", "20270115", "P", 5900, -1, 7.2, 5.1, 60),
     // four legs, two of each
-    option("SPX", "20270219", "C", 6750, 2, 5.5, 4.4),
-    option("SPX", "20270219", "P", 5700, -2, 9.1, 7.4),
-    option("SPX", "20270219", "C", 6700, -2, 8.2, 6.9),
-    option("SPX", "20270219", "P", 5650, 2, 6.3, 5),
-    // unequal quantities
-    option("SPX", "20270319", "P", 5600, -2, 6, 5),
-    option("SPX", "20270319", "P", 5650, 1, 8, 6.5),
+    option("SPX", "20270219", "C", 6750, 2, 5.5, 4.4, -80),
+    option("SPX", "20270219", "P", 5700, -2, 9.1, 7.4, 150),
+    option("SPX", "20270219", "C", 6700, -2, 8.2, 6.9, 110),
+    option("SPX", "20270219", "P", 5650, 2, 6.3, 5, -95),
+    // unequal quantities, one leg with no daily figure from the stream
+    option("SPX", "20270319", "P", 5600, -2, 6, 5, 44),
+    option("SPX", "20270319", "P", 5650, 1, 8, 6.5, null),
     // one strike over two expiries
-    option("QQQ", "20261218", "C", 520, -1, 9.4, 8.8),
-    option("QQQ", "20270115", "C", 520, 1, 14.2, 13.5),
+    option("QQQ", "20261218", "C", 520, -1, 9.4, 8.8, 18),
+    option("QQQ", "20270115", "C", 520, 1, 14.2, 13.5, -22),
   ],
 };
 

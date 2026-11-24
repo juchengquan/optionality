@@ -34,9 +34,11 @@ const NOW = new Date("2026-11-23T13:05:00Z");
 
 const drain = () => act(async () => { await new Promise((r) => setTimeout(r, 20)); });
 
-async function open(arrangement: Arrangement, answer: AccountService["answer"] = ACCOUNT, { timers = false } = {}) {
+/** The page opened on `answer`, its poll's interval the test's: at a second's cadence (#478) a real
+ *  one would read on top of what a test presses. */
+async function open(arrangement: Arrangement, answer: AccountService["answer"] = ACCOUNT) {
   const svc = serveAccount(answer);
-  vi.useFakeTimers({ toFake: timers ? ["Date", "setInterval", "clearInterval"] : ["Date"], now: NOW });
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"], now: NOW });
   if (arrangement === "desk") document.cookie = "ui_arrangement=desk;path=/";
   render(<Page path="/opt/account" base="/opt/" />);
   await until(() => expect(svc.reads()).toBe(1));
@@ -216,11 +218,11 @@ describe.each(arrangements)("on the %s, the folds", (arrangement) => {
   });
 
   it("stay as they are through the poll's next read", async () => {
-    const svc = await open(arrangement, COMBOS, { timers: true });
+    const svc = await open(arrangement, COMBOS);
     fireEvent.click(underlyingButton("QQQ"));
     const row = combo("SPX", "20270115");
     fireEvent.click(comboButton(row));
-    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
     await drain();
     expect(svc.reads()).toBe(2);
     expect(underlyingButton("QQQ").getAttribute("aria-expanded")).toBe("false");
@@ -256,6 +258,9 @@ describe.each(arrangements)("on the %s, the options combined", (arrangement) => 
     expect(fig(row, "mark")).toBe("−1.80");
     expect(fig(row, "value")).toBe("−$180");
     expect(fig(row, "pnl")).toBe("+$80");
+    // its legs' daily P&L summed (#478): −25 + 60
+    expect(fig(row, "daily")).toBe("+$35");
+    expect(row.querySelector('[data-fig="daily"]')!.getAttribute("data-outcome")).toBe("gain");
     const four = combo("SPX", "20270219");
     expect(four.querySelector('[data-fig="legs"]')!.textContent).toBe("−P5700 −C6700 +P5650 +C6750");
     expect(fig(four, "qty")).toBe("2");
@@ -263,6 +268,23 @@ describe.each(arrangements)("on the %s, the options combined", (arrangement) => 
     expect(fig(four, "mark")).toBe("−4.90");
     expect(fig(four, "value")).toBe("−$980");
     expect(fig(four, "pnl")).toBe("+$120");
+    expect(fig(four, "daily")).toBe("+$85");
+  });
+
+  it("sum no daily P&L where a leg has none, and draw each leg's own (#478)", async () => {
+    await open(arrangement, COMBOS);
+    const ratio = combo("SPX", "20270319");
+    expect(fig(ratio, "daily")).toBe("—");
+    expect(ratio.querySelector('[data-fig="daily"]')!.hasAttribute("data-outcome")).toBe(false);
+    fireEvent.click(comboButton(ratio));
+    expect(legRows(ratio).map((l) => fig(l, "daily"))).toEqual(["+$44", "—"]);
+  });
+
+  it("say no daily P&L in a folded heading (#478)", async () => {
+    await open(arrangement, COMBOS);
+    fireEvent.click(sectionButton("Options"));
+    expect(words(sectionButton("Options"))).not.toMatch(/daily/);
+    expect(sectionButton("Options").querySelectorAll("[data-fold-fig]")).toHaveLength(2);
   });
 
   it("write unequal quantities in the legs and count the units they share", async () => {
@@ -332,6 +354,7 @@ describe.each(arrangements)("on the %s, the options combined", (arrangement) => 
     expect(fig(row, "qty")).toBe("•••");
     expect(fig(row, "value")).toBe("$•••");
     expect(fig(row, "pnl")).toBe("$•••");
+    expect(fig(row, "daily")).toBe("$•••");
     expect(fig(row, "cost")).toBe("−5.50");
     // a leg's quantity per unit is the structure's shape, not its size, which the hidden count is: kept
     const ratio = combo("SPX", "20270319");
@@ -339,6 +362,7 @@ describe.each(arrangements)("on the %s, the options combined", (arrangement) => 
     for (const leg of legRows(row)) {
       expect(fig(leg, "qty")).toMatch(/^[+−]•••$/);
       expect(fig(leg, "value")).toBe("$•••");
+      expect(fig(leg, "daily")).toBe("$•••");
     }
     expect(document.querySelector(".nx-acct")!.textContent).not.toMatch(/\$\d|\d,\d{3}/);
   });

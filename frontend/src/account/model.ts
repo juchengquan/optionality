@@ -94,6 +94,8 @@ export interface Combo {
   /** money, in `currency`: the legs' own, summed; null where any leg's is missing */
   market_value: number | null;
   unrealized_pnl: number | null;
+  /** today's change, money in `currency` (#478): the legs' own, summed; null where any leg's is missing */
+  daily_pnl: number | null;
 }
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
@@ -133,6 +135,7 @@ export function combine(legs: readonly AccountHolding[]): Combo {
     market_price: net((h) => h.market_price),
     market_value: summed(legs, (h) => h.market_value),
     unrealized_pnl: summed(legs, (h) => h.unrealized_pnl),
+    daily_pnl: summed(legs, (h) => h.daily_pnl),
   };
 }
 

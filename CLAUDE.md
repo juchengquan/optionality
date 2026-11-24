@@ -554,14 +554,19 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   `index.html`. The book's header links to it ("account") and it links back, both PLAIN links, so
   moving between them loads the other page afresh and neither polls while the other is shown. It
   reads `GET /account` (#470) and nothing else: on opening, on its refresh button, and at its own
-  cadence while `document.visibilityState` is not hidden — 15 s, 30 s, 1 min (the default), 3 min
-  or off, the cookie `ui_account_refresh`, chosen on the page and not in the book's Settings;
-  never by New York's session. Read-only: totals in the base currency, the masked account as
-  served, one "IBKR marked at" time, then stocks by the SIZE of their value IN THE BASE
+  cadence while `document.visibilityState` is not hidden — 1 s (the default), 5 s, 15 s, 30 s,
+  1 min or off (#478; a cookie naming a cadence no longer offered, 3 min's `180`, reads as the
+  default), the cookie `ui_account_refresh`, chosen on the page and not in the book's Settings;
+  never by New York's session. A read a second asks IB Gateway nothing: the service answers from
+  the account it holds while it is asked (#477). Read-only: totals in the base currency, daily
+  P&L the fifth (#478), the masked account as served, one "IBKR marked at" time (net liquidation's
+  and cash's), and the live line, `live · updated hh:mm:ss <zone>` from `live.updated_at`, dated
+  where it is not today's — "read at" in its place before the P&L stream has spoken — then stocks by the SIZE of their value IN THE BASE
   CURRENCY, largest first whatever its sign (IBKR's `exchange_rates`; a currency with no rate has
   no weight and is listed after every one that converts), options by underlying then expiry, and the rest — each a table on the desk and a card
   on the phone, every figure shown in its own currency with its code beside it where that is not
-  the base. The book's privacy setting (`ui_privacy`) hides its money and counts as the book's. A
+  the base, each stock and option with its daily P&L (a combined row's its legs' summed, none where
+  one is missing; none in a folded heading). The book's privacy setting (`ui_privacy`) hides its money and counts as the book's. A
   first read that fails says the service's words and no figure; a refresh that fails after a good
   read keeps that read's figures, dimmed, under the error and "as of" its time. On the phone the
   BOOK's header drops its title "optionality" (kept for a screen reader) so its six controls fit

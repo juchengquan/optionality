@@ -14,7 +14,10 @@
   font-weight: 700; letter-spacing: 0.02em;
 }
 
-.nx-acct-total-figs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem 1.5rem; }
+/* the five totals on one row, shared out evenly, where they fit whole; where they do not — a narrow
+   desk and a large account — the last goes to the next row rather than a figure breaking in two */
+.nx-acct-total-figs { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; }
+.nx-acct-total-figs > div { flex: 1 1 0; min-width: max-content; }
 .nx-acct-total-figs dt { color: var(--muted-foreground); font-size: 0.8125rem; }
 .nx-acct-total-figs dd { font-size: 1.375rem; font-weight: 650; overflow-wrap: anywhere; }
 .nx-acct-about { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin-top: 0.5rem; }
@@ -44,6 +47,9 @@
 }
 :is(.nx-acct-fold, .nx-acct-combo-toggle)[aria-expanded="true"] .nx-acct-mark { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .nx-acct-mark { transition: none; } }
+/* a combined row's turns at once, as its legs are drawn at once: turning, it was caught as a corner
+   (⌟) rather than pointing down (the owner, 2026-11-24, #478) */
+.nx-acct-combo-toggle .nx-acct-mark { transition: none; }
 /* a folded heading's count and totals wrap at a narrow screen rather than push the page sideways,
    each piece whole */
 .nx-acct-fold-words { min-width: 0; }
@@ -94,7 +100,8 @@
 .nx-acct-table tr.nx-acct-combo[data-open] { border-bottom-style: dashed; }
 
 /* ---- the phone: a card per holding ---- */
-.nx-acct[data-arrangement="phone"] .nx-acct-total-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; }
+.nx-acct[data-arrangement="phone"] .nx-acct-total-figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 1rem; }
+.nx-acct[data-arrangement="phone"] .nx-acct-total-figs > div { min-width: 0; }
 .nx-acct[data-arrangement="phone"] .nx-acct-total-figs dd { font-size: 1.125rem; }
 .nx-acct-cards { display: flex; flex-direction: column; gap: 0.625rem; min-width: 0; }
 .nx-acct-card {

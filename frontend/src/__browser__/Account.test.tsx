@@ -6,7 +6,7 @@ import { page, userEvent } from "@vitest/browser/context";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { overflowsSideways } from "./nextBook";
-import { cutShort, foldAll, openCombos, showAccount, STATES, VARIANTS } from "../testing/accountPage";
+import { chevron, cutShort, totalsCut, foldAll, openCombos, showAccount, STATES, VARIANTS } from "../testing/accountPage";
 
 afterEach(async () => {
   cleanup();
@@ -23,6 +23,7 @@ describe("the account page on the desk", () => {
       expect(document.querySelector<HTMLElement>(".nx-acct")!.dataset.arrangement).toBe("desk");
       expect(overflowsSideways()).toBe(false);
       expect(cutShort()).toEqual([]);
+      expect(totalsCut()).toEqual([]);
       for (const table of document.querySelectorAll<HTMLElement>(".nx-acct-table")) {
         expect(table.getBoundingClientRect().right).toBeLessThanOrEqual(document.documentElement.clientWidth);
       }
@@ -45,7 +46,7 @@ describe("the account page on the desk", () => {
     const stocks = screen.getByRole("region", { name: "Stocks" });
     const table = stocks.querySelector("table")!;
     expect([...table.querySelectorAll("thead th")].map((th) => th.textContent))
-      .toEqual(["symbol", "qty", "avg cost", "mark", "value", "P&L", "P&L %", "weight"]);
+      .toEqual(["symbol", "qty", "avg cost", "mark", "value", "P&L", "P&L %", "daily P&L", "weight"]);
     // a column's figures end at one edge, row under row
     const rights = [...table.querySelectorAll<HTMLElement>("tbody td:nth-child(5)")].map((td) => {
       const r = td.getBoundingClientRect();
@@ -131,4 +132,28 @@ describe("the account page on the desk", () => {
       expect(overflowsSideways()).toBe(false);
     });
   }
+  // the owner, 2026-11-24 (#478): an opened combined row's arrow was drawn as a corner (⌟), caught
+  // half-turned; it points down from the moment the row opens, as an opened heading's does
+  it("points an opened combined row's arrow down at once, as an opened heading's, and a closed one's right", async () => {
+    await page.viewport(1280, 900);
+    await showAccount(STATES.combos);
+    const row = document.querySelector<HTMLElement>('[data-expiry="20270219"] [data-combo]')!;
+    const button = row.querySelector<HTMLButtonElement>(".nx-acct-combo-toggle")!;
+    expect(chevron(button).points, "closed").toBe("right");
+    const heading = document.querySelector<HTMLElement>('[data-section="options"] .nx-acct-fold')!;
+    expect(heading.getAttribute("aria-expanded")).toBe("true");
+    expect(chevron(heading).points, "an opened heading").toBe("down");
+    await userEvent.click(row.querySelector<HTMLElement>('[data-fig="value"]')!);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    // as soon as it is open, as its legs are, and still a while after
+    for (const when of ["at once", "a moment later"]) {
+      const c = chevron(button);
+      expect(c.points, `${when}: ${c.box}, ${c.transform}`).toBe("down");
+      const m = new DOMMatrix(c.transform);
+      expect([Math.round(m.a), Math.round(m.b)], when).toEqual([0, 1]);
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    await userEvent.click(button);
+    expect(chevron(button).points, "closed again").toBe("right");
+  });
 });
