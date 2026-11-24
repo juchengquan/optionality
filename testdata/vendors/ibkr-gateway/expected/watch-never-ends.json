@@ -1,0 +1,48 @@
+{
+  "conversation": "watch-never-ends",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [],
+  "expect": {
+    "records": [],
+    "unknown": []
+  },
+  "watches": [
+    {
+      "wanted": null,
+      "start": {
+        "$throws": "IB Gateway did not finish sending the account within 1000ms — its link to IBKR may be down while its own socket is still open"
+      },
+      "sent": [
+        [
+          "6",
+          "2",
+          "1",
+          "U0000000"
+        ],
+        [
+          "92",
+          "1",
+          "U0000000",
+          ""
+        ],
+        [
+          "93",
+          "1"
+        ],
+        [
+          "6",
+          "2",
+          "0",
+          "U0000000"
+        ]
+      ]
+    }
+  ]
+}

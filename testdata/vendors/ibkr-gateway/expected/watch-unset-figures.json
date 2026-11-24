@@ -1,0 +1,287 @@
+{
+  "conversation": "watch-unset-figures",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [],
+  "expect": {
+    "records": [],
+    "unknown": []
+  },
+  "watches": [
+    {
+      "wanted": null,
+      "start": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "09:31",
+        "totals": {
+          "net_liquidation": 67431.55,
+          "total_cash": 53510.55,
+          "unrealized_pnl": 1436.5,
+          "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": [
+          {
+            "sec_type": "STK",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": null,
+            "strike": null,
+            "right": null,
+            "multiplier": null,
+            "position": 300,
+            "market_price": 41.27,
+            "market_value": 12381,
+            "average_cost": 38.115,
+            "unrealized_pnl": 946.5,
+            "realized_pnl": 0,
+            "daily_pnl": null
+          },
+          {
+            "sec_type": "OPT",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": "20261218",
+            "strike": 45,
+            "right": "C",
+            "multiplier": 100,
+            "position": 4,
+            "market_price": 3.85,
+            "market_value": 1540,
+            "average_cost": 2.625,
+            "unrealized_pnl": 490,
+            "realized_pnl": 0,
+            "daily_pnl": null
+          }
+        ],
+        "pnl": null,
+        "pnl_at": null
+      },
+      "steps": [
+        {
+          "account": "U•••••000",
+          "paper": false,
+          "base_currency": "USD",
+          "updated_at": "09:31",
+          "totals": {
+            "net_liquidation": 67431.55,
+            "total_cash": 53510.55,
+            "unrealized_pnl": 1436.5,
+            "realized_pnl": 0
+          },
+          "exchange_rates": {
+            "USD": 1
+          },
+          "holdings": [
+            {
+              "sec_type": "STK",
+              "symbol": "ACME",
+              "currency": "USD",
+              "expiry": null,
+              "strike": null,
+              "right": null,
+              "multiplier": null,
+              "position": 300,
+              "market_price": 41.27,
+              "market_value": 12381,
+              "average_cost": 38.115,
+              "unrealized_pnl": 946.5,
+              "realized_pnl": 0,
+              "daily_pnl": null
+            },
+            {
+              "sec_type": "OPT",
+              "symbol": "ACME",
+              "currency": "USD",
+              "expiry": "20261218",
+              "strike": 45,
+              "right": "C",
+              "multiplier": 100,
+              "position": 4,
+              "market_price": 3.85,
+              "market_value": 1540,
+              "average_cost": 2.625,
+              "unrealized_pnl": 490,
+              "realized_pnl": 0,
+              "daily_pnl": null
+            }
+          ],
+          "pnl": {
+            "daily_pnl": null,
+            "unrealized_pnl": 1436.5,
+            "realized_pnl": 0
+          },
+          "pnl_at": 1
+        },
+        {
+          "account": "U•••••000",
+          "paper": false,
+          "base_currency": "USD",
+          "updated_at": "09:31",
+          "totals": {
+            "net_liquidation": 67431.55,
+            "total_cash": 53510.55,
+            "unrealized_pnl": 1436.5,
+            "realized_pnl": 0
+          },
+          "exchange_rates": {
+            "USD": 1
+          },
+          "holdings": [
+            {
+              "sec_type": "STK",
+              "symbol": "ACME",
+              "currency": "USD",
+              "expiry": null,
+              "strike": null,
+              "right": null,
+              "multiplier": null,
+              "position": 300,
+              "market_price": 41.27,
+              "market_value": 12381,
+              "average_cost": 38.115,
+              "unrealized_pnl": 946.5,
+              "realized_pnl": 0,
+              "daily_pnl": null
+            },
+            {
+              "sec_type": "OPT",
+              "symbol": "ACME",
+              "currency": "USD",
+              "expiry": "20261218",
+              "strike": 45,
+              "right": "C",
+              "multiplier": 100,
+              "position": 4,
+              "market_price": 3.85,
+              "market_value": 1540,
+              "average_cost": 2.625,
+              "unrealized_pnl": 490,
+              "realized_pnl": 0,
+              "daily_pnl": null
+            }
+          ],
+          "pnl": {
+            "daily_pnl": null,
+            "unrealized_pnl": 1436.5,
+            "realized_pnl": null
+          },
+          "pnl_at": 2
+        }
+      ],
+      "end": "stop",
+      "lost": null,
+      "last": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "09:31",
+        "totals": {
+          "net_liquidation": 67431.55,
+          "total_cash": 53510.55,
+          "unrealized_pnl": 1436.5,
+          "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": [
+          {
+            "sec_type": "STK",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": null,
+            "strike": null,
+            "right": null,
+            "multiplier": null,
+            "position": 300,
+            "market_price": 41.27,
+            "market_value": 12381,
+            "average_cost": 38.115,
+            "unrealized_pnl": 946.5,
+            "realized_pnl": 0,
+            "daily_pnl": null
+          },
+          {
+            "sec_type": "OPT",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": "20261218",
+            "strike": 45,
+            "right": "C",
+            "multiplier": 100,
+            "position": 4,
+            "market_price": 3.85,
+            "market_value": 1540,
+            "average_cost": 2.625,
+            "unrealized_pnl": 490,
+            "realized_pnl": 0,
+            "daily_pnl": null
+          }
+        ],
+        "pnl": {
+          "daily_pnl": null,
+          "unrealized_pnl": 1436.5,
+          "realized_pnl": null
+        },
+        "pnl_at": 2
+      },
+      "sent": [
+        [
+          "6",
+          "2",
+          "1",
+          "U0000000"
+        ],
+        [
+          "92",
+          "1",
+          "U0000000",
+          ""
+        ],
+        [
+          "94",
+          "2",
+          "U0000000",
+          "",
+          "100000101"
+        ],
+        [
+          "94",
+          "3",
+          "U0000000",
+          "",
+          "100000201"
+        ],
+        [
+          "95",
+          "2"
+        ],
+        [
+          "95",
+          "3"
+        ],
+        [
+          "93",
+          "1"
+        ],
+        [
+          "6",
+          "2",
+          "0",
+          "U0000000"
+        ]
+      ]
+    }
+  ]
+}

@@ -24,7 +24,7 @@ still in force. Git holds the full history of each.
 | [16](0016-the-package-is-released-not-split.md) | The Python package is released from this repository, not split out of it | in force |
 | [17](0017-the-cases-cover-the-decisions.md) | The golden cases cover the decisions, not only the maths | built (#193); the constants and the parity tier followed in #195, #198; its refusal of a second service reversed by 21 |
 | [18](0018-references-stay-on-the-page.md) | References stay on the page, and SPX is reached by a scaled proxy | built (#202); the proxy half superseded by 19 |
-| [19](0019-a-reference-names-its-source.md) | A Reference names its source, and the proxy goes | built, all five tracks (#210–#212); one seam for every vendor in #218; "no order message" scoped to the TypeScript by 21; "nothing account-shaped" superseded by 30 |
+| [19](0019-a-reference-names-its-source.md) | A Reference names its source, and the proxy goes | built, all five tracks (#210–#212); one seam for every vendor in #218; "no order message" scoped to the TypeScript by 21; "nothing account-shaped" superseded by 30; "every call bounded" amended by 31 for the account alone |
 | [20](0020-delivery-is-an-entrypoint.md) | Delivery is an entrypoint, and the library never depends on it | built; follows the three seams of #235, #239, #240 |
 | [21](0021-the-python-can-run-the-service.md) | The Python can run the service, one backend at a time | accepted, not built; six phases |
 | [22](0022-a-closed-holding-is-kept.md) | A closed holding is kept | built, in both backends |
@@ -35,7 +35,8 @@ still in force. Git holds the full history of each.
 | [27](0027-agents-price-any-spx-spread.md) | Agents price any SPX spread | built, in both backends (#452): `GET /spreads/quote` and the `price_spreads` tool, one bounded call capped by `SPREAD_QUOTE_CALLS_PER_30S`; supersedes 26's "no tool prices an unwatched contract" |
 | [28](0028-agents-add-and-edit-alarm-rules.md) | Agents add and edit alarm rules, behind a switch | built, in both backends (#456): `add_rule` and `edit_rule` over MCP, off unless `MCP_WRITES`, held to `POST /monitors` and `PATCH /monitors/{id}`, each told on Telegram and capped by `MCP_WRITES_PER_10_MIN`; amends 26's "every tool is a GET"; its allow-list widened by 29 |
 | [29](0029-agents-record-a-holding-and-correct-a-close.md) | Agents record a holding and correct a close, behind a second switch | built, in both backends (#458): `record_holding` and `correct_close` over MCP, off unless `MCP_WRITES_POSITIONS` beside `MCP_WRITES`, held to `POST /positions` and `PATCH /positions/{id}` (exit and close day only), sharing 28's cap; amends 28's allow-list |
-| [30](0030-the-service-reads-the-ibkr-account.md) | The service reads the IBKR account | accepted 2026-11-23; the library read built in both IB Gateway clients (#469), the endpoint (#470) and the page to follow; supersedes 19's "nothing account-shaped" |
+| [30](0030-the-service-reads-the-ibkr-account.md) | The service reads the IBKR account | accepted 2026-11-23; the library read built in both IB Gateway clients (#469), the endpoint (#470) and the page to follow; supersedes 19's "nothing account-shaped"; its one bounded read amended by 31 |
+| [31](0031-the-service-holds-the-ibkr-account-while-it-is-asked.md) | The service holds the IBKR account while it is asked | accepted 2026-11-24; the library watch built in both IB Gateway clients (#476), holding it behind `GET /account` (#477) and the page to follow; amends 19's bounded-call rule and 30's bounded read, for the account alone |
 
 2 (server-rendered HTML over a SPA) was deleted once 5 replaced it entirely; nothing of it remained
 in force. A new decision takes the next number, and numbers are never reused.
