@@ -18,11 +18,12 @@
  *    - **a lost connection**: while held, a watch whose connection closed is a 502 in words until
  *      it is back. It is watched again at the next read, and whenever the client answers anything
  *      else (its connection back), never at the moment it is lost; a lost watch is dropped, never
- *      stopped, because its connection is gone and a stop now would go down the one replacing it;
+ *      stopped: the loss has already ended it in the library, so a stop would send nothing;
  *    - **the answer**: the picture, stocks (`STK`) and options (`OPT`) apart and everything else
  *      under `other` with only what the page lists of it (the owner's decision on #470); the totals'
- *      P&L from the account's P&L stream once it has spoken, the account updates' until then; when
- *      that stream last spoke (`live`), and when the service answered (`read_at`);
+ *      P&L from the account's P&L stream once it has spoken, and the account updates' until then or
+ *      where it left one unset; when that stream last spoke (`live`), and when the service answered
+ *      (`read_at`, the owner's decision on #480: the time of the answer, not of a read from IB);
  *    - **the status** each failure is: a vendor not configured 503 (the owner's decision on #473),
  *      a vendor down, refusing the session or lost 502, a refusal to choose an account 422.
  *
@@ -122,10 +123,12 @@ export function accountAnswer(picture: IbkrLiveAccount, at: Date, displayTz: str
     totals: {
       net_liquidation: totals.net_liquidation,
       total_cash: totals.total_cash,
-      // the P&L stream's once it has spoken — an unset figure there is none, not the update's
-      unrealized_pnl: pnl === null ? totals.unrealized_pnl : pnl.unrealized_pnl,
-      realized_pnl: pnl === null ? totals.realized_pnl : pnl.realized_pnl,
-      daily_pnl: pnl === null ? null : pnl.daily_pnl,
+      // the P&L stream's once it has spoken, and a figure it left unset the account update's, as a
+      // holding's is (the owner's decision on #480): null only where neither has one, and the
+      // account updates carry no daily figure
+      unrealized_pnl: pnl?.unrealized_pnl ?? totals.unrealized_pnl,
+      realized_pnl: pnl?.realized_pnl ?? totals.realized_pnl,
+      daily_pnl: pnl?.daily_pnl ?? null,
     },
     exchange_rates: picture.exchange_rates,
     stocks: holdings.filter((h) => h.sec_type === "STK"),
@@ -327,7 +330,8 @@ export class AccountBook {
     });
   }
 
-  /** Let it all go: the watch stopped, unless it was lost, and nothing kept. A start still in
+  /** Let it all go: the watch stopped, unless it was lost (the loss ended it already), and nothing
+   *  kept. A start still in
    *  flight finds the hold gone and stops what it brings. */
   private release(hold: Hold): void {
     this.drop(hold);

@@ -504,13 +504,15 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   decision): no start, first or again, is tried in that time whoever asks, and a read meanwhile is
   told what the last one came to. A watch whose connection closed is a 502 "The connection to IB
   Gateway was lost" (its words logged) until it is back, watched again at the next read and when the
-  client answers anything else, never stopped (its connection is gone; a stop would go down the
-  next). The answer: its totals (`unrealized_pnl` and `realized_pnl` the account P&L stream's once it
-  has spoken, the account updates' until then, and the stream's `daily_pnl`), IBKR's
+  client answers anything else, never stopped (the loss has already ended it in the library, so a
+  stop would send nothing). The answer: its totals (`unrealized_pnl` and `realized_pnl` the account P&L stream's once it
+  has spoken, and the account updates' until then or where the stream left one unset — null only
+  where neither has one, the owner's decision — and the stream's `daily_pnl`), IBKR's
   `exchange_rates` (base units per one unit of each currency), `stocks` (STK) and `options` (OPT),
   each with its `daily_pnl`, everything else under `other` (symbol, type, quantity, value, currency),
   and `live: {updated_at}`, when the P&L stream last spoke in the display zone (null before it has),
-  beside `read_at`, when the service answered. `IBKR_ACCOUNT` (`.env`, blank is unset) is the
+  beside `read_at`, when the service answered (the time of the answer, not of a read from IB; the
+  owner's decision, and the route's summary says so). `IBKR_ACCOUNT` (`.env`, blank is unset) is the
   library's `wanted`. Never read by the sweep, the bot or the MCP door, never stored. 503 "IB Gateway
   is not configured" (`IBKR_HOST` blank, the owner's decision), 502 for a gateway that did not answer
   (the connect's words logged), a session it refused (in the gateway's words), a first picture that

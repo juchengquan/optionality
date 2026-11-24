@@ -16,12 +16,13 @@ here is the rest:
   and a read is told what the last one came to;
 - **a lost connection**: while held, a watch whose connection closed is a 502 in words until it is
   back. It is watched again at the next read, and whenever the client answers anything else (its
-  connection back), never at the moment it is lost; a lost watch is dropped, never stopped, because its
-  connection is gone and a stop now would go down the one replacing it;
+  connection back), never at the moment it is lost; a lost watch is dropped, never stopped: the loss has
+  already ended it in the library, so a stop would send nothing;
 - **the answer**: the picture, stocks (`STK`) and options (`OPT`) apart and everything else under
   `other` with only what the page lists of it (the owner's decision on #470); the totals' P&L from the
-  account's P&L stream once it has spoken, the account updates' until then; when that stream last spoke
-  (`live`), and when the service answered (`read_at`);
+  account's P&L stream once it has spoken, and the account updates' until then or where it left one
+  unset; when that stream last spoke (`live`), and when the service answered (`read_at`, the owner's
+  decision on #480: the time of the answer, not of a read from IB);
 - **the status** each failure is: a vendor not configured 503 (the owner's decision on #473), a vendor
   down, refusing the session or lost 502, a refusal to choose an account 422.
 
@@ -125,6 +126,12 @@ class AccountDeps:
     wake: Wake | None = None
 
 
+def _either(pnl: Mapping[str, Any] | None, key: str, totals: Mapping[str, Any]) -> Any:
+    """The stream's figure, or the account update's where the stream has none: `??`, which takes 0."""
+    figure = None if pnl is None else pnl[key]
+    return totals[key] if figure is None else figure
+
+
 def account_answer(picture: Mapping[str, Any], at: datetime, display_tz: str) -> dict[str, Any]:
     """The picture as the route serves it, answered at `at`."""
     holdings = picture["holdings"]
@@ -140,9 +147,11 @@ def account_answer(picture: Mapping[str, Any], at: datetime, display_tz: str) ->
         "totals": {
             "net_liquidation": totals["net_liquidation"],
             "total_cash": totals["total_cash"],
-            # the P&L stream's once it has spoken — an unset figure there is none, not the update's
-            "unrealized_pnl": totals["unrealized_pnl"] if pnl is None else pnl["unrealized_pnl"],
-            "realized_pnl": totals["realized_pnl"] if pnl is None else pnl["realized_pnl"],
+            # the P&L stream's once it has spoken, and a figure it left unset the account update's, as a
+            # holding's is (the owner's decision on #480): None only where neither has one, and the
+            # account updates carry no daily figure
+            "unrealized_pnl": _either(pnl, "unrealized_pnl", totals),
+            "realized_pnl": _either(pnl, "realized_pnl", totals),
             "daily_pnl": None if pnl is None else pnl["daily_pnl"],
         },
         "exchange_rates": picture["exchange_rates"],
@@ -301,9 +310,10 @@ class AccountBook:
         async def first() -> AccountWatch | AccountFault:
             try:
                 started = await source.watch(self._wanted())
-            except Exception:
+            except BaseException:
                 # a source that raises breaks its own promise (`AccountSource`): that is a bug, a 500, and
-                # never held — the next caller starts again
+                # never held — the next caller starts again. So is a start cancelled under the hold, which
+                # no caller can do (the shield) but the loop's shutdown can: the library abandons it
                 self._drop(hold)
                 raise
             if not isinstance(started, AccountWatched):
@@ -379,7 +389,7 @@ class AccountBook:
         hold.cancel_wake = wake(ms, woke)
 
     def _release(self, hold: _Hold) -> None:
-        """Let it all go: the watch stopped, unless it was lost, and nothing kept. A start still in flight
+        """Let it all go: the watch stopped, unless it was lost (the loss ended it already), and nothing kept. A start still in flight
         finds the hold gone and stops what it brings."""
         self._drop(hold)
         if hold.watch is not None and hold.watch.lost is None:

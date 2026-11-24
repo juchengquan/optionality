@@ -271,15 +271,21 @@ async def test_takes_the_totals_pnl_from_the_account_updates_until_the_stream_ha
     assert result.answer["live"] is None
 
 
-async def test_serves_a_figure_the_stream_sent_unset_as_null_never_the_account_updates() -> None:
-    unset = {**LIVE, "pnl": {"daily_pnl": None, "unrealized_pnl": None, "realized_pnl": -398.15}}
+async def test_takes_a_total_the_stream_sent_unset_from_the_account_update_null_only_where_neither_has_one() -> None:
+    # the owner's decision on #480, as a holding's unset figure is the account update's (#476)
+    unset = {
+        **LIVE,
+        "totals": {**TOTALS, "realized_pnl": None},
+        "pnl": {"daily_pnl": None, "unrealized_pnl": None, "realized_pnl": None},
+    }
     result = await book(Source(unset))[0].read()
     assert result.answer is not None
     assert result.answer["totals"] == {
         "net_liquidation": 184523.17,
         "total_cash": 61230.55,
-        "unrealized_pnl": None,
-        "realized_pnl": -398.15,
+        "unrealized_pnl": 2071.4,
+        "realized_pnl": None,
+        # the account updates carry no daily figure
         "daily_pnl": None,
     }
 
@@ -569,7 +575,7 @@ async def test_answers_502_in_words_while_the_watch_is_lost_and_watches_again_at
     assert len(s.asked) == 2
 
 
-async def test_never_stops_a_lost_watch_its_connection_is_gone() -> None:
+async def test_never_stops_a_lost_watch_the_loss_has_already_ended_it() -> None:
     s = Source(LIVE)
     b, clock, timers = book(s)
     await b.read()
@@ -685,6 +691,24 @@ async def test_the_only_caller_cancelled_during_the_start_leaves_the_start_runni
     assert (await b.read()).answer is not None
     assert len(s.asked) == 1
     assert s.watches[0].stopped == 0
+
+
+async def test_a_start_cancelled_under_the_hold_holds_nothing_and_the_next_read_starts_afresh() -> None:
+    # no caller can cancel the start (the shield), but the loop's shutdown can, and the library then
+    # abandons it: the hold must not be left joined to a start that will never answer
+    s = Source(LIVE)
+    s.holding()
+    b, _, _ = book(s)
+    waiting = asyncio.ensure_future(b.read())
+    await asyncio.sleep(0)
+    assert b._hold is not None and b._hold.first is not None
+    b._hold.first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await waiting
+    assert b._hold is None
+    s.release()
+    assert (await b.read()).answer is not None
+    assert len(s.asked) == 2
 
 
 async def test_the_real_timer_is_the_loops_own() -> None:

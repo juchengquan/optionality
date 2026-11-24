@@ -53,7 +53,8 @@ describe("GET /account", () => {
     expect(await body(resp)).toEqual({
       account: "masked-by-the-library", paper: true, base_currency: "USD", updated_at: "09:41",
       read_at: "2026-10-02 13:26:06+08:00",
-      totals: { net_liquidation: 1000, total_cash: 1000, unrealized_pnl: 25, realized_pnl: null, daily_pnl: -5 },
+      // the stream's realised unset: the account update's
+      totals: { net_liquidation: 1000, total_cash: 1000, unrealized_pnl: 25, realized_pnl: 0, daily_pnl: -5 },
       exchange_rates: { USD: 1 }, stocks: [], options: [ACCOUNT.holdings[0]], other: [],
       live: { updated_at: "2026-10-02 13:26:01+08:00" },
     });

@@ -61,10 +61,12 @@ const AccountOut = z.object({
   base_currency: z.string().nullable(),
   /** the gateway's account update time as it sent it: a time of day, no date; null where none came */
   updated_at: z.string().nullable(),
-  /** when the service answered, in the display zone */
+  /** when the service answered, in the display zone: with the account held, the time of this
+   *  answer, not of a read from IB Gateway */
   read_at: z.string(),
   /** in the base currency; each null where the gateway sent none. The P&L is the account's P&L
-   *  stream's once it has spoken, the account updates' until then; `daily_pnl` the stream's alone */
+   *  stream's once it has spoken, and the account updates' until then or where the stream left it
+   *  unset; `daily_pnl` the stream's alone */
   totals: z.object({
     net_liquidation: figure, total_cash: figure, unrealized_pnl: figure, realized_pnl: figure,
     daily_pnl: figure,
@@ -84,7 +86,7 @@ const AccountOut = z.object({
 
 const read = documented(
   "The IBKR account as IBKR marks it: totals, stocks, options and anything else; held while asked, "
-    + "released 90s after the last read",
+    + "released 90s after the last read; read_at is when the service answered",
   { 200: AccountOut }, [422, 502, 503],
 );
 

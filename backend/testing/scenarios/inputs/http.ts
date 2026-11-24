@@ -97,9 +97,11 @@ const NOT_YET_LIVE = {
   ],
 };
 
-/** An account whose streams have spoken with some figures IBKR marks unset. */
+/** An account whose streams have spoken with some figures IBKR marks unset, its account updates
+ *  without a realised P&L. */
 const UNSET_FIGURES = {
   ...WHOLE_ACCOUNT,
+  totals: { ...WHOLE_ACCOUNT.totals, realized_pnl: null },
   pnl: { daily_pnl: 64.5, unrealized_pnl: null, realized_pnl: null },
   holdings: [
     ibkrHolding({ daily_pnl: 64.5 }),
@@ -3468,7 +3470,8 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/account"),
   },
   {
-    name: "GET /account serves daily P&L, and a figure IBKR sent unset as null",
+    // a total the stream sent unset is the account update's, null only where neither has one
+    name: "GET /account serves daily P&L, and a total IBKR sent unset from the account update",
     world: world({ settings: IBKR, ibkr_account: answered("U0000000", UNSET_FIGURES) }),
     request: request("GET", "/account"),
   },
@@ -3576,7 +3579,7 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/account"),
   },
   {
-    // its connection is gone, so a stop would go down the one that replaced it
+    // the loss has already ended the watch in the library, so a stop would send nothing
     name: "GET /account lets a lost watch go 90s after the last read without stopping it",
     world: world({
       settings: IBKR,

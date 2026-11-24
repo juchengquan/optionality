@@ -100,7 +100,8 @@ class TestGetAccount:
                 "net_liquidation": 1000,
                 "total_cash": 1000,
                 "unrealized_pnl": 25,
-                "realized_pnl": None,
+                # the stream's realised unset: the account update's
+                "realized_pnl": 0,
                 "daily_pnl": -5,
             },
             "exchange_rates": {"USD": 1},

@@ -209,7 +209,7 @@
     "/account": {
       "get": {
         "operationId": "getAccount",
-        "summary": "The IBKR account as IBKR marks it: totals, stocks, options and anything else; held while asked, released 90s after the last read",
+        "summary": "The IBKR account as IBKR marks it: totals, stocks, options and anything else; held while asked, released 90s after the last read; read_at is when the service answered",
         "responses": {
           "200": {
             "description": "ok",

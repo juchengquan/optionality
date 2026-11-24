@@ -68,7 +68,8 @@ class OtherOut(BaseModel):
 
 class TotalsOut(BaseModel):
     """In the base currency; each None where the gateway sent none. The P&L is the account's P&L stream's
-    once it has spoken, the account updates' until then; `daily_pnl` the stream's alone."""
+    once it has spoken, and the account updates' until then or where the stream left it unset; `daily_pnl`
+    the stream's alone."""
 
     model_config = _AS_ZOD
 
@@ -96,7 +97,8 @@ class AccountOut(BaseModel):
     base_currency: str | None
     #: the gateway's account update time as it sent it: a time of day, no date; None where none came
     updated_at: str | None
-    #: when the service answered, in the display zone
+    #: when the service answered, in the display zone: with the account held, the time of this answer, not
+    #: of a read from IB Gateway
     read_at: str
     totals: TotalsOut
     #: IBKR's exchange rates, by currency code: units of the base currency per ONE unit of it, the base
@@ -127,7 +129,7 @@ def account_routes(deps: Deps) -> APIRouter:
     @router.get(
         "",
         summary="The IBKR account as IBKR marks it: totals, stocks, options and anything else; held while asked, "
-        "released 90s after the last read",
+        "released 90s after the last read; read_at is when the service answered",
         response_model=AccountOut,
     )
     async def read() -> dict[str, Any]:

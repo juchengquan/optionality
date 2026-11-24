@@ -164,12 +164,16 @@ describe("the answer, from the watch's picture", () => {
     });
   });
 
-  it("serves a figure the stream sent unset as null, never the account update's", async () => {
+  it("takes a total the stream sent unset from the account update, null only where neither has one", async () => {
+    // the owner's decision on #480, as a holding's unset figure is the account update's (#476)
     const unset: IbkrLiveAccount = {
-      ...LIVE, pnl: { daily_pnl: null, unrealized_pnl: null, realized_pnl: -398.15 },
+      ...LIVE,
+      totals: { ...TOTALS, realized_pnl: null },
+      pnl: { daily_pnl: null, unrealized_pnl: null, realized_pnl: null },
     };
     expect(await book(source(unset).source).book.read()).toMatchObject({
-      answer: { totals: { daily_pnl: null, unrealized_pnl: null, realized_pnl: -398.15 } },
+      // the account updates carry no daily figure: null
+      answer: { totals: { daily_pnl: null, unrealized_pnl: 2071.4, realized_pnl: null } },
     });
   });
 
@@ -449,7 +453,7 @@ describe("a lost connection", () => {
     expect(s.asked).toHaveLength(2);
   });
 
-  it("never stops a lost watch: its connection is gone, and a stop would go down the next one", async () => {
+  it("never stops a lost watch: the loss has already ended it, so a stop would send nothing", async () => {
     hush();
     const s = source(LIVE);
     const { book: b, clock, timers: t } = book(s.source);
