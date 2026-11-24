@@ -1,5 +1,5 @@
 {
-  "name": "GET /account reads again once 10s have passed",
+  "name": "GET /account holds nothing after a start that failed, and starts afresh",
   "world": {
     "clock": "2026-11-09T15:00:00.000Z",
     "settings": {
@@ -26,25 +26,11 @@
     },
     "sources": {},
     "ibkr_account": {
-      "down": null,
+      "down": "could not reach IB Gateway at 127.0.0.1:4001: connect ECONNREFUSED 127.0.0.1:4001",
       "refused": null,
       "fails": null,
-      "account": {
-        "account": "U•••••000",
-        "paper": false,
-        "base_currency": "USD",
-        "updated_at": "11:47",
-        "totals": {
-          "net_liquidation": 25010,
-          "total_cash": 25010,
-          "unrealized_pnl": 0,
-          "realized_pnl": 0
-        },
-        "exchange_rates": {
-          "USD": 1
-        },
-        "holdings": []
-      }
+      "account": null,
+      "lost": null
     },
     "telegram": "up",
     "sweeps": [],
@@ -60,7 +46,7 @@
   },
   "earlier": [
     {
-      "at": "2026-11-09T14:59:50.000Z",
+      "at": "2026-11-09T14:59:55.000Z",
       "request": {
         "method": "GET",
         "path": "/account",
@@ -81,25 +67,9 @@
   },
   "expect": {
     "response": {
-      "status": 200,
+      "status": 502,
       "body": {
-        "account": "U•••••000",
-        "paper": false,
-        "base_currency": "USD",
-        "updated_at": "11:47",
-        "read_at": "2026-11-09 23:00:00+08:00",
-        "totals": {
-          "net_liquidation": 25010,
-          "total_cash": 25010,
-          "unrealized_pnl": 0,
-          "realized_pnl": 0
-        },
-        "exchange_rates": {
-          "USD": 1
-        },
-        "stocks": [],
-        "options": [],
-        "other": []
+        "detail": "IB Gateway did not answer — is it running and logged in?"
       }
     },
     "rows": {},

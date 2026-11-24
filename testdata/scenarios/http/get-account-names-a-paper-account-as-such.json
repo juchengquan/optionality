@@ -43,8 +43,11 @@
         "exchange_rates": {
           "USD": 1
         },
-        "holdings": []
-      }
+        "holdings": [],
+        "pnl": null,
+        "pnl_at": null
+      },
+      "lost": null
     },
     "telegram": "up",
     "sweeps": [],
@@ -79,14 +82,16 @@
           "net_liquidation": 25010,
           "total_cash": 25010,
           "unrealized_pnl": 0,
-          "realized_pnl": 0
+          "realized_pnl": 0,
+          "daily_pnl": null
         },
         "exchange_rates": {
           "USD": 1
         },
         "stocks": [],
         "options": [],
-        "other": []
+        "other": [],
+        "live": null
       }
     },
     "rows": {},

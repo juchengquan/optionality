@@ -45,7 +45,7 @@ from optionality_backend.entrypoints.http import Deps, Surfaces, create_app
 from optionality_backend.entrypoints.mcp import McpOptions, mcp_server
 from optionality_backend.env import Settings, settings_for
 from optionality_backend.notify import NotifySender, delivery
-from optionality_backend.ports import AlarmState, QuoteFetcher, QuoteGradeReading, ReadAccount
+from optionality_backend.ports import AccountSource, AlarmState, QuoteFetcher, QuoteGradeReading
 
 TOKEN = "tok"
 
@@ -217,7 +217,7 @@ def harness(
     reference_sources: dict[str, QuoteFetcher] | None = None,
     send: NotifySender | None = None,
     quote_grade: QuoteGradeReading | None = UNREAD,
-    account: ReadAccount | None = None,
+    account: AccountSource | None = None,
 ) -> Harness:
     folder = Path(tempfile.mkdtemp(prefix="optionality-http-"))
     db = create_database(folder / "test.db")
@@ -248,7 +248,7 @@ def harness(
         # what the vendor door assembles in the service: every reachable vendor by name, the Provider
         # among them under its own
         sources={provider.name: provider.fetch_quotes, **(reference_sources or {})},
-        # the IBKR account's read (#470); None, IB Gateway is not configured
+        # IB Gateway's account, held while asked (#477); None, IB Gateway is not configured
         account=account,
     )
     # with the MCP door mounted as `__main__` mounts it (ADR 0026), so the app a test drives is the whole

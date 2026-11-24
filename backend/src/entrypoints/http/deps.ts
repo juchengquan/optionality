@@ -7,7 +7,7 @@
 import type { DatabaseSync } from "node:sqlite";
 
 import type { Settings } from "../../env.ts";
-import type { ProviderClient, ReadAccount, SweeperPort } from "../../ports.ts";
+import type { AccountSource, ProviderClient, SweeperPort } from "../../ports.ts";
 import type { Sources } from "../../references.ts";
 
 export interface Deps {
@@ -37,7 +37,8 @@ export interface Deps {
    *  `routes/references.ts` AND in `main.ts`, in two different shapes.
    */
   sources: Sources;
-  /** The IBKR account's one read (ADR 0030, #470), or null where IB Gateway is not configured
-   *  (`IBKR_HOST` blank). From the same client the prices are read through: `openVendors`. */
-  account: ReadAccount | null;
+  /** IB Gateway's account, held while `GET /account` is asked (ADR 0031, #477), or null where IB
+   *  Gateway is not configured (`IBKR_HOST` blank). On the same client the prices are read
+   *  through: `openVendors`. */
+  account: AccountSource | null;
 }

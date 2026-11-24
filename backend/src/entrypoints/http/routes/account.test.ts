@@ -1,58 +1,71 @@
-/** `GET /account`: the IBKR account, through the app (ADR 0030, #470). What each read comes to and
- *  how one is shared are `account.test.ts`'s; this holds the door — the token, the shape, the
- *  statuses, and one book per app. */
-import { afterEach, describe, expect, it } from "vitest";
+/** `GET /account`: the IBKR account, through the app (ADR 0031, #477). What a start comes to and how
+ *  the hold is kept are `account.test.ts`'s; this holds the door — the token, the shape, the
+ *  statuses, and one hold per app. */
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AccountReading, ReadAccount } from "../../../ports.ts";
+import type { AccountSource, AccountWatching, IbkrLiveAccount } from "../../../ports.ts";
 import { type Harness, body, harness } from "../../../../testing/harness.ts";
 
 let h: Harness;
 afterEach(() => h?.close());
 
-const ACCOUNT = {
+const ACCOUNT: IbkrLiveAccount = {
   account: "masked-by-the-library", paper: true, base_currency: "USD", updated_at: "09:41",
   totals: { net_liquidation: 1000, total_cash: 1000, unrealized_pnl: 0, realized_pnl: 0 },
   exchange_rates: { USD: 1 },
-  holdings: [],
+  holdings: [{
+    sec_type: "OPT", symbol: "ACME", currency: "USD", expiry: "20261218", strike: 45, right: "C",
+    multiplier: 100, position: 1, market_price: 1.5, market_value: 150, average_cost: 1.25,
+    unrealized_pnl: 25, realized_pnl: 0, daily_pnl: -5,
+  }],
+  pnl: { daily_pnl: -5, unrealized_pnl: 25, realized_pnl: null },
+  pnl_at: new Date("2026-10-02T05:26:01Z").getTime(),
 };
 
-function reading(answer: AccountReading) {
+function watching(answer: AccountWatching | "watch") {
   const asked: (string | null)[] = [];
-  const read: ReadAccount = (wanted) => {
-    asked.push(wanted);
-    return Promise.resolve(answer);
+  const source: AccountSource = {
+    watch(wanted) {
+      asked.push(wanted);
+      return Promise.resolve(answer !== "watch" ? answer : {
+        watch: { picture: () => structuredClone(ACCOUNT), lost: null, onLost: () => {}, stop: () => Promise.resolve() },
+      });
+    },
+    onAnswered: () => {},
   };
-  return { read, asked };
+  return { source, asked };
 }
 
 describe("GET /account", () => {
-  it("is behind the token, and reads nothing for a caller without one", async () => {
-    const r = reading({ account: ACCOUNT });
-    h = harness({ account: r.read });
+  it("is behind the token, and starts nothing for a caller without one", async () => {
+    const w = watching("watch");
+    h = harness({ account: w.source });
     const resp = await h.call("/account", { anonymous: true });
     expect(resp.status).toBe(401);
-    expect(r.asked).toEqual([]);
+    expect(w.asked).toEqual([]);
   });
 
-  it("answers the account in the route's shape, IBKR_ACCOUNT handed to the read", async () => {
-    const r = reading({ account: ACCOUNT });
-    h = harness({ account: r.read, settings: { ibkrAccount: "DU0000000" } });
+  it("answers the account in the route's shape, IBKR_ACCOUNT handed to the watch", async () => {
+    const w = watching("watch");
+    h = harness({ account: w.source, settings: { ibkrAccount: "DU0000000" } });
     const resp = await h.call("/account");
     expect(resp.status).toBe(200);
     expect(await body(resp)).toEqual({
       account: "masked-by-the-library", paper: true, base_currency: "USD", updated_at: "09:41",
       read_at: "2026-10-02 13:26:06+08:00",
-      totals: ACCOUNT.totals, exchange_rates: { USD: 1 }, stocks: [], options: [], other: [],
+      totals: { net_liquidation: 1000, total_cash: 1000, unrealized_pnl: 25, realized_pnl: null, daily_pnl: -5 },
+      exchange_rates: { USD: 1 }, stocks: [], options: [ACCOUNT.holdings[0]], other: [],
+      live: { updated_at: "2026-10-02 13:26:01+08:00" },
     });
-    expect(r.asked).toEqual(["DU0000000"]);
+    expect(w.asked).toEqual(["DU0000000"]);
   });
 
-  it("shares one read between two requests to the same app", async () => {
-    const r = reading({ account: ACCOUNT });
-    h = harness({ account: r.read });
+  it("holds one watch for two requests to the same app", async () => {
+    const w = watching("watch");
+    h = harness({ account: w.source });
     await h.call("/account");
     await h.call("/account");
-    expect(r.asked).toHaveLength(1);
+    expect(w.asked).toHaveLength(1);
   });
 
   it("is a 503 where IB Gateway is not configured", async () => {
@@ -63,10 +76,12 @@ describe("GET /account", () => {
   });
 
   it("is a 502 where the gateway does not answer, and a 422 where the account is refused", async () => {
-    h = harness({ account: reading({ unreachable: "could not reach IB Gateway at 127.0.0.1:4001: connect ECONNREFUSED 127.0.0.1:4001" }).read });
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    h = harness({ account: watching({ unreachable: "could not reach IB Gateway at 127.0.0.1:4001: connect ECONNREFUSED 127.0.0.1:4001" }).source });
     expect((await h.call("/account")).status).toBe(502);
     h.close();
-    h = harness({ account: reading({ refused: "several accounts on this login" }).read });
+    quiet.mockRestore();
+    h = harness({ account: watching({ refused: "several accounts on this login" }).source });
     const resp = await h.call("/account");
     expect(resp.status).toBe(422);
     expect(await body(resp)).toEqual({ detail: "several accounts on this login" });

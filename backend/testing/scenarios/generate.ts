@@ -62,6 +62,10 @@ function written(world: World): World {
       ibkr_account: {
         down: world.ibkr_account.down, refused: world.ibkr_account.refused,
         fails: world.ibkr_account.fails, account: world.ibkr_account.account,
+        lost: world.ibkr_account.lost === null ? null : {
+          at: world.ibkr_account.lost.at, words: world.ibkr_account.lost.words,
+          down: world.ibkr_account.lost.down,
+        },
       },
     }),
     telegram: world.telegram,

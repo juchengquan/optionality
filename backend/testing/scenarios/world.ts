@@ -17,10 +17,9 @@ import type { DatabaseSync } from "node:sqlite";
 import { createDatabase } from "../../src/db/open.ts";
 import { type Settings, settingsFromEnv } from "../../src/env.ts";
 import type { QuoteFetcher } from "optionality/quotes";
-import type { ibkrFields } from "optionality/vendors/fields";
-import type { QuoteGradeReading, ReadAccount } from "../../src/ports.ts";
+import type { AccountSource, AccountWatch, IbkrLiveAccount, QuoteGradeReading } from "../../src/ports.ts";
 import {
-  ACCOUNT_CALLS, type Calls, type Diff, type IbkrAccountTable, JSON_COLUMNS, type QuoteGrade, type Row, TABLES, type TableName, type Tables,
+  ACCOUNT_CALLS, ACCOUNT_STOPS, type Calls, type Diff, type IbkrAccountTable, JSON_COLUMNS, type QuoteGrade, type Row, TABLES, type TableName, type Tables,
   type Vendor, type World, columnsOf, primaryKeys,
 } from "./format.ts";
 
@@ -41,8 +40,8 @@ export interface OpenWorld {
   };
   /** every vendor by name, the Provider among them under its own, as `openVendors` assembles */
   sources: Record<string, QuoteFetcher>;
-  /** the IBKR account's read, or null where IB Gateway is not configured */
-  account: ReadAccount | null;
+  /** IB Gateway's account, or null where IB Gateway is not configured */
+  account: AccountSource | null;
   /** whether the Provider is failing right now, and with what: an earlier sweep may say so */
   outage: { down: string | null };
   /** the Telegram transport: what it delivered, in order */
@@ -77,16 +76,32 @@ function fakeVendor(
   };
 }
 
-/** IB Gateway's account read answering from its table, recording every read. See
- *  `IbkrAccountTable` for the rules. */
-function fakeAccount(table: IbkrAccountTable, calls: Calls): ReadAccount {
-  return async (wanted) => {
-    (calls[ACCOUNT_CALLS] ??= []).push(wanted === null ? [] : [wanted]);
-    if (table.down !== null) return { unreachable: table.down };
-    if (table.refused !== null) return { refused: table.refused };
-    if (table.fails !== null) return { failed: table.fails };
-    if (table.account === null) throw new Error("the world's account read answers nothing at all");
-    return { account: table.account as unknown as ibkrFields.IbkrAccount };
+/** IB Gateway's account watch answering from its table, recording every start and stop. See
+ *  `IbkrAccountTable` for the rules. A watch is lost by the clock, which is read whenever the
+ *  service asks: no event announces it, so the service must look. */
+function fakeAccount(table: IbkrAccountTable, calls: Calls, clock: { now: Date }): AccountSource {
+  const lostBy = (t: Date) => table.lost !== null && t.getTime() >= new Date(table.lost.at).getTime();
+  return {
+    watch: async (wanted) => {
+      (calls[ACCOUNT_CALLS] ??= []).push(wanted === null ? [] : [wanted]);
+      if (lostBy(clock.now) && table.lost!.down !== null) return { unreachable: table.lost!.down };
+      if (table.down !== null) return { unreachable: table.down };
+      if (table.refused !== null) return { refused: table.refused };
+      if (table.fails !== null) return { failed: table.fails };
+      if (table.account === null) throw new Error("the world's account watch holds nothing at all");
+      const picture = table.account as unknown as IbkrLiveAccount;
+      const startedLost = lostBy(clock.now);
+      const watch: AccountWatch = {
+        picture: () => structuredClone(picture),
+        get lost() {
+          return !startedLost && lostBy(clock.now) ? new Error(table.lost!.words) : null;
+        },
+        onLost: () => { /* the clock says, when asked */ },
+        stop: async () => { (calls[ACCOUNT_STOPS] ??= []).push([]); },
+      };
+      return { watch };
+    },
+    onAnswered: () => { /* no vendor here is the account's client */ },
   };
 }
 
@@ -165,6 +180,7 @@ export function openWorld(world: World): OpenWorld {
   }
 
   const calls: Calls = {};
+  const clock = { now: new Date(world.clock) };
   const outage = { down: world.provider.down };
   const provider = {
     name: world.provider.name,
@@ -182,11 +198,11 @@ export function openWorld(world: World): OpenWorld {
   return {
     db,
     settings: settingsFromEnv(world.settings),
-    clock: { now: new Date(world.clock) },
+    clock,
     newId: () => mintedId(++minted),
     provider,
     sources,
-    account: world.ibkr_account === undefined ? null : fakeAccount(world.ibkr_account, calls),
+    account: world.ibkr_account === undefined ? null : fakeAccount(world.ibkr_account, calls, clock),
     outage,
     send: (text) => {
       if (world.telegram === "down") throw new Error("telegram is down");

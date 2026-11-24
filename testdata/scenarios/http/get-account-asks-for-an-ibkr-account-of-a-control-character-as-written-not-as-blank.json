@@ -30,7 +30,8 @@
       "down": null,
       "refused": "IBKR_ACCOUNT (•••••) names no account on this login, which has U•••••000",
       "fails": null,
-      "account": null
+      "account": null,
+      "lost": null
     },
     "telegram": "up",
     "sweeps": [],

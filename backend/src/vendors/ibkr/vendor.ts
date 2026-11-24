@@ -17,23 +17,49 @@
  */
 import { IbkrAccountRefused, IbkrClient, IbkrUnreachable } from "optionality/vendors/ibkr/client";
 import type { Settings } from "../../env.ts";
-import type { ReadAccount } from "../../ports.ts";
+import type { AccountSource, AccountWatch } from "../../ports.ts";
 import type { ProviderVendor } from "../index.ts";
 
-/** The account's one read over `client` (ADR 0030, #470), every way it ends sorted for the route:
+/** What the account's source needs of the library's client: its watch (#476). */
+interface Watching {
+  watchAccount(wanted?: string): Promise<AccountWatch>;
+}
+
+/** The account's watch over `client` (ADR 0031, #477), every way a start ends sorted for the route:
  *  the library's `IbkrUnreachable` — no session at all, in the connect's own words — apart from a
- *  read that failed once it began (a plain `Error`: its deadline, or its connection closing under
- *  it) and from `IbkrAccountRefused`. One connect, made by `account` itself, so the words of a
- *  refused session reach the route rather than a probe's yes or no. */
-export function accountReader(client: IbkrClient): ReadAccount {
-  return async (wanted) => {
-    try {
-      return { account: await client.account(wanted ?? undefined) };
-    } catch (err) {
-      const words = err instanceof Error ? err.message : String(err);
-      if (err instanceof IbkrUnreachable) return { unreachable: words };
-      return err instanceof IbkrAccountRefused ? { refused: words } : { failed: words };
-    }
+ *  start that failed once it began (a plain `Error`: its deadline, or its connection closing under
+ *  it) and from `IbkrAccountRefused`. One connect, made by `watchAccount` itself, so the words of a
+ *  refused session reach the route rather than a probe's yes or no.
+ *
+ *  `answered` is the descriptor's to call each time the client answers anything else — a price
+ *  read that worked, a handshake for `/health` — which tells the hold that a lost connection is
+ *  back. A listener's failure is logged and never fails the read that called it. */
+export function accountSource(client: Watching): { source: AccountSource; answered: () => void } {
+  const listeners: (() => void)[] = [];
+  return {
+    source: {
+      async watch(wanted) {
+        try {
+          return { watch: await client.watchAccount(wanted ?? undefined) };
+        } catch (err) {
+          const words = err instanceof Error ? err.message : String(err);
+          if (err instanceof IbkrUnreachable) return { unreachable: words };
+          return err instanceof IbkrAccountRefused ? { refused: words } : { failed: words };
+        }
+      },
+      onAnswered(listener) {
+        listeners.push(listener);
+      },
+    },
+    answered() {
+      for (const listener of listeners) {
+        try {
+          listener();
+        } catch (err) {
+          console.error(`IBKR account: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    },
   };
 }
 
@@ -53,6 +79,8 @@ export const ibkrVendor: ProviderVendor = {
       port: settings.ibkrPort,
       clientId: settings.ibkrClientId,
     });
+    // TEMPORARY SEAM until #476 is merged in: the library's client then has `watchAccount`
+    const account = accountSource(client as unknown as Watching);
     // A plain object of closures, as moomoo's descriptor hands back, and never the instance:
     // `main.ts` and every route pass `provider.fetchQuotes` on DETACHED, and a class method
     // extracted from its instance has no `this` — every ask then failed with "this.close is not a
@@ -60,14 +88,24 @@ export const ibkrVendor: ProviderVendor = {
     // reason; the Provider is handed on by more hands than that one.
     return {
       name: client.name,
-      fetchQuotes: (codes) => client.fetchQuotes(codes),
-      reachable: () => client.reachable(),
+      // each answer a chance for a lost account watch to come back (ADR 0031): an empty ask
+      // connects nothing, so it says nothing
+      fetchQuotes: async (codes) => {
+        const batch = await client.fetchQuotes(codes);
+        if (codes.length > 0) account.answered();
+        return batch;
+      },
+      reachable: async () => {
+        const up = await client.reachable();
+        if (up) account.answered();
+        return up;
+      },
       // IB Gateway grades each REQUEST, which a Reference row carries as `delayed`; it states no
       // grade for the account, and passing a request's through as one is out of scope (#464)
       quoteGrade: () => null,
       close: () => client.close(),
-      // over the same client, so the account is read on the session the prices are
-      readAccount: accountReader(client),
+      // over the same client, so the account is held on the session the prices are read on
+      account: account.source,
     };
   },
 };

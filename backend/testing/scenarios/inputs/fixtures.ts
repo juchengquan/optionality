@@ -75,7 +75,7 @@ export interface WorldOver {
   settings?: Record<string, string>;
   provider?: Partial<Provider>;
   sources?: Record<string, Partial<Vendor>>;
-  /** IB Gateway's account read; absent, IB Gateway is not configured */
+  /** IB Gateway's account watch; absent, IB Gateway is not configured */
   ibkr_account?: Partial<IbkrAccountTable>;
   telegram?: "up" | "down";
   sweeps?: EarlierSweep[];
@@ -91,7 +91,7 @@ export function world(over: WorldOver = {}): World {
       Object.entries(over.sources ?? {}).map(([name, v]) => [name, vendor(v)]),
     ),
     ...(over.ibkr_account === undefined ? {} : {
-      ibkr_account: { down: null, refused: null, fails: null, account: null, ...over.ibkr_account },
+      ibkr_account: { down: null, refused: null, fails: null, account: null, lost: null, ...over.ibkr_account },
     }),
     telegram: over.telegram ?? "up",
     sweeps: over.sweeps ?? [],

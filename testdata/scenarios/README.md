@@ -31,7 +31,7 @@ Every scenario starts from one, written out in full:
 - `sources` — vendors a Reference may name besides the Provider, each a table of the same shape.
   The Provider is a source under its own name as well. A source not listed does not exist in this
   build.
-- `ibkr_account` — IB Gateway's account read (ADR 0030), a table of what it answers (below);
+- `ibkr_account` — IB Gateway's account watch (ADR 0030, 0031), a table of what it answers (below);
   absent where IB Gateway is not configured (`IBKR_HOST` blank), so a world without the key has none.
 - `telegram` — `"up"`, or `"down"`: every send fails.
 - `sweeps` — sweeps that happened BEFORE the event, each `{at, down}`, run in order with the clock
@@ -74,28 +74,38 @@ the backend's Provider as it stands; asking for it asks the world nothing.
 
 Every call is recorded, the failed ones included.
 
-### IB Gateway's account read
+### IB Gateway's account watch
 
-`ibkr_account` is `{down, refused, fails, account}`: what the library's account read answers, as a
-vendor's table states its batch — the IB Gateway clients are held to the wire by their recorded
+`ibkr_account` is `{down, refused, fails, account, lost}`: what the library's account watch answers,
+as a vendor's table states its batch — the IB Gateway clients are held to the wire by their recorded
 conversations (`testdata/vendors/ibkr-gateway/`), and the choice of account and the masking by the
-library's cases. A read asks for an account — `IBKR_ACCOUNT` trimmed as JavaScript's `trim()`
+library's cases. A start asks for an account — `IBKR_ACCOUNT` trimmed as JavaScript's `trim()`
 trims (a control character such as `\x1f` is kept, where Python's `str.strip()` would take it), or
 none where it is blank — and gets, in this order:
 
-1. "unreachable", with the words `down`, if it is not null: no session with IB Gateway at all, in
+1. "unreachable", with the words `lost.down`, if `lost` is not null, the clock is at or past
+   `lost.at`, and `lost.down` is not null: the gateway gone with the connection;
+2. "unreachable", with the words `down`, if it is not null: no session with IB Gateway at all, in
    the connect's own words (the library's `IbkrUnreachable`) — a session the gateway refused
    ("IB Gateway refused the session: …") is answered in them, anything else as a gateway that did
    not answer;
-2. a refusal with the words `refused`, if it is not null: the library would not choose an account
+3. a refusal with the words `refused`, if it is not null: the library would not choose an account
    (several on the login and none named, or one named that is not on it), every id masked;
-3. a failure with the words `fails`, if it is not null: connected, and the read did not finish
-   (its deadline passed);
-4. otherwise `account`, the library's answer — `{account, paper, base_currency, updated_at, totals,
-   exchange_rates, holdings}`, the id masked as the library masks it.
+4. a failure with the words `fails`, if it is not null: connected, and the first picture did not
+   come (its deadline passed);
+5. otherwise a watch holding `account`, the library's picture — `{account, paper, base_currency,
+   updated_at, totals, exchange_rates, holdings, pnl, pnl_at}`, the id masked as the library masks
+   it, each holding with its `daily_pnl`, `pnl` the account's P&L stream's figures or null before
+   it has spoken, `pnl_at` when it last spoke in milliseconds since the epoch, or null.
+
+`lost`, where it is not null, is `{at, words, down}`: the connection closing at `at`. From then, a
+watch started BEFORE `at` is lost, with `words`; one started at or after it is not. Nothing announces
+the loss: a backend sees it by asking the watch whether it is lost, by the clock as it stands.
 
 The ids behind them are placeholders only (`U0000000`, `DU0000001`, …), as in the recordings. Each
-read is recorded in `calls` under `"ibkr account"`, as `[<the id asked for>]`, or `[]` for none.
+start is recorded in `calls` under `"ibkr account"`, as `[<the id asked for>]`, or `[]` for none, and
+each stop under `"ibkr account stop"`, as `[]`. No vendor's call stands for the account's client
+answering something else: a world's vendors are tables, and none of them is IB Gateway's client.
 
 ### Ids
 

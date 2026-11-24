@@ -1,5 +1,5 @@
 {
-  "name": "GET /account shares a failure for 10s",
+  "name": "GET /account lets the account go 90s after the last read, and starts afresh",
   "world": {
     "clock": "2026-11-09T15:00:00.000Z",
     "settings": {
@@ -26,10 +26,28 @@
     },
     "sources": {},
     "ibkr_account": {
-      "down": "could not reach IB Gateway at 127.0.0.1:4001: connect ECONNREFUSED 127.0.0.1:4001",
+      "down": null,
       "refused": null,
       "fails": null,
-      "account": null
+      "account": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "11:47",
+        "totals": {
+          "net_liquidation": 25010,
+          "total_cash": 25010,
+          "unrealized_pnl": 0,
+          "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": [],
+        "pnl": null,
+        "pnl_at": null
+      },
+      "lost": null
     },
     "telegram": "up",
     "sweeps": [],
@@ -45,7 +63,7 @@
   },
   "earlier": [
     {
-      "at": "2026-11-09T14:59:55.000Z",
+      "at": "2026-11-09T14:58:30.000Z",
       "request": {
         "method": "GET",
         "path": "/account",
@@ -66,12 +84,37 @@
   },
   "expect": {
     "response": {
-      "status": 502,
+      "status": 200,
       "body": {
-        "detail": "IB Gateway did not answer — is it running and logged in?"
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "11:47",
+        "read_at": "2026-11-09 23:00:00+08:00",
+        "totals": {
+          "net_liquidation": 25010,
+          "total_cash": 25010,
+          "unrealized_pnl": 0,
+          "realized_pnl": 0,
+          "daily_pnl": null
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "stocks": [],
+        "options": [],
+        "other": [],
+        "live": null
       }
     },
     "rows": {},
-    "calls": {}
+    "calls": {
+      "ibkr account": [
+        []
+      ],
+      "ibkr account stop": [
+        []
+      ]
+    }
   }
 }

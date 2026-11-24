@@ -8,18 +8,28 @@ vendor" needs opening to be inert. The client itself is the library's, held to t
 the recorded gateway conversations (`python/tests/test_ibkr_gateway.py`).
 
 No test here reaches IB Gateway: nothing connects until a fetch is asked, and none is but one against
-a port nothing listens on. Since ADR 0030 it has a test of its own, the account's read, which these
-port at the end.
+a port nothing listens on. Since ADR 0030 it has a test of its own, the account's (since ADR 0031 its
+watch), which these port at the end.
 """
 
+import logging
 from typing import Any, cast
 
+import pytest
 from optionality.ibkr import IbkrAccountRefused, IbkrClient, IbkrUnreachable
+from optionality.quote import Batch
 
 from optionality_backend.env import settings_for
-from optionality_backend.ports import AccountFailed, AccountRead, AccountRefused, AccountUnreachable, ProviderClient
+from optionality_backend.ports import (
+    AccountFailed,
+    AccountRefused,
+    AccountSource,
+    AccountUnreachable,
+    AccountWatched,
+    ProviderClient,
+)
 from optionality_backend.vendors import ProviderVendor
-from optionality_backend.vendors.ibkr.vendor import account_reader, ibkr_vendor
+from optionality_backend.vendors.ibkr.vendor import IbkrAccountSource, IbkrProvider, ibkr_vendor
 
 
 def test_is_a_provider_candidate_turned_on_by_its_host():
@@ -52,7 +62,7 @@ def test_opening_connects_nothing():
     client.close()
 
 
-# --- the account's read (ADR 0030, #470) ------------------------------------------------------------
+# --- the account's watch (ADR 0031, #477) ----------------------------------------------------------
 #
 # **Where the Python differs, and why.** `vendor.test.ts` drives the library's real client against the
 # library's fake gateway, its `client-id-in-use` recording included; the Python's fake gateway is the
@@ -70,59 +80,124 @@ REFUSED = (
 )
 
 
-class _Client:
-    """The library client's one call the account's read makes, answering as told."""
+class _Watch:
+    def picture(self) -> dict[str, Any]:
+        return {"account": "masked"}
 
-    def __init__(self, *, answer: Any = None, raises: Exception | None = None) -> None:
-        self.answer, self.raises = answer, raises
+    lost = None
+
+    def on_lost(self, listener: Any) -> None:
+        pass
+
+    async def stop(self) -> None:
+        pass
+
+
+WATCH = _Watch()
+
+
+class _Client:
+    """The library client's one call the account's source makes, answering as told."""
+
+    def __init__(self, *, raises: Exception | None = None) -> None:
+        self.raises = raises
         self.asked: list[str | None] = []
 
-    async def account(self, wanted: str | None = None) -> Any:
+    async def watch_account(self, wanted: str | None = None) -> Any:
         self.asked.append(wanted)
         if self.raises is not None:
             raise self.raises
-        return self.answer
+        return WATCH
 
 
-def _reader(client: _Client) -> Any:
-    return account_reader(cast(IbkrClient, client))
+async def test_a_start_answers_the_librarys_watch_asking_for_the_account_named_or_none():
+    client = _Client()
+    source = IbkrAccountSource(client)
+    assert await source.watch("U0000001") == AccountWatched(cast(Any, WATCH))
+    assert await source.watch(None) == AccountWatched(cast(Any, WATCH))
+    assert client.asked == ["U0000001", None]
 
 
-async def test_the_account_read_answers_the_librarys_account_for_the_account_asked_for():
-    client = _Client(answer={"account": "masked"})
-    assert await _reader(client)("U0000001") == AccountRead({"account": "masked"})
-    assert client.asked == ["U0000001"]
-
-
-async def test_the_account_read_is_a_refusal_in_the_librarys_words():
+async def test_a_start_is_a_refusal_in_the_librarys_words():
     words = "several accounts on this login; set IBKR_ACCOUNT to one of …"
-    assert await _reader(_Client(raises=IbkrAccountRefused(words)))(None) == AccountRefused(words)
+    assert await IbkrAccountSource(_Client(raises=IbkrAccountRefused(words))).watch(None) == AccountRefused(words)
 
 
-async def test_the_account_read_is_unreachable_in_the_gateways_words_where_it_refuses_the_session():
-    assert await _reader(_Client(raises=IbkrUnreachable(REFUSED)))(None) == AccountUnreachable(REFUSED)
+async def test_a_start_is_unreachable_in_the_gateways_words_where_it_refuses_the_session():
+    assert await IbkrAccountSource(_Client(raises=IbkrUnreachable(REFUSED))).watch(None) == AccountUnreachable(REFUSED)
 
 
-async def test_the_account_read_is_a_failure_in_the_librarys_words_where_it_does_not_finish():
-    # a plain ConnectionError is a read that failed once it began: never "unreachable", though
+async def test_a_start_is_a_failure_in_the_librarys_words_where_the_first_picture_does_not_come():
+    # a plain ConnectionError is a start that failed once it began: never "unreachable", though
     # `IbkrUnreachable` is one too
     words = "IB Gateway did not finish sending the account within 8000ms"
-    assert await _reader(_Client(raises=ConnectionError(words)))(None) == AccountFailed(words)
+    assert await IbkrAccountSource(_Client(raises=ConnectionError(words))).watch(None) == AccountFailed(words)
 
 
-async def test_the_account_read_is_unreachable_in_the_connects_words_against_a_port_nothing_listens_on():
-    # the real client, reaching nothing: unreachable, never a failure, in the connect's own words
-    client = IbkrClient("127.0.0.1", port=1, client_id=31419, connect_timeout_ms=500)
+def test_the_client_answering_tells_every_listener_and_a_listener_that_raises_is_logged(caplog):
+    source = IbkrAccountSource(_Client())
+    heard: list[str] = []
+
+    def bug() -> None:
+        raise RuntimeError("a bug")
+
+    source.on_answered(bug)
+    source.on_answered(lambda: heard.append("second"))
+    with caplog.at_level(logging.ERROR, logger="optionality_backend.vendors.ibkr.vendor"):
+        source.answered()
+    assert heard == ["second"]
+    assert [r.getMessage() for r in caplog.records] == ["IBKR account: a bug"]
+
+
+def test_the_provider_carries_the_accounts_source():
+    client = ibkr_vendor.open(settings_for(ibkr_host="127.0.0.1", ibkr_port=1))
+    assert isinstance(client, IbkrProvider)
+    assert isinstance(client.account_source, AccountSource)
+    client.close()
+
+
+def _provider_heard(port: int = 1) -> tuple[IbkrProvider, list[int]]:
+    client = ibkr_vendor.open(settings_for(ibkr_host="127.0.0.1", ibkr_port=port))
+    assert isinstance(client, IbkrProvider)
+    heard: list[int] = []
+    client.account_source.on_answered(lambda: heard.append(1))
+    return client, heard
+
+
+async def test_says_the_client_answered_after_a_price_read_that_worked_and_not_after_one_that_asked_nothing(
+    monkeypatch,
+):
+    async def answers(self: IbkrClient, codes: list[str]) -> Batch:
+        return Batch(records=[], unknown=list(codes))
+
+    monkeypatch.setattr(IbkrClient, "fetch_quotes", answers)
+    client, heard = _provider_heard()
+    await client.fetch_quotes([])
+    assert heard == []
+    await client.fetch_quotes(["US.SPXW261218C8100000"])
+    assert heard == [1]
+    client.close()
+
+
+async def test_does_not_say_the_client_answered_after_a_price_read_that_failed():
+    client, heard = _provider_heard()
     try:
-        reading = await account_reader(client)(None)
+        with pytest.raises(Exception):  # noqa: B017 — whatever the connect raises
+            await client.fetch_quotes(["US.SPXW261218C8100000"])
     finally:
         client.close()
-    assert isinstance(reading, AccountUnreachable)
-    assert reading.words.startswith("could not reach IB Gateway at 127.0.0.1:1: ")
+    assert heard == []
 
 
-def test_the_provider_carries_the_account_read():
-    client = ibkr_vendor.open(settings_for(ibkr_host="127.0.0.1", ibkr_port=1))
-    assert client is not None
-    assert callable(client.read_account)
+async def test_says_the_client_answered_after_a_handshake_for_health_and_not_after_one_that_failed(monkeypatch):
+    client, heard = _provider_heard()
+    assert await client.reachable() is False
+    assert heard == []
+
+    async def up(self: IbkrClient) -> bool:
+        return True
+
+    monkeypatch.setattr(IbkrClient, "reachable", up)
+    assert await client.reachable() is True
+    assert heard == [1]
     client.close()

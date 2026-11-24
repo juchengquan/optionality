@@ -17,6 +17,7 @@ Deterministic BY INJECTION, never by scrubbing: the clock and the id minter are 
 backend, so what a replay records is what the backend actually wrote.
 """
 
+import copy
 import json
 import shutil
 import sqlite3
@@ -34,13 +35,13 @@ from optionality_backend.db.migrate import DIRECTORY
 from optionality_backend.db.open import create_database
 from optionality_backend.ports import (
     AccountFailed,
-    AccountRead,
-    AccountReading,
     AccountRefused,
+    AccountSource,
     AccountUnreachable,
+    AccountWatched,
+    AccountWatching,
     GradeRead,
     QuoteGradeReading,
-    ReadAccount,
 )
 
 from .compare import same
@@ -245,16 +246,58 @@ def fake_vendor(name: str, table: dict[str, Any], calls: Calls, outage: Callable
     return fetch
 
 
-#: The `calls` key an account read is recorded under (`format.ts`' `ACCOUNT_CALLS`).
+#: The `calls` key a watch's start is recorded under (`format.ts`' `ACCOUNT_CALLS`).
 ACCOUNT_CALLS = "ibkr account"
+#: The `calls` key a watch's stop is recorded under (`format.ts`' `ACCOUNT_STOPS`).
+ACCOUNT_STOPS = "ibkr account stop"
 
 
-def fake_account(table: dict[str, Any], calls: Calls) -> ReadAccount:
-    """IB Gateway's account read answering from its table, recording every read: `world.ts`'s
-    `fakeAccount`, and the README's "IB Gateway's account read"."""
+class _FakeWatch:
+    """A watch holding the world's picture, lost by the clock — `world.ts`' `fakeAccount`'s watch."""
 
-    async def read(wanted: str | None) -> AccountReading:
-        calls.setdefault(ACCOUNT_CALLS, []).append([] if wanted is None else [wanted])
+    def __init__(self, picture: dict[str, Any], lost_by: Callable[[], bool], words: str | None, calls: Calls) -> None:
+        self._picture = picture
+        self._started_lost = lost_by()
+        self._lost_by = lost_by
+        self._words = words
+        self._calls = calls
+
+    def picture(self) -> dict[str, Any]:
+        return copy.deepcopy(self._picture)
+
+    @property
+    def lost(self) -> BaseException | None:
+        if not self._started_lost and self._lost_by():
+            return ConnectionError(self._words)
+        return None
+
+    def on_lost(self, listener: Callable[[BaseException], None]) -> None:
+        """The clock says, when asked."""
+
+    async def stop(self) -> None:
+        self._calls.setdefault(ACCOUNT_STOPS, []).append([])
+
+
+class _FakeAccount:
+    """IB Gateway's account watch answering from its table, recording every start and stop:
+    `world.ts`'s `fakeAccount`, and the README's "IB Gateway's account watch". A watch is lost by the
+    clock, which is read whenever the service asks: no event announces it, so the service must look."""
+
+    def __init__(self, table: dict[str, Any], calls: Calls, clock: "Clock") -> None:
+        self._table = table
+        self._calls = calls
+        self._clock = clock
+
+    def _lost_by(self) -> bool:
+        lost = self._table["lost"]
+        return lost is not None and self._clock.now >= instant(lost["at"])
+
+    async def watch(self, wanted: str | None) -> AccountWatching:
+        table = self._table
+        self._calls.setdefault(ACCOUNT_CALLS, []).append([] if wanted is None else [wanted])
+        lost = table["lost"]
+        if self._lost_by() and lost["down"] is not None:
+            return AccountUnreachable(lost["down"])
         if table["down"] is not None:
             return AccountUnreachable(table["down"])
         if table["refused"] is not None:
@@ -262,10 +305,12 @@ def fake_account(table: dict[str, Any], calls: Calls) -> ReadAccount:
         if table["fails"] is not None:
             return AccountFailed(table["fails"])
         if table["account"] is None:
-            raise WorldError("the world's account read answers nothing at all")
-        return AccountRead(table["account"])
+            raise WorldError("the world's account watch holds nothing at all")
+        words = None if lost is None else lost["words"]
+        return AccountWatched(_FakeWatch(table["account"], self._lost_by, words, self._calls))
 
-    return read
+    def on_answered(self, listener: Callable[[], None]) -> None:
+        """No vendor here is the account's client."""
 
 
 @dataclass
@@ -318,8 +363,8 @@ class OpenWorld:
     provider: Provider
     #: every vendor by name, the Provider among them under its own, as `openVendors` assembles
     sources: dict[str, QuoteFetcher]
-    #: the IBKR account's read, or None where IB Gateway is not configured
-    account: ReadAccount | None
+    #: IB Gateway's account, or None where IB Gateway is not configured
+    account: AccountSource | None
     outage: Outage
     #: the sweep's Telegram transport, and what it delivered, in order
     send: Callable[[str], None]
@@ -382,15 +427,16 @@ def open_world(world: dict[str, Any]) -> OpenWorld:
             replies.append(dict(params))
         return {}
 
+    clock = Clock(instant(world["clock"]))
     return OpenWorld(
         path=path,
         db=db,
         env=dict(world["settings"]),
-        clock=Clock(instant(world["clock"])),
+        clock=clock,
         new_id=new_id,
         provider=provider,
         sources=sources,
-        account=None if "ibkr_account" not in world else fake_account(world["ibkr_account"], calls),
+        account=None if "ibkr_account" not in world else _FakeAccount(world["ibkr_account"], calls, clock),
         outage=outage,
         send=send,
         sent=sent,
