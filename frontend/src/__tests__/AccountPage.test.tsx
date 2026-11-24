@@ -275,14 +275,22 @@ describe.each(arrangements)("on the %s, reading the account", (arrangement) => {
     await waitFor(() => expect(refreshButton().disabled).toBe(false));
   });
 
-  it("writes nothing: no request but the read, and no control but the cadence and the refresh", async () => {
+  it("writes nothing: no request but the read, and no control but the cadence, the refresh and the folds", async () => {
     const svc = await open(arrangement);
     fireEvent.click(refreshButton());
     await until(() => expect(svc.reads()).toBe(2));
+    // every fold and every combined row pressed, and still only the read
+    for (const b of page().querySelectorAll<HTMLButtonElement>("button[aria-expanded]")) fireEvent.click(b);
+    await drain();
     expect(svc.requests.every((r) => r === "GET /account")).toBe(true);
-    const controls = [...page().querySelectorAll("button, input, select, textarea, form")]
+    const controls = [...page().querySelectorAll("button, input, select, textarea, form")];
+    const named = controls.filter((el) => !el.hasAttribute("aria-expanded"))
       .map((el) => el.getAttribute("aria-label") ?? el.id ?? el.tagName);
-    expect(controls).toEqual(["refresh now", "nx-acct-refresh"]);
+    expect(named).toEqual(["refresh now", "nx-acct-refresh"]);
+    // the rest fold or open what is drawn: three sections, two underlyings and one combined row
+    const folds = controls.filter((el) => el.hasAttribute("aria-expanded"));
+    expect(folds.every((el) => el.tagName === "BUTTON" && el.getAttribute("type") === "button")).toBe(true);
+    expect(folds).toHaveLength(6);
   });
 });
 
@@ -337,8 +345,10 @@ describe.each(arrangements)("on the %s, the account drawn", (arrangement) => {
     const spx = underlyings[1]!;
     expect([...spx.querySelectorAll<HTMLElement>("[data-expiry]")].map((e) => e.dataset.expiry))
       .toEqual(["20261204", "20261218"]);
+    // its three contracts on one expiry are one row (the owner, 2026-11-24), each a leg under it
     const dec18 = spx.querySelector<HTMLElement>('[data-expiry="20261218"]')!;
-    const rows = [...dec18.querySelectorAll<HTMLElement>("[data-holding]")];
+    expect(dec18.querySelectorAll("[data-combo]")).toHaveLength(1);
+    const rows = [...dec18.querySelectorAll<HTMLElement>("[data-leg]")];
     expect(rows.map((r) => r.querySelector('[data-fig="contract"]')?.textContent)).toEqual(["P6750", "P6800", "C7300"]);
     const short = rows[1]!;
     // the contract written through Legs.tsx: its type in the type's colour, a short leg bold
@@ -437,7 +447,7 @@ describe.each(arrangements)("on the %s, the account drawn", (arrangement) => {
     expect(fig("AAPL", "mark")).toBe("180.00");
     expect(fig("AAPL", "pnl-share")).toBe("+20.0%");
     expect(fig("AAPL", "weight")).toBe("7.2%");
-    const short = document.querySelectorAll('[data-underlying="SPX"] [data-expiry="20261218"] [data-holding]')[1]!;
+    const short = document.querySelectorAll('[data-underlying="SPX"] [data-expiry="20261218"] [data-leg]')[1]!;
     expect(short.querySelector('[data-fig="qty"]')?.textContent).toBe("−•••");
     expect(short.querySelector('[data-fig="value"]')?.textContent).toBe("$•••");
     // no amount anywhere on the page

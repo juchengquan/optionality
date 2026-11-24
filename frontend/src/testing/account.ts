@@ -6,7 +6,9 @@
  *  - `EMPTY`: cash and nothing held;
  *  - `TWO_CURRENCIES`: a USD account that also holds a stock and a future in EUR, at a made-up rate;
  *  - `NO_RATE`: the same, and a stock in SEK, a currency IBKR sent no rate for;
- *  - `ODD_OPTIONS`: a put and a call at one strike, and an option with no expiry.
+ *  - `ODD_OPTIONS`: a put and a call at one strike, and an option with no expiry;
+ *  - `COMBOS`: options only, each expiry a different shape — a contract alone, a two-leg spread, a
+ *    four-leg structure two of each, legs of unequal quantities, and one contract over two expiries.
  *
  *  And `serveAccount`, a fake of the one route the page reads, which counts every read and answers
  *  what the test sets — an account, or a refusal in the service's words with its status. */
@@ -82,6 +84,30 @@ export const ODD_OPTIONS: Account = {
     option("SPX", "20261218", "C", 7000, -1, 6.1, 5.2),
     option("SPX", "20261218", "P", 7000, 1, 7.4, 6.6),
     ...ACCOUNT.options,
+  ],
+};
+
+/** Invented options, each expiry a shape of its own. */
+export const COMBOS: Account = {
+  ...ACCOUNT,
+  stocks: [], other: [],
+  options: [
+    // alone on its expiry
+    option("SPX", "20261204", "C", 7500, 1, 2.35, 1.1),
+    // two legs, one of each
+    option("SPX", "20270115", "P", 5850, 1, 4.6, 3.3),
+    option("SPX", "20270115", "P", 5900, -1, 7.2, 5.1),
+    // four legs, two of each
+    option("SPX", "20270219", "C", 6750, 2, 5.5, 4.4),
+    option("SPX", "20270219", "P", 5700, -2, 9.1, 7.4),
+    option("SPX", "20270219", "C", 6700, -2, 8.2, 6.9),
+    option("SPX", "20270219", "P", 5650, 2, 6.3, 5),
+    // unequal quantities
+    option("SPX", "20270319", "P", 5600, -2, 6, 5),
+    option("SPX", "20270319", "P", 5650, 1, 8, 6.5),
+    // one strike over two expiries
+    option("QQQ", "20261218", "C", 520, -1, 9.4, 8.8),
+    option("QQQ", "20270115", "C", 520, 1, 14.2, 13.5),
   ],
 };
 

@@ -1,11 +1,11 @@
 /** The account page (#471) for the layout suites (`__browser__/Account*.test.tsx`): drawn on one
  *  of the made-up answers in `testing/account.ts`, and measured for what a reader needs of it — nothing pushed sideways, and
- *  every figure of every row drawn whole, inside its row. */
+ *  every figure of every row drawn whole, inside its row: folded, and with its combined rows opened. */
 import { act, fireEvent, render } from "@testing-library/react";
 
 import { Page } from "../Page";
 import type { Account } from "../shared/api";
-import { ACCOUNT, EMPTY, NO_RATE, PAPER, REFUSALS, serveAccount, TWO_CURRENCIES } from "./account";
+import { ACCOUNT, COMBOS, EMPTY, NO_RATE, PAPER, REFUSALS, serveAccount, TWO_CURRENCIES } from "./account";
 
 /** as the book's layout suites wait (`__browser__/nextBook.ts`): long enough for the read to land */
 const settle = () => new Promise((r) => setTimeout(r, 250));
@@ -27,6 +27,14 @@ export const LARGE: Account = {
   other: TWO_CURRENCIES.other.map((o) => ({ ...o, market_value: scaled(o.market_value) })),
 };
 
+/** COMBOS a thousand times over, for wide combined rows and folded totals. */
+export const LARGE_COMBOS: Account = {
+  ...COMBOS,
+  options: COMBOS.options.map((o) => ({
+    ...o, position: scaled(o.position), market_value: scaled(o.market_value), unrealized_pnl: scaled(o.unrealized_pnl),
+  })),
+};
+
 /** Every state the page draws an answer in, by name. */
 export const STATES = {
   loaded: ACCOUNT,
@@ -35,6 +43,8 @@ export const STATES = {
   "two currencies": TWO_CURRENCIES,
   "no rate": NO_RATE,
   large: LARGE,
+  combos: COMBOS,
+  "large combos": LARGE_COMBOS,
   "not configured": REFUSALS.notConfigured,
   "not answering": REFUSALS.notAnswering,
   deadline: REFUSALS.deadline,
@@ -58,10 +68,25 @@ export async function showAccount(answer: (typeof STATES)[keyof typeof STATES], 
   }
 }
 
-/** The variants beside the states: privacy on, and a failed refresh after a good read. */
+/** Every combined row opened, then every section and underlying folded: from the inside out, so
+ *  each heading is pressed while it is drawn. */
+async function pressAll(selector: string): Promise<void> {
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>(selector)].reverse();
+  for (const b of buttons) await act(async () => { fireEvent.click(b); });
+}
+export const openCombos = () => pressAll(".nx-acct-combo-toggle");
+export const foldAll = () => pressAll(".nx-acct-fold");
+
+/** The variants beside the states: privacy on, a failed refresh after a good read, and the folds
+ *  and combined rows each way. */
 export const VARIANTS = {
   "privacy on": () => showAccount(TWO_CURRENCIES, { privacy: true }),
   "failed refresh after a good read": () => showAccount(TWO_CURRENCIES, { thenFails: REFUSALS.notAnswering }),
+  "every combined row opened": async () => { await showAccount(LARGE_COMBOS); await openCombos(); },
+  "every combined row opened, privacy on": async () => { await showAccount(LARGE_COMBOS, { privacy: true }); await openCombos(); },
+  "everything folded": async () => { await showAccount(LARGE); await foldAll(); },
+  "everything folded, no rate": async () => { await showAccount(NO_RATE); await foldAll(); },
+  "everything folded, privacy on": async () => { await showAccount(LARGE_COMBOS, { privacy: true }); await foldAll(); },
 } as const;
 
 /** Every figure, currency and lead of every row that is not drawn whole inside its place: cut by its
@@ -70,7 +95,10 @@ export const VARIANTS = {
 export function cutShort(): string[] {
   const rows = [...document.querySelectorAll<HTMLElement>("[data-holding]")];
   return rows.flatMap((row) => {
-    return [...row.querySelectorAll<HTMLElement>("[data-fig], [data-currency], .nx-acct-lead, th")].flatMap((el) => {
+    // each row's own, never those of the legs drawn inside a combined card, nor anything not drawn
+    const own = [...row.querySelectorAll<HTMLElement>("[data-fig], [data-currency], .nx-acct-lead, th")]
+      .filter((el) => el.closest("[data-holding]") === row && el.getClientRects().length > 0);
+    return own.flatMap((el) => {
       const r = el.getBoundingClientRect();
       const clipped = el.scrollWidth > Math.ceil(r.width) + 0.5;
       const places = [row, el.closest<HTMLElement>("td, .nx-acct-figs > div, .nx-acct-card-head")]

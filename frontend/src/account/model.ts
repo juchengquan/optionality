@@ -5,7 +5,12 @@
  *  (`exchange_rates`: base units per one unit of each currency; the owner, 2026-11-23): a stock's
  *  weight — its share of net liquidation, which is in the base — and the order the stocks are listed
  *  in. A holding in a currency with no rate has no weight (a dash) and is listed after every holding
- *  that converts. */
+ *  that converts.
+ *
+ *  And two things the owner asked for on 2026-11-24: every option on one underlying and one expiry
+ *  is ONE row, its legs combined (`optionRows`, `combine`) — IB Gateway groups nothing, so this is
+ *  the page's rule — and a folded heading says its holdings' value and P&L summed in the base
+ *  currency (`totalInBase`). */
 import type { Account, AccountHolding } from "../shared/api";
 import { DASH, type WrittenLeg } from "../shared/format";
 import { MINUS, trueMinus } from "../shared/numbers";
@@ -67,6 +72,111 @@ export function optionGroups(options: readonly AccountHolding[]): OptionGroup[] 
     }));
 }
 
+/** One row of an expiry: a contract alone on it, or every contract on it combined. */
+export type OptionRow = { kind: "contract"; holding: AccountHolding } | Combo;
+
+/** Every contract on one underlying, expiry and currency as one row (the owner, 2026-11-24). */
+export interface Combo {
+  kind: "combo";
+  /** the contracts, in the expiry's ladder order (`optionGroups`) */
+  legs: AccountHolding[];
+  /** each leg as the book writes it, its quantity per unit */
+  written: WrittenLeg[];
+  /** how many of the structure are held: the largest count every leg's quantity divides by — `2`
+   *  for two of each leg, `1` for a 2:1 — or null where a quantity is unknown or not whole */
+  units: number | null;
+  currency: string;
+  /** PER SHARE of one unit, signed as IBKR signs a combination: each leg's price times its signed
+   *  quantity, summed, over the units — a credit is negative. Null where any leg's figure or
+   *  quantity is missing, or the legs' multipliers differ, so a share is not one thing. */
+  average_cost: number | null;
+  market_price: number | null;
+  /** money, in `currency`: the legs' own, summed; null where any leg's is missing */
+  market_value: number | null;
+  unrealized_pnl: number | null;
+}
+
+const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
+
+/** The units a structure is held in: the greatest common divisor of its legs' quantities. Null
+ *  where one is unknown or not a whole number. */
+export function unitsOf(positions: readonly (number | null)[]): number | null {
+  if (positions.some((p) => p === null || !Number.isInteger(p))) return null;
+  const units = (positions as number[]).reduce((u, p) => gcd(u, Math.abs(p)), 0);
+  return units === 0 ? null : units;
+}
+
+/** The sum of a figure over the legs, or null where any leg is missing it: no partial sums. */
+function summed(legs: readonly AccountHolding[], figure: (h: AccountHolding) => number | null): number | null {
+  const each = legs.map(figure);
+  return each.some((n) => n === null) ? null : (each as number[]).reduce((a, b) => a + b, 0);
+}
+
+/** Contracts as one row. */
+export function combine(legs: readonly AccountHolding[]): Combo {
+  const units = unitsOf(legs.map((h) => h.position));
+  const oneMultiplier = new Set(legs.map((h) => h.multiplier)).size === 1;
+  const net = (price: (h: AccountHolding) => number | null): number | null => {
+    if (units === null || !oneMultiplier) return null;
+    const sum = summed(legs, (h) => { const p = price(h); return p === null ? null : p * h.position!; });
+    return sum === null ? null : sum / units;
+  };
+  return {
+    kind: "combo",
+    legs: [...legs],
+    written: legs.map((h) => ({
+      ...contractLeg(h), ...(units === null ? {} : { qty: Math.abs(h.position!) / units }),
+    })),
+    units,
+    currency: legs[0]?.currency ?? "",
+    average_cost: net((h) => h.average_cost),
+    market_price: net((h) => h.market_price),
+    market_value: summed(legs, (h) => h.market_value),
+    unrealized_pnl: summed(legs, (h) => h.unrealized_pnl),
+  };
+}
+
+/** An expiry's rows (the owner, 2026-11-24): its contracts in each currency as ONE combined row, and
+ *  a contract alone on its expiry as itself. Contracts IBKR sent with no expiry are each their own
+ *  row, since nothing says they share one. Different expiries are never combined: each is its own
+ *  call to this. */
+export function optionRows(e: OptionGroup["expiries"][number]): OptionRow[] {
+  if (e.expiry === null) return e.rows.map((holding) => ({ kind: "contract", holding }));
+  const byCurrency = new Map<string, AccountHolding[]>();
+  for (const h of e.rows) byCurrency.set(h.currency, [...(byCurrency.get(h.currency) ?? []), h]);
+  return [...byCurrency.values()].map((legs) =>
+    legs.length === 1 ? { kind: "contract", holding: legs[0]! } : combine(legs));
+}
+
+/** Holdings' value and P&L summed in the base currency, each converted at IBKR's rate as a weight
+ *  is (`valueInBase`), for a folded heading. Where a holding's currency has no rate, or the base is
+ *  unknown, nothing is summed and `without` says why; where a holding is missing a figure, that
+ *  total is null and the other still summed. A holding that carries no P&L (`OtherHolding`) has none
+ *  summed. */
+export interface InBase { value: number | null; pnl: number | null; without: string | null }
+
+export function totalInBase(
+  holdings: readonly { market_value: number | null; currency: string; unrealized_pnl?: number | null }[],
+  account: Account,
+): InBase {
+  if (account.base_currency === null) return { value: null, pnl: null, without: "no base currency" };
+  const unrated = [...new Set(holdings.map((h) => h.currency))]
+    .filter((c) => c !== account.base_currency && !(typeof account.exchange_rates[c] === "number"
+      && Number.isFinite(account.exchange_rates[c])))
+    .sort();
+  if (unrated.length > 0) return { value: null, pnl: null, without: `no rate for ${unrated.join(", ")}` };
+  const total = (figure: (h: (typeof holdings)[number]) => number | null | undefined): number | null => {
+    let sum = 0;
+    for (const h of holdings) {
+      const n = figure(h);
+      if (n === null || n === undefined) return null;
+      sum += valueInBase({ market_value: n, currency: h.currency }, account)!;
+    }
+    return sum;
+  };
+  return { value: total((h) => h.market_value), pnl: total((h) => h.unrealized_pnl), without: null };
+}
+
 /** A stock's share of net liquidation, by its value in the base currency (`valueInBase`), which net
  *  liquidation is in: none where that value is unknown, or net liquidation is unknown or zero.
  *  Signed: a short weighs negative. */
@@ -125,6 +235,13 @@ export function quantityText(n: number | null, privacy = false): string {
   if (n === null || !Number.isFinite(n)) return DASH;
   const sign = n > 0 ? "+" : n < 0 ? MINUS : "";
   return `${sign}${privacy ? "•••" : COUNT.format(Math.abs(n))}`;
+}
+
+/** A combined row's units, unsigned — each leg carries its own sign — `2`, and under `privacy`
+ *  hidden as a holding's count is, `•••`. */
+export function unitsText(n: number | null, privacy = false): string {
+  if (n === null || !Number.isFinite(n)) return DASH;
+  return privacy ? "•••" : COUNT.format(n);
 }
 
 /** A share as a percentage to a tenth: `7.2%`, and `+20.0%` where `signed`. */

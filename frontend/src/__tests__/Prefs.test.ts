@@ -10,12 +10,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  readArrangement, readEntryStyle, readHidden, readPriceMap, readPrivacy, readRefresh, readUp,
-  writeArrangement, writeEntryStyle, writeFolded, writeHidden, writePriceMap, writePrivacy, writeRefresh, writeUp,
+  readAccountFolded, readArrangement, readEntryStyle, readHidden, readPriceMap, readPrivacy, readRefresh, readUp,
+  writeAccountFolded, writeArrangement, writeEntryStyle, writeFolded, writeHidden, writePriceMap, writePrivacy,
+  writeRefresh, writeUp,
 } from "../shared/prefs";
 
 const NAMES = [
   "ui_cols_combo", "ui_refresh", "ui_up", "ui_entry", "ui_privacy", "ui_arrangement", "ui_price_map", "ui_folded",
+  "ui_account_folded",
 ];
 const clear = () => { for (const n of NAMES) document.cookie = `${n}=;path=/`; };
 afterEach(clear);
@@ -60,6 +62,7 @@ describe("every preference is written to outlive the tab", () => {
     ["the arrangement", () => writeArrangement("phone")],
     ["the price map", () => writePriceMap(true)],
     ["the folded expiry groups", () => writeFolded(new Set(["spreads:20261218"]))],
+    ["the account page's folds", () => writeAccountFolded(new Set(["stocks", "options:SPX"]))],
   ];
 
   for (const [what, write] of writes) {
@@ -74,6 +77,35 @@ describe("every preference is written to outlive the tab", () => {
       expect(set).toContain("samesite=lax");
     });
   }
+});
+
+/** The account page's folds (the owner, 2026-11-24): its three sections and each underlying inside
+ *  Options, by name. An underlying is IBKR's symbol, which may carry a space or a dot, so the
+ *  cookie is written encoded and read tolerantly: anything that is not one of those is dropped. */
+describe("the account page's folds", () => {
+  it("round-trip the sections and the underlyings, a symbol's space and dot included", () => {
+    writeAccountFolded(new Set(["stocks", "other", "options", "options:SPX", "options:AB C.D"]));
+    expect([...readAccountFolded()].sort()).toEqual(["options", "options:AB C.D", "options:SPX", "other", "stocks"]);
+    // nothing in the stored value that a cookie may not carry
+    const raw = document.cookie.split("; ").find((c) => c.startsWith("ui_account_folded="))!;
+    expect(raw).not.toMatch(/[ ,;"\\]/);
+  });
+
+  it("drop what is neither a section nor an underlying under Options, on reading and on writing", () => {
+    document.cookie = "ui_account_folded=stocks,bogus,options:,spreads:20261218,options:SPX,Stocks;path=/";
+    expect([...readAccountFolded()].sort()).toEqual(["options:SPX", "stocks"]);
+    writeAccountFolded(new Set(["other", "nonsense", "options:  "]));
+    expect([...readAccountFolded()]).toEqual(["other"]);
+  });
+
+  it("read a hand-edited cookie with a stray % without throwing", () => {
+    document.cookie = "ui_account_folded=stocks,%zz;path=/";
+    expect([...readAccountFolded()]).toEqual(["stocks"]);
+  });
+
+  it("read nothing folded from no cookie", () => {
+    expect(readAccountFolded().size).toBe(0);
+  });
 });
 
 /** The cadence had no test of its own while it sat in `App.tsx`: it was private to that module,
