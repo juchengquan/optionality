@@ -150,6 +150,26 @@ describe("the conversations", () => {
       .toThrow(/step 3, and the watches take 2/);
   });
 
+  it("reads steps sent BEFORE a watch's start, the last ending with its download end", () => {
+    // review round 1 of #479: so a P&L that arrives before the download ends can be in the corpus
+    const file = () => JSON.parse(readFileSync(join(RECORDINGS, "watch-pnl-before-download-end.json"),
+      "utf8")) as { watches: Record<string, unknown>[];
+      exchanges: { request: string; later?: { step: number; replies: string[][] }[] }[] };
+    expect(parseConversation("watch-pnl-before-download-end", file()).watches)
+      .toEqual([{ wanted: null, before: 1, steps: 1, end: "stop" }]);
+    for (const before of [0, -1, 1.5]) {
+      const bad = file();
+      bad.watches[0]!.before = before;
+      expect(() => parseConversation("watch-pnl-before-download-end", bad), String(before))
+        .toThrow(/watches\[0\]\.before must be/);
+    }
+    // the step it starts at ends with the download end, not with the P&L
+    const noEnd = file();
+    noEnd.exchanges.find((e) => e.request === "reqAccountUpdates")!.later = [];
+    expect(() => parseConversation("watch-pnl-before-download-end", noEnd))
+      .toThrow(/step 1 must end with the download end a watch starts on/);
+  });
+
   it("keeps every field as the text the wire carried, never a number", () => {
     // "4.10" and 4.1 are different bytes, and so are "2.1E-4" and 0.00021. A recording that let
     // JSON reformat a field would replay something the gateway never sent.
@@ -261,9 +281,9 @@ describe("a constructed account that adds up", () => {
   };
 
   it("has the account conversations to check", () => {
-    // the five the account reads hold, and the six the watches do (ADR 0031)
+    // the five the account reads hold, and the seven the watches do (ADR 0031)
     expect(accountExchanges().filter(({ e }) => ledger(e.replies, "CashBalance").has("BASE")))
-      .toHaveLength(11);
+      .toHaveLength(12);
   });
 
   it("states each BASE figure as the currencies' at their rates", () => {

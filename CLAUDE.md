@@ -188,8 +188,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   deleted once read — and replay
   `accountReads` beside the asks, and since ADR 0031 `watches`: a watch is replayed STEP BY STEP,
   an exchange's `later` replies sent at a numbered step (`fake.ts`' `step`), a picture recorded
-  after each, and each step ending with the account's P&L, so the replay knows the client has read
-  it once the client's clock — a counter, read once per P&L message — has been read once for every
+  after each, and each step ending with the account's P&L (or, for a watch's `before` steps sent
+  while its start waits, the last with the download end, the start resolving), so the replay knows
+  the client has read it once the client's clock — a counter, read once per P&L message — has been read once for every
   P&L the stub wrote: a condition, not a timer, and `pnl_at` in `expected/` a count, never a wall
   time. `expected/*.json` is generated: what `ibkr/client.ts` returns or throws for each,
   replayed through the fake by `ibkr/replay.ts`, every reply at once. `make check-cases` and

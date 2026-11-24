@@ -761,6 +761,8 @@ describe("the account watch (ADR 0031)", () => {
       account: "U•••••000", paper: false, base_currency: "USD", updated_at: "14:32",
       totals: { net_liquidation: 67431.55, total_cash: 53510.55 }, pnl: null, pnl_at: null,
     });
+    // the call the download carries at a position of zero, closed today, is left out (review round
+    // 1 of #479): a holding at zero leaves the picture, at the first download as at any update
     expect(first.holdings.map((h) => [h.symbol, h.sec_type, h.market_value, h.daily_pnl]))
       .toEqual([["ACME", "STK", 12381, null], ["ACME", "OPT", 1540, null]]);
     expect(watch.lost).toBeNull();
@@ -781,7 +783,7 @@ describe("the account watch (ADR 0031)", () => {
     const watch = await c.watchAccount();
     await step(1);
     expect(watch.picture()).toMatchObject({
-      pnl: { daily_pnl: 152.4, unrealized_pnl: 1436.5, realized_pnl: 0 }, pnl_at: 1,
+      pnl: { daily_pnl: 152.4, unrealized_pnl: 1436.5, realized_pnl: 120 }, pnl_at: 1,
       // the totals stay the account updates': IBKR pushes those on its own clock
       totals: { net_liquidation: 67431.55, unrealized_pnl: 1436.5 },
     });
@@ -970,6 +972,34 @@ describe("the account watch (ADR 0031)", () => {
     expect(read.holdings[0]).not.toHaveProperty("daily_pnl");
     expect(read.holdings[0]).toMatchObject({ market_value: 12381 });
     expect(read.totals).toEqual(watch.picture().totals);
+  });
+
+  it("holds a bounded read begun during a watch's start until the start, and sends nothing of its own", async () => {
+    // review round 1 of #479: answered before the download ended, it would be an empty account
+    const c = await watching("watch-started-and-stopped");
+    const [watch, read] = await Promise.all([c.watchAccount(), c.account()]);
+    expect(read.holdings.map((h) => h.symbol)).toEqual(["ACME", "ACME"]);
+    expect(read.totals).toEqual(watch.picture().totals);
+    expect(watchMessages(gateway!).filter((f) => f[0] === "6")).toEqual([["6", "2", "1", "U0000000"]]);
+  });
+
+  it("logs a lost listener that throws, and still tells the others", async () => {
+    const errors: string[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.map(String).join(" "));
+    });
+    try {
+      const c = await watching("watch-lost");
+      const watch = await c.watchAccount();
+      const told: string[] = [];
+      watch.onLost(() => { throw new Error("a listener's own fault"); });
+      watch.onLost((err) => told.push(err.message));
+      c.close();
+      expect(told).toEqual(["IB Gateway's connection closed under the account watch"]);
+      expect(errors).toEqual([expect.stringContaining("a listener's own fault")]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("refuses a second watch, and a bounded read of another account, while one is held", async () => {

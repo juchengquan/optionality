@@ -52,6 +52,7 @@ client read, which is why `ib_async` could not decode it.
 | `watch-lost` | constructed | a watch of a stock, its P&L at step 1, then the connection dropped: lost, its picture kept, and a stop after it sends nothing |
 | `watch-unset-figures` | constructed | a watch whose streams send `Double.MAX_VALUE` (IB's unset) at step 1 and empty fields at step 2: each no figure, a holding's unset figures keeping the account update's |
 | `watch-several` | constructed | two managed accounts: a watch naming neither refused, one naming an account not on the login refused, one naming the second held for a step and stopped |
+| `watch-pnl-before-download-end` | constructed | a watch whose download does not end at once: the account's P&L at step 1, sent while the start still waits, then the download end, so the picture it starts on carries the P&L; the stock's stream and the P&L at step 2; then stopped |
 | `watch-never-ends` | constructed | a watch whose download never ends: failed at the read's deadline, in its words, the P&L cancelled and the account unsubscribed on the way out |
 
 The account and watch conversations are CONSTRUCTED, and every one always will be: the repository
@@ -143,9 +144,13 @@ as a 4-byte big-endian integer.
   the file's text.
 - `watches` (optional, ADR 0031) is account watches, made in turn by the SAME client after the reads,
   each naming the account it `wanted` or `null`, how many `steps` it is held through, and how it
-  `end`s: `"stop"`, the caller stops it, or `"drop"`, the stub drops every connection under it. The
-  steps are numbered in turn across the watches: the first's are 1 to its `steps`, the next's
-  after. Its exchanges are `"request": "reqPnL"`, with the `account` it names (`sent`
+  `end`s: `"stop"`, the caller stops it, or `"drop"`, the stub drops every connection under it.
+  `before` (optional) is how many steps go while its START is still waiting for the download to end:
+  the last of them must end with that download end (`54`, from the account exchange's `later`), and
+  whatever comes ahead of it in that step — the account's P&L — is in the picture the watch starts
+  on (`watch-pnl-before-download-end`); the start resolving is how a replay knows that step has been
+  read. The steps are numbered in turn across the watches, each watch's `before` steps first: the
+  first's are 1 to its `before` plus `steps`, the next's after. Its exchanges are `"request": "reqPnL"`, with the `account` it names (`sent`
   `["92", "$reqId", <account>, ""]`), and `"request": "reqPnLSingle"`, with the `account` and the
   holding's `conId` (`sent` `["94", "$reqId", <account>, "", <conId>]`); `$reqId` in their replies is
   the request's own id, which their answers carry at field 1. Their `replies` are EMPTY: a stream's
@@ -156,7 +161,8 @@ as a 4-byte big-endian integer.
   connection holds the request then, with its id (rule 8). An account exchange's are the updates
   pushed while the subscription stands — a portfolio row as a holding trades, the update time with
   it. Every step must END with the account's P&L: of the exchanges with replies at that step, the
-  last is a `reqPnL` one and its last reply is a PNL message (`94`). That is how a replay knows the
+  last is a `reqPnL` one and its last reply is a PNL message (`94`) — except the step a watch's
+  download ends at (its last `before` step), which ends with that download end instead. That is how a replay knows the
   client has read the step (see "What an expectation says"), and `recordings.ts` refuses a file
   that breaks it, or that sends at a step no watch takes.
 - `later` (optional, at the top level) is further asks, each a list of codes, made in turn by the SAME client after

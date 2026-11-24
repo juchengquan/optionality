@@ -1,6 +1,6 @@
 {
   "conversation": "watch-started-and-stopped",
-  "summary": "A watch of one account holding a stock and a call: the download, then the account's P&L and each holding's at the first step, the stock's and the account's again at the second (a holding's stream speaks only when its figures change); then stopped: each holding's stream cancelled, the account's P&L cancelled, the account updates unsubscribed, and error 2100 after the unsubscribe.",
+  "summary": "A watch of one account holding a stock and a call, its download also carrying a call closed today at a position of zero, which is left out of the picture and never followed: the download, then the account's P&L and each holding's at the first step, the stock's and the account's again at the second (a holding's stream speaks only when its figures change); then stopped: each holding's stream cancelled, the account's P&L cancelled, the account updates unsubscribed, and error 2100 after the unsubscribe.",
   "provenance": {
     "kind": "constructed",
     "why": "Nothing of the owner's account may be committed (the repository is public), so no account conversation is ever captured into it (ADR 0030, ADR 0031).",
@@ -43,15 +43,17 @@
         ["6", "2", "$LEDGER-ExchangeRate", "1.00", "BASE", "U0000000"],
         ["6", "2", "$LEDGER-NetLiquidationByCurrency", "67431.55", "BASE", "U0000000"],
         ["6", "2", "$LEDGER-UnrealizedPnL", "1436.50", "BASE", "U0000000"],
-        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "BASE", "U0000000"],
+        ["6", "2", "$LEDGER-RealizedPnL", "120.00", "BASE", "U0000000"],
         ["6", "2", "$LEDGER-Currency", "USD", "USD", "U0000000"],
         ["6", "2", "$LEDGER-CashBalance", "53510.55", "USD", "U0000000"],
         ["6", "2", "$LEDGER-ExchangeRate", "1.00", "USD", "U0000000"],
         ["6", "2", "$LEDGER-NetLiquidationByCurrency", "67431.55", "USD", "U0000000"],
         ["6", "2", "$LEDGER-UnrealizedPnL", "1436.50", "USD", "U0000000"],
-        ["6", "2", "$LEDGER-RealizedPnL", "0.00", "USD", "U0000000"],
+        ["6", "2", "$LEDGER-RealizedPnL", "120.00", "USD", "U0000000"],
         ["8", "1", "14:32"],
         ["7", "8", "100000101", "ACME", "STK", "", "0", "0", "", "NASDAQ", "USD", "ACME", "NMS", "300", "41.27", "12381.00", "38.115", "946.50", "0.0", "U0000000"],
+        ["8", "1", "14:32"],
+        ["7", "8", "100000203", "ACME", "OPT", "20261218", "50", "C", "100", "SMART", "USD", "ACME  261218C00050000", "ACME", "0", "2.10", "0.00", "0.0", "0.00", "120.00", "U0000000"],
         ["8", "1", "14:32"],
         ["7", "8", "100000201", "ACME", "OPT", "20261218", "45", "C", "100", "SMART", "USD", "ACME  261218C00045000", "ACME", "4", "3.85", "1540.00", "262.5", "490.00", "0.0", "U0000000"],
         ["8", "1", "14:32"],
@@ -110,13 +112,13 @@
         {
           "step": 1,
           "replies": [
-            ["94", "$reqId", "152.40", "1436.50", "0.00"]
+            ["94", "$reqId", "152.40", "1436.50", "120.00"]
           ]
         },
         {
           "step": 2,
           "replies": [
-            ["94", "$reqId", "167.40", "1451.50", "0.00"]
+            ["94", "$reqId", "167.40", "1451.50", "120.00"]
           ]
         }
       ]

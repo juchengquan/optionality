@@ -27,7 +27,9 @@ parametrization over an empty directory passes by collecting nothing.
 As `replay.ts` replays one: start it, take its picture, and at each step tell the stub to send that
 step's replies and wait until the client has READ them — the client's clock is a counter read once
 per P&L message, and every step ends with the account's P&L, so the step has been read when the
-clock has been read once for every P&L the stub wrote. A condition, not a timer.
+clock has been read once for every P&L the stub wrote. A condition, not a timer. A watch's `before`
+steps go while its start is still waiting, the last carrying the download end, so the start resolving
+is that step's sign.
 """
 
 import asyncio
@@ -41,7 +43,7 @@ from test_cases import same
 from optionality.ibkr import IbkrAccountRefused, IbkrAccountWatch, IbkrClient
 
 #: the conversations there were when this was written; more is fine, fewer is a directory gone
-FLOOR = 22
+FLOOR = 23
 #: the messages a watch sends: reqAccountUpdates, reqPnL, cancelPnL, reqPnLSingle, cancelPnLSingle
 WATCH_MESSAGES = {"6", "92", "93", "94", "95"}
 #: a replay that takes longer than this has hung, whatever its waits are configured to
@@ -94,7 +96,14 @@ async def until(done: Any) -> None:
 
 
 async def watched(
-    client: IbkrClient, gateway: Any, clock: list[int], wanted: str | None, steps: int, first: int, end: str
+    client: IbkrClient,
+    gateway: Any,
+    clock: list[int],
+    wanted: str | None,
+    ahead: int,
+    steps: int,
+    first: int,
+    end: str,
 ) -> dict[str, Any]:
     """One watch in the expectation's terms, replayed as `replay.ts`' `watched` replays it."""
     before = len(gateway.received)
@@ -102,9 +111,16 @@ async def watched(
     def sent() -> list[list[str]]:
         return [f for f in gateway.received[before:] if f[0] in WATCH_MESSAGES]
 
+    starting = asyncio.ensure_future(client.watch_account(wanted))
+    for n in range(first, first + ahead):
+        await gateway.step(n)
+        # every step but the one the download ends at ends with a P&L; that one, with the start
+        if n < first + ahead - 1:
+            await until(lambda: clock[0] >= sum(1 for m in gateway.written if m[0] == "94"))
+    first += ahead
     watch: IbkrAccountWatch
     try:
-        watch = await client.watch_account(wanted)
+        watch = await starting
     except IbkrAccountRefused as err:
         await unsubscribed(gateway)
         return {"wanted": wanted, "start": {"$refused": str(err)}, "sent": sent()}
@@ -170,10 +186,11 @@ async def replay(name: str) -> dict[str, Any]:
             result["watches"] = []
             first = 1
             for spec in conversation["watches"]:
+                ahead = spec.get("before", 0)
                 result["watches"].append(
-                    await watched(client, gateway, clock, spec["wanted"], spec["steps"], first, spec["end"])
+                    await watched(client, gateway, clock, spec["wanted"], ahead, spec["steps"], first, spec["end"])
                 )
-                first += spec["steps"]
+                first += ahead + spec["steps"]
         result["sent"] = sorted({fields[0] for fields in gateway.received})
         return result
     finally:

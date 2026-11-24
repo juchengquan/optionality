@@ -1236,6 +1236,18 @@ class _AccountWatch:
         self.client.cancelPnL(self._pnl_id)
         self.client.reqAccountUpdates(False, self.account)
 
+    async def abandon(self) -> None:
+        """The caller gave up on the start: fail it, cancelling and unsubscribing, if it is still
+        running; stop the watch if it already resolved."""
+        if not self.ready.done():
+            self._end()
+            if self.client.isReady():
+                self.client.cancelPnL(self._pnl_id)
+                self.client.reqAccountUpdates(False, self.account)
+            self.ready.cancel()
+        else:
+            await self.stop()
+
     # --- what the client calls ---
 
     def answer(self) -> IbkrAccount:
@@ -1526,7 +1538,15 @@ class IbkrClient:
             watch = _AccountWatch(self, client, choice["account"])
             self._watching = watch
             watch.begin()
-            return await asyncio.shield(watch.ready)
+            try:
+                return await asyncio.shield(watch.ready)
+            except asyncio.CancelledError:
+                # the caller gave up (review round 1 of #479): a start left running would hold the
+                # one subscription for nobody, and refuse every later watch. Abandoned, it cancels and
+                # unsubscribes as a start that fails at its deadline does — or, if it had already
+                # resolved, the watch nobody will hold is stopped
+                await watch.abandon()
+                raise
 
     def _read_account(self, client: "Client", account: str) -> _AccountRead:
         """Subscribe, collect until the download's end, unsubscribe, answer — or fail at the

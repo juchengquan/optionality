@@ -221,7 +221,7 @@ describe("replaying a recording", () => {
     // asked for, so its step-1 figures go nowhere
     expect(seen.filter((m) => m.kind === "pnl" || m.kind === "pnlSingle")
       .map((m) => [m.kind, "reqId" in m ? m.reqId : null])).toEqual([["pnlSingle", 12], ["pnl", 11]]);
-    expect(gateway!.written.at(-1)).toEqual(["94", "11", "152.40", "1436.50", "0.00"]);
+    expect(gateway!.written.at(-1)).toEqual(["94", "11", "152.40", "1436.50", "120.00"]);
   });
 
   it("sends a stream's later figures no more once it is cancelled", async () => {

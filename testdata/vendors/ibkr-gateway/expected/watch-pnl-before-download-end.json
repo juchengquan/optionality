@@ -1,0 +1,177 @@
+{
+  "conversation": "watch-pnl-before-download-end",
+  "provenance": "constructed",
+  "client": "typescript/src/vendors/ibkr/client.ts",
+  "config": {
+    "clientId": 31419,
+    "connectTimeoutMs": 1000,
+    "requestTimeoutMs": 1000,
+    "quietMs": 250
+  },
+  "ask": [],
+  "expect": {
+    "records": [],
+    "unknown": []
+  },
+  "watches": [
+    {
+      "wanted": null,
+      "start": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "09:45",
+        "totals": {
+          "net_liquidation": 73611.55,
+          "total_cash": 61230.55,
+          "unrealized_pnl": 946.5,
+          "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": [
+          {
+            "sec_type": "STK",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": null,
+            "strike": null,
+            "right": null,
+            "multiplier": null,
+            "position": 300,
+            "market_price": 41.27,
+            "market_value": 12381,
+            "average_cost": 38.115,
+            "unrealized_pnl": 946.5,
+            "realized_pnl": 0,
+            "daily_pnl": null
+          }
+        ],
+        "pnl": {
+          "daily_pnl": 15,
+          "unrealized_pnl": 946.5,
+          "realized_pnl": 0
+        },
+        "pnl_at": 1
+      },
+      "steps": [
+        {
+          "account": "U•••••000",
+          "paper": false,
+          "base_currency": "USD",
+          "updated_at": "09:45",
+          "totals": {
+            "net_liquidation": 73611.55,
+            "total_cash": 61230.55,
+            "unrealized_pnl": 946.5,
+            "realized_pnl": 0
+          },
+          "exchange_rates": {
+            "USD": 1
+          },
+          "holdings": [
+            {
+              "sec_type": "STK",
+              "symbol": "ACME",
+              "currency": "USD",
+              "expiry": null,
+              "strike": null,
+              "right": null,
+              "multiplier": null,
+              "position": 300,
+              "market_price": 41.3,
+              "market_value": 12390,
+              "average_cost": 38.115,
+              "unrealized_pnl": 955.5,
+              "realized_pnl": 0,
+              "daily_pnl": 24
+            }
+          ],
+          "pnl": {
+            "daily_pnl": 24,
+            "unrealized_pnl": 955.5,
+            "realized_pnl": 0
+          },
+          "pnl_at": 2
+        }
+      ],
+      "end": "stop",
+      "lost": null,
+      "last": {
+        "account": "U•••••000",
+        "paper": false,
+        "base_currency": "USD",
+        "updated_at": "09:45",
+        "totals": {
+          "net_liquidation": 73611.55,
+          "total_cash": 61230.55,
+          "unrealized_pnl": 946.5,
+          "realized_pnl": 0
+        },
+        "exchange_rates": {
+          "USD": 1
+        },
+        "holdings": [
+          {
+            "sec_type": "STK",
+            "symbol": "ACME",
+            "currency": "USD",
+            "expiry": null,
+            "strike": null,
+            "right": null,
+            "multiplier": null,
+            "position": 300,
+            "market_price": 41.3,
+            "market_value": 12390,
+            "average_cost": 38.115,
+            "unrealized_pnl": 955.5,
+            "realized_pnl": 0,
+            "daily_pnl": 24
+          }
+        ],
+        "pnl": {
+          "daily_pnl": 24,
+          "unrealized_pnl": 955.5,
+          "realized_pnl": 0
+        },
+        "pnl_at": 2
+      },
+      "sent": [
+        [
+          "6",
+          "2",
+          "1",
+          "U0000000"
+        ],
+        [
+          "92",
+          "1",
+          "U0000000",
+          ""
+        ],
+        [
+          "94",
+          "2",
+          "U0000000",
+          "",
+          "100000101"
+        ],
+        [
+          "95",
+          "2"
+        ],
+        [
+          "93",
+          "1"
+        ],
+        [
+          "6",
+          "2",
+          "0",
+          "U0000000"
+        ]
+      ]
+    }
+  ]
+}

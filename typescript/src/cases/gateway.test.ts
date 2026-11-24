@@ -124,6 +124,9 @@ describe("testdata/vendors/ibkr-gateway/expected/", () => {
     // refused as the read refuses, sending nothing; and failed at the read's deadline
     expect(watchesOf("watch-several").map((w) => Object.keys(w.start)[0])).toEqual(
       ["$refused", "$refused", "account"]);
+    // a P&L that comes before the download ends is in the picture the watch starts on
+    const [early] = watchesOf("watch-pnl-before-download-end");
+    expect(early!.start).toMatchObject({ pnl: { daily_pnl: 15 }, pnl_at: 1 });
     const [never] = watchesOf("watch-never-ends");
     expect(never!.start).toEqual({ $throws: expect.stringMatching(/did not finish sending/) });
     expect(never!.sent.map((f) => f[0])).toEqual(["6", "92", "93", "6"]);

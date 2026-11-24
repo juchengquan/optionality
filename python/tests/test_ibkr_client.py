@@ -1266,7 +1266,7 @@ def test_a_watch_hands_out_a_copy_the_caller_may_keep_and_change() -> None:
 
     assert watching("watch-started-and-stopped", test) == (
         12381,
-        {"daily_pnl": 152.4, "unrealized_pnl": 1436.5, "realized_pnl": 0},
+        {"daily_pnl": 152.4, "unrealized_pnl": 1436.5, "realized_pnl": 120},
         67431.55,
     )
 
@@ -1457,3 +1457,67 @@ def test_no_account_id_is_written_in_full_by_a_watch(
     said += [record.getMessage() for record in caplog.records] + [out.out, out.err]
     for account in ("DU0000000", "DU0000001", "U0000000", "U0000001"):
         assert [line for line in said if account in line] == [], account
+
+
+def test_a_watch_whose_caller_gives_up_during_the_start_unsubscribes_and_leaves_room_for_the_next() -> None:
+    """Review round 1 of #479: a caller cancelled during the start (`wait_for`, an HTTP handler whose
+    client went away) left the start running for nobody — it succeeded, held the one subscription,
+    and refused every later watch until the connection dropped. Given up on, the start cancels the
+    account's P&L and unsubscribes, and the next watch starts."""
+    conversation = copy.deepcopy(load_conversation("watch-started-and-stopped"))
+    for exchange in conversation["exchanges"]:
+        if exchange["request"] == "reqAccountUpdates":
+            exchange["atMs"] = [300] * len(exchange["replies"])
+
+    async def run() -> Any:
+        gateway = await start_fake_gateway(conversation, pace=1.0)
+        client = IbkrClient(port=gateway.port, client_id=31419, connect_timeout_ms=1000, request_timeout_ms=3000)
+        try:
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(client.watch_account(), 0.1)
+            await waited(lambda: any(f[0] == "6" and f[2] == "0" for f in gateway.received))
+            given_up = watch_messages(gateway)
+            # the next start is not refused as "already holds a watch", and gets its picture
+            watch = await client.watch_account()
+            return given_up, watch.picture()["account"]
+        finally:
+            client.close()
+            await gateway.close()
+
+    assert asyncio.run(run()) == (
+        [["6", "2", "1", "U0000000"], ["92", "1", "U0000000", ""], ["93", "1"], ["6", "2", "0", "U0000000"]],
+        "U•••••000",
+    )
+
+
+def test_a_bounded_read_begun_during_a_watchs_start_waits_for_it_and_sends_nothing_of_its_own() -> None:
+    """Review round 1 of #479: answered before the download ended, it would be an empty account."""
+
+    async def test(client: IbkrClient, gateway: FakeGateway, _: Any) -> Any:
+        watch, read = await asyncio.gather(client.watch_account(), client.account())
+        return (
+            [h["symbol"] for h in read["holdings"]],
+            read["totals"] == watch.picture()["totals"],
+            [f for f in watch_messages(gateway) if f[0] == "6"],
+        )
+
+    assert watching("watch-started-and-stopped", test) == (["ACME", "ACME"], True, [["6", "2", "1", "U0000000"]])
+
+
+def test_a_lost_listener_that_raises_is_logged_and_the_others_are_still_told(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.ERROR, logger="optionality")
+
+    def raises(_: ConnectionError) -> None:
+        raise ValueError("a listener's own fault")
+
+    async def test(client: IbkrClient, _: FakeGateway, __: Any) -> Any:
+        watch = await client.watch_account()
+        told: list[str] = []
+        watch.on_lost(raises)
+        watch.on_lost(lambda err: told.append(str(err)))
+        client.close()
+        return told
+
+    assert watching("watch-lost", test) == [LOST]
+    (record,) = [r for r in caplog.records if r.name == "optionality.ibkr"]
+    assert record.exc_info is not None and str(record.exc_info[1]) == "a listener's own fault"
