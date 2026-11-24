@@ -226,6 +226,11 @@ describe("provenance, which is the point of the files", () => {
         .map((e) => ({ ...e, later: undefined })) };
     expect(() => parseConversation("watch-lost", pnlOnly))
       .toThrow(/reads the account, so it must be constructed/);
+    // and a watch alone, with no exchange that touches the account to give it away
+    const watchOnly = { ...watch, provenance: recorded, exchanges: [],
+      watches: [{ wanted: null, steps: 0, end: "stop" }] };
+    expect(() => parseConversation("watch-lost", watchOnly))
+      .toThrow(/reads the account, so it must be constructed/);
   });
 
   it("refuses a file that does not say which it is", () => {
