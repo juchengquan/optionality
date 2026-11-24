@@ -668,6 +668,25 @@ async def test_a_caller_giving_up_does_not_cancel_the_start_under_the_others() -
     assert len(s.asked) == 1
 
 
+async def test_the_only_caller_cancelled_during_the_start_leaves_the_start_running_for_the_next_read() -> None:
+    # a request given up — a client that disconnected, a timeout around the route — cancels its own wait,
+    # never the start: the watch it brings is held, and the next read is answered from it
+    s = Source(LIVE)
+    s.holding()
+    b, _, _ = book(s)
+    gone = asyncio.ensure_future(b.read())
+    await asyncio.sleep(0)
+    gone.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await gone
+    s.release()
+    await settle()
+    assert len(s.watches) == 1
+    assert (await b.read()).answer is not None
+    assert len(s.asked) == 1
+    assert s.watches[0].stopped == 0
+
+
 async def test_the_real_timer_is_the_loops_own() -> None:
     # no injected timer: the loop's `call_later`, cancelled with the hold
     s = Source(LIVE)

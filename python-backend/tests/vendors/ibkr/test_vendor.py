@@ -160,6 +160,24 @@ async def test_a_start_is_unreachable_in_the_connects_words_against_a_port_nothi
         client.close()
 
 
+async def test_a_second_watch_the_library_refuses_is_a_failure_and_the_routes_502_in_its_words():
+    # the library refuses a second watch with a plain RuntimeError, not IbkrAccountRefused: sorted as a
+    # start that failed, never a 500 (`account.py` says when the hold can meet it)
+    words = "this client already holds a watch of U•••••000; stop it first"
+    source = IbkrAccountSource(_Client(raises=RuntimeError(words)))
+    assert await source.watch(None) == AccountFailed(words)
+    book = AccountBook(
+        AccountDeps(
+            source=source,
+            wanted="",
+            now=lambda: datetime(2026, 11, 23, 15, tzinfo=UTC),
+            display_tz="",
+            wake=lambda _ms, _fn: lambda: None,
+        )
+    )
+    assert await book.read() == AccountResult(fault=AccountFault(502, words))
+
+
 def test_the_client_answering_tells_every_listener_and_a_listener_that_raises_is_logged(caplog):
     source = IbkrAccountSource(_Client())
     heard: list[str] = []

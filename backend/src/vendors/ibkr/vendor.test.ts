@@ -75,7 +75,7 @@ describe("a start, through the library's real client", () => {
       host: "127.0.0.1", port: gateway.port, clientId: 31419, connectTimeoutMs: 1000, requestTimeoutMs,
     });
     opened.push({ gateway, close: () => c.close() });
-    return { source: accountSource(c).source, gateway };
+    return { source: accountSource(c).source, gateway, client: c };
   }
   const book = (source: ReturnType<typeof accountSource>["source"]) => new AccountBook({
     source, wanted: "", now: () => new Date("2026-11-23T15:00:00.000Z"), displayTz: "", wake: () => () => {},
@@ -124,6 +124,19 @@ describe("a start, through the library's real client", () => {
     expect(await source.watch(null)).toEqual({
       refused: "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001",
     });
+  });
+
+  it("is a failure, and the route's 502 in the library's words, where the client already holds a watch", async () => {
+    // the library refuses a second watch with a plain Error, not IbkrAccountRefused: sorted as a
+    // start that failed, never a 500 (`account.ts` says when the hold can meet it)
+    const { source, client } = await against("watch-started-and-stopped");
+    const held = await client.watchAccount();
+    const words = "this client already holds a watch of U•••••000; stop it first";
+    expect(await source.watch(null)).toEqual({ failed: words });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await book(source).read()).toEqual({ fault: { status: 502, message: words } });
+    log.mockRestore();
+    await held.stop();
   });
 
   it("is the route's lost 502 once the real connection closes under a held watch", async () => {

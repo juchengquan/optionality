@@ -168,7 +168,19 @@ interface Hold {
   cancelWake: () => void;
 }
 
-/** One per app, so every caller — today the page alone — reads the one hold. */
+/** One per app, so every caller — today the page alone — reads the one hold.
+ *
+ *  The library refuses a SECOND watch on one client with a plain `Error` ("this client already holds
+ *  a watch of …; stop it first"), which the descriptor sorts as a start that `failed`: a 502 in the
+ *  library's words, remembered like any failed start — never a 500. The hold almost never meets it,
+ *  because it never starts a watch while the library holds one: a release stops its watch first, and
+ *  a stop forgets the watch at once, before anything is sent; a watch again starts only once the
+ *  held watch is lost, which the library has forgotten too. The one window is a release while a
+ *  start is still in flight (the timer, or the client answering, at the 90 s), followed at once by a
+ *  read: that read's start is refused as above, and the start in flight, when it ends, finds the hold
+ *  gone and is stopped. The library's other plain refusal — the account read finding a watch of
+ *  another account — cannot reach here: the service reads the account only through the watch, and
+ *  `IBKR_ACCOUNT` is fixed for the life of the process. */
 export class AccountBook {
   private readonly deps: AccountDeps;
   private hold: Hold | null = null;

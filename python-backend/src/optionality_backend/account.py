@@ -207,7 +207,23 @@ def _eager[T](coro: Coroutine[Any, Any, T]) -> "asyncio.Task[T]":
 
 @dataclass
 class AccountBook:
-    """One per app, so every caller — today the page alone — reads the one hold."""
+    """One per app, so every caller — today the page alone — reads the one hold.
+
+    The library refuses a SECOND watch on one client with a plain `RuntimeError` ("this client already
+    holds a watch of …; stop it first"), which the descriptor sorts as a start that failed: a 502 in the
+    library's words, remembered like any failed start — never a 500. The hold almost never meets it,
+    because it never starts a watch while the library holds one: a release stops its watch first, and a
+    stop forgets the watch at once, before anything is sent (the stop's task is eager); a watch again
+    starts only once the held watch is lost, which the library has forgotten too. The one window is a
+    release while a start is still in flight, followed at once by a read: that read's start is refused as
+    above, and the start in flight, when it ends, finds the hold gone and is stopped. The library's other
+    plain refusal — the account read finding a watch of another account — cannot reach here: the service
+    reads the account only through the watch, and `IBKR_ACCOUNT` is fixed for the life of the process.
+
+    Nothing a caller does cancels a start: the first is a task of the hold's own, awaited through
+    `asyncio.shield`, so a request given up — a client that disconnected, a timeout around the route —
+    leaves it running for the next read; a watch again and a stop are tasks of their own, awaited by no
+    caller. The hold has no deadline of its own around a start: the library's is the only one."""
 
     deps: AccountDeps
     _hold: _Hold | None = field(default=None)
