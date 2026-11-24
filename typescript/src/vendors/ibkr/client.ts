@@ -60,7 +60,7 @@
  */
 import { contractFor } from "./contract.ts";
 import {
-  type AccountValueRow, GREEK_TICKS, type IbkrAccount, type IbkrHolding,
+  type AccountValueRow, GREEK_TICKS, type IbkrAccount, type IbkrHolding, type IbkrLiveAccount,
   MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS, accountAnswer, chooseAccount, grade, greekFields,
   hasFigures, holdingFrom, managedAccounts, withMid,
 } from "./fields.ts";
@@ -73,7 +73,22 @@ import { TwsSocket, type TwsSocketConfig } from "./socket.ts";
 import type { Quote } from "../../domain/quote.ts";
 import type { QuoteBatch } from "../../quotes.ts";
 
-export type { IbkrAccount, IbkrHolding, IbkrTotals } from "./fields.ts";
+export type {
+  IbkrAccount, IbkrHolding, IbkrLiveAccount, IbkrLiveHolding, IbkrPnl, IbkrTotals,
+} from "./fields.ts";
+
+/** The account held while asked (ADR 0031): the subscriptions `watchAccount` started, and the
+ *  latest picture they make. */
+export interface IbkrAccountWatch {
+  /** the latest picture, a copy the caller may keep */
+  picture(): IbkrLiveAccount;
+  /** set, once, when the connection closes under the watch; the picture stays the last one */
+  readonly lost: Error | null;
+  /** called once, at once, when the connection closes under the watch — or now, if it has */
+  onLost(listener: (err: Error) => void): void;
+  /** the cancels, then the unsubscribe; idempotent; resolves when sent */
+  stop(): Promise<void>;
+}
 
 /** The account read could not reach IB Gateway at all: the connect failed, in its own words — a
  *  refused session ("IB Gateway refused the session: 326 …"), a refused connection ("could not
@@ -109,6 +124,10 @@ export interface IbkrConfig extends TwsSocketConfig {
    *  this number exists at all: the gateway's own end marker comes about eleven seconds late, so
    *  SOMETHING sooner has to say "that was all of them". Restarted by every new figure. */
   quietMs?: number;
+  /** The clock an account watch stamps reqPnL's figures with (`pnl_at`), in ms since the epoch.
+   *  Read once for each P&L message the watch reads, and nowhere else; a replay pins it, so the
+   *  corpus carries no wall time. */
+  now?: () => number;
 }
 
 /** A conid, once resolved. Kept for the life of the connection: a contract's identity does not
@@ -353,6 +372,15 @@ export class IbkrClient {
       // another account's read holds the one subscription: it finishes first, whatever it comes to
       await running.answer.catch(() => undefined);
     }
+  }
+
+  /** The account HELD while asked (ADR 0031): subscribe to its updates and its P&L and keep both,
+   *  and once the first download ends follow each holding's own P&L stream. Resolves with the
+   *  handle on the first complete picture, under the account read's deadline and refusals, in its
+   *  words (`IbkrAccountRefused`, `IbkrUnreachable`). */
+  async watchAccount(wanted?: string): Promise<IbkrAccountWatch> {
+    void wanted;
+    throw new Error("watchAccount is not built yet (#476)");
   }
 
   /** Subscribe, collect until the download's end, unsubscribe, answer — or fail at the deadline,

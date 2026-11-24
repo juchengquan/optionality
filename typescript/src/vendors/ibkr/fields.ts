@@ -176,6 +176,32 @@ export interface IbkrAccount {
   holdings: IbkrHolding[];
 }
 
+/** reqPnL's figures for the account, in the BASE currency; null where IB sent it unset (ADR 0031). */
+export interface IbkrPnl {
+  daily_pnl: number | null;
+  unrealized_pnl: number | null;
+  realized_pnl: number | null;
+}
+
+/** A holding as the account watch holds it (ADR 0031): `IbkrHolding`, where `market_value`,
+ *  `unrealized_pnl` and `market_price` (value / (position × multiplier)) are the holding's own P&L
+ *  stream's once it has spoken for it — in the holding's own currency, as the account read's are —
+ *  and the rest the account updates'. */
+export interface IbkrLiveHolding extends IbkrHolding {
+  /** the stream's daily P&L, in the holding's currency; null before it speaks, or where unset */
+  daily_pnl: number | null;
+}
+
+/** The account as the watch holds it: the account read's answer, its holdings live, and the
+ *  account's P&L apart from the totals, which stay the account updates' (ADR 0031). */
+export interface IbkrLiveAccount extends Omit<IbkrAccount, "holdings"> {
+  holdings: IbkrLiveHolding[];
+  /** reqPnL's last figures; null before it first speaks */
+  pnl: IbkrPnl | null;
+  /** when reqPnL last spoke, ms since the epoch by the client's `now`; null before */
+  pnl_at: number | null;
+}
+
 /** The account's totals from ACCT_VALUE, in the base currency; null where the gateway sent none. */
 export interface IbkrTotals {
   /** NetLiquidation */
