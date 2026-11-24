@@ -1,5 +1,5 @@
 {
-  "name": "GET /account serves daily P&L, and a total IBKR sent unset from the account update",
+  "name": "GET /account takes a total IBKR sent unset from the account update and keeps a 0 it sent",
   "world": {
     "clock": "2026-11-09T15:00:00.000Z",
     "settings": {
@@ -38,11 +38,11 @@
           "net_liquidation": 184523.25,
           "total_cash": 61230.5,
           "unrealized_pnl": 2071.5,
-          "realized_pnl": null
+          "realized_pnl": -412.75
         },
         "pnl": {
-          "daily_pnl": 64.5,
-          "unrealized_pnl": null,
+          "daily_pnl": null,
+          "unrealized_pnl": 0,
           "realized_pnl": null
         },
         "pnl_at": 1794236397000,
@@ -119,9 +119,9 @@
         "totals": {
           "net_liquidation": 184523.25,
           "total_cash": 61230.5,
-          "unrealized_pnl": 2071.5,
-          "realized_pnl": null,
-          "daily_pnl": 64.5
+          "unrealized_pnl": 0,
+          "realized_pnl": -412.75,
+          "daily_pnl": null
         },
         "exchange_rates": {
           "USD": 1,

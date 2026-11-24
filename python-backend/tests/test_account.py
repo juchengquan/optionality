@@ -37,7 +37,7 @@ from optionality_backend.ports import (
 )
 
 #: The hold, stated rather than imported, so the number itself is held: 90 s, the owner's decision on
-#: #477 — the page's slowest refresh is a minute, so every refresh keeps it.
+#: #477 — sized for the page's refresh options as #478 sets them, a minute at the slowest.
 HELD_MS = 90_000
 #: How long a failed start is remembered, stated for the same reason: 5 s, the owner's decision on #477 —
 #: at most one try in that time while IB Gateway is down, whoever asks.
@@ -288,6 +288,32 @@ async def test_takes_a_total_the_stream_sent_unset_from_the_account_update_null_
         # the account updates carry no daily figure
         "daily_pnl": None,
     }
+
+
+async def test_keeps_a_total_the_stream_sent_as_0_never_the_account_updates() -> None:
+    zero = {**LIVE, "pnl": {"daily_pnl": 0, "unrealized_pnl": 0, "realized_pnl": 0}}
+    result = await book(Source(zero))[0].read()
+    assert result.answer is not None
+    assert result.answer["totals"] == {
+        "net_liquidation": 184523.17,
+        "total_cash": 61230.55,
+        "unrealized_pnl": 0,
+        "realized_pnl": 0,
+        "daily_pnl": 0,
+    }
+
+
+async def test_says_when_it_answered_read_at_is_the_answers_time_not_the_requests() -> None:
+    s = Source(LIVE)
+    s.holding()
+    b, clock, _ = book(s)
+    first = asyncio.ensure_future(b.read())
+    await asyncio.sleep(0)
+    clock.now = at(2500)
+    s.release()
+    result = await first
+    assert result.answer is not None
+    assert result.answer["read_at"] == "2026-11-23 23:00:02+08:00"
 
 
 async def test_answers_the_picture_as_it_stands_at_each_read() -> None:

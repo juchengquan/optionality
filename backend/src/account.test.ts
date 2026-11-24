@@ -12,7 +12,7 @@ import type {
 } from "./ports.ts";
 
 /** The hold, stated rather than imported, so the number itself is held: 90 s, the owner's decision
- *  on #477 — the page's slowest refresh is a minute, so every refresh keeps it. */
+ *  on #477 — sized for the page's refresh options as #478 sets them, a minute at the slowest. */
 const HELD_MS = 90_000;
 /** How long a failed start is remembered, stated for the same reason: 5 s, the owner's decision on
  *  #477 — at most one try in that time while IB Gateway is down, whoever asks. */
@@ -175,6 +175,23 @@ describe("the answer, from the watch's picture", () => {
       // the account updates carry no daily figure: null
       answer: { totals: { daily_pnl: null, unrealized_pnl: 2071.4, realized_pnl: null } },
     });
+  });
+
+  it("keeps a total the stream sent as 0, never the account update's", async () => {
+    const zero: IbkrLiveAccount = { ...LIVE, pnl: { daily_pnl: 0, unrealized_pnl: 0, realized_pnl: 0 } };
+    expect(await book(source(zero).source).book.read()).toMatchObject({
+      answer: { totals: { daily_pnl: 0, unrealized_pnl: 0, realized_pnl: 0 } },
+    });
+  });
+
+  it("says when it answered: read_at is the answer's time, not the request's", async () => {
+    const s = source(LIVE);
+    s.holding();
+    const { book: b, clock } = book(s.source);
+    const first = b.read();
+    clock.now = at(2500);
+    s.release();
+    expect(await first).toMatchObject({ answer: { read_at: "2026-11-23 23:00:02+08:00" } });
   });
 
   it("answers the picture as it stands at each read", async () => {

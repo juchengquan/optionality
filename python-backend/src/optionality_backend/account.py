@@ -59,8 +59,9 @@ from .schemas.zod import JS_WHITESPACE
 
 log = logging.getLogger(__name__)
 
-#: How long the account is held after the last read: 90 s, the owner's decision on #477 — the page's
-#: slowest refresh is a minute, so every refresh keeps it.
+#: How long the account is held after the last read: 90 s, the owner's decision on #477 — sized for the
+#: page's refresh options as #478 sets them, a minute at the slowest, so every refresh keeps it; a slower
+#: refresh (main's 3 min until #478 lands) starts a fresh watch on each refresh.
 ACCOUNT_HELD_FOR_MS = 90_000
 
 #: How long a start that failed is remembered, from when it came back: 5 s, the owner's decision on #477
@@ -389,8 +390,8 @@ class AccountBook:
         hold.cancel_wake = wake(ms, woke)
 
     def _release(self, hold: _Hold) -> None:
-        """Let it all go: the watch stopped, unless it was lost (the loss ended it already), and nothing kept. A start still in flight
-        finds the hold gone and stops what it brings."""
+        """Let it all go: the watch stopped, unless it was lost (the loss ended it already), and nothing
+        kept. A start still in flight finds the hold gone and stops what it brings."""
         self._drop(hold)
         if hold.watch is not None and hold.watch.lost is None:
             self._stop(hold.watch)

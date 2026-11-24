@@ -97,12 +97,10 @@ const NOT_YET_LIVE = {
   ],
 };
 
-/** An account whose streams have spoken with some figures IBKR marks unset, its account updates
- *  without a realised P&L. */
+/** An account whose streams have spoken with some figures IBKR marks unset and one of 0. */
 const UNSET_FIGURES = {
   ...WHOLE_ACCOUNT,
-  totals: { ...WHOLE_ACCOUNT.totals, realized_pnl: null },
-  pnl: { daily_pnl: 64.5, unrealized_pnl: null, realized_pnl: null },
+  pnl: { daily_pnl: null, unrealized_pnl: 0, realized_pnl: null },
   holdings: [
     ibkrHolding({ daily_pnl: 64.5 }),
     ibkrHolding({
@@ -3470,8 +3468,9 @@ export const HTTP: readonly HttpInput[] = [
     request: request("GET", "/account"),
   },
   {
-    // a total the stream sent unset is the account update's, null only where neither has one
-    name: "GET /account serves daily P&L, and a total IBKR sent unset from the account update",
+    // a total the stream sent unset is the account update's, null only where neither has one (the
+    // account updates carry no daily figure), and a 0 it sent is its own
+    name: "GET /account takes a total IBKR sent unset from the account update and keeps a 0 it sent",
     world: world({ settings: IBKR, ibkr_account: answered("U0000000", UNSET_FIGURES) }),
     request: request("GET", "/account"),
   },
