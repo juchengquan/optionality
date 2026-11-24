@@ -2,9 +2,10 @@
  *  sorted for `GET /account` (ADR 0031, #477), and the client's other answers handed on as the
  *  chance for a lost watch to come back. */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { IbkrAccountRefused, IbkrUnreachable } from "optionality/vendors/ibkr/client";
+import { IbkrAccountRefused, IbkrClient, IbkrUnreachable } from "optionality/vendors/ibkr/client";
 import { type FakeGateway, startFakeGateway } from "optionality/vendors/ibkr/fake";
 
+import { AccountBook, LOST, NOT_ANSWERING } from "../../account.ts";
 import { settingsFor } from "../../env.ts";
 import type { AccountWatch, IbkrLiveAccount } from "../../ports.ts";
 import { accountSource, ibkrVendor } from "./vendor.ts";
@@ -62,6 +63,78 @@ describe("a start of the account's watch", () => {
   it("is a failure, in the library's words, where the first picture did not come", async () => {
     const words = "IB Gateway did not finish sending the account within 300ms";
     expect(await accountSource(client(new Error(words))).source.watch(null)).toEqual({ failed: words });
+  });
+});
+
+describe("a start, through the library's real client", () => {
+  // the client against the library's fake gateway, replaying the constructed conversations, so the
+  // real watch's starts and refusals are what is sorted
+  async function against(conversation: string, requestTimeoutMs = 1000) {
+    const gateway = await startFakeGateway(0, { conversation });
+    const c = new IbkrClient({
+      host: "127.0.0.1", port: gateway.port, clientId: 31419, connectTimeoutMs: 1000, requestTimeoutMs,
+    });
+    opened.push({ gateway, close: () => c.close() });
+    return { source: accountSource(c).source, gateway };
+  }
+  const book = (source: ReturnType<typeof accountSource>["source"]) => new AccountBook({
+    source, wanted: "", now: () => new Date("2026-11-23T15:00:00.000Z"), displayTz: "", wake: () => () => {},
+  });
+
+  it("answers the watch on its first picture, its id masked by the library", async () => {
+    const { source } = await against("watch-started-and-stopped");
+    const started = await source.watch(null);
+    expect(started).toHaveProperty("watch");
+    if (!("watch" in started)) return;
+    expect(started.watch.picture().account).toBe("U•••••000");
+    await started.watch.stop();
+  });
+
+  it("is unreachable in the gateway's own words where it refuses the session, and the route says them", async () => {
+    const { source } = await against("client-id-in-use");
+    expect(await source.watch(null)).toEqual({ unreachable: expect.stringMatching(/^IB Gateway refused the session: 326 /) });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { source: again } = await against("client-id-in-use");
+    expect(await book(again).read()).toEqual({ fault: { status: 502, message: expect.stringMatching(
+      /^IB Gateway refused the session: 326 Unable to connect as the client id is already in use/) } });
+    log.mockRestore();
+  });
+
+  it("is unreachable in the connect's own words where nothing listens, and the route says it did not answer", async () => {
+    const c = new IbkrClient({ host: "127.0.0.1", port: 1, clientId: 31419, connectTimeoutMs: 500 });
+    opened.push({ close: () => c.close() });
+    const { source } = accountSource(c);
+    expect(await source.watch(null))
+      .toEqual({ unreachable: "could not reach IB Gateway at 127.0.0.1:1: connect ECONNREFUSED 127.0.0.1:1" });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await book(source).read()).toEqual({ fault: { status: 502, message: NOT_ANSWERING } });
+    expect(log).toHaveBeenCalledWith(
+      "IBKR account: could not reach IB Gateway at 127.0.0.1:1: connect ECONNREFUSED 127.0.0.1:1");
+    log.mockRestore();
+  });
+
+  it("is a failure in the library's words where the first picture does not come by the deadline", async () => {
+    const { source } = await against("watch-never-ends", 300);
+    expect(await source.watch(null))
+      .toEqual({ failed: expect.stringMatching(/did not finish sending the account within 300ms/) });
+  });
+
+  it("is a refusal in the library's words where several accounts and none is named", async () => {
+    const { source } = await against("watch-several");
+    expect(await source.watch(null)).toEqual({
+      refused: "several accounts on this login; set IBKR_ACCOUNT to one of U•••••000, U•••••001",
+    });
+  });
+
+  it("is the route's lost 502 once the real connection closes under a held watch", async () => {
+    const { source, gateway } = await against("watch-started-and-stopped");
+    const b = book(source);
+    expect(await b.read()).toHaveProperty("answer");
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    gateway.dropConnections();
+    await vi.waitFor(() => expect(log).toHaveBeenCalledWith(expect.stringMatching(/^IBKR account: the watch was lost: /)));
+    expect(await b.read()).toEqual({ fault: { status: 502, message: LOST } });
+    log.mockRestore();
   });
 });
 

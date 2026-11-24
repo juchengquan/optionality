@@ -13,12 +13,14 @@ watch), which these port at the end.
 """
 
 import logging
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import pytest
 from optionality.ibkr import IbkrAccountRefused, IbkrClient, IbkrUnreachable
 from optionality.quote import Batch
 
+from optionality_backend.account import NOT_ANSWERING, AccountBook, AccountDeps, AccountFault, AccountResult
 from optionality_backend.env import settings_for
 from optionality_backend.ports import (
     AccountFailed,
@@ -68,8 +70,10 @@ def test_opening_connects_nothing():
 # library's fake gateway, its `client-id-in-use` recording included; the Python's fake gateway is the
 # library's own test support (`python/tests/fake_gateway.py`), outside any package the backend may
 # import. So the client is stood in for here by one that raises what the library's raises —
-# `IbkrUnreachable` with `client-id-in-use`'s words, which `python/tests/test_ibkr_gateway.py` holds the
-# library to against that recording — and the real client is driven against a port nothing listens on.
+# `IbkrUnreachable` with `client-id-in-use`'s words, the deadline's, a refusal's — which
+# `python/tests/test_ibkr_gateway.py` and `test_ibkr_client.py` hold the library's watch to against the same
+# recordings the TypeScript's real-client tests replay (`client-id-in-use`, `watch-never-ends`,
+# `watch-several`); and the real client is driven against a port nothing listens on.
 # The route's answer to a refused session is held identically in both backends by the door scenario
 # "GET /account says the gateway refused the session, in its words".
 
@@ -132,6 +136,28 @@ async def test_a_start_is_a_failure_in_the_librarys_words_where_the_first_pictur
     # `IbkrUnreachable` is one too
     words = "IB Gateway did not finish sending the account within 8000ms"
     assert await IbkrAccountSource(_Client(raises=ConnectionError(words))).watch(None) == AccountFailed(words)
+
+
+async def test_a_start_is_unreachable_in_the_connects_words_against_a_port_nothing_listens_on():
+    # the real client and its real watch, reaching nothing: unreachable, never a failure, in the
+    # connect's own words — and the route says the gateway did not answer
+    client = IbkrClient("127.0.0.1", port=1, client_id=31419, connect_timeout_ms=500)
+    try:
+        started = await IbkrAccountSource(client).watch(None)
+        assert isinstance(started, AccountUnreachable)
+        assert started.words.startswith("could not reach IB Gateway at 127.0.0.1:1: ")
+        book = AccountBook(
+            AccountDeps(
+                source=IbkrAccountSource(client),
+                wanted="",
+                now=lambda: datetime(2026, 11, 23, 15, tzinfo=UTC),
+                display_tz="",
+                wake=lambda _ms, _fn: lambda: None,
+            )
+        )
+        assert await book.read() == AccountResult(fault=AccountFault(502, NOT_ANSWERING))
+    finally:
+        client.close()
 
 
 def test_the_client_answering_tells_every_listener_and_a_listener_that_raises_is_logged(caplog):
