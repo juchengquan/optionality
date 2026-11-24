@@ -78,7 +78,12 @@ when it ends is the caller's.
 **One account subscription per client.** IB allows one, so a watch waits for a bounded read that is
 running; while a watch is held, a bounded read of the SAME account is answered from the watch's
 picture and sends nothing (its own subscribe and unsubscribe would end the watch's), a read of
-another account is refused, and so is a second watch.
+another account is refused, and so is a second watch. Such a read's answer is therefore the watch's
+picture without its P&L — no zero-position rows, and the streams' figures where they have spoken —
+rather than the account update's rows as sent; once the service holds the account (#477) it no
+longer makes the bounded read, so nothing a person sees depends on that difference. A start whose
+caller gives up (a Python caller cancelled) is abandoned as a failed one is: the P&L cancelled and
+the account unsubscribed, or the watch stopped if it had already started.
 
 **The wire**, at protocol 157 and above, where every field is present, as `ib_async` 2.1.0's
 `client.py` and `decoder.py` and `ibapi` 9.81 have it, with no version field in any of them: out,
@@ -96,7 +101,8 @@ and say so. A stream's figures are sent LATER than the request that started them
 Every step ends with the account's P&L, and the replay's clock is a counter read once per P&L
 message, so the replay knows the client has read a step when the clock has been read once for every
 P&L sent — a condition, not a timer — and `pnl_at` in `expected/` counts P&L messages, never a wall
-time.
+time. A watch's `before` steps are sent while its start still waits, the last ending with the
+download end, so a P&L that arrives before the download ends is in the corpus too.
 
 ## Consequences
 

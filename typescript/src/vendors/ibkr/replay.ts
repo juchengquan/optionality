@@ -39,6 +39,10 @@
  *  is a COUNTER read once per P&L message (`now`): the replay waits until the clock has been read
  *  once for every P&L the stub wrote, and that is when the step has been read. A condition, not a
  *  timer. So `pnl_at` in `expected/` is the count of P&L messages read, never a wall time.
+ *
+ *  A watch's `before` steps are sent while its start is still waiting for the download to end, the
+ *  last of them carrying that end: what comes ahead of it — the account's P&L — is in the picture
+ *  the watch starts on, and the start resolving is how the replay knows that step was read.
  */
 import {
   IbkrAccountRefused, type IbkrAccountWatch, IbkrClient, type IbkrConfig,
@@ -136,13 +140,25 @@ export async function replay(name: string): Promise<Expectation> {
     return { wanted, expect: got, sent: subscriptions().slice(before) };
   };
   const watched = async (
-    wanted: string | null, steps: number, first: number, end: WatchEnd,
+    wanted: string | null, ahead: number, steps: number, first: number, end: WatchEnd,
   ): Promise<WatchExpectation> => {
     const before = gateway.received.length;
     const sent = () => gateway.received.slice(before).filter((f) => WATCH_MESSAGES.has(f[0]!));
+    const starting = client.watchAccount(wanted ?? undefined)
+      .then((w) => ({ w }), (err: unknown) => ({ err }));
+    for (let n = first; n < first + ahead; n++) {
+      await gateway.step(n);
+      // every step but the one the download ends at ends with a P&L; that one, with the start
+      if (n < first + ahead - 1) {
+        await until(() => readings >= gateway.written.filter((m) => m[0] === "94").length);
+      }
+    }
+    first += ahead;
     let watch: IbkrAccountWatch;
     try {
-      watch = await client.watchAccount(wanted ?? undefined);
+      const started = await starting;
+      if ("err" in started) throw started.err;
+      watch = started.w;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await unsubscribed(gateway.received);
@@ -188,9 +204,9 @@ export async function replay(name: string): Promise<Expectation> {
     if (conversation.watches) {
       watches = [];
       let first = 1;
-      for (const { wanted, steps, end } of conversation.watches) {
-        watches.push(await watched(wanted, steps, first, end));
-        first += steps;
+      for (const { wanted, before = 0, steps, end } of conversation.watches) {
+        watches.push(await watched(wanted, before, steps, first, end));
+        first += before + steps;
       }
     }
   } finally {

@@ -126,9 +126,15 @@ export const PNL_CONID_AT = 4;
 export type WatchEnd = "stop" | "drop";
 
 /** One account watch a replay makes (ADR 0031): start it naming `wanted` (or none), advance
- *  `steps` steps, a picture after each, then end it. */
+ *  `steps` steps, a picture after each, then end it.
+ *
+ *  `before`, where a file has it, is steps sent while the start is still WAITING for the download
+ *  to end: the last of them carries the download end, so whatever comes ahead of it in that step —
+ *  the account's P&L — is in the picture the watch starts on. The start resolving is how the replay
+ *  knows that step has been read. */
 export interface Watch {
   wanted: string | null;
+  before?: number;
   steps: number;
   end: WatchEnd;
 }
@@ -268,7 +274,15 @@ export function parseConversation(name: string, value: unknown): Conversation {
         fail(`watches[${i}].steps must be a whole number of steps`);
       }
       if (watch.end !== "stop" && watch.end !== "drop") fail(`watches[${i}].end must be "stop" or "drop"`);
-      return { wanted: watch.wanted as string | null, steps: watch.steps as number, end: watch.end as WatchEnd };
+      if (watch.before !== undefined
+        && (!Number.isInteger(watch.before) || (watch.before as number) < 1)) {
+        fail(`watches[${i}].before must be a whole number of steps, 1 or more`);
+      }
+      return {
+        wanted: watch.wanted as string | null,
+        ...(watch.before === undefined ? {} : { before: watch.before as number }),
+        steps: watch.steps as number, end: watch.end as WatchEnd,
+      };
     })
     : fail("watches must be a list");
   if (ask.length === 0 && (reads === undefined || reads.length === 0)
@@ -344,8 +358,15 @@ export function parseConversation(name: string, value: unknown): Conversation {
     : fail("exchanges must be a list");
 
   // ADR 0031: a replay knows the client has read a step when it has read the step's last P&L,
-  // so each step ends with the account's: its reqPnL exchange is the last that answers at it
-  const steps = (watches ?? []).reduce((n, w) => n + w.steps, 0);
+  // so each step ends with the account's: its reqPnL exchange is the last that answers at it —
+  // but for the step a watch's download ends at (its last `before` step), which ends with that
+  // download end, the start resolving being how the replay knows it has been read
+  const steps = (watches ?? []).reduce((n, w) => n + (w.before ?? 0) + w.steps, 0);
+  const opening = new Set<number>();
+  (watches ?? []).reduce((first, w) => {
+    if (w.before) opening.add(first + w.before - 1);
+    return first + (w.before ?? 0) + w.steps;
+  }, 1);
   for (const e of exchanges) {
     for (const l of e.later ?? []) {
       if (l.step > steps) fail(`a later reply comes at step ${l.step}, and the watches take ${steps}`);
@@ -354,6 +375,13 @@ export function parseConversation(name: string, value: unknown): Conversation {
   for (let step = 1; step <= steps; step++) {
     const last = exchanges.filter((e) => e.later?.some((l) => l.step === step)).at(-1);
     const replies = last?.later?.filter((l) => l.step === step).flatMap((l) => l.replies) ?? [];
+    if (opening.has(step)) {
+      if (last?.request !== "reqAccountUpdates" || replies.at(-1)?.[0] !== "54") {
+        fail(`step ${step} must end with the download end a watch starts on, from a `
+          + "reqAccountUpdates exchange");
+      }
+      continue;
+    }
     if (last?.request !== "reqPnL" || replies.at(-1)?.[0] !== "94") {
       fail(`step ${step} must end with the account's P&L, a PNL message from a reqPnL exchange`);
     }
