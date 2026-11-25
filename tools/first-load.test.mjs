@@ -9,10 +9,12 @@
  *  that page touched: its own chunk and the entry, never the libraries or the other page — a name
  *  that moves is a file every phone downloads again after the deploy.
  *
- *  Caddy runs on a port of its own, never the live UI's 31416: the Caddyfile is copied with its
- *  listener moved, and `/opt` is stripped first, as `tailscale serve --set-path /opt` strips it in
- *  front of the live one. Its config and data directories are the test's own, so nothing it writes
- *  lands beside the live Caddy's. */
+ *  Caddy runs on ports of its own, never the live UI's 31416: the Caddyfile is copied with its
+ *  listener moved, and a second site in front of it strips `/opt` and proxies, as `tailscale serve
+ *  --set-path /opt` does in front of the live one. In front and not inside: stripped inside, the
+ *  Caddyfile's own `header /assets/*` saw `/opt/assets/...`, so every asset went out `no-store` and
+ *  a measured second visit downloaded everything again. Its config and data directories are the
+ *  test's own, so nothing it writes lands beside the live Caddy's. */
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
@@ -48,7 +50,10 @@ function get(port, path, encoding) {
     request({ host: "127.0.0.1", port, path, headers }, (res) => {
       const parts = [];
       res.on("data", (b) => parts.push(b));
-      res.on("end", () => resolve({ status: res.statusCode, encoding: res.headers["content-encoding"] ?? null, body: Buffer.concat(parts) }));
+      res.on("end", () => resolve({
+        status: res.statusCode, encoding: res.headers["content-encoding"] ?? null,
+        cache: res.headers["cache-control"] ?? null, body: Buffer.concat(parts),
+      }));
     }).on("error", reject).end();
   });
 }
@@ -61,8 +66,10 @@ beforeAll(async () => {
   // the listener moved, or this would be a second Caddy on the live UI's port
   if (config.split(LIVE_LISTENER).length !== 2) throw new Error(`deploy/Caddyfile has no single "${LIVE_LISTENER}" to move`);
   port = await freePort();
+  const inner = await freePort();
   dir = mkdtempSync(join(tmpdir(), "first-load-"));
-  writeFileSync(join(dir, "Caddyfile"), config.replace(LIVE_LISTENER, `:${port} {\n\turi strip_prefix /opt`));
+  const front = `:${port} {\n\tbind 127.0.0.1\n\turi strip_prefix /opt\n\treverse_proxy 127.0.0.1:${inner}\n}\n`;
+  writeFileSync(join(dir, "Caddyfile"), `${config.replace(LIVE_LISTENER, `:${inner} {`)}\n${front}`);
   caddy = spawn(CADDY, ["run", "--config", join(dir, "Caddyfile"), "--adapter", "caddyfile"], {
     env: { ...process.env, OPTIONALITY_UI_ROOT: DIST, XDG_CONFIG_HOME: dir, XDG_DATA_HOME: dir },
     stdio: ["ignore", "ignore", "pipe"],
@@ -107,6 +114,11 @@ describe("the encoding Caddy answers with (#483)", () => {
       expect(res.encoding, offer).toBe("gzip");
       expect(gunzipSync(res.body).equals(onDisk())).toBe(true);
     }
+  });
+
+  it("keeps an asset for a year and the page for no time at all, as it did before (#483)", async () => {
+    expect((await get(port, file(), "zstd")).cache).toBe("public, max-age=31536000, immutable");
+    for (const page of ["/opt/", "/opt/account"]) expect((await get(port, page, "zstd")).cache, page).toBe("no-store");
   });
 
   it("is the file as it is to one that offers neither", async () => {
