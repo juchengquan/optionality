@@ -25,6 +25,9 @@
  *    sending what it has already sent, and a repeat is the running board rather than more of the
  *    answer. A figure later than the quiet after the last new one IS lost: an option's previous
  *    close has come after its greeks, or not before the client was done (2026-11-10);
+ *  - **for an INDEX, its last price and its previous close** (`INDEX_FIGURES`, #484): the two
+ *    figures a Reference reads, both in its stream's first burst, so the ask ends there rather
+ *    than a quiet later. An index whose stream never sends both ends as above;
  *  - **the timeout**, `requestTimeoutMs`, which keeps whatever arrived.
  *
  *  The greeks are waited for because the quiet alone lost them: across six live captures of an
@@ -43,7 +46,8 @@
  *  snapshot's end eleven seconds later, because the account has no snapshot permission for an
  *  index — the gateway's own parameters message says 0, where an option's says 3 (recorded in
  *  the session on 2026-11-10, `index-in-the-session`). A stream sends every figure it holds in one
- *  burst, half a second after the request, and the quiet after it ends the ask. It is still one
+ *  burst, half a second after the request, and the burst's last price and close end the ask
+ *  (#484; the quiet after it did until then, a quarter-second on every Reference). It is still one
  *  ask and one answer: the stream is cancelled when the ask finishes, so no running board of
  *  prices outlives it to make a dead session look like a calm market.
  *
@@ -68,8 +72,9 @@
  */
 import { contractFor } from "./contract.ts";
 import {
-  type AccountValueRow, GREEK_TICKS, type IbkrAccount, type IbkrHolding, type IbkrLiveAccount,
-  type IbkrPnl, type IbkrPnlSingle, MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS, accountAnswer,
+  type AccountValueRow, GREEK_TICKS, INDEX_FIGURES, type IbkrAccount, type IbkrHolding,
+  type IbkrLiveAccount, type IbkrPnl, type IbkrPnlSingle, MARKET_DATA_DELAYED_FROZEN, PRICE_TICKS,
+  accountAnswer,
   chooseAccount, grade, greekFields, hasFigures, holdingFrom, liveHolding, managedAccounts,
   maskAccount, pnlFrom, pnlSingleFrom, withMid,
 } from "./fields.ts";
@@ -713,6 +718,11 @@ export class IbkrClient {
         if (message.kind === "greeks" && GREEK_TICKS.has(message.tickType)) {
           modelled = true;
           Object.assign(record, greekFields(message.figures));
+        }
+        // an index holding its last price and its close has its answer: the rest of its stream
+        // is the running board, so no quiet is waited out behind it (#484)
+        if (!option && INDEX_FIGURES.every((field) => record[field] !== undefined)) {
+          return done(record);
         }
         // complete, or a new figure since it was: start the quiet again. A figure already held
         // is a stream repeating itself, and restarting on that would hold a busy stream open

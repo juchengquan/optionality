@@ -84,8 +84,9 @@ def test_an_option_is_answered_under_the_services_own_field_names() -> None:
 def test_an_index_is_asked_as_a_stream_and_answered_by_its_first_burst() -> None:
     """A snapshot of SPX or VIX carries no figure at any hour — the account has no snapshot
     permission for an index — and a stream sends every figure it holds at once (recorded in the
-    session on 2026-11-10). A replay delivers the whole three seconds at once, so SPX's last is its
-    last update's."""
+    session on 2026-11-10). SPX's last is the burst's, though a replay delivers the whole three
+    seconds at once: the stream is finished on the burst's last and close, and its updates are never
+    read (#484)."""
 
     async def ask(client: IbkrClient, _: FakeGateway) -> Any:
         return await client.fetch_quotes([OPTION, "SPX", "VIX"])
@@ -97,7 +98,7 @@ def test_an_index_is_asked_as_a_stream_and_answered_by_its_first_burst() -> None
         "code": "SPX",
         "delayed": False,
         "last_known": False,
-        "last_price": 7499.46,
+        "last_price": 7499.18,
         "prev_close_price": 7549.94,
     }
     assert by_code["VIX"] == {
@@ -273,12 +274,91 @@ def test_a_stream_repeating_figures_it_already_sent_does_not_hold_the_ask_open()
 
     batch, ms = against(_edited("index-in-the-session", "SPX", "IND", busy), ask, pace=1, request_timeout_ms=5000)
     (q,) = batch.records
-    assert q["prev_close_price"] == 7549.94
-    # the burst's last, or the first update's if it was read inside the quiet: which one is a race
-    # between two timers 16ms apart, and not what this test is about
-    assert q["last_price"] in (7499.18, 7499.44)
-    # the burst at 0.5s and a quarter-second of quiet, not the 3.6s the updates last
+    # the burst's: an index is finished on its last price and close (#484)
+    assert (q["prev_close_price"], q["last_price"]) == (7549.94, 7499.18)
+    # the burst at 0.5s, not the 3.6s the updates last
     assert ms < 2000
+
+
+def test_an_indexs_stream_is_finished_on_its_last_price_and_close_not_on_the_quiet_after_them() -> None:
+    """A Reference reads an index's last price and its previous close, and the stream's first burst
+    carries both, so nothing it sends later is more of the answer (#484). A quiet of three seconds
+    here, which the ask would otherwise wait out after the burst at 0.52s; the updates that follow
+    it, from 0.75s, are never read."""
+
+    async def ask(client: IbkrClient, _: FakeGateway) -> Any:
+        return await _timed(client, ["SPX"])
+
+    batch, ms = against("index-in-the-session", ask, pace=1, request_timeout_ms=4000, quiet_ms=3000)
+    assert batch.records == [
+        {"code": "SPX", "delayed": False, "last_known": False, "last_price": 7499.18, "prev_close_price": 7549.94}
+    ]
+    assert ms < 1500
+
+
+def test_an_index_is_finished_once_it_holds_both_wherever_in_the_stream_the_second_arrives() -> None:
+    """Constructed from index-in-the-session: the close held back from the burst and sent with the
+    first update, at 0.75s. The ask ends there, on the close, still well inside the quiet."""
+
+    def late(exchange: dict[str, Any]) -> None:
+        if exchange["sent"][17] != "0":
+            return  # the stream's, not the snapshot's beside it
+        replies, at_ms = exchange["replies"], exchange["atMs"]
+        close = next(i for i, m in enumerate(replies) if m[0] == "1" and m[3] == "9")
+        message = replies.pop(close)
+        at_ms.pop(close)
+        update = at_ms.index(754)
+        replies.insert(update, message)
+        at_ms.insert(update, 754)
+
+    async def ask(client: IbkrClient, _: FakeGateway) -> Any:
+        return await _timed(client, ["SPX"])
+
+    conversation = _edited("index-in-the-session", "SPX", "IND", late)
+    batch, ms = against(conversation, ask, pace=1, request_timeout_ms=4000, quiet_ms=3000)
+    (q,) = batch.records
+    assert (q["last_price"], q["prev_close_price"]) == (7499.18, 7549.94)
+    assert ms < 1500
+
+
+def test_an_index_whose_stream_never_sends_its_close_waits_out_the_quiet_as_before() -> None:
+    """Constructed from index-in-the-session, its close removed: the ask is not finished on its
+    figures, so it ends as every ask did before #484, on the quiet after its last new figure."""
+
+    def without_the_close(exchange: dict[str, Any]) -> None:
+        keep = [not (m[0] == "1" and m[3] == "9") for m in exchange["replies"]]
+        exchange["replies"] = [m for m, k in zip(exchange["replies"], keep, strict=True) if k]
+        exchange["atMs"] = [at for at, k in zip(exchange["atMs"], keep, strict=True) if k]
+
+    async def ask(client: IbkrClient, _: FakeGateway) -> Any:
+        return await _timed(client, ["SPX"])
+
+    no_close = _edited("index-in-the-session", "SPX", "IND", without_the_close)
+    batch, ms = against(no_close, ask, pace=1, request_timeout_ms=4000, quiet_ms=600)
+    (q,) = batch.records
+    assert "prev_close_price" not in q
+    assert "last_price" in q
+    # the burst at 0.52s, then the whole quiet
+    assert ms >= 1100
+
+
+def test_an_option_still_waits_for_its_greeks_where_its_book_carries_a_last_price_and_a_close() -> None:
+    """Only an index is finished on its figures: an option is answered with its model's greeks.
+    Constructed from normal-with-greeks, a last price added to its book at 0.27s; the greeks come at
+    1.95s, and at a quarter of that the quiet alone would end the ask before them."""
+
+    def with_a_last(exchange: dict[str, Any]) -> None:
+        bid = next(i for i, m in enumerate(exchange["replies"]) if m[0] == "1" and m[3] == "1")
+        exchange["replies"].insert(bid + 1, ["1", "6", "$reqId", "4", "4.30", "1", "0"])
+        exchange["atMs"].insert(bid + 1, exchange["atMs"][bid])
+
+    async def ask(client: IbkrClient, _: FakeGateway) -> Any:
+        return await _timed(client, [OPTION])
+
+    conversation = _edited("normal-with-greeks", "SPX", "OPT", with_a_last)
+    batch, _ = against(conversation, ask, pace=0.25, request_timeout_ms=5000)
+    (q,) = batch.records
+    assert (q["last_price"], q["prev_close_price"], q["option_delta"]) == (4.3, 3.65, MODEL_DELTA)
 
 
 def test_every_contract_is_asked_side_by_side_so_a_batch_costs_its_slowest() -> None:

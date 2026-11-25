@@ -94,16 +94,17 @@ def test_the_corpus_covers_every_function_this_module_ports() -> None:
         assert callable(getattr(ibkr, py, None)), f"{ts} maps to {py}, which does not exist"
 
 
-#: The corpus writes the TypeScript's shapes, and three of them differ here: a JS `Record` with
+#: The corpus writes the TypeScript's shapes, and four of them differ here: a JS `Record` with
 #: number keys arrives with string ones, a JS `Set` arrives as the generator's `{"$set": [...]}`,
-#: and a frozenset is not a set literal. A constant with no entry is compared AS IT STANDS — which
-#: is what a number needs — so a constant added to `ibkr/fields.ts` is held here the moment
+#: a frozenset is not a set literal, and a tuple is not the list a JS array arrives as. A
+#: constant with no entry is compared AS IT STANDS — which is what a number needs — so a
+#: constant added to `ibkr/fields.ts` is held here the moment
 #: `make cases` records it, rather than when somebody remembers to add a line.
 SHAPES: dict[str, Any] = {
     "PRICE_TICKS": lambda recorded: {int(k): v for k, v in recorded.items()},
     "GREEK_TICKS": lambda recorded: decode(recorded),
 }
-MINE: dict[str, Any] = {"GREEK_TICKS": set}
+MINE: dict[str, Any] = {"GREEK_TICKS": set, "INDEX_FIGURES": list}
 
 
 @pytest.mark.parametrize("name", sorted(corpus()["constants"]))

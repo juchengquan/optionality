@@ -29,6 +29,13 @@ export const PRICE_TICKS: Record<number, string> = {
   66: "bid_price", 67: "ask_price", 68: "last_price", 75: "prev_close_price",
 };
 
+/** The two figures an INDEX is asked for, and what finishes its ask once both are held (#484):
+ *  its last price and its previous close, which are what a Reference reads. An index is asked as
+ *  a stream (`client.ts`), whose first burst carries every figure it has; what the stream sends
+ *  after that is the running board, not more of the answer, so the ask does not wait out the
+ *  quiet behind them. Where one never comes, the ask ends as any other does. */
+export const INDEX_FIGURES: readonly string[] = ["last_price", "prev_close_price"];
+
 /** The greeks message's ids: the model computation, live (13) and delayed (83). Nothing else is
  *  read — a bid- or ask-implied computation is a different claim from the model's, and the service
  *  has one field for each greek.
