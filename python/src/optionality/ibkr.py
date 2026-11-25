@@ -119,6 +119,12 @@ PRICE_TICKS: dict[int, str] = {
     75: "prev_close_price",
 }
 
+#: the two figures an INDEX is asked for, and what finishes its ask once both are held (#484): its
+#: last price and its previous close, which are what a Reference reads. Its stream's first burst
+#: carries every figure it has, and what comes after is the running board, so the ask does not wait
+#: out the quiet behind them; where one never comes, the ask ends as any other does (`fields.ts`)
+INDEX_FIGURES: tuple[str, ...] = ("last_price", "prev_close_price")
+
 #: the greeks message's ids: the model computation, live (13) and delayed (83). Nothing else is read —
 #: a bid- or ask-implied computation is a different claim from the model's, and so is the CUSTOM one
 #: (53), which this once named as the delayed model's (`fields.ts` says how that was found)
@@ -1368,7 +1374,9 @@ class IbkrClient:
     (`has_figures`, which keeps "subscribed, nothing yet" apart from a contract that does not
     exist), and for an option its model greeks too, computed or not — and a brief quiet has
     followed, `quiet_ms`, restarted by every NEW figure and not by a stream repeating one it
-    already sent; or at `request_timeout_ms`, keeping whatever arrived. The snapshot's end comes
+    already sent; for an index, as soon as it holds its last price and its previous close
+    (`INDEX_FIGURES`, #484), its stream's first burst; or at `request_timeout_ms`, keeping whatever
+    arrived. The snapshot's end comes
     eleven to twelve seconds in, after the default timeout, so live it is the timeout that ends an
     option whose model greeks never come. Every contract is asked side by side, so a batch costs
     its slowest contract (`ib_async` paces the wire at 45 messages a second, as `socket.ts` now
@@ -1874,6 +1882,11 @@ class IbkrClient:
                 case _GreeksTick(tick_type=tick_type, figures=figures) if tick_type in GREEK_TICKS:
                     modelled = True
                     record.update(greek_fields(figures))
+            # an index holding its last price and its close has its answer: the rest of its stream
+            # is the running board, so no quiet is waited out behind it (#484)
+            if not option and all(record.get(field) is not None for field in INDEX_FIGURES):
+                done(record)
+                return
             # complete, or a new figure since it was: start the quiet again. A figure already held
             # is a stream repeating itself, and restarting on that would hold a busy stream open
             # until the timeout

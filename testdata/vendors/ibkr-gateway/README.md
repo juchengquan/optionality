@@ -322,8 +322,9 @@ subscribes to nothing), or `{"$throws": message}` for any other failure.
 `{"$throws": message}` — the golden cases' tag. A message that would name the stub's port, which
 the OS picks, names `<port>` instead. Every reply is delivered at once, so the batch is what the
 client makes of the gateway's **whole** answer; where that differs from what it made of the live
-one, the recording's provenance says so (`index-in-the-session`: the live client finishes on
-SPX's first burst, and the replay hands it three seconds of updates with it).
+one, the recording's provenance says so. (`index-in-the-session` did until #484: the replay handed
+the client three seconds of SPX's updates with its first burst, and it read to the last; it now
+finishes an index on its last price and close, the burst's, replayed or live.)
 
 The batch is what must match, and for the Python client the thrown message does too, word for
 word: `python/tests/test_ibkr_gateway.py` compares the whole `expect` (and each `later`) with the

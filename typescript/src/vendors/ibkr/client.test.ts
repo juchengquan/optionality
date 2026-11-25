@@ -130,9 +130,10 @@ describe("one bounded ask", () => {
     const c = await connected({ conversation: "index-in-the-session" });
     const batch = await c.fetchQuotes([OPTION, "SPX", "VIX"]);
     expect(batch.unknown).toEqual([]);
-    // a replay delivers the whole three seconds at once, so SPX's last is its last update's
+    // the burst's last price, though a replay delivers the whole three seconds at once: the
+    // stream is finished on the burst's last and close, and its updates are never read (#484)
     expect(batch.records.find((r) => r.code === "SPX")).toEqual({
-      code: "SPX", delayed: false, last_known: false, last_price: 7499.46, prev_close_price: 7549.94,
+      code: "SPX", delayed: false, last_known: false, last_price: 7499.18, prev_close_price: 7549.94,
     });
     expect(batch.records.find((r) => r.code === "VIX")).toEqual({
       code: "VIX", delayed: false, last_known: false, last_price: 20.49, prev_close_price: 19.92,
@@ -260,12 +261,78 @@ describe("when an ask is finished (#257)", () => {
     });
     const c = await connected({ conversation: busy, pace: 1 }, 5000);
     const { batch, ms } = await timed(c, ["SPX"]);
-    expect(batch.records[0]).toMatchObject({ prev_close_price: 7549.94 });
-    // the burst's last, or the first update's if it was read inside the quiet: which one is a
-    // race between two timers 16ms apart, and not what this test is about
-    expect([7499.18, 7499.44]).toContain(batch.records[0]!.last_price);
-    // the burst at 0.5s and a quarter-second of quiet, not the 3.6s the updates last
+    // the burst's: an index is finished on its last price and close (#484)
+    expect(batch.records[0]).toMatchObject({ prev_close_price: 7549.94, last_price: 7499.18 });
+    // the burst at 0.5s, not the 3.6s the updates last
     expect(ms).toBeLessThan(2000);
+  });
+
+  it("finishes an index's stream on its last price and close, not on the quiet after them", async () => {
+    // A Reference reads an index's last price and its previous close, and the stream's first
+    // burst carries both, so nothing it sends later is more of the answer (#484). A quiet of three
+    // seconds here, which the ask would otherwise wait out after the burst at 0.52s; the updates
+    // that follow it, from 0.75s, are never read.
+    const c = await connected({ conversation: "index-in-the-session", pace: 1 }, 4000, 3000);
+    const { batch, ms } = await timed(c, ["SPX"]);
+    expect(batch.records[0]).toEqual({
+      code: "SPX", delayed: false, last_known: false, last_price: 7499.18, prev_close_price: 7549.94,
+    });
+    expect(ms).toBeLessThan(1500);
+  });
+
+  it("finishes it once it holds both, wherever in the stream the second arrives", async () => {
+    // Constructed from index-in-the-session: the close held back from the burst and sent with
+    // the first update, at 0.75s. The ask ends there, on the close, still well inside the quiet.
+    const late = edited("index-in-the-session", { symbol: "SPX", secType: "IND" }, (e) => {
+      if (e.sent[17] !== "0") return e;                // the stream's, not the snapshot's beside it
+      const close = e.replies.findIndex((m) => m[0] === "1" && m[3] === "9");
+      const replies = e.replies.filter((_, i) => i !== close);
+      const atMs = e.atMs.filter((_, i) => i !== close);
+      const update = atMs.indexOf(754);
+      replies.splice(update, 0, e.replies[close]!);
+      atMs.splice(update, 0, 754);
+      return { replies, atMs };
+    });
+    const c = await connected({ conversation: late, pace: 1 }, 4000, 3000);
+    const { batch, ms } = await timed(c, ["SPX"]);
+    expect(batch.records[0]).toMatchObject({ last_price: 7499.18, prev_close_price: 7549.94 });
+    expect(ms).toBeLessThan(1500);
+  });
+
+  it("waits out the quiet, as before, for an index whose stream never sends its close", async () => {
+    // Constructed from index-in-the-session, its close removed: the ask is not finished on its
+    // figures, so it ends as every ask did before #484, on the quiet after its last new figure
+    const noClose = edited("index-in-the-session", { symbol: "SPX", secType: "IND" }, (e) => {
+      const keep = e.replies.map((m) => !(m[0] === "1" && m[3] === "9"));
+      return {
+        replies: e.replies.filter((_, i) => keep[i]), atMs: e.atMs.filter((_, i) => keep[i]),
+      };
+    });
+    const c = await connected({ conversation: noClose, pace: 1 }, 4000, 600);
+    const { batch, ms } = await timed(c, ["SPX"]);
+    expect(batch.records[0]!.prev_close_price).toBeUndefined();
+    expect(batch.records[0]!.last_price).toBeDefined();
+    // the burst at 0.52s, then the whole quiet
+    expect(ms).toBeGreaterThanOrEqual(1100);
+  });
+
+  it("still waits for an option's greeks where its book carries a last price and a close", async () => {
+    // Only an index is finished on its figures: an option is answered with its model's greeks.
+    // Constructed from normal-with-greeks, a last price added to its book at 0.27s; the greeks
+    // come at 1.95s, and at a quarter of that the quiet alone would end the ask before them.
+    const withLast = edited("normal-with-greeks", { symbol: "SPX", secType: "OPT" }, (e) => {
+      const bid = e.replies.findIndex((m) => m[0] === "1" && m[3] === "1");
+      const replies = [...e.replies];
+      const atMs = [...e.atMs];
+      replies.splice(bid + 1, 0, ["1", "6", "$reqId", "4", "4.30", "1", "0"]);
+      atMs.splice(bid + 1, 0, e.atMs[bid]!);
+      return { replies, atMs };
+    });
+    const c = await connected({ conversation: withLast, pace: 0.25 }, 5000);
+    const { batch } = await timed(c, [OPTION]);
+    expect(batch.records[0]).toMatchObject({
+      last_price: 4.3, prev_close_price: 3.65, option_delta: MODEL.delta,
+    });
   });
 
   it("asks every contract side by side, so a batch costs its slowest contract", async () => {
