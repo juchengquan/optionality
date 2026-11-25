@@ -95,6 +95,12 @@ describe("the encoding Caddy answers with (#483)", () => {
     }
   });
 
+  it("is zstd at a level that saves something over gzip: at its default it saved nothing", async () => {
+    const zstd = (await get(port, file(), "zstd")).body.length;
+    const gzip = (await get(port, file(), "gzip")).body.length;
+    expect(zstd, `zstd ${zstd} bytes, gzip ${gzip}`).toBeLessThan(0.95 * gzip);
+  });
+
   it("is gzip to one that offers gzip and no zstd, as a Safari before zstd does", async () => {
     for (const offer of ["gzip", "gzip, deflate, br"]) {
       const res = await get(port, file(), offer);
@@ -114,7 +120,7 @@ describe("the encoding Caddy answers with (#483)", () => {
 
 describe("the files each page asks for (#483)", () => {
   let browser;
-  const asked = {};
+  const asked = {}, askedAt = {}, arrivedAt = {};
 
   beforeAll(async () => {
     expect(named("libraries"), "one libraries chunk").toHaveLength(1);
@@ -129,11 +135,16 @@ describe("the files each page asks for (#483)", () => {
       const tab = await context.newPage();
       // the API is not served here: refused at once, so each page draws its own failure words
       await tab.route("**/api/**", (route) => route.abort());
-      const files = [];
-      tab.on("request", (r) => { if (/\/assets\//.test(r.url())) files.push(r.url().split("/assets/")[1]); });
+      // every round trip 200 ms longer, so which file was asked for before which arrived is plain
+      const cdp = await context.newCDPSession(tab);
+      await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 200, downloadThroughput: -1, uploadThroughput: -1 });
+      const files = [], at = {}, arrived = {};
+      const asset = (r) => (/\/assets\//.test(r.url()) ? r.url().split("/assets/")[1] : null);
+      tab.on("request", (r) => { const f = asset(r); if (f) { files.push(f); at[f] ??= Date.now(); } });
+      tab.on("requestfinished", (r) => { const f = asset(r); if (f) arrived[f] ??= Date.now(); });
       await tab.goto(`http://127.0.0.1:${port}${path}`, { waitUntil: "networkidle" });
       await tab.waitForFunction(() => (document.getElementById("root")?.childElementCount ?? 0) > 0);
-      asked[page] = files;
+      asked[page] = files; askedAt[page] = at; arrivedAt[page] = arrived;
       await context.close();
     }
   });
@@ -148,6 +159,15 @@ describe("the files each page asks for (#483)", () => {
   it("the account page asks for its own code and the libraries, and none of the book's", () => {
     expect(asked.account).toEqual(expect.arrayContaining([...named("Account"), ...named("libraries")]));
     expect(asked.account.filter((f) => f.startsWith("Next-"))).toEqual([]);
+  });
+
+  it("each page asks for its own code while the libraries are still arriving, not after them", () => {
+    // a page's chunk asked for by its import alone waits for every byte of the libraries first:
+    // a second round trip, which made the split slower cold than the one bundle it replaced
+    for (const [page, own] of [["book", named("Next")[0]], ["account", named("Account")[0]]]) {
+      const libraries = named("libraries")[0];
+      expect(askedAt[page][own], `${page}: ${own} asked for after ${libraries} arrived`).toBeLessThan(arrivedAt[page][libraries]);
+    }
   });
 
   it("each page asks for each file once: the HTML's early request and the page's own import agree", () => {
@@ -189,5 +209,9 @@ describe("the names a deploy moves (#483)", () => {
 
   it("a change to the book alone renames its own chunk and the entry — never the libraries", async () => {
     expect(moved(as, await namesWith("src/Next.tsx"))).toEqual(["Next.js", "main.js"]);
+  });
+
+  it("a change to the code both pages share renames what imports it — never the libraries", async () => {
+    expect(moved(as, await namesWith("src/pages.ts"))).not.toContain("libraries.js");
   });
 });
