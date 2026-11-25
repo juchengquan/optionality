@@ -1,0 +1,283 @@
+/** The dashboard's first load (#483), held against what is actually served: the COMMITTED bundle,
+ *  `frontend/dist`, served by the real `deploy/Caddyfile`, and opened in a real browser.
+ *
+ *  Three things only the build and the server can say. Which files each page asks for — the book
+ *  none of the account page's code and the account page none of the book's, each file once — which
+ *  no suite of the source sees, since none of them loads the build. Which encoding Caddy answers
+ *  with: zstd to a browser that offers it, gzip to one that offers only that, the file as it is to
+ *  one that offers neither. And which file names a change to one page moves, by building again with
+ *  that page touched: its own chunk and the entry, never the libraries or the other page — a name
+ *  that moves is a file every phone downloads again after the deploy.
+ *
+ *  Caddy runs on ports of its own, never the live UI's 31416: the Caddyfile is copied with its
+ *  listener moved, and a second site in front of it strips `/opt` and proxies, as `tailscale serve
+ *  --set-path /opt` does in front of the live one. In front and not inside: stripped inside, the
+ *  Caddyfile's own `header /assets/*` saw `/opt/assets/...`, so every asset went out `no-store` and
+ *  a measured second visit downloaded everything again. Its config and data directories are the
+ *  test's own, so nothing it writes lands beside the live Caddy's. */
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { request } from "node:http";
+import { createRequire } from "node:module";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { gunzipSync, zstdDecompressSync } from "node:zlib";
+
+import { chromium, devices } from "playwright";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
+
+const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+/** Vite as the FRONTEND resolves it: the build tested is the frontend's, and only
+ *  `frontend/package.json` declares vite — so it is found from there, not from wherever this file's
+ *  own lookup happens to climb to. */
+const { build } = await import(pathToFileURL(createRequire(join(ROOT, "frontend/package.json")).resolve("vite")).href);
+const DIST = join(ROOT, "frontend/dist");
+const LIVE_LISTENER = ":31416 {";
+const CADDY = process.env.CADDY_BIN || spawnSync("sh", ["-c", "command -v caddy"], { encoding: "utf8" }).stdout.trim();
+
+function freePort() {
+  return new Promise((resolve) => {
+    const s = createServer().listen(0, "127.0.0.1", () => {
+      const { port } = s.address();
+      s.close(() => resolve(port));
+    });
+  });
+}
+
+/** One GET, offering `encoding` (none at all when null): the status, the encoding answered, the body. */
+function get(port, path, encoding) {
+  return new Promise((resolve, reject) => {
+    const headers = encoding === null ? {} : { "Accept-Encoding": encoding };
+    request({ host: "127.0.0.1", port, path, headers }, (res) => {
+      const parts = [];
+      res.on("data", (b) => parts.push(b));
+      res.on("end", () => resolve({
+        status: res.statusCode, encoding: res.headers["content-encoding"] ?? null,
+        cache: res.headers["cache-control"] ?? null, body: Buffer.concat(parts),
+      }));
+    }).on("error", reject).end();
+  });
+}
+
+let dir, caddy, port, log = "";
+
+beforeAll(async () => {
+  if (!CADDY) throw new Error("caddy not found — brew install caddy (the dashboard's server, ADR 0006)");
+  const config = readFileSync(join(ROOT, "deploy/Caddyfile"), "utf8");
+  // the listener moved, or this would be a second Caddy on the live UI's port
+  if (config.split(LIVE_LISTENER).length !== 2) throw new Error(`deploy/Caddyfile has no single "${LIVE_LISTENER}" to move`);
+  port = await freePort();
+  const inner = await freePort();
+  dir = mkdtempSync(join(tmpdir(), "first-load-"));
+  const front = `:${port} {\n\tbind 127.0.0.1\n\turi strip_prefix /opt\n\treverse_proxy 127.0.0.1:${inner}\n}\n`;
+  writeFileSync(join(dir, "Caddyfile"), `${config.replace(LIVE_LISTENER, `:${inner} {`)}\n${front}`);
+  caddy = spawn(CADDY, ["run", "--config", join(dir, "Caddyfile"), "--adapter", "caddyfile"], {
+    env: { ...process.env, OPTIONALITY_UI_ROOT: DIST, XDG_CONFIG_HOME: dir, XDG_DATA_HOME: dir },
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  caddy.stderr.on("data", (b) => { log += b; });
+  // a CADDY_BIN naming nothing runnable: said at once, rather than as an unhandled ENOENT and then
+  // five seconds of waiting for a server that never started
+  let failed = null;
+  caddy.on("error", (e) => { failed = e; });
+  for (let i = 0; i < 100; i++) {
+    if (failed) throw new Error(`caddy could not be started from ${CADDY}: ${failed.message}`);
+    try { if ((await get(port, "/opt/", null)).status === 200) return; } catch { /* not yet */ }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  throw new Error(`caddy did not answer on ${port}:\n${log}`);
+});
+
+afterAll(() => {
+  if (caddy?.exitCode === null) caddy.kill("SIGKILL");
+  if (dir) rmSync(dir, { recursive: true, force: true });
+});
+
+const assets = () => readdirSync(join(DIST, "assets"));
+const named = (prefix) => assets().filter((f) => f.startsWith(`${prefix}-`) && f.endsWith(".js"));
+
+describe("the encoding Caddy answers with (#483)", () => {
+  const file = () => `/opt/assets/${named("libraries")[0]}`;
+  const onDisk = () => readFileSync(join(DIST, file().replace("/opt/", "")));
+
+  it("is zstd to a browser that offers it, whatever else it offers first", async () => {
+    for (const offer of ["zstd", "gzip, deflate, br, zstd", "zstd, gzip"]) {
+      const res = await get(port, file(), offer);
+      expect(res.encoding, offer).toBe("zstd");
+      expect(zstdDecompressSync(res.body).equals(onDisk())).toBe(true);
+    }
+  });
+
+  it("is zstd at a level that saves something over gzip: at its default it saved nothing", async () => {
+    const zstd = (await get(port, file(), "zstd")).body.length;
+    const gzip = (await get(port, file(), "gzip")).body.length;
+    expect(zstd, `zstd ${zstd} bytes, gzip ${gzip}`).toBeLessThan(0.95 * gzip);
+  });
+
+  it("is gzip to one that offers gzip and no zstd, as a Safari before zstd does", async () => {
+    for (const offer of ["gzip", "gzip, deflate, br"]) {
+      const res = await get(port, file(), offer);
+      expect(res.encoding, offer).toBe("gzip");
+      expect(gunzipSync(res.body).equals(onDisk())).toBe(true);
+    }
+  });
+
+  it("keeps an asset for a year and the page for no time at all, as it did before (#483)", async () => {
+    expect((await get(port, file(), "zstd")).cache).toBe("public, max-age=31536000, immutable");
+    for (const page of ["/opt/", "/opt/account"]) expect((await get(port, page, "zstd")).cache, page).toBe("no-store");
+  });
+
+  it("is the file as it is to one that offers neither", async () => {
+    for (const offer of [null, "identity", "br"]) {
+      const res = await get(port, file(), offer);
+      expect(res.encoding, String(offer)).toBeNull();
+      expect(res.body.equals(onDisk())).toBe(true);
+    }
+  });
+});
+
+describe("the files each page asks for (#483)", () => {
+  let browser;
+  const asked = {}, askedAt = {}, arrivedAt = {};
+
+  beforeAll(async () => {
+    expect(named("libraries"), "one libraries chunk").toHaveLength(1);
+    expect(named("Next"), "one chunk for the book").toHaveLength(1);
+    expect(named("Account"), "one chunk for the account page").toHaveLength(1);
+    browser = await chromium.launch();
+    // the phone, as the slow link is the phone's; Chromium's rather than the profile's WebKit,
+    // because Chromium is what the suites install
+    const { defaultBrowserType: _, ...iphone } = devices["iPhone 13"];
+    for (const [page, path] of [["book", "/opt/"], ["account", "/opt/account"]]) {
+      const context = await browser.newContext(iphone);
+      const tab = await context.newPage();
+      // the API is not served here: refused at once, so each page draws its own failure words
+      await tab.route("**/api/**", (route) => route.abort());
+      // every round trip 200 ms longer, so which file was asked for before which arrived is plain
+      const cdp = await context.newCDPSession(tab);
+      await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 200, downloadThroughput: -1, uploadThroughput: -1 });
+      const files = [], at = {}, arrived = {};
+      const asset = (r) => (/\/assets\//.test(r.url()) ? r.url().split("/assets/")[1] : null);
+      tab.on("request", (r) => { const f = asset(r); if (f) { files.push(f); at[f] ??= Date.now(); } });
+      tab.on("requestfinished", (r) => { const f = asset(r); if (f) arrived[f] ??= Date.now(); });
+      await tab.goto(`http://127.0.0.1:${port}${path}`, { waitUntil: "networkidle" });
+      await tab.waitForFunction(() => (document.getElementById("root")?.childElementCount ?? 0) > 0);
+      asked[page] = files; askedAt[page] = at; arrivedAt[page] = arrived;
+      await context.close();
+    }
+  });
+
+  afterAll(async () => { await browser?.close(); });
+
+  it("the book asks for its own code and the libraries, and none of the account page's", () => {
+    expect(asked.book).toEqual(expect.arrayContaining([...named("Next"), ...named("libraries")]));
+    expect(asked.book.filter((f) => f.startsWith("Account-"))).toEqual([]);
+  });
+
+  it("the account page asks for its own code and the libraries, and none of the book's", () => {
+    expect(asked.account).toEqual(expect.arrayContaining([...named("Account"), ...named("libraries")]));
+    expect(asked.account.filter((f) => f.startsWith("Next-"))).toEqual([]);
+  });
+
+  it("each page asks for its own code while the libraries are still arriving, not after them", () => {
+    // a page's chunk asked for by its import alone waits for every byte of the libraries first:
+    // a second round trip, which made the split slower cold than the one bundle it replaced
+    for (const [page, own] of [["book", named("Next")[0]], ["account", named("Account")[0]]]) {
+      const libraries = named("libraries")[0];
+      expect(askedAt[page][own], `${page}: ${own} asked for after ${libraries} arrived`).toBeLessThan(arrivedAt[page][libraries]);
+    }
+  });
+
+  it("each page asks for each file once: the HTML's early request and the page's own import agree", () => {
+    for (const page of ["book", "account"]) {
+      expect(asked[page].filter((f, i) => asked[page].indexOf(f) !== i), page).toEqual([]);
+    }
+  });
+
+  it("every file the build wrote is asked for by one page or the other", () => {
+    const either = new Set([...asked.book, ...asked.account]);
+    expect(assets().filter((f) => !either.has(f))).toEqual([]);
+  });
+});
+
+describe("the names a deploy moves (#483)", () => {
+  /** The build's file names, with `module`'s code touched first (`null`: as it is). */
+  async function namesWith(module) {
+    const outDir = mkdtempSync(join(tmpdir(), "first-load-build-"));
+    const target = module && join(ROOT, "frontend", module);
+    const touch = { name: "touch", enforce: "pre", transform: (code, id) => (id === target ? `${code}\nconsole.debug("touched");\n` : null) };
+    try {
+      await build({
+        configFile: join(ROOT, "frontend/vite.config.ts"), root: join(ROOT, "frontend"), base: "/opt/", logLevel: "silent",
+        build: { outDir, emptyOutDir: true }, plugins: [touch],
+      });
+      return new Set(readdirSync(join(outDir, "assets")));
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
+  }
+  const moved = (before, after) => [...after].filter((f) => !before.has(f)).map((f) => f.replace(/-[\w-]+\.(js|css)$/, ".$1")).sort();
+
+  let as;
+  beforeAll(async () => { as = await namesWith(null); });
+
+  it("a change to the account page alone renames its own chunk and the entry, and nothing else", async () => {
+    expect(moved(as, await namesWith("src/account/Account.tsx"))).toEqual(["Account.js", "main.js"]);
+  });
+
+  it("a change to the book alone renames its own chunk and the entry — never the libraries", async () => {
+    expect(moved(as, await namesWith("src/Next.tsx"))).toEqual(["Next.js", "main.js"]);
+  });
+
+  it("a change to the code both pages share renames what imports it — never the libraries", async () => {
+    expect(moved(as, await namesWith("src/pages.ts"))).not.toContain("libraries.js");
+  });
+});
+
+describe("the code each page's files carry (#483, review of #485)", () => {
+  /** The page's own code is everything under `src/` but the account page's directory, what both
+   *  pages share by design — `shared/`, `components/`, `lib/` — and these, which the entry or both
+   *  pages need and which belong to neither. `next.css` is here because the account page draws over
+   *  the book's colour tokens by design (#471, `account.css`); everything else of the book's is not. */
+  const NEUTRAL = ["main.tsx", "Page.tsx", "PageBoundary.tsx", "pages.ts", "arrangement.ts", "poll.ts", "next.css"];
+  const SHARED = /^(shared|components|lib)\//;
+  const SRC = join(ROOT, "frontend/src/");
+
+  let chunks;
+  beforeAll(async () => {
+    const outDir = mkdtempSync(join(tmpdir(), "first-load-modules-"));
+    const keep = { name: "keep-bundle", generateBundle(_, bundle) { chunks = bundle; } };
+    try {
+      await build({
+        configFile: join(ROOT, "frontend/vite.config.ts"), root: join(ROOT, "frontend"), base: "/opt/", logLevel: "silent",
+        build: { outDir, write: false }, plugins: [keep],
+      });
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
+  });
+
+  /** The source modules in every file a page asks for: the entry, its page's chunk, and every
+   *  chunk either imports — as `src/`-relative names. */
+  function carried(page) {
+    const all = Object.values(chunks).filter((c) => c.type === "chunk");
+    const start = [all.find((c) => c.isEntry), all.find((c) => c.isDynamicEntry && c.facadeModuleId === join(SRC, page))];
+    const seen = new Set();
+    const walk = (c) => { if (!c || seen.has(c.fileName)) return; seen.add(c.fileName); for (const f of c.imports) walk(chunks[f]); };
+    start.forEach(walk);
+    return [...seen].flatMap((f) => chunks[f].moduleIds).filter((id) => id.startsWith(SRC)).map((id) => id.slice(SRC.length));
+  }
+
+  it("the account page's files carry none of the book's code", () => {
+    const book = carried("account/Account.tsx").filter((m) => !m.startsWith("account/") && !SHARED.test(m) && !NEUTRAL.includes(m));
+    expect(book).toEqual([]);
+  });
+
+  it("the book's files carry none of the account page's code", () => {
+    expect(carried("Next.tsx").filter((m) => m.startsWith("account/"))).toEqual([]);
+  });
+});

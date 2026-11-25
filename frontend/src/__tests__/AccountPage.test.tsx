@@ -113,7 +113,12 @@ describe("the page a path names", () => {
       if (arrangement === "desk") document.cookie = "ui_arrangement=desk;path=/";
       servePage();
       render(<Page path="/opt/" base="/opt/" />);
-      const head = await waitFor(() => document.querySelector<HTMLElement>(".nx-head")!);
+      // waited for until it is drawn: each page's code arrives on its own (#483)
+      const head = await waitFor(() => {
+        const drawn = document.querySelector<HTMLElement>(".nx-head");
+        if (!drawn) throw new Error("the book's header is not drawn yet");
+        return drawn;
+      });
       const to = within(head).getByRole("link", { name: "account" });
       expect(to.tagName).toBe("A");
       expect(to.getAttribute("href")).toBe("/opt/account");

@@ -26,6 +26,7 @@ import { useCallback, useState } from "react";
 import { attentionOf, ATTENTION_WORDS, groupRows, ownAttentionOf } from "./desk/columns";
 import { ORDER, type NeedKind } from "./needs";
 import type { BookModel, BookSection, ExpiryBook } from "./placement";
+import { pressed } from "./shared/folds";
 import { readFolded, writeFolded } from "./shared/prefs";
 import { writtenDate } from "./shared/times";
 
@@ -37,17 +38,6 @@ export const foldKey = (kind: SectionKind, expiry: string): string => `${kind}:$
 /** Every group the book draws now, as the cookie names them. */
 export function groupsOf(placed: BookModel): Set<string> {
   return new Set(placed.sections.flatMap((s) => s.expiries.map((g) => foldKey(s.kind, g.expiry))));
-}
-
-/** The folds after `key` is pressed, from the folds as stored NOW: the key folded or opened as THIS
- *  tab wants it — the opposite of what it shows, never a flip of the cookie, which another tab may
- *  have changed under it — the other keys kept, and, given the groups the book draws, every fold the
- *  book no longer has dropped. */
-export function pressed(stored: ReadonlySet<string>, key: string, fold: boolean,
-                        drawn: ReadonlySet<string> | null): Set<string> {
-  const next = new Set(stored);
-  if (fold) next.add(key); else next.delete(key);
-  return drawn === null ? next : new Set([...next].filter((k) => drawn.has(k)));
 }
 
 /** A count of one of the kinds of attention, as a folded heading draws it: the chip's own words. */

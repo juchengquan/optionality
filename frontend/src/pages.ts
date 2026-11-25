@@ -7,9 +7,13 @@ export type PageName = "account" | "book";
 const rooted = (base: string) => (base.endsWith("/") ? base : `${base}/`);
 
 /** The page at `path` under `base`: `account` for `/opt/account`, with or without its slash, and
- *  the book for anything else — an unknown path falls through to the book, as it always has. */
+ *  the book for anything else — an unknown path falls through to the book, as it always has.
+ *
+ *  Self-contained, naming nothing outside its own body, because it is also written into
+ *  `index.html` as text (`preload.ts`, #483): the page's own code is asked for there, by this same
+ *  rule, before any module has arrived. */
 export function pageAt(path: string, base: string): PageName {
-  const root = rooted(base);
+  const root = base.endsWith("/") ? base : `${base}/`;
   if (!path.startsWith(root)) return "book";
   return /^account\/?$/.test(path.slice(root.length)) ? "account" : "book";
 }
