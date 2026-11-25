@@ -142,13 +142,14 @@ export function writeFolded(folded: Set<string>): void {
   writeCookie("ui_folded", [...folded].filter((k) => FOLDED.test(k)).sort().join("."));
 }
 
-/** What the account page has folded (the owner, 2026-11-24): `stocks`, `options` and `other`, its
- *  sections, and `options:SPX`, an underlying inside Options. Its own cookie, apart from the book's
- *  `ui_folded`, and like it storing what is FOLDED, so everything starts open. An underlying is IBKR's
+/** The account page's folds (the owner, 2026-11-24), each stored where it differs from how it
+ *  starts: `options` and `other`, sections that start open, and `options:SPX`, an underlying inside
+ *  Options, each when FOLDED; and `stocks:open`, Stocks OPENED, since Stocks starts folded (the
+ *  owner, 2026-11-25). Its own cookie, apart from the book's `ui_folded`. An underlying is IBKR's
  *  symbol, which may carry a space, so the list is written encoded, "," between entries; read
- *  tolerantly (`decoded`), and any entry that is not a section or a printable symbol under Options
- *  is dropped here, and so from the cookie at its next write. */
-const ACCOUNT_FOLDED = /^(stocks|options|other)$|^options:[\x21-\x7e](?:[\x20-\x7e]{0,30}[\x21-\x7e])?$/;
+ *  tolerantly (`decoded`), and any entry that is not one of those is dropped here, and so from the
+ *  cookie at its next write — a bare `stocks` too, which said Stocks was folded before it started so. */
+const ACCOUNT_FOLDED = /^(stocks:open|options|other)$|^options:[\x21-\x7e](?:[\x20-\x7e]{0,30}[\x21-\x7e])?$/;
 
 export function readAccountFolded(): Set<string> {
   return new Set(readCookie("ui_account_folded").split(",").filter((k) => ACCOUNT_FOLDED.test(k)));

@@ -1,9 +1,10 @@
 /** The account page's folds and combined options (the owner, 2026-11-24), on made-up accounts
  *  (`testing/account.ts`), on the desk and the phone:
  *
- *  - Stocks, Options and Other each fold, and so does each underlying inside Options. Everything
- *    starts open; a folded heading keeps its name and adds its count, value and P&L in the base
- *    currency; what is folded is remembered in `ui_account_folded`.
+ *  - Options, Stocks and Other, in that order, each fold, and so does each underlying inside
+ *    Options. Stocks starts folded and the rest open (the owner, 2026-11-25); a folded heading keeps
+ *    its name and adds its count, value and P&L in the base currency; where a fold differs from how
+ *    it starts is remembered in `ui_account_folded` — Stocks opened as `stocks:open`.
  *  - Every option on one underlying and expiry is ONE row, its legs written as the book writes a
  *    structure, its prices netted per share and its money summed; it starts closed and opens to
  *    its legs, each drawn as a contract's row is.
@@ -72,20 +73,34 @@ const legRows = (row: HTMLElement) => controlled(comboButton(row))
 describe.each(arrangements)("on the %s, the folds", (arrangement) => {
   const unit = arrangement === "desk" ? "row" : "card";
 
-  it("start open, with nothing written, and each heading is a button saying what it folds", async () => {
+  it("draw Options, then Stocks, then Other", async () => {
+    await open(arrangement);
+    expect([...document.querySelectorAll<HTMLElement>("section[data-section]")].map((x) => x.dataset.section))
+      .toEqual(["options", "stocks", "other"]);
+    // and with nothing in Options, Stocks first
+    cleanup();
+    await open(arrangement, { ...ACCOUNT, options: [] });
+    expect([...document.querySelectorAll<HTMLElement>("section[data-section]")].map((x) => x.dataset.section))
+      .toEqual(["stocks", "other"]);
+  });
+
+  it("start with Stocks folded and the rest open, nothing written, each heading a button saying what it folds", async () => {
     await open(arrangement);
     expect(storedCookie()).toBeUndefined();
-    for (const name of ["Stocks", "Options", "Other"]) {
+    for (const name of ["Options", "Stocks", "Other"]) {
       const button = sectionButton(name);
+      const folded = name === "Stocks";
       expect(button.tagName).toBe("BUTTON");
       expect(button.closest("h2"), name).toBeTruthy();
-      expect(button.getAttribute("aria-expanded"), name).toBe("true");
+      expect(button.getAttribute("aria-expanded"), name).toBe(String(!folded));
       const body = controlled(button);
       expect(body).toHaveLength(1);
-      expect(body[0]!.hidden, name).toBe(false);
+      expect(body[0]!.hidden, name).toBe(folded);
+      // folded, the rows kept mounted
       expect(body[0]!.querySelectorAll("[data-holding]").length, name).toBeGreaterThan(0);
-      // open, a heading says its name alone
-      expect(words(button), name).toBe(name);
+      // open, a heading says its name alone; folded, its count, value and P&L too
+      // (19,000 + 18,000 − 1,240; −1,000 + 3,000 − 40)
+      expect(words(button), name).toBe(folded ? `Stocks · 3 ${unit}s · value $35,760 · P&L +$1,960` : name);
     }
     for (const symbol of ["QQQ", "SPX"]) {
       const button = underlyingButton(symbol);
@@ -96,25 +111,38 @@ describe.each(arrangements)("on the %s, the folds", (arrangement) => {
     }
   });
 
-  it("fold a section, its rows kept and hidden, its heading adding count, value and P&L in the base", async () => {
+  it("open Stocks to its rows, its heading its name alone, and fold it again, its rows kept and hidden", async () => {
     await open(arrangement);
-    const rows = section("Stocks").querySelectorAll("[data-holding]").length;
-    fireEvent.click(sectionButton("Stocks"));
     const button = sectionButton("Stocks");
-    expect(button.getAttribute("aria-expanded")).toBe("false");
     const body = controlled(button)[0]!;
-    expect(body.hidden).toBe(true);
-    expect(body.querySelectorAll("[data-holding]").length, "the folded rows unmounted").toBe(rows);
-    // 19,000 + 18,000 − 1,240; −1,000 + 3,000 − 40
-    expect(words(button)).toBe(`Stocks · 3 ${unit}s · value $35,760 · P&L +$1,960`);
-    expect(button.querySelector('[data-fold-fig="pnl"]')!.getAttribute("data-outcome")).toBe("gain");
-    // the region keeps its name
-    expect(section("Stocks")).toBeTruthy();
-    // and opened again, its name alone
+    const rows = body.querySelectorAll("[data-holding]").length;
     fireEvent.click(button);
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(body.hidden).toBe(false);
     expect(words(button)).toBe("Stocks");
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(body.hidden).toBe(true);
+    expect(body.querySelectorAll("[data-holding]").length, "the folded rows unmounted").toBe(rows);
+    expect(words(button)).toBe(`Stocks · 3 ${unit}s · value $35,760 · P&L +$1,960`);
+    expect(button.querySelector('[data-fold-fig="pnl"]')!.getAttribute("data-outcome")).toBe("gain");
+    // the region keeps its name
+    expect(section("Stocks")).toBeTruthy();
+  });
+
+  it("fold a section that starts open, its rows kept and hidden, and open it again", async () => {
+    await open(arrangement);
+    const button = sectionButton("Other");
+    const body = controlled(button)[0]!;
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(body.hidden).toBe(true);
+    expect(body.querySelectorAll("[data-holding]").length, "the folded rows unmounted").toBe(1);
+    expect(words(button)).toBe(`Other · 1 ${unit} · value $3,000`);
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(body.hidden).toBe(false);
+    expect(words(button)).toBe("Other");
   });
 
   it("count what the arrangement draws under Options: a combined expiry is one", async () => {
@@ -141,20 +169,20 @@ describe.each(arrangements)("on the %s, the folds", (arrangement) => {
 
   it("sum in the base at IBKR's rates, and say where a currency has none rather than sum it", async () => {
     await open(arrangement, TWO_CURRENCIES);
-    fireEvent.click(sectionButton("Stocks"));
     // 35,760 + 16,800 EUR × 1.0841; 1,960 + 1,400 EUR × 1.0841
     expect(words(sectionButton("Stocks"))).toBe(`Stocks · 4 ${unit}s · value $53,973 · P&L +$3,478`);
     cleanup();
     document.cookie = "ui_account_folded=;path=/;max-age=0";
     await open(arrangement, NO_RATE);
-    fireEvent.click(sectionButton("Stocks"));
     expect(words(sectionButton("Stocks"))).toBe(`Stocks · 5 ${unit}s · no total: no rate for SEK`);
   });
 
   it("hide every amount in a folded heading under the book's privacy setting", async () => {
     document.cookie = "ui_privacy=on;path=/";
     await open(arrangement, TWO_CURRENCIES);
-    for (const name of ["Stocks", "Options", "Other"]) fireEvent.click(sectionButton(name));
+    // Stocks starts folded
+    for (const name of ["Options", "Other"]) fireEvent.click(sectionButton(name));
+    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("false");
     expect(words(sectionButton("Stocks"))).toBe(`Stocks · 4 ${unit}s · value $••• · P&L $•••`);
     expect(words(sectionButton("Other"))).toBe(`Other · 2 ${unit}s · value $•••`);
     fireEvent.click(sectionButton("Options"));
@@ -163,20 +191,40 @@ describe.each(arrangements)("on the %s, the folds", (arrangement) => {
     expect(document.querySelector(".nx-acct")!.textContent).not.toMatch(/\$\d|\d,\d{3}/);
   });
 
-  it("are remembered in a cookie of their own, and folded again on opening", async () => {
+  it("are remembered in a cookie of their own where they differ from how they start, and drawn so on opening", async () => {
     await open(arrangement);
+    // Stocks opened is `stocks:open`; an underlying folded is its name
     fireEvent.click(sectionButton("Stocks"));
+    expect([...readAccountFolded()]).toEqual(["stocks:open"]);
     fireEvent.click(underlyingButton("SPX"));
-    expect([...readAccountFolded()].sort()).toEqual(["options:SPX", "stocks"]);
+    expect([...readAccountFolded()].sort()).toEqual(["options:SPX", "stocks:open"]);
     expect(document.cookie).not.toMatch(/(^|; )ui_folded=/);
     cleanup();
     await open(arrangement);
-    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("false");
+    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("true");
     expect(underlyingButton("SPX").getAttribute("aria-expanded")).toBe("false");
     expect(underlyingButton("QQQ").getAttribute("aria-expanded")).toBe("true");
     expect(sectionButton("Options").getAttribute("aria-expanded")).toBe("true");
+    // Stocks folded again, as it starts: its entry gone
     fireEvent.click(sectionButton("Stocks"));
+    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("false");
     expect([...readAccountFolded()]).toEqual(["options:SPX"]);
+    cleanup();
+    await open(arrangement);
+    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("read an old cookie's `stocks` as folded, as Stocks now starts, and drop it at the next write", async () => {
+    document.cookie = "ui_account_folded=stocks,other;path=/";
+    await open(arrangement);
+    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("false");
+    expect(sectionButton("Other").getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(underlyingButton("SPX"));
+    expect(storedCookie()).toBe(`ui_account_folded=${encodeURIComponent("options:SPX,other")}`);
+    // and the press that opens Stocks writes its own entry, the old one long gone
+    fireEvent.click(sectionButton("Stocks"));
+    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("true");
+    expect(storedCookie()).toBe(`ui_account_folded=${encodeURIComponent("options:SPX,other,stocks:open")}`);
   });
 
   it("read a hand-edited cookie tolerantly, and drop what it does not know at the next write", async () => {
@@ -185,22 +233,25 @@ describe.each(arrangements)("on the %s, the folds", (arrangement) => {
     // a stray % leaves the whole value undecoded, and the entries around it still read
     expect(sectionButton("Other").getAttribute("aria-expanded")).toBe("false");
     expect(underlyingButton("QQQ").getAttribute("aria-expanded")).toBe("false");
-    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("true");
+    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("false");
+    expect(sectionButton("Options").getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(sectionButton("Stocks"));
-    expect([...readAccountFolded()].sort()).toEqual(["options:QQQ", "other", "stocks"]);
+    expect([...readAccountFolded()].sort()).toEqual(["options:QQQ", "other", "stocks:open"]);
     expect(storedCookie()).not.toMatch(/bogus|zz/);
   });
 
   it("keep another tab's folds, and fold or open what THIS tab shows", async () => {
     await open(arrangement);
-    // another tab folds Other and SPX after this one read the cookie
-    document.cookie = "ui_account_folded=other%2Coptions%3ASPX;path=/";
-    fireEvent.click(sectionButton("Stocks"));
-    expect([...readAccountFolded()].sort()).toEqual(["options:SPX", "other", "stocks"]);
-    // another tab opens Stocks, which this one still shows folded: a press here opens it, never folds it again
-    document.cookie = "ui_account_folded=other;path=/";
+    // another tab folds Other and SPX, and opens Stocks, after this one read the cookie
+    document.cookie = `ui_account_folded=${encodeURIComponent("other,options:SPX,stocks:open")};path=/`;
+    // this tab still shows Stocks folded: a press here opens it, never folds it again
     fireEvent.click(sectionButton("Stocks"));
     expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("true");
+    expect([...readAccountFolded()].sort()).toEqual(["options:SPX", "other", "stocks:open"]);
+    // another tab folds Stocks, which this one shows open: a press here folds it, never opens it again
+    document.cookie = "ui_account_folded=other;path=/";
+    fireEvent.click(sectionButton("Stocks"));
+    expect(sectionButton("Stocks").getAttribute("aria-expanded")).toBe("false");
     expect([...readAccountFolded()]).toEqual(["other"]);
   });
 
@@ -208,13 +259,18 @@ describe.each(arrangements)("on the %s, the folds", (arrangement) => {
     document.cookie = "ui_account_folded=options%3AXYZ%2Cother;path=/";
     await open(arrangement);
     fireEvent.click(sectionButton("Stocks"));
-    expect([...readAccountFolded()].sort()).toEqual(["other", "stocks"]);
+    expect([...readAccountFolded()].sort()).toEqual(["other", "stocks:open"]);
     // a section the account has nothing in is kept: it is a section, not a holding
     cleanup();
-    document.cookie = "ui_account_folded=other;path=/";
-    await open(arrangement, { ...ACCOUNT, other: [] });
-    fireEvent.click(sectionButton("Stocks"));
-    expect([...readAccountFolded()].sort()).toEqual(["other", "stocks"]);
+    document.cookie = `ui_account_folded=${encodeURIComponent("other,stocks:open")};path=/`;
+    await open(arrangement, { ...ACCOUNT, other: [], options: ACCOUNT.options.filter((o) => o.symbol !== "QQQ") });
+    fireEvent.click(underlyingButton("SPX"));
+    expect([...readAccountFolded()].sort()).toEqual(["options:SPX", "other", "stocks:open"]);
+    // and Stocks' entry with nothing in Stocks
+    cleanup();
+    await open(arrangement, { ...ACCOUNT, stocks: [] });
+    fireEvent.click(underlyingButton("SPX"));
+    expect([...readAccountFolded()].sort()).toEqual(["other", "stocks:open"]);
   });
 
   it("stay as they are through the poll's next read", async () => {

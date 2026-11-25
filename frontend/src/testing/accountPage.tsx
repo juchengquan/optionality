@@ -57,10 +57,12 @@ export const STATES = {
   "refused session": REFUSALS.refusedSession,
 } as const;
 
-/** The page drawn on `answer`. `privacy`: with the book's privacy setting on. `thenFails`: a refresh
- *  after that read, refused so — the last figures kept, dimmed, under the error. */
-export async function showAccount(answer: (typeof STATES)[keyof typeof STATES], { privacy = false, thenFails }: {
-  privacy?: boolean; thenFails?: { status: number; detail: string };
+/** The page drawn on `answer`, with Stocks opened, so its rows are drawn and measured: Stocks starts
+ *  folded (the owner, 2026-11-25). `asItStarts`: Stocks left folded. `privacy`: with the book's
+ *  privacy setting on. `thenFails`: a refresh after that read, refused so — the last figures kept,
+ *  dimmed, under the error. */
+export async function showAccount(answer: (typeof STATES)[keyof typeof STATES], { privacy = false, thenFails, asItStarts = false }: {
+  privacy?: boolean; thenFails?: { status: number; detail: string }; asItStarts?: boolean;
 } = {}): Promise<void> {
   document.cookie = `ui_privacy=${privacy ? "on" : "off"};path=/`;
   const svc = serveAccount(answer);
@@ -70,6 +72,8 @@ export async function showAccount(answer: (typeof STATES)[keyof typeof STATES], 
   await waitFor(() => { if (!document.querySelector(".nx-acct")) throw new Error("the account page is not drawn yet"); },
     { timeout: 10_000 });
   await settle();
+  const stocks = document.querySelector<HTMLButtonElement>('[data-section="stocks"] .nx-acct-fold');
+  if (!asItStarts && stocks?.getAttribute("aria-expanded") === "false") await act(async () => { fireEvent.click(stocks); });
   if (thenFails) {
     svc.answer = thenFails;
     await act(async () => { fireEvent.click(document.querySelector<HTMLButtonElement>('[aria-label="refresh now"]')!); });

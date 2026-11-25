@@ -583,9 +583,10 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   the account it holds while it is asked (#477). Read-only: totals in the base currency, daily
   P&L the fifth (#478), the masked account as served, one "IBKR marked at" time (net liquidation's
   and cash's), and the live line, `live · updated hh:mm:ss <zone>` from `live.updated_at`, dated
-  where it is not today's — "read at" in its place before the P&L stream has spoken — then stocks by the SIZE of their value IN THE BASE
+  where it is not today's — "read at" in its place before the P&L stream has spoken — then options by underlying then expiry, stocks by the SIZE of their value IN THE BASE
   CURRENCY, largest first whatever its sign (IBKR's `exchange_rates`; a currency with no rate has
-  no weight and is listed after every one that converts), options by underlying then expiry, and the rest — each a table on the desk and a card
+  no weight and is listed after every one that converts) and folded until opened (the owner,
+  2026-11-25), and the rest — each a table on the desk and a card
   on the phone, every figure shown in its own currency with its code beside it where that is not
   the base, each stock and option with its daily P&L (a combined row's its legs' summed, none where
   one is missing; none in a folded heading). The book's privacy setting (`ui_privacy`) hides its money and counts as the book's. A
