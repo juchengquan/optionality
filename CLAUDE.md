@@ -267,6 +267,21 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path. Two frontend branches
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
+  **The bundle is split for the first load (#483)**, which on a slow phone link is bytes and round
+  trips: `libraries-<hash>.js` holds everything from `node_modules` (and Rollup's `\0` helpers), so
+  its name moves only when a dependency does; each page is a chunk of its own (`Next-`, `Account-`),
+  loaded by `src/Page.tsx` only when the path names it; `shell-<hash>.js` is what the entry needs
+  before either page, kept out of `main-` because the entry names both pages' chunks and a page
+  importing it would be renamed with the other; shared page code and the CSS are Rollup's to name.
+  A chunk a page asks for only arrives after the libraries under it, so the build writes
+  `src/preload.ts`' script into `index.html` (`vite.config.ts`' `preloadEachPage`): it asks for the
+  page's own files beside the libraries, by `pageAt` itself written in as text — without it the
+  split was SLOWER cold than one bundle (1.12 s to 1.48 s at 5 Mbps, 330 ms latency). The pages are
+  loaded by hand, not by `React.lazy`, whose Suspense reveal waits at least 300 ms. Caddy encodes
+  `zstd best` then `gzip` (zstd at its default saved nothing over gzip). `tools/first-load.test.mjs`
+  (in `test-tools`) holds all of it against the committed `dist` served by the real Caddyfile on a
+  port of its own: the files each page asks for, the encodings, and which names a one-page change
+  moves (two builds).
   The browser suite runs as TWO vitest instances of Chromium: the desktop one runs every
   `src/__browser__/*.test.tsx`, and `iphone` — Playwright's iPhone 13 profile, `isMobile` and
   touch — runs only `*.iphone.test.tsx`. Each instance names its own files and the suite-wide
@@ -551,7 +566,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   **A second page, the IBKR account (#471)**, at `/opt/account`: `main.tsx` mounts `src/Page.tsx`,
   which draws `src/account/` when the path after `UI_BASE` is `account` (`src/pages.ts`) and the
   book otherwise — no router, still the one entry, since Caddy sends every unknown path to
-  `index.html`. The book's header links to it ("account") and it links back, both PLAIN links, so
+  `index.html`. Each page's code is its own chunk, loaded only on that page (#483; see
+  `make build-ui` above); while it arrives nothing is drawn, and one that cannot be fetched is
+  `PageBoundary`'s failure words. The book's header links to it ("account") and it links back, both PLAIN links, so
   moving between them loads the other page afresh and neither polls while the other is shown. It
   reads `GET /account` (#470) and nothing else: on opening, on its refresh button, and at its own
   cadence while `document.visibilityState` is not hidden — 1 s (the default), 5 s, 15 s, 30 s,
