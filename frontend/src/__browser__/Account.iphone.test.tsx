@@ -90,10 +90,21 @@ describe("the account page on an iPhone", () => {
     expect(new Set(figs.map((f) => Math.round(f.top))).size).toBe(4);
   });
 
+  it("draws Options, then Stocks folded, then Other, one under the next", async () => {
+    await showAccount(STATES.loaded, { asItStarts: true });
+    const boxes = ["Options", "Stocks", "Other"].map((name) => screen.getByRole("region", { name }).getBoundingClientRect());
+    expect(boxes[0]!.bottom).toBeLessThanOrEqual(boxes[1]!.top + 0.5);
+    expect(boxes[1]!.bottom).toBeLessThanOrEqual(boxes[2]!.top + 0.5);
+    const stocks = screen.getByRole("region", { name: "Stocks" });
+    expect(stocks.querySelector(".nx-acct-fold")!.getAttribute("aria-expanded")).toBe("false");
+    expect(stocks.querySelector<HTMLElement>('[data-holding="AAPL"]')!.getBoundingClientRect().height, "a folded row is not drawn").toBe(0);
+  });
+
   it("folds a section at a tap, what is under it moving up, and opens it again", async () => {
     await showAccount(STATES.loaded);
     const fold = screen.getByRole("region", { name: "Stocks" }).querySelector<HTMLButtonElement>(".nx-acct-fold")!;
-    const below = () => screen.getByRole("region", { name: "Options" }).getBoundingClientRect().top;
+    // Other's distance from Stocks' heading, which a scroll to reach the heading moves with it
+    const below = () => screen.getByRole("region", { name: "Other" }).getBoundingClientRect().top - fold.getBoundingClientRect().top;
     const open = below();
     await userEvent.click(fold);
     expect(fold.getAttribute("aria-expanded")).toBe("false");

@@ -1,6 +1,7 @@
 /** One answer of `GET /account` drawn (#471): the PAPER banner where it is one, the totals with the
- *  account as served and when IBKR marked it, then the stocks, the options and anything else — a
- *  table per kind on the desk, a card per holding on the phone, from the same cells.
+ *  account as served and when IBKR marked it, then the options, the stocks and anything else (the
+ *  owner, 2026-11-25: options first) — a table per kind on the desk, a card per holding on the
+ *  phone, from the same cells.
  *
  *  Money is money, to the whole unit, in the holding's own currency; a price is per share, as IBKR
  *  marks it and as the page writes every price. A figure in a currency that is not the base carries
@@ -8,13 +9,13 @@
  *  Under the book's privacy setting the money and the counts are hidden as the book hides them.
  *
  *  The owner's decisions of 2026-11-24:
- *  - **Stocks, Options and Other each fold, and so does each underlying inside Options**, as the
+ *  - **Options, Stocks and Other each fold, and so does each underlying inside Options**, as the
  *    book's expiry groups fold: a button heading saying whether it is open (`aria-expanded`) and
  *    what it folds (`aria-controls`), the folded rows kept mounted and `hidden`. Folded, a heading
  *    keeps its name and adds its count — what the arrangement draws, rows on the desk and cards on
  *    the phone, as the book's folded headings count — and its holdings' value and P&L summed in the
- *    base currency at IBKR's rates (`totalInBase`), or why they cannot be. Everything starts open;
- *    what is folded is remembered (`folds.ts`).
+ *    base currency at IBKR's rates (`totalInBase`), or why they cannot be. Stocks starts folded and
+ *    everything else open (the owner, 2026-11-25); a fold changed is remembered (`folds.ts`).
  *  - **Every option on one underlying and expiry is ONE row** (`optionRows`): its legs written as
  *    the book writes a structure, its units, its prices netted per share as IBKR signs them, its
  *    money summed. It starts closed, and opens — a press anywhere on it, or its button — to its legs
@@ -161,12 +162,6 @@ export function AccountView({ account, phone, privacy, stale = false }: {
       {account.paper ? <p className="nx-acct-paper" role="note">PAPER account</p> : null}
       <Totals account={account} privacy={privacy} />
       {holdsNothing(account) ? <p className="nx-meta nx-acct-empty">nothing held in this account</p> : null}
-      {stockRows.length > 0 ? (
-        <Section title="Stocks" fold="stocks" folds={folds}
-                 summary={summary(stockRows.length, totalInBase(account.stocks, account))}>
-          <Rows groups={[{ key: "stocks", rows: stockRows }]} leadLabel="symbol" phone={phone} />
-        </Section>
-      ) : null}
       {underlyings.length > 0 ? (
         <Section title="Options" fold="options" folds={folds}
                  summary={summary(underlyings.reduce((n, u) => n + rowsOf(u), 0), totalInBase(account.options, account))}>
@@ -176,6 +171,12 @@ export function AccountView({ account, phone, privacy, stale = false }: {
               <Rows leadLabel="contract" phone={phone} fixed groups={u.expiries} />
             </Underlying>
           ))}
+        </Section>
+      ) : null}
+      {stockRows.length > 0 ? (
+        <Section title="Stocks" fold="stocks" folds={folds}
+                 summary={summary(stockRows.length, totalInBase(account.stocks, account))}>
+          <Rows groups={[{ key: "stocks", rows: stockRows }]} leadLabel="symbol" phone={phone} />
         </Section>
       ) : null}
       {otherRows.length > 0 ? (

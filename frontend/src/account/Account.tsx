@@ -1,5 +1,5 @@
 /** The account page (#471): the whole IBKR account as IBKR marks it, read-only — its totals, then
- *  its stocks, its options and anything else apart. At `/opt/account` (`pages.ts`), reached from
+ *  its options, its stocks and anything else apart. At `/opt/account` (`pages.ts`), reached from
  *  the book's header and left by a plain link, so neither page polls while the other is shown.
  *
  *  One arrangement or the other as the book chooses (`arrangement.ts`): a table per kind on the

@@ -62,7 +62,7 @@ describe("every preference is written to outlive the tab", () => {
     ["the arrangement", () => writeArrangement("phone")],
     ["the price map", () => writePriceMap(true)],
     ["the folded expiry groups", () => writeFolded(new Set(["spreads:20261218"]))],
-    ["the account page's folds", () => writeAccountFolded(new Set(["stocks", "options:SPX"]))],
+    ["the account page's folds", () => writeAccountFolded(new Set(["stocks:open", "options:SPX"]))],
   ];
 
   for (const [what, write] of writes) {
@@ -80,27 +80,37 @@ describe("every preference is written to outlive the tab", () => {
 });
 
 /** The account page's folds (the owner, 2026-11-24): its three sections and each underlying inside
- *  Options, by name. An underlying is IBKR's symbol, which may carry a space or a dot, so the
- *  cookie is written encoded and read tolerantly: anything that is not one of those is dropped. */
+ *  Options, by name, each where it differs from how it starts — Options, Other and an underlying
+ *  folded, Stocks opened (`stocks:open`), since Stocks starts folded (the owner, 2026-11-25). An
+ *  underlying is IBKR's symbol, which may carry a space or a dot, so the cookie is written encoded
+ *  and read tolerantly: anything that is not one of those is dropped. */
 describe("the account page's folds", () => {
   it("round-trip the sections and the underlyings, a symbol's space and dot included", () => {
-    writeAccountFolded(new Set(["stocks", "other", "options", "options:SPX", "options:AB C.D"]));
-    expect([...readAccountFolded()].sort()).toEqual(["options", "options:AB C.D", "options:SPX", "other", "stocks"]);
+    writeAccountFolded(new Set(["stocks:open", "other", "options", "options:SPX", "options:AB C.D"]));
+    expect([...readAccountFolded()].sort()).toEqual(["options", "options:AB C.D", "options:SPX", "other", "stocks:open"]);
     // nothing in the stored value that a cookie may not carry
     const raw = document.cookie.split("; ").find((c) => c.startsWith("ui_account_folded="))!;
     expect(raw).not.toMatch(/[ ,;"\\]/);
   });
 
   it("drop what is neither a section nor an underlying under Options, on reading and on writing", () => {
-    document.cookie = "ui_account_folded=stocks,bogus,options:,spreads:20261218,options:SPX,Stocks;path=/";
-    expect([...readAccountFolded()].sort()).toEqual(["options:SPX", "stocks"]);
+    document.cookie = "ui_account_folded=stocks:open,bogus,options:,spreads:20261218,options:SPX,Stocks,stocks:OPEN,other:open;path=/";
+    expect([...readAccountFolded()].sort()).toEqual(["options:SPX", "stocks:open"]);
     writeAccountFolded(new Set(["other", "nonsense", "options:  "]));
     expect([...readAccountFolded()]).toEqual(["other"]);
   });
 
+  it("drop an old cookie's bare `stocks`, which said Stocks was folded, as it now starts, on reading and on writing", () => {
+    document.cookie = "ui_account_folded=stocks,other;path=/";
+    expect([...readAccountFolded()]).toEqual(["other"]);
+    writeAccountFolded(new Set(["stocks", "options:SPX"]));
+    expect([...readAccountFolded()]).toEqual(["options:SPX"]);
+    expect(document.cookie).toContain("ui_account_folded=options%3ASPX");
+  });
+
   it("read a hand-edited cookie with a stray % without throwing", () => {
-    document.cookie = "ui_account_folded=stocks,%zz;path=/";
-    expect([...readAccountFolded()]).toEqual(["stocks"]);
+    document.cookie = "ui_account_folded=stocks:open,%zz;path=/";
+    expect([...readAccountFolded()]).toEqual(["stocks:open"]);
   });
 
   it("read nothing folded from no cookie", () => {
