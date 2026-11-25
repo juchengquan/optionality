@@ -18,18 +18,23 @@
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
+import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { gunzipSync, zstdDecompressSync } from "node:zlib";
 
 import { chromium, devices } from "playwright";
-import { build } from "vite";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+/** Vite as the FRONTEND resolves it: the build tested is the frontend's, and only
+ *  `frontend/package.json` declares vite — so it is found from there, not from wherever this file's
+ *  own lookup happens to climb to. */
+const { build } = await import(pathToFileURL(createRequire(join(ROOT, "frontend/package.json")).resolve("vite")).href);
 const DIST = join(ROOT, "frontend/dist");
 const LIVE_LISTENER = ":31416 {";
 const CADDY = process.env.CADDY_BIN || spawnSync("sh", ["-c", "command -v caddy"], { encoding: "utf8" }).stdout.trim();
@@ -75,7 +80,12 @@ beforeAll(async () => {
     stdio: ["ignore", "ignore", "pipe"],
   });
   caddy.stderr.on("data", (b) => { log += b; });
+  // a CADDY_BIN naming nothing runnable: said at once, rather than as an unhandled ENOENT and then
+  // five seconds of waiting for a server that never started
+  let failed = null;
+  caddy.on("error", (e) => { failed = e; });
   for (let i = 0; i < 100; i++) {
+    if (failed) throw new Error(`caddy could not be started from ${CADDY}: ${failed.message}`);
     try { if ((await get(port, "/opt/", null)).status === 200) return; } catch { /* not yet */ }
     await new Promise((r) => setTimeout(r, 50));
   }

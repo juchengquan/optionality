@@ -269,7 +269,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
   **The bundle is split for the first load (#483)**, which on a slow phone link is bytes and round
   trips: `libraries-<hash>.js` holds everything from `node_modules` (and Rollup's `\0` helpers), so
-  its name moves only when a dependency does; each page is a chunk of its own (`Next-`, `Account-`),
+  its name moves only when a dependency, or which of its exports the pages use, changes (a new
+  lucide-react icon renames it: unused exports are dropped); each page is a chunk of its own (`Next-`, `Account-`),
   loaded by `src/Page.tsx` only when the path names it; `shell-<hash>.js` is what the entry needs
   before either page, kept out of `main-` because the entry names both pages' chunks and a page
   importing it would be renamed with the other; shared page code and the CSS are Rollup's to name.

@@ -61,7 +61,9 @@ function preloadEachPage(): Plugin {
  *
  *  `libraries`: everything from `node_modules`, in a file of its own named by its content alone, so
  *  a deploy that changes only the page's own code leaves that name — and the phone's cached copy —
- *  as it was. Rollup's helpers (`\0`, the dynamic-import preload among them) go with them: a
+ *  as it was. Its content is the library code the pages USE, unused exports being dropped, so the
+ *  name also moves when a page starts or stops using one: a new icon from lucide-react renames it
+ *  (review of #485). Rollup's helpers (`\0`, the dynamic-import preload among them) go with them: a
  *  library that imported one from a chunk of page code would take that chunk's hash into its own.
  *
  *  `shell`: the page's own code the entry needs before either page — `PageBoundary`, `pages.ts` and
