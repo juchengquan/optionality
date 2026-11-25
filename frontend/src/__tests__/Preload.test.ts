@@ -20,7 +20,7 @@ function askedAt(path: string, base = "/opt/"): string[] {
   window.history.replaceState(null, "", path);
   new Function(preloadScript(FILES, base))();
   return [...document.head.querySelectorAll("link")]
-    .map((l) => [l.rel, l.getAttribute("as") ?? "-", l.getAttribute("crossorigin"), l.getAttribute("href")].join(" "));
+    .map((l) => [l.rel, l.getAttribute("as") ?? "-", l.hasAttribute("crossorigin") ? "crossorigin" : "-", l.getAttribute("href")].join(" "));
 }
 
 afterEach(() => { document.head.innerHTML = ""; window.history.replaceState(null, "", "/"); });
@@ -34,10 +34,12 @@ describe("the HTML's own request for the page's files (#483)", () => {
   }
 
   it("asks for a script as a module and a style as a style, each as Vite asks for it", () => {
+    // crossorigin on each, or the browser asks again when the import does: a module is fetched
+    // with CORS, and Vite adds its stylesheet so
     expect(askedAt("/opt/account")).toEqual([
-      "modulepreload - " + " /opt/assets/Account-a.js",
-      "modulepreload - " + " /opt/assets/shared-b.js",
-      "preload style " + " /opt/assets/Account-c.css",
+      "modulepreload - crossorigin /opt/assets/Account-a.js",
+      "modulepreload - crossorigin /opt/assets/shared-b.js",
+      "preload style crossorigin /opt/assets/Account-c.css",
     ]);
   });
 
