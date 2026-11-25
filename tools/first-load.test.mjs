@@ -237,3 +237,47 @@ describe("the names a deploy moves (#483)", () => {
     expect(moved(as, await namesWith("src/pages.ts"))).not.toContain("libraries.js");
   });
 });
+
+describe("the code each page's files carry (#483, review of #485)", () => {
+  /** The page's own code is everything under `src/` but the account page's directory, what both
+   *  pages share by design — `shared/`, `components/`, `lib/` — and these, which the entry or both
+   *  pages need and which belong to neither. `next.css` is here because the account page draws over
+   *  the book's colour tokens by design (#471, `account.css`); everything else of the book's is not. */
+  const NEUTRAL = ["main.tsx", "Page.tsx", "PageBoundary.tsx", "pages.ts", "arrangement.ts", "poll.ts", "next.css"];
+  const SHARED = /^(shared|components|lib)\//;
+  const SRC = join(ROOT, "frontend/src/");
+
+  let chunks;
+  beforeAll(async () => {
+    const outDir = mkdtempSync(join(tmpdir(), "first-load-modules-"));
+    const keep = { name: "keep-bundle", generateBundle(_, bundle) { chunks = bundle; } };
+    try {
+      await build({
+        configFile: join(ROOT, "frontend/vite.config.ts"), root: join(ROOT, "frontend"), base: "/opt/", logLevel: "silent",
+        build: { outDir, write: false }, plugins: [keep],
+      });
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
+  });
+
+  /** The source modules in every file a page asks for: the entry, its page's chunk, and every
+   *  chunk either imports — as `src/`-relative names. */
+  function carried(page) {
+    const all = Object.values(chunks).filter((c) => c.type === "chunk");
+    const start = [all.find((c) => c.isEntry), all.find((c) => c.isDynamicEntry && c.facadeModuleId === join(SRC, page))];
+    const seen = new Set();
+    const walk = (c) => { if (!c || seen.has(c.fileName)) return; seen.add(c.fileName); for (const f of c.imports) walk(chunks[f]); };
+    start.forEach(walk);
+    return [...seen].flatMap((f) => chunks[f].moduleIds).filter((id) => id.startsWith(SRC)).map((id) => id.slice(SRC.length));
+  }
+
+  it("the account page's files carry none of the book's code", () => {
+    const book = carried("account/Account.tsx").filter((m) => !m.startsWith("account/") && !SHARED.test(m) && !NEUTRAL.includes(m));
+    expect(book).toEqual([]);
+  });
+
+  it("the book's files carry none of the account page's code", () => {
+    expect(carried("Next.tsx").filter((m) => m.startsWith("account/"))).toEqual([]);
+  });
+});

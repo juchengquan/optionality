@@ -1,5 +1,6 @@
 /** What the account page has folded (the owner, 2026-11-24): its three sections, Stocks, Options and
- *  Other, and each underlying inside Options. As the book's expiry groups fold (`../folds.ts`):
+ *  Other, and each underlying inside Options. As the book's expiry groups fold (`../folds.ts`; the
+ *  press itself is `../shared/folds.ts`, so this page reaches nothing of the book's):
  *
  *  - **Remembered in a cookie of its own** (`readAccountFolded`), which stores what is FOLDED, so
  *    everything starts open — a new underlying included.
@@ -12,8 +13,8 @@
  */
 import { useCallback, useState } from "react";
 
-import { pressed } from "../folds";
 import type { Account } from "../shared/api";
+import { pressed } from "../shared/folds";
 import { readAccountFolded, writeAccountFolded } from "../shared/prefs";
 
 export type SectionKey = "stocks" | "options" | "other";
