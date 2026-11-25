@@ -38,7 +38,16 @@
 	@html not path /assets/*
 	header @html Cache-Control "no-store"
 
-	encode gzip
+	# zstd first, gzip for a browser that offers no zstd, and the file as it is for one that offers
+	# neither (#483). Listed in order of preference, which settles a browser that offers both at once.
+	# zstd at its BEST level, because at its default it saved nothing over gzip: the libraries' chunk
+	# was 153.0 KB in zstd and 152.5 KB in gzip, and 141.4 KB at best — measured 2026-11-25, for about
+	# 10 ms more of this machine's time per file, on files a browser then keeps for a year.
+	# No brotli: stock Caddy's encode has none, and it would need .br files committed beside the bundle.
+	encode {
+		zstd best
+		gzip
+	}
 
 	log {
 		output stderr

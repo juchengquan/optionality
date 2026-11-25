@@ -4,7 +4,7 @@
 	launchd-ui-install launchd-ui-restart launchd-ui-uninstall ui-logs \
 	backup restore launchd-backup-install launchd-backup-uninstall backup-logs rotate-logs \
 	launchd-opend-install launchd-opend-uninstall opend-logs check-opend opend-sync \
-	test-tools py-cut py-tag ibkr-fake-gateway check-py-backend check-workspace-links
+	test-tools playwright-chromium py-cut py-tag ibkr-fake-gateway check-py-backend check-workspace-links
 
 API_LABEL = com.optionality.api
 API_PLIST = $(HOME)/Library/LaunchAgents/$(API_LABEL).plist
@@ -158,9 +158,15 @@ test-ui-fast:
 
 # NOTE: the first run downloads a headless Chromium (~95MB) into ~/Library/Caches.
 # Nothing here touches the deploy path — ADR 0006 keeps node off that entirely.
-test-ui-layout:
-	$(JS_INSTALL) && bunx playwright install --with-deps chromium >/dev/null 2>&1 || true
+test-ui-layout: playwright-chromium
 	bun run --cwd frontend test:browser
+
+# Playwright's Chromium, for every suite that opens one: the layout suite above and
+# tools/first-load.test.mjs (#483), which `test-tools` runs BEFORE test-ui — so after a Playwright
+# bump `make check` stopped there with "Executable doesn't exist" while only test-ui-layout could
+# install it. A prerequisite of both; quick when the browser is already there.
+playwright-chromium:
+	$(JS_INSTALL) && bunx playwright install --with-deps chromium >/dev/null 2>&1 || true
 
 # the bundle is COMMITTED, so node is needed only to change the frontend, never to run
 # the service — a failed build must not become a failed deploy, and now that Caddy serves
@@ -373,7 +379,7 @@ check-scenarios:
 # The repo-wide tools' own arithmetic (ADR 0016) — the release version in particular, which is
 # where a version scheme goes wrong silently. Its own invocation because tools/ is not a package:
 # it is what reads and writes ACROSS the packages, so neither workspace's suite covers it.
-test-tools:
+test-tools: playwright-chromium
 	bunx vitest run --root tools
 
 # Cutting a release of the Python package (ADR 0016). Two steps, because CLAUDE.md forbids pushing

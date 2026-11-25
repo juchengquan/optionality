@@ -48,7 +48,8 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   suite is checked zone-independent instead — `env` would not reach its Chromium. Targets, in the
   order they run: lint, `check-workspace-links`, typecheck, `check-api`, `check-cases`, `check-scenarios`, the Python suites
   (the library's, then the Python backend's), `test-tools` (the repo-wide `tools/`, which no
-  workspace's suite covers), the library suite (`test-lib`), the API suite, both UI suites,
+  workspace's suite covers; since #483 it needs Playwright's Chromium, which its prerequisite
+  `playwright-chromium` installs, and caddy, on PATH or as `CADDY_BIN`), the library suite (`test-lib`), the API suite, both UI suites,
   `check-ui` and `check-opend`. This list went stale twice without a gate noticing, and it is
   worth knowing why:
   `check-make-targets` checks that every backticked invocation names a rule that EXISTS, never that a
@@ -267,6 +268,25 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   the bundle in `frontend/dist` is COMMITTED so node never sits on the deploy path. Two frontend branches
   therefore collide in `dist` every time: **`make resolve-ui`** settles it by rebuilding from the merged
   source — never hand-merge a bundle, and never configure a merge driver for it (`.gitattributes` says why).
+  **The bundle is split for the first load (#483)**, which on a slow phone link is bytes and round
+  trips: `libraries-<hash>.js` holds everything from `node_modules` (and Rollup's `\0` helpers), so
+  its name moves when a dependency changes, or when the pages change how they import library code
+  (an export used or dropped — a new lucide-react icon — or imports reordered so the libraries are
+  reached in another order); an edit that changes neither moves nothing. Each page is a chunk of its own (`Next-`, `Account-`),
+  loaded by `src/Page.tsx` only when the path names it; `shell-<hash>.js` is what the entry needs
+  before either page, kept out of `main-` because the entry names both pages' chunks and a page
+  importing it would be renamed with the other; shared page code and the CSS are Rollup's to name.
+  A chunk a page asks for only arrives after the libraries under it, so the build writes
+  `src/preload.ts`' script into `index.html` (`vite.config.ts`' `preloadEachPage`): it asks for the
+  page's own files beside the libraries, by `pageAt` itself written in as text — without it the
+  split was SLOWER cold than one bundle (1.12 s to 1.48 s at 5 Mbps, 330 ms latency). The pages are
+  loaded by hand, not by `React.lazy`, whose Suspense reveal waits at least 300 ms. Caddy encodes
+  `zstd best` then `gzip` (zstd at its default saved nothing over gzip). `tools/first-load.test.mjs`
+  (in `test-tools`) holds all of it against the committed `dist` served by the real Caddyfile on a
+  port of its own: the files each page asks for, the encodings, which names a one-page change
+  moves (two builds), and that the account page's files carry none of the book's modules (the book's
+  being everything under `src/` outside `account/`, `shared/`, `components/`, `lib/` and a short list
+  of neutral modules — `next.css` among them, whose colour tokens the account page draws over).
   The browser suite runs as TWO vitest instances of Chromium: the desktop one runs every
   `src/__browser__/*.test.tsx`, and `iphone` — Playwright's iPhone 13 profile, `isMobile` and
   touch — runs only `*.iphone.test.tsx`. Each instance names its own files and the suite-wide
@@ -551,7 +571,9 @@ through `typescript/package.json`'s `exports`. The library imports nothing from 
   **A second page, the IBKR account (#471)**, at `/opt/account`: `main.tsx` mounts `src/Page.tsx`,
   which draws `src/account/` when the path after `UI_BASE` is `account` (`src/pages.ts`) and the
   book otherwise — no router, still the one entry, since Caddy sends every unknown path to
-  `index.html`. The book's header links to it ("account") and it links back, both PLAIN links, so
+  `index.html`. Each page's code is its own chunk, loaded only on that page (#483; see
+  `make build-ui` above); while it arrives nothing is drawn, and one that cannot be fetched is
+  `PageBoundary`'s failure words. The book's header links to it ("account") and it links back, both PLAIN links, so
   moving between them loads the other page afresh and neither polls while the other is shown. It
   reads `GET /account` (#470) and nothing else: on opening, on its refresh button, and at its own
   cadence while `document.visibilityState` is not hidden — 1 s (the default), 5 s, 15 s, 30 s,

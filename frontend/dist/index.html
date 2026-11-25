@@ -5,8 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
     <title>optionality</title>
-    <script type="module" crossorigin src="/opt/assets/main-C5a-3Kpo.js"></script>
-    <link rel="stylesheet" crossorigin href="/opt/assets/main-DPsBYRzl.css">
+    <script type="module" crossorigin src="/opt/assets/main-B5GegXFP.js"></script>
+    <link rel="modulepreload" crossorigin href="/opt/assets/libraries-UvXaKjaA.js">
+    <link rel="modulepreload" crossorigin href="/opt/assets/shell-BPGBIRq_.js">
+    <script>(function askFor(files, base, page) {
+  for (const href of files[page(location.pathname, base)]) {
+    const link = document.createElement("link");
+    const style = href.endsWith(".css");
+    link.rel = style ? "preload" : "modulepreload";
+    if (style) link.setAttribute("as", "style");
+    link.crossOrigin = "";
+    link.href = href;
+    document.head.appendChild(link);
+  }
+})({"account":["/opt/assets/Account-_DexD7zo.js","/opt/assets/poll-CWDGH925.js","/opt/assets/Account-C7fO8zxP.css","/opt/assets/poll-2zU1PAoy.css"],"book":["/opt/assets/Next-DOgMP7sI.js","/opt/assets/poll-CWDGH925.js","/opt/assets/Next-Db7WDELL.css","/opt/assets/poll-2zU1PAoy.css"]}, "/opt/", function pageAt(path, base) {
+  const root = base.endsWith("/") ? base : `${base}/`;
+  if (!path.startsWith(root)) return "book";
+  return /^account\/?$/.test(path.slice(root.length)) ? "account" : "book";
+});</script>
   </head>
   <body>
     <div id="root"></div>

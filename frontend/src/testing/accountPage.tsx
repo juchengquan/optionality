@@ -1,7 +1,7 @@
 /** The account page (#471) for the layout suites (`__browser__/Account*.test.tsx`): drawn on one
  *  of the made-up answers in `testing/account.ts`, and measured for what a reader needs of it — nothing pushed sideways, and
  *  every figure of every row drawn whole, inside its row: folded, and with its combined rows opened. */
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 
 import { Page } from "../Page";
 import type { Account } from "../shared/api";
@@ -65,6 +65,10 @@ export async function showAccount(answer: (typeof STATES)[keyof typeof STATES], 
   document.cookie = `ui_privacy=${privacy ? "on" : "off"};path=/`;
   const svc = serveAccount(answer);
   render(<Page path="/opt/account" base="/opt/" />);
+  // the page's own code arrives on its own (#483): the first time in a run, the dev server is still
+  // transforming it when a fixed wait is up
+  await waitFor(() => { if (!document.querySelector(".nx-acct")) throw new Error("the account page is not drawn yet"); },
+    { timeout: 10_000 });
   await settle();
   if (thenFails) {
     svc.answer = thenFails;
